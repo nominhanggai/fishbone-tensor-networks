@@ -48,7 +48,7 @@ class SimpleTTPS:
             self.ttnB.append(
                 eb[i] + ev[i] + vb[i]
             )
-        self._pD = []  # dimentions of the physical leg
+        self._pD = []  # dimensions of physical legs
         for n in range(self._nc):
             self._pD.append(
                 [self.ttnB[n][i].shape[1] for i in range(self._L[i])]
