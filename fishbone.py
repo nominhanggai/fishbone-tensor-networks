@@ -91,9 +91,8 @@ class SimpleTTPS:
         :param i: Which site
         :return: S*B
         """
-        assert n <= len(self._ebL) - 1
-        for j in range(self._nc):
-            assert 0 <= i < self._ebL[n] + self._evL[n] + self._vbL[n]
+        assert -1 <= n <= len(self._ebL) - 1
+        assert 0 <= i < self._L[n] - 1
         return np.tensordot(
             np.diag(self.ttnS[n][i]),
             self.ttnB[n][i],
@@ -132,7 +131,7 @@ class SimpleTTPS:
 
         if n > 0:
             assert n <= self._nc - 1
-            assert 0 <= i < self._ebL[i] + self._vbL[i] + 1
+            assert 0 <= i < self._L[n] - 1
             return np.tensordot(
                 self.get_theta1(n, i), self.ttnB[n][i + 1], axes=1
             )  # vL i _vU_ _vD_ [vR],  [vL] j _vU_ _vD_ vR -> {vL i _vU_ _vD_; j _vU_ _vD_ vR}
@@ -186,18 +185,74 @@ class SimpleTTPS:
                 [2, 0]
             )  # vL i vU [vD] vR, [vD'] vD -> vL i vU vR vD
             U = np.transpose(U, [0, 1, 2, 4, 3])
-            D = np.tensordot(
-                np.diag(self.ttnS[i+1][self._ebL[i+1]]) ** (-1), D,
+            # vL i vU vR vD -> vL i vU vD vR
+            U = np.tensordot(
+                np.diag(self.ttnS[i+1][self._ebL[i+1]]) ** (-1), U,
                 [1, 0]
-            )  # vL [vL'], [vL'] i vU vD vR -> vL i vD vR vU
+            )  # vL [vL'], [vL'] i vU vD vR -> vL i vU vD vR
             self.ttnB[i+1][self._ebL[i+1]] = U
+
         else:
             if i == self._vbL[n]:
-                pass
-            elif i == self._vbL[n] + 1:
-                pass
+                chiL_l, p_l, chiR_l, p_r, chiU_r, chiD_r, chiR_r = theta.shape
+                theta = np.reshape(theta, [chiL_l * p_l * chiR_l,
+                                           p_r * chiU_r * chiD_r * chiR_r])
+                A, S, B = svd(theta, full_matrices=False)
+                chivC = min(chi_max, np.sum(S > eps))
+                piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
+                A, S, B = A[:, piv], S[piv], B[piv, :]
+                S = S / np.linalg.norm(S)
+                self.ttnS[n][i+1] = S
+                A = np.reshape(A, [chiL_l, p_l, chivC])
+                # A: vL*i*vR -> vL i vR=chivC
+                B = np.reshape(B, [chivC, p_r, chiU_r, chiD_r, chiR_r])
+                # B: chivC*j*vU*vD*vR -> vL==chivC j vU vD vR
+                A = np.tensordot(np.diag(self.ttnS[n][i-1]**(-1)), A, axes=[1, 0])
+                A = np.tensordot(A, np.diag(S), axes=[2,0])
+                self.ttnB[n][i] = A
+                self.ttnB[n][i+1] = B
 
-        pass
+            elif i == self._vbL[n] + 1:
+                chiL_l, p_l, chiU_l, chiD_l, p_r, chiR_r = theta.shape
+                theta = np.reshape(theta, [chiL_l * p_l * chiU_l * chiD_l,
+                                           p_r *  chiR_r])
+                A, S, B = svd(theta, full_matrices=False)
+                chivC = min(chi_max, np.sum(S > eps))
+                piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
+                A, S, B = A[:, piv], S[piv], B[piv, :]
+                S = S / np.linalg.norm(S)
+                self.ttnS[n][i+1] = S
+                A = np.reshape(A, [chiL_l, p_l, chiU_l, chiD_l, chivC])
+                # A: {vL*i*vU*vD, chivC} -> vL i vU vD vR=chivC
+                B = np.reshape(B, [chivC, p_r,  chiR_r])
+                # B: {chivC, j*vR} -> vL==chivC j vR
+                A = np.tensordot(np.diag(self.ttnS[n][i-1]**(-1)), A, axes=[1, 0])
+                # vL [vL'] * [vL] i vU vD vR -> vL i vU vD vR
+                A = np.tensordot(A, S, [4, 0])
+                # vL i vU vD [vR] * [vR] vR -> vL i vU vD vR
+                self.ttnB[n][i] = A
+                self.ttnB[n][i+1] = B
+
+            else:
+                chiL_l, p_l, p_r, chiR_r = theta.shape
+                theta = np.reshape(theta, [chiL_l * p_l,
+                                           p_r * chiR_r])
+                A, S, B = svd(theta, full_matrices=False)
+                chivC = min(chi_max, np.sum(S > eps))
+                piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
+                A, S, B = A[:, piv], S[piv], B[piv, :]
+                S = S / np.linalg.norm(S)
+                self.ttnS[n][i+1] = S
+                A = np.reshape(A, [chiL_l, p_l, chivC])
+                # A: {vL*i, chivC} -> vL i vR=chivC
+                B = np.reshape(B, [chivC, p_r, chiR_r])
+                # B: {chivC, j*vR} -> vL==chivC j vR
+                A = np.tensordot(np.diag(self.ttnS[n][i - 1] ** (-1)), A, axes=[1, 0])
+                # vL [vL'] * [vL] i vR -> vL i vR
+                A = np.tensordot(A, S, [4, 0])
+                # vL i [vR] * [vR] vR -> vL i vR
+                self.ttnB[n][i] = A
+                self.ttnB[n][i + 1] = B
 
     def update_bond(self):
         """TODO
