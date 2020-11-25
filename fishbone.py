@@ -136,21 +136,23 @@ class SimpleTTPS:
                 self.get_theta1(n, i), self.ttnB[n][i + 1], axes=1
             )  # vL i _vU_ _vD_ [vR],  [vL] j _vU_ _vD_ vR -> {vL i _vU_ _vD_; j _vU_ _vD_ vR}
 
-    def split_truncate_theta(self, n, i, chi_max: object, eps):
+    def split_truncate_theta(self, theta, n, i, chi_max, eps):
         """
-        TODO
         Split the contracted two-site wave function and truncate the number of singular values.
-        :param n: which chain
+        :param theta:
+        :type theta:
+        :param n: Which chain. n=-1 means the backbone.
+        In this case (n=-1), i means which bond: 0 -> the first.
         :type n: int
         :param i: which bond on the chain
-        :type n: int
+        :type i: int
         :param chi_max: int, Maximum number of singular values to keep
         :type chi_max: int
         :param eps:
         :type eps: float
-        :return: B_1, S, B_2
+        :return: No return. Just updates the tensors in self.ttnS and self.ttnB
         """
-        theta = self.get_theta2(n, i)
+        #theta = self.get_theta2(n, i)
         if n == -1:
             # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
             chiL_d, p_d, chiD_d, chiR_d, chiL_u, p_u, chiU_u, chiR_u = theta.shape
@@ -254,15 +256,47 @@ class SimpleTTPS:
                 self.ttnB[n][i] = A
                 self.ttnB[n][i + 1] = B
 
-    def update_bond(self):
-        """TODO
+    def update_bond(self, n, i, chi_max, eps):
         """
-        pass
+        :param n:
+        :type n:
+        :param i:
+        :type i:
+        :param chi_max:
+        :type chi_max:
+        :param eps:
+        :type eps:
+        """
+        theta = self.get_theta2(n, i)
+        if n == -1:
+            # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
+            Utheta = np.einsum('IJKL,aKcdLfgh->aIcdJfgh', self.ttnH[i][-1], theta)
+            # {i j [i*] [j*]} * {vL [i] vU vD, [j] vU vD vR}
+            # {i j   k   l}     {a   b  c  d ,  e  f  g  h}
+            self.split_truncate_theta(Utheta, n, i, chi_max, eps)
+        else:
+            if i == self._vbL[n]:
+                Utheta = np.einsum('IJKL,aKLfgh->aIJfgh', self.ttnH[n][i], theta)
+                # {i j [i*] [j*]} * {vL [i]  [j] vU vD vR}
+                # {i j  k   l}      {a   b   e   f  g  h}
+                self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
+            elif i == self._vbL[n] + 1:
+                Utheta = np.einsum('IJKL,aKcdLh->aIcdJh', self.ttnH[n][i], theta)
+                # {i j [i*] [j*]} * {vL [i] vU vD,  [j]  vR}
+                # {i j  k   l}      {a   b  c  d ,   e   h}
+                self.split_truncate_theta(Utheta, n, i, chi_max, eps)
+
+            else:
+                Utheta = np.einsum('IJKL,aKLh->aIJh', self.ttnH[n][i], theta)
+                # {i j [i*] [j*]} * {vL [i], [j] vR}
+                # {I J  K   L}      {a   b,   e   h}
+                self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
 def init_ttn(nc, L, d1, d2):
     """
-
+    Initialize the SimpleTTN class.
+    Fill all the relevant lists, including ttnS, ttnB, ttnH.
     :param nc:
     :type nc:
     :param L:
