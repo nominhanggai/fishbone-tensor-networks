@@ -162,10 +162,14 @@ class SimpleTTPS:
             piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
             D, S, U = D[:, piv], S[piv], U[piv, :]
             S = S / np.linalg.norm(S)
-            D = np.reshape(D, [chiL_d, p_d, chivC, chiD_d, chiR_d])
-            # A: vL*i*vD*vR*chivC -> vL i vU=chivC vD vR
-            U = np.reshape(U, [chiL_u, p_u, chiU_u, chivC, chiR_u])
-            # B: vL*j*vU*vR*chivC -> vL i vU vD==chivC vR
+            D = np.reshape(D, [chiL_d, p_d, chiD_d, chiR_d, chivC])
+            # D: vL*i*vD*vR*chivC -> vL i vD vR vU=chivC
+            D = np.transpose(D, [0, 1, 4, 2, 3])
+            # vL i vD vR vU -> vL i vU vD vR
+            U = np.reshape(U, [chivC, chiL_u, p_u, chiU_u, chiR_u])
+            # B: chivC*vL*j*vU*vR -> vD==chivC vL i vU vR
+            U = np.transpose(U, [1, 2, 3, 0, 4])
+            # vD vL i vU vR -> vL i vU vD vR
             self.ttnS[i][-1] = S
             D = np.tensordot(
                 D, np.diag(S),
