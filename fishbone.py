@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+from scipy.linalg import svd
 
 
 class SimpleTTPS:
@@ -18,6 +19,13 @@ class SimpleTTPS:
 
     def __init__(self, B, S,  # ele_list, vib_list, e_bath_list, v_bath_list
                  ):
+        """
+
+        :param B:
+        :type B:
+        :param S:
+        :type S:
+        """
         # self.e = ele_list
         # self.v = vib_list
         # self.eb = e_bath_list
@@ -74,9 +82,11 @@ class SimpleTTPS:
                 [np.empty(0, dtype=np.float) for i in range(self._L[n])]
             )
 
-    def get_theta1(self, n, i):
+    def get_theta1(self, n: int, i: int):
         """
         Calculate effective single-site wave function on sites i in B canonical form.
+        :return:
+        :rtype:
         :param n: Which chain
         :param i: Which site
         :return: S*B
@@ -92,11 +102,17 @@ class SimpleTTPS:
 
     def get_theta2(self, n, i):
         """Calculate effective two-site wave function on sites i,j=(i+1) in mixed canonical form.
+        :param n:
+        :type n:
+        :param i:
+        :type i:
+        :return:
+        :rtype:
         """
-        # n=-1 means the backbone chain. When n=-1, i is the bond number bottom up
+        # n=0 means the backbone chain. When n=0, i is the bond number bottom up
         if n == -1:
             try:
-                assert 0 <= i < self._nc - 1
+                assert 0 <= i < self._nc - 2
             except AssertionError:
                 print("The bond is out of the range.",
                       file=sys.stderr
@@ -106,29 +122,77 @@ class SimpleTTPS:
             upward_b = np.tensordot(
                 self.get_theta1(i, self._ebL[i]),
                 np.diag(self.ttnS[i][self._ebL[i]] ** (-1))
-            )  # vL i [vU] vD vR, vU [vD] -> vL i vD vR vU
+            )  # vL i [vU] vD vR, vU [vU] -> vL i vD vR vU
+            upward_b = np.transpose(upward_b, [0, 1, 4, 2, 3])  # vL i vD vR vU -> vL i vU vD vR
             return np.tensordot(
                 upward_b,
                 self.get_theta1(i + 1, self._ebL[i + 1]),
                 [2, 4]
             )  # vL i [vU] vD vR , vL' j vU' [vD'] vR' -> {vL i VD vR; VL' j vU' vR'}
 
-        if n != -1:
+        if n > 0:
             assert n <= self._nc - 1
             assert 0 <= i < self._ebL[i] + self._vbL[i] + 1
             return np.tensordot(
                 self.get_theta1(n, i), self.ttnB[n][i + 1], axes=1
             )  # vL i _vU_ _vD_ [vR],  [vL] j _vU_ _vD_ vR -> {vL i _vU_ _vD_; j _vU_ _vD_ vR}
 
-    def split_truncate_theta(self, theta, n, i):
+    def split_truncate_theta(self, n, i, chi_max: object, eps):
         """
         TODO
         Split the contracted two-site wave function and truncate the number of singular values.
-        :param theta: the contracted two-site wave function
         :param n: which chain
+        :type n: int
         :param i: which bond on the chain
+        :type n: int
+        :param chi_max: int, Maximum number of singular values to keep
+        :type chi_max: int
+        :param eps:
+        :type eps: float
         :return: B_1, S, B_2
         """
+        theta = self.get_theta2(n, i)
+        if n == -1:
+            # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
+            chiL_d, p_d, chiD_d, chiR_d, chiL_u, p_u, chiU_u, chiR_u = theta.shape
+            theta = np.reshape(theta, [chiL_d * p_d * chiD_d * chiR_d,
+                                       chiL_u * p_u * chiU_u * chiR_u])
+            D, S, U = svd(theta, full_matrices=False)
+            chivC = min(chi_max, np.sum(S > eps))
+            piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
+            D, S, U = D[:, piv], S[piv], U[piv, :]
+            S = S / np.linalg.norm(S)
+            D = np.reshape(D, [chiL_d, p_d, chivC, chiD_d, chiR_d])
+            # A: vL*i*vD*vR*chivC -> vL i vU=chivC vD vR
+            U = np.reshape(U, [chiL_u, p_u, chiU_u, chivC, chiR_u])
+            # B: vL*j*vU*vR*chivC -> vL i vU vD==chivC vR
+            self.ttnS[i][-1] = S
+            D = np.tensordot(
+                D, np.diag(S),
+                [2, 0]
+            )  # vL i [vU] vD vR, [vU'] vU -> vL i vD vR vU
+            D = np.transpose(D, [0, 1, 4, 3, 2])
+            D = np.tensordot(
+                np.diag(self.ttnS[i][self._ebL[i]]) ** (-1), D,
+                [1, 0]
+            )  # vL [vL'], [vL'] i vU vD vR -> vL i vD vR vU
+            self.ttnB[i][self._ebL[i]] = D
+            U = np.tensordot(
+                U, np.diag(S),
+                [2, 0]
+            )  # vL i vU [vD] vR, [vD'] vD -> vL i vU vR vD
+            U = np.transpose(U, [0, 1, 2, 4, 3])
+            D = np.tensordot(
+                np.diag(self.ttnS[i+1][self._ebL[i+1]]) ** (-1), D,
+                [1, 0]
+            )  # vL [vL'], [vL'] i vU vD vR -> vL i vD vR vU
+            self.ttnB[i+1][self._ebL[i+1]] = U
+        else:
+            if i == self._vbL[n]:
+                pass
+            elif i == self._vbL[n] + 1:
+                pass
+
         pass
 
     def update_bond(self):
@@ -138,6 +202,19 @@ class SimpleTTPS:
 
 
 def init_ttn(nc, L, d1, d2):
+    """
+
+    :param nc:
+    :type nc:
+    :param L:
+    :type L:
+    :param d1:
+    :type d1:
+    :param d2:
+    :type d2:
+    :return:
+    :rtype:
+    """
     eb = np.zeros([1, d1, 1], np.float)  # vL i vR
     eb[0, 0, 0] = 1.
     ebs = [eb.copy() for i in range(L)]
@@ -158,7 +235,7 @@ def init_ttn(nc, L, d1, d2):
     eb_sss = [eb_ss.copy() for i in range(nc)]
 
     ev_s = np.ones([1], np.float)
-    ev_ss = [ev_s.copy() for i in range(2)]
+    ev_ss = [ev_s.copy() for i in range(2)]  # we have two sites here, e site and v site.
     ev_sss = [ev_ss.copy() for i in range(nc)]
 
     vb_s = np.ones([1], np.float)
