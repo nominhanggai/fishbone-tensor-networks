@@ -5,16 +5,21 @@ from scipy.linalg import svd
 
 class SimpleTTPS:
     """ Simple Tree Like Tensor-Product States
-        
                          ⋮
-        --d33--d32--d31--E3--V3--b31--b32--b33--
+        --d33--d32--d31--E3--V3--b31--b32--b33--  3
                          |
-        --d23--d22--d21--E2--V2--b21--b22--b23--
+        --d23--d22--d21--E2--V2--b21--b22--b23--  2
                          |
-        --d13--d12--d11--E1--V1--b11--b12--b13--
+        --d13--d12--d11--E1--V1--b11--b12--b13--  1
                          |
-        --d03--d02--d01--E0--V0--b01--b02--b03--
-                         ⋮ 
+        --d03--d02--d01--E0--V0--b01--b02--b03--  0
+                        ⋮
+                        -1
+    Let's look at what's already in the diagram and ignore the ellipsis.
+    Bond d03--d02 will be the bond 0 on the chain 0.
+    Bond d12--d11 will be the bond 1 on the china 1.
+    Bond E0-E1 will be the bond 0 on the chain -1.
+
     """
 
     def __init__(self, B, S,  # ele_list, vib_list, e_bath_list, v_bath_list
