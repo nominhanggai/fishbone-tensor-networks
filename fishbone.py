@@ -13,7 +13,7 @@ class SimpleTTPS:
         --d13--d12--d11--E1--V1--b11--b12--b13--  1
                          |
         --d03--d02--d01--E0--V0--b01--b02--b03--  0
-                        ⋮
+                         ⋮
                         -1
     Let's look at what's already in the diagram and ignore the ellipsis.
     Bond d03--d02 will be the bond 0 on the chain 0.
@@ -104,10 +104,10 @@ class SimpleTTPS:
             [1, 0]
         )  # vL [vL'], [vL] i vU vD  vR -> vL i vU vD vR
 
-    def get_theta2(self, n, i):
+    def get_theta2(self, n: int, i: int):
         """Calculate effective two-site wave function on sites i,j=(i+1) in mixed canonical form.
         :param n:
-        :type n:
+        :type n: int
         :param i:
         :type i:
         :return:
@@ -116,7 +116,7 @@ class SimpleTTPS:
         # n=0 means the backbone chain. When n=0, i is the bond number bottom up
         if n == -1:
             try:
-                assert 0 <= i < self._nc - 2
+                assert 0 <= i <= self._nc - 2
             except AssertionError:
                 print("The bond is out of the range.",
                       file=sys.stderr
@@ -125,8 +125,10 @@ class SimpleTTPS:
                 sys.exit(1)
             upward_b = np.tensordot(
                 self.get_theta1(i, self._ebL[i]),
-                np.diag(self.ttnS[i][self._ebL[i]] ** (-1))
-            )  # vL i [vU] vD vR, vU [vU] -> vL i vD vR vU
+                np.diag(self.ttnS[i][self._ebL[i]] ** (-1)),
+                [2, 0]
+            )  # vL i [vU] vD vR, [vU] vU -> vL i vD vR vU
+            print(upward_b.shape)
             upward_b = np.transpose(upward_b, [0, 1, 4, 2, 3])  # vL i vD vR vU -> vL i vU vD vR
             return np.tensordot(
                 upward_b,
@@ -349,5 +351,5 @@ def init_ttn(nc, L, d1, d2):
 
 
 if __name__ == "__main__":
-    ttn = init_ttn(nc=2, L=3, d1=5, d2=6)
+    ttn = init_ttn(nc=4, L=3, d1=5, d2=6)
     ttn.get_theta2(-1, 1)
