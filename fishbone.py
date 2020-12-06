@@ -22,7 +22,7 @@ class SimpleTTPS:
 
     """
 
-    def __init__(self, B, S,  # ele_list, vib_list, e_bath_list, v_bath_list
+    def __init__(self, B, S, H # ele_list, vib_list, e_bath_list, v_bath_list
                  ):
         """
 
@@ -54,10 +54,10 @@ class SimpleTTPS:
         self._ebL = [len(eb[n]) for n in range(self._nc)]
         self._vbL = [len(vb[n]) for n in range(self._nc)]
         self._L = [sum(x) for x in zip(self._ebL, self._evL, self._vbL)]
-
+        
         self.ttnB = []
         # ttn means tree tensor network. The self.ttn array stores the tensors in the whole network.
-        for i in range(self._nc):
+        for n in range(self._nc):
             self.ttnB.append(
                 eb[i] + ev[i] + vb[i]
             )
@@ -83,9 +83,12 @@ class SimpleTTPS:
                    ]
         """
         for n in range(self._nc):
-            self.ttnH.append(
-                [np.empty(0, dtype=np.float) for i in range(self._L[n])]
-            )
+            if self._evL[n] == 2:
+                H_eb, H_ev, H_vb= H[n]
+            self.ttnH.append(h_ev + H_ev + H_vb)
+            elif self._evL[n] == 1:
+                H_eb, H_ev = H[n]
+                self.ttnH.append(H_ev + H_ev)
 
     def get_theta1(self, n: int, i: int):
         """
@@ -281,7 +284,7 @@ class SimpleTTPS:
             # {i j [i*] [j*]} * {vL [i] vU vD, [j] vU vD vR}
             # {i j   k   l}     {a   b  c  d ,  e  f  g  h}
             self.split_truncate_theta(Utheta, n, i, chi_max, eps)
-        else:
+        elif n >= 0:
             if i == self._vbL[n]:
                 Utheta = np.einsum('IJKL,aKLfgh->aIJfgh', self.ttnH[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i]  [j] vU vD vR}
@@ -320,7 +323,7 @@ def init_ttn(nc, L, d1, d2):
     ebs = [eb.copy() for i in range(L)]
     ebss = [ebs.copy() for i in range(nc)]
     #
-    ev = np.zeros([1, d1, 1, 1, 1], np.float)  # vL i vU vD vR
+    ev = np.zeros([1, d2, 1, 1, 1], np.float)  # vL i vU vD vR
     ev[0, 0, 0, 0, 0] = 1.
     evs = [ev.copy() for i in range(2)]
     evss = [evs.copy() for i in range(nc)]
