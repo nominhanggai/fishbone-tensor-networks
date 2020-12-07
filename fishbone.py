@@ -50,16 +50,16 @@ class SimpleTTPS:
             sys.exit(1)
 
         self._nc = len(ev)
-        self._evL = [len(ev[n]) for n in range(self._nc)]
-        self._ebL = [len(eb[n]) for n in range(self._nc)]
-        self._vbL = [len(vb[n]) for n in range(self._nc)]
+        self._evL = [len(ev_n) for ev_n in ev]
+        self._ebL = [len(eb_n) for eb_n in eb]
+        self._vbL = [len(vb_n) for vb_n in vb]
         self._L = [sum(x) for x in zip(self._ebL, self._evL, self._vbL)]
         
         self.ttnB = []
         # ttn means tree tensor network. The self.ttn array stores the tensors in the whole network.
         for n in range(self._nc):
             self.ttnB.append(
-                eb[i] + ev[i] + vb[i]
+                eb[n] + ev[n] + vb[n]
             )
         self._pD = []  # dimensions of physical legs
         for n in range(self._nc):
@@ -85,7 +85,7 @@ class SimpleTTPS:
         for n in range(self._nc):
             if self._evL[n] == 2:
                 H_eb, H_ev, H_vb= H[n]
-            self.ttnH.append(h_ev + H_ev + H_vb)
+                self.ttnH.append(H_eb + H_ev + H_vb)
             elif self._evL[n] == 1:
                 H_eb, H_ev = H[n]
                 self.ttnH.append(H_ev + H_ev)
@@ -280,28 +280,35 @@ class SimpleTTPS:
         theta = self.get_theta2(n, i)
         if n == -1:
             # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
-            Utheta = np.einsum('IJKL,aKcdLfgh->aIcdJfgh', self.ttnH[i][-1], theta)
+            Utheta = np.einsum('IJKL, aKcdLfgh->aIcdJfgh', self.ttnH[i][-1], theta)
             # {i j [i*] [j*]} * {vL [i] vU vD, [j] vU vD vR}
             # {i j   k   l}     {a   b  c  d ,  e  f  g  h}
             self.split_truncate_theta(Utheta, n, i, chi_max, eps)
-        elif n >= 0:
+        elif 0 <= n < self._nc :
             if i == self._vbL[n]:
-                Utheta = np.einsum('IJKL,aKLfgh->aIJfgh', self.ttnH[n][i], theta)
+                Utheta = np.einsum('IJKL, aKLfgh->aIJfgh', self.ttnH[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i]  [j] vU vD vR}
                 # {i j  k   l}      {a   b   e   f  g  h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
             elif i == self._vbL[n] + 1:
-                Utheta = np.einsum('IJKL,aKcdLh->aIcdJh', self.ttnH[n][i], theta)
+                Utheta = np.einsum('IJKL, aKcdLh->aIcdJh', self.ttnH[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i] vU vD,  [j]  vR}
                 # {i j  k   l}      {a   b  c  d ,   e   h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
-            else:
+            elif 0 <= i <= self._L[n] :
                 Utheta = np.einsum('IJKL,aKLh->aIJh', self.ttnH[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i], [j] vR}
                 # {I J  K   L}      {a   b,   e   h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
+            else:
+                raise ValueError
+                # TODO error that i is out of range. Should echo n and i
+        else:
+            raise ValueError
+            # TODO error that n is out of range.
+            # TODO Should echo n and number of chains
 
 def init_ttn(nc, L, d1, d2):
     """
