@@ -125,7 +125,6 @@ class SimpleTTPS:
                       file=sys.stderr
                       )
                 raise
-                sys.exit(1)
             upward_b = np.tensordot(
                 self.get_theta1(i, self._ebL[i]),
                 np.diag(self.ttnS[i][self._ebL[i]] ** (-1)),
