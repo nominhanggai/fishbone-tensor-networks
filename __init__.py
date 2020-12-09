@@ -1,3 +1,3 @@
-from finshbone import *
-from model import *
-from tebd import *
+from fishbonett.fishbone import *
+from fishbonett.model import *
+from fishbonett.tebd import *

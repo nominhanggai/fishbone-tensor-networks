@@ -1,4 +1,4 @@
-import numpy as np
+from .model import *
 from scipy.linalg import expm
 
 
