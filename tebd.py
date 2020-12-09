@@ -1,6 +1,7 @@
-from .model import *
+from fishbonett.model import FishBoneH
+from fishbonett.fishbone import FishBoneNet
 from scipy.linalg import expm
-
+import numpy as np
 
 def calc_U_bonds(H_bonds, dt):
     """Given the H_bonds, calculate ``U_bonds[i] = expm(-dt*H_bonds[i])``.
@@ -17,5 +18,6 @@ def calc_U_bonds(H_bonds, dt):
     return U_bonds
 
 
-def run_TEBD():
-    pass
+tts = FishBoneNet()
+tth = FishBoneH()
+

@@ -3,7 +3,7 @@ import sys
 from scipy.linalg import svd
 
 
-class SimpleTTPS:
+class FishBoneNet:
     """ Simple Tree Like Tensor-Product States
                          ⋮
         --d33--d32--d31--E3--V3--b31--b32--b33--  3
@@ -22,7 +22,7 @@ class SimpleTTPS:
 
     """
 
-    def __init__(self, B, S, H # ele_list, vib_list, e_bath_list, v_bath_list
+    def __init__(self, B, S # ele_list, vib_list, e_bath_list, v_bath_list
                  ):
         """
 
@@ -64,7 +64,7 @@ class SimpleTTPS:
         self._pD = []  # dimensions of physical legs
         for n in range(self._nc):
             self._pD.append(
-                [self.ttnB[n][i].shape[1] for i in range(self._L[i])]
+                [self.ttnB[n][i].shape[1] for i in range(self._L[n])]
             )
         self.ttnS = []
 
