@@ -18,6 +18,5 @@ def calc_U_bonds(H_bonds, dt):
     return U_bonds
 
 
-tts = FishBoneNet()
-tth = FishBoneH()
+
 
