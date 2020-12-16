@@ -1,21 +1,16 @@
 from fishbonett.model import FishBoneH
-from fishbonett.fishbone import FishBoneNet
-from scipy.linalg import expm
+from fishbonett.fishbone import FishBoneNet, init_ttn
 import numpy as np
 
-def calc_U_bonds(H_bonds, dt):
-    """Given the H_bonds, calculate ``U_bonds[i] = expm(-dt*H_bonds[i])``.
+a = [3, 3, 3]
+b = [2]
+pd = np.array([[a, b, b, a], [a, b, b, a]], dtype=object)
 
-    Each local operator has legs (i out, (i+1) out, i in, (i+1) in), in short ``i j i* j*``.
-    Note that no imaginary 'i' is included, thus real `dt` means 'imaginary time' evolution!
-    """
-    d = H_bonds[0].shape[0]
-    U_bonds = []
-    for H in H_bonds:
-        H = np.reshape(H, [d * d, d * d])
-        U = expm(-dt * H)
-        U_bonds.append(np.reshape(U, [d, d, d, d]))
-    return U_bonds
+eeth = FishBoneH(pd)
+eetn = init_ttn(nc=1, L=3, d1=3, de=2, dv=5)
+eeth.build()
+eetn.ttnH = eeth.get_u(dt=0.01)
+print(eeth.get_u(dt=0.01), eeth.H)
 
 
 

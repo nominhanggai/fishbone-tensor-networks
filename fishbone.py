@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 from scipy.linalg import svd
+import copy
 
 
 class FishBoneNet:
@@ -22,7 +23,7 @@ class FishBoneNet:
 
     """
 
-    def __init__(self, B, S # ele_list, vib_list, e_bath_list, v_bath_list
+    def __init__(self, B, S  # ele_list, vib_list, e_bath_list, v_bath_list
                  ):
         """
 
@@ -37,7 +38,9 @@ class FishBoneNet:
         # self.vb = v_bath_list
         (eb, ev, vb) = B
         (eb_s, ev_s, vb_s) = S
-
+        # print("eb", eb, "len", len(eb))
+        # print("ev", ev, "len", len(ev))
+        # print("vb", vb, "len", len(vb))
         try:
             assert len(eb) == len(ev) == len(vb)
         except AssertionError:
@@ -47,14 +50,13 @@ class FishBoneNet:
                   file=sys.stderr
                   )
             raise
-            sys.exit(1)
 
         self._nc = len(ev)
         self._evL = [len(ev_n) for ev_n in ev]
         self._ebL = [len(eb_n) for eb_n in eb]
         self._vbL = [len(vb_n) for vb_n in vb]
         self._L = [sum(x) for x in zip(self._ebL, self._evL, self._vbL)]
-        
+
         self.ttnB = []
         # ttn means tree tensor network. The self.ttn array stores the tensors in the whole network.
         for n in range(self._nc):
@@ -82,13 +84,13 @@ class FishBoneNet:
                      ...
                    ]
         """
-        for n in range(self._nc):
-            if self._evL[n] == 2:
-                H_eb, H_ev, H_vb= H[n]
-                self.ttnH.append(H_eb + H_ev + H_vb)
-            elif self._evL[n] == 1:
-                H_eb, H_ev = H[n]
-                self.ttnH.append(H_ev + H_ev)
+        # for n in range(self._nc):
+        #     if self._evL[n] == 2:
+        #         H_eb, H_ev, H_vb = H[n]
+        #         self.ttnH.append(H_eb + H_ev + H_vb)
+        #     elif self._evL[n] == 1:
+        #         H_eb, H_ev = H[n]
+        #         self.ttnH.append(H_ev + H_ev)
 
     def get_theta1(self, n: int, i: int):
         """
@@ -161,7 +163,7 @@ class FishBoneNet:
         :type eps: float
         :return: No return. Just updates the tensors in self.ttnS and self.ttnB
         """
-        #theta = self.get_theta2(n, i)
+        # theta = self.get_theta2(n, i)
         if n == -1:
             # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
             chiL_d, p_d, chiD_d, chiR_d, chiL_u, p_u, chiU_u, chiR_u = theta.shape
@@ -198,10 +200,10 @@ class FishBoneNet:
             U = np.transpose(U, [0, 1, 2, 4, 3])
             # vL i vU vR vD -> vL i vU vD vR
             U = np.tensordot(
-                np.diag(self.ttnS[i+1][self._ebL[i+1]]) ** (-1), U,
+                np.diag(self.ttnS[i + 1][self._ebL[i + 1]]) ** (-1), U,
                 [1, 0]
             )  # vL [vL'], [vL'] i vU vD vR -> vL i vU vD vR
-            self.ttnB[i+1][self._ebL[i+1]] = U
+            self.ttnB[i + 1][self._ebL[i + 1]] = U
 
         else:
             if i == self._vbL[n]:
@@ -213,36 +215,36 @@ class FishBoneNet:
                 piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
                 A, S, B = A[:, piv], S[piv], B[piv, :]
                 S = S / np.linalg.norm(S)
-                self.ttnS[n][i+1] = S
+                self.ttnS[n][i + 1] = S
                 A = np.reshape(A, [chiL_l, p_l, chivC])
                 # A: vL*i*vR -> vL i vR=chivC
                 B = np.reshape(B, [chivC, p_r, chiU_r, chiD_r, chiR_r])
                 # B: chivC*j*vU*vD*vR -> vL==chivC j vU vD vR
-                A = np.tensordot(np.diag(self.ttnS[n][i-1]**(-1)), A, axes=[1, 0])
-                A = np.tensordot(A, np.diag(S), axes=[2,0])
+                A = np.tensordot(np.diag(self.ttnS[n][i - 1] ** (-1)), A, axes=[1, 0])
+                A = np.tensordot(A, np.diag(S), axes=[2, 0])
                 self.ttnB[n][i] = A
-                self.ttnB[n][i+1] = B
+                self.ttnB[n][i + 1] = B
 
             elif i == self._vbL[n] + 1:
                 chiL_l, p_l, chiU_l, chiD_l, p_r, chiR_r = theta.shape
                 theta = np.reshape(theta, [chiL_l * p_l * chiU_l * chiD_l,
-                                           p_r *  chiR_r])
+                                           p_r * chiR_r])
                 A, S, B = svd(theta, full_matrices=False)
                 chivC = min(chi_max, np.sum(S > eps))
                 piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
                 A, S, B = A[:, piv], S[piv], B[piv, :]
                 S = S / np.linalg.norm(S)
-                self.ttnS[n][i+1] = S
+                self.ttnS[n][i + 1] = S
                 A = np.reshape(A, [chiL_l, p_l, chiU_l, chiD_l, chivC])
                 # A: {vL*i*vU*vD, chivC} -> vL i vU vD vR=chivC
-                B = np.reshape(B, [chivC, p_r,  chiR_r])
+                B = np.reshape(B, [chivC, p_r, chiR_r])
                 # B: {chivC, j*vR} -> vL==chivC j vR
-                A = np.tensordot(np.diag(self.ttnS[n][i-1]**(-1)), A, axes=[1, 0])
+                A = np.tensordot(np.diag(self.ttnS[n][i - 1] ** (-1)), A, axes=[1, 0])
                 # vL [vL'] * [vL] i vU vD vR -> vL i vU vD vR
                 A = np.tensordot(A, S, [4, 0])
                 # vL i vU vD [vR] * [vR] vR -> vL i vU vD vR
                 self.ttnB[n][i] = A
-                self.ttnB[n][i+1] = B
+                self.ttnB[n][i + 1] = B
 
             else:
                 chiL_l, p_l, p_r, chiR_r = theta.shape
@@ -253,7 +255,7 @@ class FishBoneNet:
                 piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
                 A, S, B = A[:, piv], S[piv], B[piv, :]
                 S = S / np.linalg.norm(S)
-                self.ttnS[n][i+1] = S
+                self.ttnS[n][i + 1] = S
                 A = np.reshape(A, [chiL_l, p_l, chivC])
                 # A: {vL*i, chivC} -> vL i vR=chivC
                 B = np.reshape(B, [chivC, p_r, chiR_r])
@@ -283,7 +285,7 @@ class FishBoneNet:
             # {i j [i*] [j*]} * {vL [i] vU vD, [j] vU vD vR}
             # {i j   k   l}     {a   b  c  d ,  e  f  g  h}
             self.split_truncate_theta(Utheta, n, i, chi_max, eps)
-        elif 0 <= n < self._nc :
+        elif 0 <= n < self._nc:
             if i == self._vbL[n]:
                 Utheta = np.einsum('IJKL, aKLfgh->aIJfgh', self.ttnH[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i]  [j] vU vD vR}
@@ -296,7 +298,7 @@ class FishBoneNet:
                 # {i j  k   l}      {a   b  c  d ,   e   h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
-            elif 0 <= i <= self._L[n] :
+            elif 0 <= i <= self._L[n]:
                 Utheta = np.einsum('IJKL,aKLh->aIJh', self.ttnH[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i], [j] vR}
                 # {I J  K   L}      {a   b,   e   h}
@@ -309,10 +311,15 @@ class FishBoneNet:
             # TODO error that n is out of range.
             # TODO Should echo n and number of chains
 
-def init_ttn(nc, L, d1, d2):
+
+def init_ttn(nc, L, d1, de, dv):
     """
     Initialize the SimpleTTN class.
     Fill all the relevant lists, including ttnS, ttnB, ttnH.
+    :param de:
+    :type de:
+    :param dv:
+    :type dv:
     :param nc:
     :type nc:
     :param L:
@@ -329,10 +336,12 @@ def init_ttn(nc, L, d1, d2):
     ebs = [eb.copy() for i in range(L)]
     ebss = [ebs.copy() for i in range(nc)]
     #
-    ev = np.zeros([1, d2, 1, 1, 1], np.float)  # vL i vU vD vR
-    ev[0, 0, 0, 0, 0] = 1.
-    evs = [ev.copy() for i in range(2)]
-    evss = [evs.copy() for i in range(nc)]
+    e = np.zeros([1, de, 1, 1, 1], np.float)  # vL i vU vD vR
+    e[0, 0, 0, 0, 0] = 1.
+    v = np.zeros([1, dv, 1, 1, 1], np.float)  # vL i vU vD vR
+    v[0, 0, 0, 0, 0] = 1.
+
+    evss = [[e.copy(), v.copy()] for i in range(nc)]
     #
     vb = np.zeros([1, d1, 1], np.float)  # vL i vR
     vb[0, 0, 0] = 1.
@@ -353,12 +362,12 @@ def init_ttn(nc, L, d1, d2):
     # print(ebss[1])
     # print(evss[1])
     # print(vbss[1])
-    return SimpleTTPS(
+    return FishBoneNet(
         (ebss, evss, vbss),
         (eb_sss, ev_sss, vb_sss)
     )
 
 
 if __name__ == "__main__":
-    ttn = init_ttn(nc=4, L=3, d1=5, d2=6)
+    ttn = init_ttn(nc=4, L=3, d1=5, de=2, dv=10)
     ttn.get_theta2(-1, 1)
