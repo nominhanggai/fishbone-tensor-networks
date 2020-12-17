@@ -140,7 +140,7 @@ class FishBoneNet:
                 [2, 4]
             )  # vL i [vU] vD vR , vL' j vU' [vD'] vR' -> {vL i VD vR; VL' j vU' vR'}
 
-        if n > 0:
+        if n >= 0:
             assert n <= self._nc - 1
             assert 0 <= i < self._L[n] - 1
             return np.tensordot(
@@ -262,7 +262,7 @@ class FishBoneNet:
                 # B: {chivC, j*vR} -> vL==chivC j vR
                 A = np.tensordot(np.diag(self.ttnS[n][i - 1] ** (-1)), A, axes=[1, 0])
                 # vL [vL'] * [vL] i vR -> vL i vR
-                A = np.tensordot(A, S, [4, 0])
+                A = np.tensordot(A, S, [2, 0])
                 # vL i [vR] * [vR] vR -> vL i vR
                 self.ttnB[n][i] = A
                 self.ttnB[n][i + 1] = B
@@ -299,7 +299,9 @@ class FishBoneNet:
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
             elif 0 <= i <= self._L[n]:
+                print(theta.shape)
                 Utheta = np.einsum('IJKL,aKLh->aIJh', self.ttnH[n][i], theta)
+
                 # {i j [i*] [j*]} * {vL [i], [j] vR}
                 # {I J  K   L}      {a   b,   e   h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
