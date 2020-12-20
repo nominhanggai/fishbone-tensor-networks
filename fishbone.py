@@ -78,7 +78,7 @@ class FishBoneNet:
         for n in range(self._nc):
             self.ttnS.append(eb_s[n] + ev_s[n] + vb_s[n])
 
-        self.ttnH = []
+        self.U = []
         """ ttnH = [ [ H_11, H_12, ..., H_1M, H_backbone_1 ],
                      [ H_21, H_22, ..., H_2N, H_backbone_2 ],
                      ...
@@ -148,7 +148,7 @@ class FishBoneNet:
             #     self.get_theta1(n, i).shape, self.ttnB[n][i + 1].shape, n, i, np.tensordot(
             #     self.get_theta1(n, i), self.ttnB[n][i + 1], axes=1
             # ).shape)
-            print("Product Shape", self.get_theta1(n, i).shape, self.ttnB[n][i + 1].shape)
+            print("theta2 product shape, theta1 and B", self.get_theta1(n, i).shape, self.ttnB[n][i + 1].shape)
             return np.tensordot(
                 self.get_theta1(n, i), self.ttnB[n][i + 1], axes=1
             )  # vL i _vU_ _vD_ [vR],  [vL] j _vU_ _vD_ vR -> {vL i _vU_ _vD_; j _vU_ _vD_ vR}
@@ -238,12 +238,14 @@ class FishBoneNet:
                 piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
                 A, S, B = A[:, piv], S[piv], B[piv, :]
                 S = S / np.linalg.norm(S)
-                self.ttnS[n][i] = S
+                self.ttnS[n][i+1] = S
+                print("Shape of middle S", np.diag(self.ttnS[n][i+1]).shape)
                 A = np.reshape(A, [chiL_l, p_l, chivC])
                 # A: vL*i*vR -> vL i vR=chivC
                 B = np.reshape(B, [chivC, p_r, chiU_r, chiD_r, chiR_r])
                 # B: chivC*j*vU*vD*vR -> vL==chivC j vU vD vR
-                A = np.tensordot(np.diag(self.ttnS[n][i - 1] ** (-1)), A, axes=[1, 0])
+                print("Shape of left S and A", np.diag(self.ttnS[n][i] ** (-1)).shape, A.shape)
+                A = np.tensordot(np.diag(self.ttnS[n][i] ** (-1)), A, axes=[1, 0])
                 A = np.tensordot(A, np.diag(S), axes=[2, 0])
                 self.ttnB[n][i] = A
                 self.ttnB[n][i + 1] = B
@@ -258,16 +260,15 @@ class FishBoneNet:
                 A, S, B = A[:, piv], S[piv], B[piv, :]
                 S = S / np.linalg.norm(S)
                 self.ttnS[n][i + 1] = S
+                #print("Shape of middle S", np.diag(self.ttnS[n][i + 1]).shape)
                 A = np.reshape(A, [chiL_l, p_l, chiU_l, chiD_l, chivC])
-                print("A.shape", A.shape)
                 # A: {vL*i*vU*vD, chivC} -> vL i vU vD vR=chivC
                 B = np.reshape(B, [chivC, p_r, chiR_r])
                 # B: {chivC, j*vR} -> vL==chivC j vR
+                #print("Shape of left S and A", np.diag(self.ttnS[n][i] ** (-1)).shape, A.shape)
                 A = np.tensordot(np.diag(self.ttnS[n][i] ** (-1)), A, axes=[1, 0])
-                print("A.shape", A.shape)
                 # vL [vL'] * [vL] i vU vD vR -> vL i vU vD vR
                 A = np.tensordot(A, np.diag(S), [4, 0])
-                print("A.shape", A.shape)
                 # vL i vU vD [vR] * [vR] vR -> vL i vU vD vR
                 self.ttnB[n][i] = A
                 self.ttnB[n][i + 1] = B
@@ -315,21 +316,21 @@ class FishBoneNet:
         #("HERE", n, i)
         if n == -1:
             # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
-            Utheta = np.einsum('IJKL, aKcdeLgh->aIcdeJgh', self.ttnH[i][-1], theta)
-            print("Utheta.shape", Utheta.shape, self.ttnH[i][-1].shape, theta.shape)
+            Utheta = np.einsum('IJKL, aKcdeLgh->aIcdeJgh', self.U[i][-1], theta)
+            print("Utheta.shape", Utheta.shape, self.U[i][-1].shape, theta.shape)
             # {i j [i*] [j*]} * {vL [i] vD vR, vL' [j] vD vR}
             # {i j   k   l}     {a   b  c  d ,  e  f  g  h}
             self.split_truncate_theta(Utheta, n, i, chi_max, eps)
         elif 0 <= n < self._nc:
             if i == self._ebL[n] - 1:
-                print("Theta Shape", theta.shape, self.ttnH[n][i].shape)
-                Utheta = np.einsum('IJKL, aKLfgh->aIJfgh', self.ttnH[n][i], theta)
+                print("Theta Shape", theta.shape, "n and i", n, i, self.U[n][i].shape)
+                Utheta = np.einsum('IJKL, aKLfgh->aIJfgh', self.U[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i]  [j] vU vD vR}
                 # {i j  k   l}      {a   b   e   f  g  h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
             elif i == self._ebL[n]:
-                Utheta = np.einsum('IJKL, aKcdLh->aIcdJh', self.ttnH[n][i], theta)
+                Utheta = np.einsum('IJKL, aKcdLh->aIcdJh', self.U[n][i], theta)
                 # {i j [i*] [j*]} * {vL [i] vU vD,  [j]  vR}
                 # {i j  k   l}      {a   b  c  d ,   e   h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
@@ -337,7 +338,7 @@ class FishBoneNet:
             elif 0 <= i <= self._L[n]:
                 #print("HEREE", theta.shape, n, i)
                 #print("Hshape", self.ttnH[n][i].reshape(4,4), n, i)
-                Utheta = np.einsum('IJKL,aKLh->aIJh', self.ttnH[n][i], theta)
+                Utheta = np.einsum('IJKL,aKLh->aIJh', self.U[n][i], theta)
                 #print("theta", theta)
                 #print("Utheta", Utheta)
                 #print("U", self.ttnH[n][i])
@@ -379,7 +380,7 @@ def init_ttn(nc, L, d1, de, dv):
     :rtype:
     """
     eb = np.zeros([1, d1, 1], np.float)  # vL i vR
-    eb[0, 0, 0] = 1.
+    eb[0, 1, 0] = 1.
     ebs = [eb.copy() for i in range(L)]
     ebss = [dcopy(ebs) for i in range(nc)]
     #
