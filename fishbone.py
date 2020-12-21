@@ -120,7 +120,7 @@ class FishBoneNet:
         """
         # n=0 means the backbone chain. When n=0, i is the bond number bottom up
         if n == -1:
-            #print("i", i)
+            # print("i", i)
             try:
                 assert 0 <= i <= self._nc - 1
             except AssertionError:
@@ -128,33 +128,27 @@ class FishBoneNet:
                       file=sys.stderr
                       )
                 raise
-            lowerTheta = self.get_theta1(i+1, self._ebL[i+1])
-            sInverseMiddle = np.diag(self.ttnS[i][-1] ** (-1))
-            print("SHAPE", lowerTheta.shape, sInverseMiddle.shape)
-            upright_b = np.tensordot(
-                lowerTheta,
-                sInverseMiddle,
+            theta_lower = self.get_theta1(i + 1, self._ebL[i + 1])
+            s_inverse_middle = np.diag(self.ttnS[i][-1] ** (-1))
+            # print("SHAPE", theta_lower.shape, s_inverse_middle.shape)
+            gamma_lower_down_canonical = np.tensordot(
+                theta_lower,
+                s_inverse_middle,
                 [2, 0]
             )  # vL i [vU] vD vR, [vU] vU -> vL i vD vR vU
-            b_low = np.transpose(upright_b, [0, 1, 4, 2, 3])  # vL i vD vR vU -> vL i vU vD vR
-            b_high = self.get_theta1(i, self._ebL[i])
-            print("b_high shape", b_high.shape)
-            print("b_low shape", b_low.shape)
+            gamma_lower_down_canonical = np.transpose(gamma_lower_down_canonical,
+                                                      [0, 1, 4, 2, 3])  # vL i vD vR vU -> vL i vU vD vR
+            theta_higher = self.get_theta1(i, self._ebL[i])
             return np.tensordot(
-                b_high,
-                b_low,
+                theta_higher,
+                gamma_lower_down_canonical,
                 [3, 2]
             )  # vL i vU [vD] vR , vL' j [vU'] vD' vR' -> {vL i vU vR; VL' j vD' vR'}
 
         if n >= 0:
             assert n <= self._nc - 1
             assert 0 <= i < self._L[n] - 1
-            # if i == self._ebL[n]:
-            # print("HHHH",
-            #     self.get_theta1(n, i).shape, self.ttnB[n][i + 1].shape, n, i, np.tensordot(
-            #     self.get_theta1(n, i), self.ttnB[n][i + 1], axes=1
-            # ).shape)
-            print("theta2 product shape, theta1 and B", self.get_theta1(n, i).shape, self.ttnB[n][i + 1].shape)
+            # print("theta2 product shape, theta1 and B", self.get_theta1(n, i).shape, self.ttnB[n][i + 1].shape)
             return np.tensordot(
                 self.get_theta1(n, i), self.ttnB[n][i + 1], axes=1
             )  # vL i _vU_ _vD_ [vR],  [vL] j _vU_ _vD_ vR -> {vL i _vU_ _vD_; j _vU_ _vD_ vR}
@@ -163,6 +157,7 @@ class FishBoneNet:
             #         'ABC,Cjkl->ABjkl', self.get_theta1(n,i)
             #     )  # vL i [vR],  [vL] j vU vD vR -> {vL i vU vD; j _vU_ _vD_ vR}
             # elif 0 <= i <= self._L[n]:
+
     def split_truncate_theta(self, theta, n, i, chi_max, eps):
         """
         Split the contracted two-site wave function and truncate the number of singular values.
@@ -182,73 +177,72 @@ class FishBoneNet:
         # theta = self.get_theta2(n, i)
         if n == -1:
             # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
-            chiL_u, p_u, chiU_u, chiR_u, chiL_d, p_d, chiD_d , chiR_d,  = theta.shape
-            #print("thetashape", theta.shape)
-            theta = np.reshape(theta, [chiL_u * p_u * chiU_u * chiR_u,
-                                       chiL_d * p_d * chiD_d * chiR_d])
-            U, S, D = svd(theta, full_matrices=False)
-            dshape = (D.shape, U.shape)
-            #print("dshape", dshape, theta.shape)
+            chi_left_higher, phys_higher, chi_up_higher, chi_right_higher, \
+            chi_left_on_left, phys_lower, chi_down_lower, chi_right_lower = theta.shape
+            theta = np.reshape(theta, [chi_left_higher * phys_higher * chi_up_higher * chi_right_higher,
+                                       chi_left_on_left * phys_lower * chi_down_lower * chi_right_lower])
+            gamma_higher_up_canonical, S, gamma_lower_down_canonical = svd(theta, full_matrices=False)
             chivC = min(chi_max, np.sum(S > eps))
             piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
-            U, S, D = U[:, piv], S[piv], D[piv, :]
+            gamma_higher_up_canonical, S, gamma_lower_down_canonical = gamma_higher_up_canonical[:, piv], S[piv], gamma_lower_down_canonical[piv, :]
             S = S / np.linalg.norm(S)
-            U = np.reshape(U, [chiL_u, p_u, chiU_u, chiR_u, chivC])
-            # D: vL*i*vU*vR*chivC -> vL i vU vR vU=chivC
-            #print("DSHAPE", D.shape)
-            U = np.transpose(U, [0, 1, 2, 4, 3])
-            # vL i vU vR vD -> vL i vU vD vR
-            #print("DSHAPE", D.shape)
-            D = np.reshape(D, [chivC, chiL_d, p_d, chiD_d, chiR_d])
-            #print("USHAPE", U.shape)
-            # B: chivC*vL*j*vD*vR -> vD==chivC vL i vD vR
-            D = np.transpose(D, [1, 2, 0, 3, 4])
-            # vU vL i vD vR -> vL i vU vD vR
             self.ttnS[i][-1] = S
-            #print("S", i)
-            U = np.tensordot(
-                U, np.diag(S),
+            gamma_higher_up_canonical = np.reshape(gamma_higher_up_canonical,
+                                      [chi_left_higher, phys_higher, chi_up_higher, chi_right_higher, chivC])
+            # D: vL*i*vU*vR*chivC -> vL i vU vR vU=chivC
+            # print("DSHAPE", D.shape)
+            gamma_higher_up_canonical = np.transpose(gamma_higher_up_canonical, [0, 1, 2, 4, 3])
+            # vL i vU vR vD -> vL i vU vD vR
+            # print("DSHAPE", D.shape)
+            theta_higher = np.tensordot(
+                gamma_higher_up_canonical, np.diag(S),
                 [3, 0]
             )  # vL i vU [vD] vR, [vD'] vD -> vL i vU vR vD
-            U = np.transpose(U, [0, 1, 2, 4, 3])
-            U = np.tensordot(
-                np.diag(self.ttnS[i][self._ebL[i]]) ** (-1), U,
+            theta_higher = np.transpose(theta_higher, [0, 1, 2, 4, 3])
+            gamma_higher_right_canonical = np.tensordot(
+                np.diag(self.ttnS[i][self._ebL[i]]) ** (-1), theta_higher,
                 [1, 0]
             )  # vL [vL'], [vL'] i vU vD vR -> vL i vD vR vU
-            self.ttnB[i][self._ebL[i+1]] = U
-            D = np.tensordot(
-                D, np.diag(S),
+            self.ttnB[i][self._ebL[i + 1]] = gamma_higher_right_canonical
+
+            gamma_lower_down_canonical = np.reshape(gamma_lower_down_canonical,
+                                     [chivC, chi_left_on_left, phys_lower, chi_down_lower, chi_right_lower])
+            # print("USHAPE", U.shape)
+            # B: chivC*vL*j*vD*vR -> vD==chivC vL i vD vR
+            gamma_lower_down_canonical = np.transpose(gamma_lower_down_canonical, [1, 2, 0, 3, 4])
+            # vU vL i vD vR -> vL i vU vD vR
+
+            # print("S", i)
+            theta_lower = np.tensordot(
+                gamma_lower_down_canonical, np.diag(S),
                 [2, 0]
             )  # vL i [vU] vD vR, [vU'] vU -> vL i vD vR vU
-            #print("DSHAPE", D.shape)
-            D = np.transpose(D, [0, 1, 4, 2, 3])
-            #print("DSHAPE", D.shape)
+            # print("DSHAPE", D.shape)
+            theta_lower = np.transpose(theta_lower, [0, 1, 4, 2, 3])
             # vL i vD vR vU -> vL i vU vD vR
-            a = np.diag(self.ttnS[i + 1][self._ebL[i + 1]]) ** (-1)
-            #print("Shape", a.shape, U.shape)
-            D = np.tensordot(
-                np.diag(self.ttnS[i + 1][self._ebL[i + 1]]) ** (-1), D,
+            gamma_lower_right_canonical = np.tensordot(
+                np.diag(self.ttnS[i + 1][self._ebL[i + 1]]) ** (-1), theta_lower,
                 [1, 0]
             )  # vL [vL'], [vL'] i vU vD vR -> vL i vU vD vR
-            #print("USHAPE", U.shape)
-            self.ttnB[i+1][self._ebL[i]] = D
+            # print("USHAPE", U.shape)
+            self.ttnB[i + 1][self._ebL[i]] = gamma_lower_right_canonical
 
         else:
-            if i == self._ebL[n] -1:
-                #print("ni", n, i, theta.shape)
-                chiL_l, p_l, p_r, chiU_r, chiD_r, chiR_r = theta.shape
-                theta = np.reshape(theta, [chiL_l * p_l,
-                                           p_r * chiU_r * chiD_r * chiR_r])
+            if i == self._ebL[n] - 1:
+                # print("ni", n, i, theta.shape)
+                chi_left_on_left, phys_left, \
+                    phys_right, chi_up_on_right, chi_down_on_right, chi_right_on_right = theta.shape
+                theta = np.reshape(theta,[chi_left_on_left * phys_left, phys_right * chi_up_on_right * chi_down_on_right * chi_right_on_right])
                 A, S, B = svd(theta, full_matrices=False)
                 chivC = min(chi_max, np.sum(S > eps))
                 piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
                 A, S, B = A[:, piv], S[piv], B[piv, :]
                 S = S / np.linalg.norm(S)
-                self.ttnS[n][i+1] = S
-                print("Shape of middle S", np.diag(self.ttnS[n][i+1]).shape)
-                A = np.reshape(A, [chiL_l, p_l, chivC])
+                self.ttnS[n][i + 1] = S
+                print("Shape of middle S", np.diag(self.ttnS[n][i + 1]).shape)
+                A = np.reshape(A, [chi_left_on_left, phys_left, chivC])
                 # A: vL*i*vR -> vL i vR=chivC
-                B = np.reshape(B, [chivC, p_r, chiU_r, chiD_r, chiR_r])
+                B = np.reshape(B, [chivC, phys_right, chi_up_on_right, chi_down_on_right, chi_right_on_right])
                 # B: chivC*j*vU*vD*vR -> vL==chivC j vU vD vR
                 print("Shape of left S and A", np.diag(self.ttnS[n][i] ** (-1)).shape, A.shape)
                 A = np.tensordot(np.diag(self.ttnS[n][i] ** (-1)), A, axes=[1, 0])
@@ -257,21 +251,21 @@ class FishBoneNet:
                 self.ttnB[n][i + 1] = B
 
             elif i == self._ebL[n]:
-                chiL_l, p_l, chiU_l, chiD_l, p_r, chiR_r = theta.shape
-                theta = np.reshape(theta, [chiL_l * p_l * chiU_l * chiD_l,
-                                           p_r * chiR_r])
+                chi_left_on_left, phys_left, chiU_l, chiD_l, phys_right, chi_right_on_right = theta.shape
+                theta = np.reshape(theta, [chi_left_on_left * phys_left * chiU_l * chiD_l,
+                                           phys_right * chi_right_on_right])
                 A, S, B = svd(theta, full_matrices=False)
                 chivC = min(chi_max, np.sum(S > eps))
                 piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
                 A, S, B = A[:, piv], S[piv], B[piv, :]
                 S = S / np.linalg.norm(S)
                 self.ttnS[n][i + 1] = S
-                #print("Shape of middle S", np.diag(self.ttnS[n][i + 1]).shape)
-                A = np.reshape(A, [chiL_l, p_l, chiU_l, chiD_l, chivC])
+                # print("Shape of middle S", np.diag(self.ttnS[n][i + 1]).shape)
+                A = np.reshape(A, [chi_left_on_left, phys_left, chiU_l, chiD_l, chivC])
                 # A: {vL*i*vU*vD, chivC} -> vL i vU vD vR=chivC
-                B = np.reshape(B, [chivC, p_r, chiR_r])
+                B = np.reshape(B, [chivC, phys_right, chi_right_on_right])
                 # B: {chivC, j*vR} -> vL==chivC j vR
-                #print("Shape of left S and A", np.diag(self.ttnS[n][i] ** (-1)).shape, A.shape)
+                # print("Shape of left S and A", np.diag(self.ttnS[n][i] ** (-1)).shape, A.shape)
                 A = np.tensordot(np.diag(self.ttnS[n][i] ** (-1)), A, axes=[1, 0])
                 # vL [vL'] * [vL] i vU vD vR -> vL i vU vD vR
                 A = np.tensordot(A, np.diag(S), [4, 0])
@@ -280,33 +274,34 @@ class FishBoneNet:
                 self.ttnB[n][i + 1] = B
 
             else:
-                chiL_l, p_l, p_r, chiR_r = theta.shape
-                #print("theta shape", theta, theta.shape)
-                theta = np.reshape(theta, [chiL_l * p_l,
-                                           p_r * chiR_r])
+                chi_left_on_left, phys_left, phys_right, chi_right_on_right = theta.shape
+                # print("theta shape", theta, theta.shape)
+                theta = np.reshape(theta, [chi_left_on_left * phys_left,
+                                           phys_right * chi_right_on_right])
                 A, S, B = svd(theta, full_matrices=False)
-                #print("ABS", A.shape, B.shape, S)
+                # print("ABS", A.shape, B.shape, S)
                 chivC = min(chi_max, np.sum(S > eps))
                 piv = np.argsort(S)[::-1][:chivC]  # keep the largest `chivC` singular values
-                #print("piv", chivC, piv, np.sum(S > eps))
+                # print("piv", chivC, piv, np.sum(S > eps))
                 A, S, B = A[:, piv], S[piv], B[piv, :]
-                #print("AB", A.shape, B.shape, S.shape)
+                # print("AB", A.shape, B.shape, S.shape)
                 S = S / np.linalg.norm(S)
-                self.ttnS[n][i+1] = S
-                A = np.reshape(A, [chiL_l, p_l, chivC])
-                #print("Areshape", A, S)
+                self.ttnS[n][i + 1] = S
+                A = np.reshape(A, [chi_left_on_left, phys_left, chivC])
+                # print("Areshape", A, S)
                 # A: {vL*i, chivC} -> vL i vR=chivC
-                B = np.reshape(B, [chivC, p_r, chiR_r])
+                B = np.reshape(B, [chivC, phys_right, chi_right_on_right])
                 # B: {chivC, j*vR} -> vL==chivC j vR
                 A = np.tensordot(np.diag(self.ttnS[n][i] ** (-1)), A, [1, 0])
-                #print("Adot", A)
+                # print("Adot", A)
                 # vL [vL'] * [vL] i vR -> vL i vR
                 A = np.tensordot(A, np.diag(S), [2, 0])
                 # vL i [vR] * [vR] vR -> vL i vR
-                #print("ABfinal", "A",A, "B", B)
+                # print("ABfinal", "A",A, "B", B)
                 self.ttnB[n][i] = A
                 self.ttnB[n][i + 1] = B
-                #print("ttnB n= ",n , self.ttnB[n])
+                # print("ttnB n= ",n , self.ttnB[n])
+
     def update_bond(self, n, i, chi_max, eps):
         """
         :param n:
@@ -319,7 +314,7 @@ class FishBoneNet:
         :type eps:
         """
         theta = self.get_theta2(n, i)
-        #("HERE", n, i)
+        # ("HERE", n, i)
         if n == -1:
             # {Down part: vL i VD vR; Up part: VL' j vU' vR'}
             Utheta = np.einsum('IJKL, aKcdeLgh->aIcdeJgh', self.U[i][-1], theta)
@@ -342,12 +337,12 @@ class FishBoneNet:
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
 
             elif 0 <= i <= self._L[n]:
-                #print("HEREE", theta.shape, n, i)
-                #print("Hshape", self.ttnH[n][i].reshape(4,4), n, i)
+                # print("HEREE", theta.shape, n, i)
+                # print("Hshape", self.ttnH[n][i].reshape(4,4), n, i)
                 Utheta = np.einsum('IJKL,aKLh->aIJh', self.U[n][i], theta)
-                #print("theta", theta)
-                #print("Utheta", Utheta)
-                #print("U", self.ttnH[n][i])
+                # print("theta", theta)
+                # print("Utheta", Utheta)
+                # print("U", self.ttnH[n][i])
                 # {i j [i*] [j*]} * {vL [i], [j] vR}
                 # {I J  K   L}      {a   b,   e   h}
                 self.split_truncate_theta(Utheta, n, i, chi_max, eps)
