@@ -1,2 +1,38 @@
 __pycache__/
 .*
+
+
+
+## LaTeX FILES
+# LaTeX temporary files
+*.aux
+*.log
+*.toc
+*.ent
+
+# PDF output - usually a bad idea to keep this in Git
+#*.pdf
+
+# Latexmk
+*.fdb_latexmk
+
+# SyncTeX
+*.synctex.gz
+*.synctex(busy)
+
+# LaTeX Beamer
+*.snm
+*.vrb
+*.nav
+*.out
+
+# BibTeX
+*.bbl
+*.blg
+
+# 'tikz/external' library files
+*.dpth
+*.dep
+*.log
+*.ent
+*.auxlock

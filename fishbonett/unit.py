@@ -5,7 +5,8 @@ KB = 8.617333262145 * 1e-4  # 0.1 ev * 1 K
 FREQ = 2.99792458*2*3.141592653 * 0.01 # ps^(-1). freq <-> 1cm-1
 
 '''
-Energy Unit = 0.1 ev
+
+Energy Unit = 1 E = 
 Temperature Unit = K
 Time Unit = 1 pico second
 Frequency Unit = pico second^(-1)
