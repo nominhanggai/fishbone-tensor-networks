@@ -10,7 +10,7 @@ Temperature Unit = K
 Time Unit = 1 pico second
 Frequency Unit = pico second^(-1)
 WaveNumber Unit = 1 cm^(-1) 
-Wave Number to Angular Frequency: 1 waveNumber <-> 1 * Freq
+Wave Number to Angular Frequency: 1 waveNumber <-> 1 * FREQ (pico second)^(-1)
 '''
 
 
