@@ -12,7 +12,10 @@ def sigmaz(d=2):
     z[0, 0] = -1
     z[1, 1] = 1
     return z
-
+sz = np.array([[1, 0], [0, -1]])
+E = 1000
+h_loc = E / 2 * sz
+a = (np.identity(2) + sz) / 4
 
 def sigmax(d=2):
     z = np.zeros([d, d])
@@ -21,22 +24,23 @@ def sigmax(d=2):
     return z
 
 
-def temp_factor(beta, w):
+def temp_factor(temp, w):
+    beta = 1/(0.6950348009119888*temp)
     return 0.5 * (1. + 1. / tanh(beta * w / 2.))
 
+bath_length = 2
 
-bath_length = 50
-aa = [8]*bath_length
+aa = [6,7]
 b = [2]
 c = [4]
-pd = np.array([[aa, b, c, aa[::-1]], [aa, b, c, aa[::-1]]], dtype=object)
+pd = np.array([[[], b, c, aa[::-1]], [aa, b, [], []]], dtype=object)
 
 eth = FishBoneH(pd)
 etn = init(pd)
 
 # electronic couplings
-tda = 0.5
-e = 1.0
+tda = 10
+e = 100
 
 #
 # half_my_ome_2 = 1.0
@@ -44,34 +48,41 @@ e = 1.0
 # my = 2 * half_my_ome_2/(ome**2)
 #
 # spectral density parameters
-eta = 1.
-ome = 1.0
-gamma = 1.0
-y0 = 1.
-eth.domain = [-300, 300]
-beta = 1.
-# A = 1.
-def sd_zero_temp(w):
-    return eta * w * gamma ** 4 * y0 ** 2\
-           / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
+# eta = 1.
+# ome = 1.0
+# gamma = 10.0
+# y0 = 10.
+# eth.domain = [-100, 100]
+# temp = 77.
+# # A = 1.
+# def sd_zero_temp(w):
+#     return eta * w * gamma ** 4 * y0 ** 2\
+#            / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
+#
+# eth.sd[0, 0] = lambda w: sd_zero_temp(w)*temp_factor(temp,w)
 
-eth.sd[0, 0] = lambda w: sd_zero_temp(w)*temp_factor(beta,w)
+lambd = 75
+Omega = 150
+s = 2
+j = lambda x: lambd * ((x / Omega) ** s) * np.exp(-x / Omega)
 
+g = 2500
+eth.domain=[0,g]
 
-def sd_over_w(w):
-    return eta * gamma ** 4 * y0 ** 2 * (1 / 3.1415926) \
-           / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
+# def sd_over_w(w):
+#     return eta * gamma ** 4 * y0 ** 2 * (1 / 3.1415926) \
+#            / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
 
-
-sd = lambda w: sd_over_w(w)
-reorg = integrate(sd, *eth.domain)
+#
+# sd = lambda w: sd_over_w(w)
+# reorg = integrate(sd, *eth.domain)
 
 eth.hv_dy = [_c(*c) + _c(*c).T for i in range(3)]
-eth.he_dy = [sigmaz() for i in range(3)]
+eth.he_dy = [a for i in range(3)]
 
-a = kron(_c(*b), _c(*b).T) + kron(_c(*b).T, _c(*b)) #+ kron(_c(*b).T, _c(*b).T) + kron(_c(*b), _c(*b))
+a2 = kron(_c(*b), _c(*b).T) + kron(_c(*b).T, _c(*b)) #+ kron(_c(*b).T, _c(*b).T) + kron(_c(*b), _c(*b))
 
-eth.h2ee = [a for i in range(2)]
+eth.h2ee = [a2 for i in range(2)]
 eth.h2ev = [kron(sigmaz(), _c(*c) + _c(*c).T) for i in range(3)]
 eth.h1e = [e*sigmaz() + tda*sigmax()
            for i in range(3)]
@@ -80,15 +91,18 @@ eth.h1v = [_c(*c).T @ _c(*c) for i in range(3)]
 eth.build()
 
 
-dt = 0.1
+dt = 0.01
 dim = aa[-1]
 etn.U = eth.get_u(dt)
-h_fix = eth.H[0][bath_length-1][0]
-# print(h_fix, eth.h1e[0][0])
-print("a", (aa[-1]))
-h_fix = h_fix + np.kron(np.eye(aa[-1]), eth.h1e[0][0])
-u = calc_U(h_fix, dt).reshape(dim,2,dim,2)
-etn.U[0][bath_length-1] = u
+# h_fix = eth.H[0][bath_length-1][0]
+# # print(h_fix, eth.h1e[0][0])
+# print("a", (aa[-1]))
+# h_fix = h_fix + np.kron(np.eye(aa[-1]), eth.h1e[0][0])
+# u = calc_U(h_fix, dt).reshape(dim,2,dim,2)
+# etn.U[0][bath_length-1] = u
+
+print(eth.k_list)
+print(eth.w_list)
 
 p = []
 for tn in range(200):
@@ -102,24 +116,25 @@ for tn in range(200):
     for n in range(0, 1):
         for j in range(0, bath_length):
             print("nj==", n, j)
-            etn.update_bond(n, j, 100, 1e-10)
-
-            be = etn.ttnB[n][bath_length]
-            s = etn.ttnS[n][bath_length]
-            print(be.shape,s.shape)
-            c = np.einsum('Ibcde,IJ->Jbcde',be,np.diag(s))
-            p.append(c[0,0,0,0,0])
+            etn.update_bond(n, j, 100, 1e-7)
             print([x.shape for x in etn.ttnB[n][:bath_length+1]])
             print([x.shape for x in etn.ttnS[n][:bath_length+1]])
             print([x.shape for x in etn.U[n]][:bath_length+1])
+
+    # be = etn.ttnB[0][bath_length]
+    # s = etn.ttnS[0][bath_length]
+    # print(be.shape, s.shape)
+    # c = np.einsum('Ibcde,IJ->Jbcde', be, np.diag(s))
+    # p.append(c[0, 0, 0, 0, 0])
 #
-
-s = etn.ttnS[0][2]
-print("S",s , np.linalg.norm(s))
-
-print(etn.ttnB[0])
-
+#
+# s = etn.ttnS[0][2]
+# print("S",s , np.linalg.norm(s))
+#
+# print(etn.ttnB[0])
+#
 print("population", [np.abs(x)**2 for x in p])
+print(eth.w_list,eth.k_list)
 # f= open("population.dat","w+")
 # f.write(p) TODO Output Populations
 # f.close()

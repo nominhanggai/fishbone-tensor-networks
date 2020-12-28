@@ -9,8 +9,8 @@ def coth(x):
 
 def sigmaz(d=2):
     z = np.zeros([d, d])
-    z[0, 0] = -1
-    z[1, 1] = 1
+    z[0, 0] = 1
+    z[1, 1] = -1
     return z
 
 
@@ -21,21 +21,22 @@ def sigmax(d=2):
     return z
 
 
-def temp_factor(beta, w):
+def temp_factor(temp, w):
+    beta = 1/(0.6950348009119888*temp)
     return 0.5 * (1. + 1. / tanh(beta * w / 2.))
 
 
 bath_length = 5
-a = [9,8,7,6,5]
+a = [10]*bath_length
 b = [2]
 c = [4]
-pd = np.array([[a, b, c, a[::-1]], [a, b, c, a[::-1]]], dtype=object)
+pd = np.array([[a, b, [], []], [a, b, [], []]], dtype=object)
 
 eth = FishBoneH(pd)
 etn = init(pd)
 
 # electronic couplings
-tda = 0.1
+tda = 1.0
 e = 1.0
 
 #
@@ -44,36 +45,37 @@ e = 1.0
 # my = 2 * half_my_ome_2/(ome**2)
 #
 # spectral density parameters
-eta = 1.
-ome = 1.0
-gamma = 1.0
-y0 = 1.
-eth.domain = [-10, 10]
-beta = .1
-# A = 1.
+eth.domain = [-350, 350]
+S1 = 0.39; S2 = 0.23; S3 = 0.23
+s1 = 0.4; s2 = 0.25; s3 = 0.2
+w1 = 26; w2 = 51; w3 = 85
+temp = 77
+def sd_back(Sk, sk, w, wk):
+    return Sk/(sk*np.sqrt(2*3.1415926)) * w * \
+           np.exp(-np.log(np.abs(w)/wk)**2 / (2*sk**2))
+
 def sd_zero_temp(w):
-    return eta * w * gamma ** 4 * y0 ** 2\
-           / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
+    return sd_back(S1,s1,w, w1)+sd_back(S2,s2,w,w2)+sd_back(S3,s3,w,w3)
 
-eth.sd[0, 0] = lambda w: sd_zero_temp(w)*temp_factor(beta,w)
-
-
-def sd_over_w(w):
-    return eta * gamma ** 4 * y0 ** 2 * (1 / 3.1415926) \
-           / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
+eth.sd[0, 0] = lambda w: sd_zero_temp(w)*temp_factor(temp,w)
 
 
-sd = lambda w: sd_over_w(w)
-reorg = integrate(sd, *eth.domain)
+# def sd_over_w(w):
+#     return eta * gamma ** 4 * y0 ** 2 * (1 / 3.1415926) \
+#            / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
+#
+#
+# sd = lambda w: sd_over_w(w)
+# reorg = integrate(sd, *eth.domain)
 
 eth.hv_dy = [_c(*c) + _c(*c).T for i in range(3)]
-eth.he_dy = [np.eye(2) for i in range(3)]
+eth.he_dy = [sigmaz(2) for i in range(3)]
 
 a = kron(_c(*b), _c(*b).T) + kron(_c(*b).T, _c(*b)) #+ kron(_c(*b).T, _c(*b).T) + kron(_c(*b), _c(*b))
 
 eth.h2ee = [a for i in range(2)]
 eth.h2ev = [kron(sigmaz(), _c(*c) + _c(*c).T) for i in range(3)]
-eth.h1e = [e*sigmaz() #+ tda*sigmax()
+eth.h1e = [e*sigmaz() + tda*sigmax()
            for i in range(3)]
 eth.h1v = [_c(*c).T @ _c(*c) for i in range(3)]
 
@@ -83,7 +85,7 @@ eth.build()
 
 etn.U = eth.get_u(dt=0.001)
 p = []
-for tn in range(1000):
+for tn in range(200):
     # # for ni in range(etn._nc - 1):
     # #     print("ni", ni)
     # #     print([x.shape for x in etn.ttnB[0]])
@@ -94,23 +96,21 @@ for tn in range(1000):
     for n in range(0, 1):
         for j in range(0, 5):
             print("nj==", n, j)
-            etn.update_bond(n, j, 100, 1e-10)
-
-            be = etn.ttnB[n][bath_length]
-            s = etn.ttnS[n][bath_length]
-            print(be.shape,s.shape)
-            c = np.einsum('Ibcde,IJ->Jbcde',be,np.diag(s))
-            p.append(c[0,0,0,0,0])
+            etn.update_bond(n, j, 50, 1e-5)
             print([x.shape for x in etn.ttnB[n][:bath_length+1]])
             print([x.shape for x in etn.ttnS[n][:bath_length+1]])
             print([x.shape for x in etn.U[n]][:bath_length+1])
+        be = etn.ttnB[n][bath_length]
+        s = etn.ttnS[n][bath_length]
+        print(be.shape, s.shape)
+        c = np.einsum('Ibcde,IJ->Jbcde', be, np.diag(s))
+        p.append(c[0, 0, 0, 0, 0])
 # #
 #
 # s = etn.ttnS[0][2]
 # print("S",s , np.linalg.norm(s))
 
 print(etn.ttnB[0])
-p=np.array([p])
 print("population", [np.abs(x)**2 for x in p])
 #
 # h0 = eth.H[0][0][0]

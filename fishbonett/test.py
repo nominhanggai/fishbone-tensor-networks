@@ -1,22 +1,27 @@
 from model import FishBoneH, kron, _c
-from fishbone import init_ttn, init
+from fishbone import init
 import numpy as np
 from numpy import exp, tanh
+from scipy.linalg import expm
 
-bath_length = 5
-a = [3]*bath_length
-b = [2]
-c = [4]
-pd = np.array([[a[::-1], b, c, a], [a, b, c, a]], dtype=object)
+# [[array([1., 3.]), array([1., 3.])], [array([1., 3.]), array([1., 3.])]]
+# [[array([0.56418958, 1. ]), array([0.56418958, 1. ])], [array([0.56418958, 1.  ]), array([0.56418958, 1. ])]]
 
-eth = FishBoneH(pd)
-etn = init_ttn(nc=2, L=bath_length, d1=3, de=2, dv=4)
-etn2 = init(pd)
+def sigmaz(d=2):
+    z = np.zeros([d, d])
+    z[0, 0] = 0
+    z[1, 1] = 0
+    return z
 
-for n in range(2):
-    print("Old", [x.shape for x in etn.ttnB[n]])
-    print("New", [x.shape for x in etn2.ttnB[n]])
-    print("Diff", [np.linalg.norm(x - y) for x, y in zip(etn.ttnB[n], etn2.ttnB[n])])
+def sigmax(d=2):
+    z = np.zeros([d, d])
+    z[0, 1] = 1
+    z[1, 0] = 1
+    return z
+sys = sigmax() + sigmaz()
 
-print(etn.ttnB[0][0])
-print(etn2.ttnB[0][0])
+intit = np.array([[1/np.sqrt(2)],[1/np.sqrt(2)]])
+
+for n in range(0,201):
+    final = expm(-1j * n* sys * 0.001) @ intit
+    print([x*x.conj() for x in final])
