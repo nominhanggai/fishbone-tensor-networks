@@ -1,5 +1,5 @@
-from model import FishBoneH, kron, _c, calc_U
-from fishbone import init
+from model import SpinBoson, kron, _c
+from fishbone import SpinBoson1D
 import numpy as np
 from numpy import exp, tanh
 from numpy.linalg import norm
@@ -9,13 +9,9 @@ def coth(x):
 
 def sigmaz(d=2):
     z = np.zeros([d, d])
-    z[0, 0] = -1
-    z[1, 1] = 1
+    z[0, 0] = 1
+    z[1, 1] = -1
     return z
-sz = np.array([[1, 0], [0, -1]])
-E = 1000
-h_loc = E / 2 * sz
-a = (np.identity(2) + sz) / 4
 
 def sigmax(d=2):
     z = np.zeros([d, d])
@@ -28,161 +24,78 @@ def temp_factor(temp, w):
     beta = 1/(0.6950348009119888*temp)
     return 0.5 * (1. + 1. / tanh(beta * w / 2.))
 
+
 bath_length = 2
+a = [2]*bath_length
 
-aa = [6,7]
-b = [2]
-c = [4]
-pd = np.array([[[], b, c, aa[::-1]], [aa, b, [], []]], dtype=object)
-
-eth = FishBoneH(pd)
-etn = init(pd)
-
+pd = a + [2]
+eth = SpinBoson(pd)
+etn = SpinBoson1D(pd)
+etn.B[-1][0,1,0] = 1/np.sqrt(2)
+etn.B[-1][0,0,0] = 1./np.sqrt(2)
 # electronic couplings
-tda = 10
-e = 100
+# tda = 100.0
+e = 1000.
 
-#
-# half_my_ome_2 = 1.0
-# ome = 1.0
-# my = 2 * half_my_ome_2/(ome**2)
-#
 # spectral density parameters
-# eta = 1.
-# ome = 1.0
-# gamma = 10.0
-# y0 = 10.
-# eth.domain = [-100, 100]
-# temp = 77.
-# # A = 1.
-# def sd_zero_temp(w):
-#     return eta * w * gamma ** 4 * y0 ** 2\
-#            / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
-#
-# eth.sd[0, 0] = lambda w: sd_zero_temp(w)*temp_factor(temp,w)
-
+g = 2500
+eth.domain = [0, g]
+ncap = 20000
 lambd = 75
 Omega = 150
 s = 2
 j = lambda x: lambd * ((x / Omega) ** s) * np.exp(-x / Omega)
 
-g = 2500
-eth.domain=[0,g]
-
-# def sd_over_w(w):
-#     return eta * gamma ** 4 * y0 ** 2 * (1 / 3.1415926) \
-#            / ((ome ** 2 - w ** 2) ** 2 + 4 * w ** 2 * gamma ** 2)
-
-#
-# sd = lambda w: sd_over_w(w)
-# reorg = integrate(sd, *eth.domain)
-
-eth.hv_dy = [_c(*c) + _c(*c).T for i in range(3)]
-eth.he_dy = [a for i in range(3)]
-
-a2 = kron(_c(*b), _c(*b).T) + kron(_c(*b).T, _c(*b)) #+ kron(_c(*b).T, _c(*b).T) + kron(_c(*b), _c(*b))
-
-eth.h2ee = [a2 for i in range(2)]
-eth.h2ev = [kron(sigmaz(), _c(*c) + _c(*c).T) for i in range(3)]
-eth.h1e = [e*sigmaz() + tda*sigmax()
-           for i in range(3)]
-eth.h1v = [_c(*c).T @ _c(*c) for i in range(3)]
-
-eth.build()
+eth.sd = j
+# eth.sd = j
+eth.he_dy = (np.eye(2) + sigmaz(2))/4
+# eth.he_dy = np.eye(2)
+eth.h1e = 1000/2 *sigmaz() # + 0.5*sigmax()
 
 
-dt = 0.01
-dim = aa[-1]
-etn.U = eth.get_u(dt)
-# h_fix = eth.H[0][bath_length-1][0]
-# # print(h_fix, eth.h1e[0][0])
-# print("a", (aa[-1]))
-# h_fix = h_fix + np.kron(np.eye(aa[-1]), eth.h1e[0][0])
-# u = calc_U(h_fix, dt).reshape(dim,2,dim,2)
-# etn.U[0][bath_length-1] = u
+eth.build(g)
+etn.U = eth.get_u(dt=0.0001)
 
-print(eth.k_list)
-print(eth.w_list)
 
 p = []
-for tn in range(200):
-    # # for ni in range(etn._nc - 1):
-    # #     print("ni", ni)
-    # #     print([x.shape for x in etn.ttnB[0]])
-    # #     print([x.shape for x in etn.ttnB[1]])
-    # #     etn.update_bond(-1, ni, 10, 1e-5)
-    # #     print("ni complete", ni)
-    #
-    for n in range(0, 1):
-        for j in range(0, bath_length):
-            print("nj==", n, j)
-            etn.update_bond(n, j, 100, 1e-7)
-            print([x.shape for x in etn.ttnB[n][:bath_length+1]])
-            print([x.shape for x in etn.ttnS[n][:bath_length+1]])
-            print([x.shape for x in etn.U[n]][:bath_length+1])
+be = etn.B[-1]
+s = etn.S[-1]
+c = np.einsum('Ibc,IJ->Jbc', be, np.diag(s))
+c1 = c[0, 0, 0]
+c2 = c[0, 1, 0]
+p.append(c1*c2)
 
-    # be = etn.ttnB[0][bath_length]
-    # s = etn.ttnS[0][bath_length]
-    # print(be.shape, s.shape)
-    # c = np.einsum('Ibcde,IJ->Jbcde', be, np.diag(s))
-    # p.append(c[0, 0, 0, 0, 0])
-#
-#
-# s = etn.ttnS[0][2]
-# print("S",s , np.linalg.norm(s))
-#
-# print(etn.ttnB[0])
-#
-print("population", [np.abs(x)**2 for x in p])
-print(eth.w_list,eth.k_list)
-# f= open("population.dat","w+")
-# f.write(p) TODO Output Populations
-# f.close()
+for tn in range(1000):
+    print("ni complete", tn)
+    for j in range(0, bath_length):
+        print("j==", j)
+        etn.update_bond(j, 50, 1e-20)
+    # print(etn.B[1][:,:,0] )
+    # print(etn.S[1])
+    # print([x.shape for x in etn.U])
+    be = etn.B[-1]
+    s = etn.S[-1]
+    c = np.einsum('Ibc, IJ->Jbc', be, np.diag(s))
+    print(c[:,:,0])
+    print(s)
+    cc = c.conj()
+    c1 = c[0,0,0]
+    c2 = c[0,1,0]
+    c3 = c[1,0,0]
+    c4 = c[1,1,0]
+    p.append(c1**2+c3**2)
 
-# h0 = eth.H[0][0][0]
-# h1 = eth.H[0][1][0]
-# h2 = eth.H[0][2][0]
-# h3 = eth.H[0][3][0]
-#
+print("population", [np.abs(x) for x in p])
+print(s)
+# # print(eth.w_list)
 # print(eth.k_list)
-# print(eth.w_list)
-# # k0 = 5.15693988
-# k0 = eth.k_list[0][0][-1]
-# # w0 = -0.04314381
-# w0 = eth.w_list[0][0][-1]
-# # k1 = 5.4966608
-# k1 = eth.k_list[0][0][-2]
-# # w1 = -0.21686089
-# w1 = eth.w_list[0][0][-2]
-# # w2 = 1.01884703
-# k2 = eth.k_list[0][0][-3]
-# w2 = eth.w_list[0][0][-3]
-# k3 = eth.k_list[0][0][-4]
-# w3 = eth.w_list[0][0][-4]
-# # k4 = eth.k_list[0][0][-5]
-# w4 = eth.w_list[0][0][-5]
-# print(w4)
-#
-# c9 = _c(9)
-# c8 = _c(8)
-# c7 = _c(7)
-# c6 = _c(6)
-# c5 = _c(5)
-#
-#
-# h0p = np.kron(w0*c9.T@c9, np.eye(8)) + k0*(np.kron(c9.T,c8) + np.kron(c9,c8.T))
-# h1eb,_,_ = eth.get_h1(0)
-# h10 = h1eb[0]
-#
-#
-# h1p = np.kron(w1*c8.T@c8, np.eye(7)) + k1*(np.kron(c8.T,c7) + np.kron(c8,c7.T))
-# h2p = np.kron(w2*c7.T@c7, np.eye(6)) + k2*(np.kron(c7.T,c6) + np.kron(c7,c6.T))
-# h3p = np.kron(w3*c6.T@c6, np.eye(5)) + k3*(np.kron(c6.T,c5) + np.kron(c6,c5.T))
-# # h4p = np.kron(w4*c8.T@c5, np.eye(7)) + k4*(np.kron(c8.T,c7) + np.kron(c8,c7.T))
-#
-# # print(norm(h0p-h0))
-# # print(norm(h1p-h1))
-# #
-# # print(norm(h2p-h2))
-#
-# print(norm(h3p-h3))
+# c = _c(10)
+# hb = np.kron(449.97993819*c.T@c, np.eye(2))
+# hs = np.kron(np.eye(10), eth.h1e)
+# hi = 84.62805478*np.kron(c.T+c, eth.he_dy)
+# h = hb+hs+hi
+# U = (-1j*h*0.001)
+# u = U.reshape(10,2,10,2)
+# state = np.kron(np.array([1]+[0]*9), np.array([1]+[0])).reshape(10,2)
+# print(u.shape,state.shape)
+# s = np.einsum('ijkl,kl->ij',u, state)

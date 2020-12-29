@@ -85,7 +85,7 @@ eth.build()
 
 etn.U = eth.get_u(dt=0.001)
 p = []
-for tn in range(200):
+for tn in range(100):
     # # for ni in range(etn._nc - 1):
     # #     print("ni", ni)
     # #     print([x.shape for x in etn.ttnB[0]])
