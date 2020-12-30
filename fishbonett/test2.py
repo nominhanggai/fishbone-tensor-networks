@@ -112,60 +112,60 @@ for dt in np.linspace(0,0.1,50):
 print(p)
 # s = np.einsum('ijkl,kl->ij', u, state)
 # Mini TEBD
-h1 = np.kron(748.75012497*c.T@c, np.eye(2)) + 259.72266674*(np.kron(c.T,c) + np.kron(c,c.T))
-h2 = np.kron(449.97993819*c.T@c, np.eye(2)) + 84.62805478*np.kron(c.T+c, eth.he_dy) + np.kron(np.eye(dim), eth.h1e)
+# h1 = np.kron(748.75012497*c.T@c, np.eye(2)) + 259.72266674*(np.kron(c.T,c) + np.kron(c,c.T))
+# h2 = np.kron(449.97993819*c.T@c, np.eye(2)) + 84.62805478*np.kron(c.T+c, eth.he_dy) + np.kron(np.eye(dim), eth.h1e)
+#
+# dt = 0.001
+# U1 = [exp(-1j*h*dt).reshape(2,2,2,2) for h in [h1,h2]]
+# U = eth.get_u(0.001)
 
-dt = 0.001
-U1 = [exp(-1j*h*dt).reshape(2,2,2,2) for h in [h1,h2]]
-U = eth.get_u(0.001)
-
-def g_state(dim):
-    tensor = np.zeros(dim)
-    tensor[(0,) * len(dim)] = 1.
-    return tensor
-
-
-Bs = [g_state([1,d,1]) for d in [2,2,2]]
-Ss = [np.ones([1], np.float) for d in [2,2,2]]
-Bs[-1][0,0,0] = 1/np.sqrt(2)
-Bs[-1][0,1,0] = 1/np.sqrt(2)
-
-def get_theta1(i):
-    return np.tensordot(np.diag(Ss[i]), Bs[i], [1, 0])
-
-def get_theta2(i):
-    j = (i + 1)
-    return np.tensordot(get_theta1(i), Bs[j], [2, 0])
-
-print("A", get_theta2(1))
-
-
-def split_truncate_theta(theta, i, chi_max, eps):
-    (chi_left_on_left, phys_left,
-     phys_right, chi_right_on_right) = theta.shape
-    theta = np.reshape(theta, [chi_left_on_left * phys_left,
-                               phys_right * chi_right_on_right])
-    A, S, B = svd(theta, full_matrices=False)
-    chivC = min(chi_max, np.sum(S > eps))
-    # keep the largest `chivC` singular values
-    piv = np.argsort(S)[::-1][:chivC]
-    A, S, B = A[:, piv], S[piv], B[piv, :]
-    S = S / np.linalg.norm(S)
-    A = np.reshape(A, [chi_left_on_left, phys_left, chivC])  # A: {vL*i, chivC} -> vL i vR=chivC
-    B = np.reshape(B, [chivC, phys_right, chi_right_on_right])  # B: {chivC, j*vR} -> vL==chivC j vR
-    A = np.tensordot(np.diag(Ss[i] ** (-1)), A, [1, 0])  # vL [vL'] * [vL] i vR -> vL i vR
-    A = np.tensordot(A, np.diag(S), [2, 0])  # vL i [vR] * [vR] vR -> vL i vR
-    Ss[i + 1] = S
-    Bs[i] = A
-    Bs[i + 1] = B
-
-
-def update_bond(i, chi_max, eps):
-    theta = get_theta2(i)
-    U_bond = U[i]
-    Utheta = np.tensordot(U_bond, theta, axes=([2, 3], [1, 2]))  # i j [i*] [j*], vL [i] [j] vR
-    Utheta = np.transpose(Utheta, [2, 0, 1, 3])  # vL i j vR
-    split_truncate_theta(Utheta, i, chi_max, eps)
+# def g_state(dim):
+#     tensor = np.zeros(dim)
+#     tensor[(0,) * len(dim)] = 1.
+#     return tensor
+#
+#
+# Bs = [g_state([1,d,1]) for d in [2,2,2]]
+# Ss = [np.ones([1], np.float) for d in [2,2,2]]
+# Bs[-1][0,0,0] = 1/np.sqrt(2)
+# Bs[-1][0,1,0] = 1/np.sqrt(2)
+#
+# def get_theta1(i):
+#     return np.tensordot(np.diag(Ss[i]), Bs[i], [1, 0])
+#
+# def get_theta2(i):
+#     j = (i + 1)
+#     return np.tensordot(get_theta1(i), Bs[j], [2, 0])
+#
+# print("A", get_theta2(1))
+#
+#
+# def split_truncate_theta(theta, i, chi_max, eps):
+#     (chi_left_on_left, phys_left,
+#      phys_right, chi_right_on_right) = theta.shape
+#     theta = np.reshape(theta, [chi_left_on_left * phys_left,
+#                                phys_right * chi_right_on_right])
+#     A, S, B = svd(theta, full_matrices=False)
+#     chivC = min(chi_max, np.sum(S > eps))
+#     # keep the largest `chivC` singular values
+#     piv = np.argsort(S)[::-1][:chivC]
+#     A, S, B = A[:, piv], S[piv], B[piv, :]
+#     S = S / np.linalg.norm(S)
+#     A = np.reshape(A, [chi_left_on_left, phys_left, chivC])  # A: {vL*i, chivC} -> vL i vR=chivC
+#     B = np.reshape(B, [chivC, phys_right, chi_right_on_right])  # B: {chivC, j*vR} -> vL==chivC j vR
+#     A = np.tensordot(np.diag(Ss[i] ** (-1)), A, [1, 0])  # vL [vL'] * [vL] i vR -> vL i vR
+#     A = np.tensordot(A, np.diag(S), [2, 0])  # vL i [vR] * [vR] vR -> vL i vR
+#     Ss[i + 1] = S
+#     Bs[i] = A
+#     Bs[i + 1] = B
+#
+#
+# def update_bond(i, chi_max, eps):
+#     theta = get_theta2(i)
+#     U_bond = U[i]
+#     Utheta = np.tensordot(U_bond, theta, axes=([2, 3], [1, 2]))  # i j [i*] [j*], vL [i] [j] vR
+#     Utheta = np.transpose(Utheta, [2, 0, 1, 3])  # vL i j vR
+#     split_truncate_theta(Utheta, i, chi_max, eps)
 
 # p = []
 # be = Bs[-1]
