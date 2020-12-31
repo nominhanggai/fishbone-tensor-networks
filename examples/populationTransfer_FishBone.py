@@ -131,9 +131,9 @@ eth.sd[0, 0] = lambda w: sd_zero_temp(w) * temp_factor(0.001,w)
 eth.sd[1, 0] = lambda w: sd_zero_temp(w) * temp_factor(0.001,w)
 ######## Spectral Density Parameters ############
 
-eth.he_dy = [(np.eye(2) + sigmaz())/4 for i in range(2)]
+eth.he_dy = [(np.eye(2) + sigmaz())/2 for i in range(2)]
 
-eth.h1e = [1000. / 2 * sigmaz() for i in range(2)]
+eth.h1e = [0. * sigmaz() for i in range(2)]
 lam = 69
 annih = _c(*b)
 a = lam * ( kron(annih, annih.T) + kron(annih.T, annih) ) #+ kron(_c(*b).T, _c(*b).T) + kron(_c(*b), _c(*b))
@@ -174,4 +174,4 @@ for tn in range(2000):
     p.append(population[1,1])
     # p.append(c1 * c2.conj() + c3 * c4.conj())
 #
-print("population", [np.abs(x) for x in p[::10]])
+print("population", [np.abs(x) for x in p[::5]])
