@@ -1,5 +1,5 @@
-from model import SpinBoson, kron, _c
-from fishbone import SpinBoson1D
+from fishbonett.model import SpinBoson, kron, _c
+from fishbonett.fishbone import SpinBoson1D
 import numpy as np
 from numpy import exp, tanh, pi
 from numpy.linalg import norm
@@ -24,6 +24,7 @@ def sigmax(d=2):
 def temp_factor(temp, w):
     beta = 1/(0.6950348009119888*temp)
     return 0.5 * (1. + 1. / tanh(beta * w / 2.))
+
 bath_length = 120
 a = [7]*bath_length
 
@@ -73,7 +74,7 @@ c1 = c[0, 0, 0]
 c2 = c[0, 1, 0]
 p.append(c1*c2)
 
-for tn in range(250):
+for tn in range(50):
     print("ni complete", tn)
     for j in range(0, bath_length):
         print("j==", j)
@@ -84,15 +85,14 @@ for tn in range(250):
     be = etn.B[-1]
     s = etn.S[-1]
     c = np.einsum('Ibc, IJ->Jbc', be, np.diag(s))
-    u_sys_dagger = expm(1j*(tn+1)*0.001*eth.h1e)
-    rho = np.outer(c[0,:,0], c[0,:,0].conj()) + np.outer(c[1,:,0], c[1,:,0].conj())
-    c = u_sys_dagger@rho
-    c = c@u_sys_dagger.T.conj()
+    # u_sys_dagger = expm(1j*(tn+1)*0.001*eth.h1e)
+    # rho = np.outer(c[0,:,0], c[0,:,0].conj()) + np.outer(c[1,:,0], c[1,:,0].conj())
+    # c = u_sys_dagger@rho
+    # c = c@u_sys_dagger.T.conj()
     cc = c.conj()
-    c1 = c[0,0]
-    c2 = c[0,1]
-    c3 = c[1,0]
-    c4 = c[1,1]
+    c1 = c[0,0,0]
+    c2 = c[0,1,0]
+    c3 = c[1,0,0]
+    c4 = c[1,1,0]
     p.append(c1*c2.conj()+c3*c4.conj())
-
 print("population", [np.abs(x) for x in p])

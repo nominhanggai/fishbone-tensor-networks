@@ -1,5 +1,5 @@
-from model import SpinBoson, kron, _c
-from fishbone import SpinBoson1D
+from fishbonett.model import SpinBoson, kron, _c
+from fishbonett.fishbone import SpinBoson1D
 import numpy as np
 from numpy import exp, tanh
 from numpy.linalg import norm
@@ -26,8 +26,8 @@ def temp_factor(temp, w):
     return 0.5 * (1. + 1. / tanh(beta * w / 2.))
 
 
-bath_length = 20
-a = [2]*bath_length
+bath_length = 120
+a = [8]*bath_length
 
 pd = a + [2]
 eth = SpinBoson(pd)
@@ -67,18 +67,12 @@ c2 = c[0, 1, 0]
 p.append(c1*c2)
 
 for tn in range(1000):
-    print("ni complete", tn)
     for j in range(0, bath_length):
-        print("j==", j)
-        etn.update_bond(j, 50, 1e-15)
-    # print(etn.B[1][:,:,0] )
-    # print(etn.S[1])
-    # print([x.shape for x in etn.U])
+        print("j==", j, tn )
+        etn.update_bond(j, 10, 1e-5)
     be = etn.B[-1]
     s = etn.S[-1]
     c = np.einsum('Ibc, IJ->Jbc', be, np.diag(s))
-    print(c[:,:,0])
-    print("S", etn.S)
     cc = c.conj()
     c1 = c[0,0,0]
     c2 = c[0,1,0]
@@ -86,30 +80,34 @@ for tn in range(1000):
     c4 = c[1,1,0]
     p.append(c1*c2.conj()+c3*c4.conj())
 
-print("population", [np.abs(x) for x in p])
+print("population", [np.abs(x) for x in p[::4]])
 
-print(eth.w_list)
-print(eth.k_list)
-dim = 2
-c = _c(dim)
-hb1 = np.kron(np.eye(2), np.kron(449.97993819*c.T@c, np.eye(2)) )
-hb2 = np.kron(np.kron(748.75012497*c.T@c, np.eye(2)) , np.eye(2))
-hs = np.kron(np.eye(2), np.kron(np.eye(dim), eth.h1e))
-hi1 = np.kron(np.eye(dim), 84.62805478*np.kron(c.T+c, eth.he_dy))
-hi2 = np.kron(259.72266674*(np.kron(c.T,c) + np.kron(c,c.T)), np.eye(dim))
-h = hb1+hb2+hs+hi1 + hi2
-def U(dt):
-    return expm(-1j*h*dt)
-# u = U.reshape(10,2,10,2)
-state = np.kron(np.array([1]+[0]), np.kron(np.array([1]+[0]), np.array([1/np.sqrt(2)]+[1/np.sqrt(2)])))
-# print(u.shape,state.shape)
-p = []
-for dt in np.linspace(0,0.1,50):
-    s = U(dt)@state
-    s = s.reshape(4,2)
-    r = np.einsum("IJ, Ij->Jj ", s.conj(), s)
-    p.append(np.abs(r[0,1]))
-print(p)
+################### Simple Propagation ###################
+# print(eth.w_list)
+# print(eth.k_list)
+# dim = 2
+# c = _c(dim)
+# hb1 = np.kron(np.eye(2), np.kron(449.97993819*c.T@c, np.eye(2)) )
+# hb2 = np.kron(np.kron(748.75012497*c.T@c, np.eye(2)) , np.eye(2))
+# hs = np.kron(np.eye(2), np.kron(np.eye(dim), eth.h1e))
+# hi1 = np.kron(np.eye(dim), 84.62805478*np.kron(c.T+c, eth.he_dy))
+# hi2 = np.kron(259.72266674*(np.kron(c.T,c) + np.kron(c,c.T)), np.eye(dim))
+# h = hb1+hb2+hs+hi1 + hi2
+# def U(dt):
+#     return expm(-1j*h*dt)
+# # u = U.reshape(10,2,10,2)
+# state = np.kron(np.array([1]+[0]), np.kron(np.array([1]+[0]), np.array([1/np.sqrt(2)]+[1/np.sqrt(2)])))
+# # print(u.shape,state.shape)
+# p = []
+# for dt in np.linspace(0,0.1,50):
+#     s = U(dt)@state
+#     s = s.reshape(4,2)
+#     r = np.einsum("IJ, Ij->Jj ", s.conj(), s)
+#     p.append(np.abs(r[0,1]))
+# print(p)
+################### Simple Propagation ###################
+
+
 # s = np.einsum('ijkl,kl->ij', u, state)
 # Mini TEBD
 # h1 = np.kron(748.75012497*c.T@c, np.eye(2)) + 259.72266674*(np.kron(c.T,c) + np.kron(c,c.T))
