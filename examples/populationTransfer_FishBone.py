@@ -91,8 +91,8 @@ def init_special(pd):
     )
 
 
-bath_length = 120
-a = [8]*bath_length
+bath_length = 80
+a = [25]*bath_length
 b = [2]
 c = [4]
 pd = np.array([[a, b, [], []], [a, b, [], []]], dtype=object)
@@ -111,7 +111,7 @@ eth.domain = [-350, 350]
 S1 = 0.39; S2 = 0.23; S3 = 0.23
 s1 = 0.4; s2 = 0.25; s3 = 0.2
 w1 = 26; w2 = 51; w3 = 85
-temp = 0.0001
+temp = 300.
 def sd_back(Sk, sk, w, wk):
     return Sk/(sk*np.sqrt(2/pi)) * w * \
            np.exp(-np.log(np.abs(w)/wk)**2 / (2*sk**2))
@@ -127,8 +127,8 @@ def sd_zero_temp(w):
     return sd_back(S1,s1,w, w1)+sd_back(S2,s2,w,w2)+sd_back(S3,s3,w,w3) + \
            sd_high(gamma, Omega_1, g1, w) + sd_high(gamma, Omgea_2, g2, w) + sd_high(gamma, Omgea_3, g3, w)
 
-eth.sd[0, 0] = lambda w: sd_zero_temp(w) * temp_factor(0.001,w)
-eth.sd[1, 0] = lambda w: sd_zero_temp(w) * temp_factor(0.001,w)
+eth.sd[0, 0] = lambda w: sd_zero_temp(w) * temp_factor(temp,w)
+eth.sd[1, 0] = lambda w: sd_zero_temp(w) * temp_factor(temp,w)
 ######## Spectral Density Parameters ############
 
 eth.he_dy = [(np.eye(2) + sigmaz())/2 for i in range(2)]

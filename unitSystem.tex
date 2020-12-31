@@ -1,63 +1,70 @@
-\documentclass[]{article}
+\documentclass{article}
+\usepackage[letterpaper,total={5.5in, 8in}]{geometry}
 \usepackage{siunitx,float}
 \sisetup{load-configurations = abbreviations}
+\usepackage{threeparttable,booktabs}
 %opening
-\title{}
-\author{}
+%\author{}
 
 \begin{document}
 
-\maketitle
+%\maketitle
 
-\begin{abstract}
-
-\end{abstract}
-
-\section{The System of Units}
-\begin{table}
-	\begin{tabular}{ccc}
-		Constants &                  SI                  &     This System      \\
-		 $\hbar$  & $\SI{1.054571817e-34}{\joule\per\s}$ & $1\mathrm{E T^{-1}}$
-	\end{tabular}
-\end{table}
+\section*{The System of Units}
+\renewcommand{\arraystretch}{1.2}
 
 We define a new time unit $\mathrm{T}$ such that a wave number $\tilde{\nu}$ has the same numerical value as the corresponding angular wave frequency $\omega=\tilde{\nu} 2\pi c$ ($c$ is the speed of light). 
 \begin{table}[H]
 	\centering
+	\begin{threeparttable}
 	\begin{tabular}{rll}
-		               & SI                                 & New                                           \\
-		    $\nu$      & \SI{1}{\per\centi\meter}           & $1\mathrm{cm^{-1}}$                           \\
-		   $\omega$    & \SI{1.8836515673088531e10}{\per\s} & $1\mathrm{T}^{-1}$                            \\
-		Time Unit(SI)  & \SI{1}{\s}                         & $1.8836515673088531\times 10^{10} \mathrm{T}$ \\
-		Time Unit(New) & \SI{5.308837458876145e-12}{\s}     & $1\mathrm{T}$
+		\toprule
+		               & SI                                 & New                                       \\
+		\midrule
+		         $\nu$ & \SI{1}{\per\centi\meter}           & $1\mathrm{cm^{-1}}$                       \\
+		      $\omega$ & \SI{1.8836515673088531e10}{\per\s} & $1\mathrm{T}^{-1}$                        \\
+		 Time Unit(SI) & \SI{1}{\s}                         & $\num{1.8836515673088531e10}\mathrm{\,T}$ \\
+		Time Unit(New) & \SI{5.308837458876145e-12}{\s}     & $1\mathrm{T}$                             \\
+		\bottomrule
 	\end{tabular}
 	\caption{The Defining Relationship: $\omega = 2\pi c \nu.$ $c =\SI{299792458e10}{\centi\meter\per\s}$.}
+	\end{threeparttable}
 \end{table}
 
-We define a new energy unit $\mathrm{E}$ such that Planck's constant $\hbar$ is $1\mathrm{ET}$.  Planck's constant in SI is \SI{1.054571817e-34}{\joule\s}. Once $E$ is defined, for $\tilde{\nu}=\SI{1}{\centi\meter}$, we have corresponding energy $\mathcal{E}=\hbar \omega = 1\mathrm{ET}\times 1\mathrm{T}^{-1}=1\mathrm{E}$.
+With the time unit defined, we further define a new energy unit $\mathrm{E}$ such that Planck's constant $\hbar$ is $1\mathrm{E\,T}$.  Planck's constant in SI is \SI{1.054571817e-34}{\joule\s}. Once $\mathrm{E}$ is defined, for $\tilde{\nu}=\SI{1}{\centi\meter}$, we will have the corresponding angular frequency $\omega=1\mathrm{cm}^{-1}$ and the energy $\mathcal{E}=\hbar\omega = 1\mathrm{\,E\,T}\times 1\mathrm{\,T}^{-1}=1\mathrm{\,E}$.
 \begin{table}[H]
 	\centering
+	\begin{threeparttable}
 	\begin{tabular}{rll}
+		\toprule
 		                 & SI                                 & New                                           \\
+		\midrule
 		         $\hbar$ & \SI{1.054571817e-34}{\joule\s}     & $1\mathrm{E\cdot T}$                          \\
-		   Time Unit(SI) & \SI{1}{\s}                         & $1.8836515673088531\times 10^{10} \mathrm{T}$ \\
+		   Time Unit(SI) & \SI{1}{\s}                         & $\num{1.8836515673088531e10} \mathrm{\,T}$ \\
 		  Time Unit(New) & \SI{5.308837458876145e-12}{\s}     & $1\mathrm{T}$                                 \\
-		 Energy Unit(SI) & \SI{1}{\joule}                     & $5.0341165706272096\times 10^{22} \mathrm{E}$ \\
-		Energy Unit(New) & \SI{1.986445855931795e-23}{\joule} & $1 \mathrm{E}$
+		 Energy Unit(SI) & \SI{1}{\joule}                     & $\num{5.0341165706272096e22} \mathrm{\,E}$ \\
+		Energy Unit(New) & \SI{1.986445855931795e-23}{\joule} & $1 \mathrm{E}$                                \\
+		\bottomrule
 	\end{tabular}
 	\caption{The Defining Relationship: $\hbar = \SI{1.054571817e-34}{\joule\s}  =1\mathrm{ET}$.}
+	\end{threeparttable}
 \end{table}
 
-With the energy unit defined, we check the value of Boltzmann's constant in this system of units. 
+With the two units defined, we calculate the value of Boltzmann's constant in this system of units. 
 \begin{table}[H]
 	\centering
+	\begin{threeparttable}
 	\begin{tabular}{rll}
+		\toprule
 		                 & SI                                   & New                                           \\
-		 Energy Unit(SI) & \SI{1}{\joule}                       & $5.0341165706272096\times 10^{22} \mathrm{E}$ \\
+		\midrule
+		 Energy Unit(SI) & \SI{1}{\joule}                       & $\num{5.0341165706272096e22} \mathrm{\,E}$ \\
 		Energy Unit(New) & \SI{1.986445855931795e-23}{\joule}   & $1 \mathrm{E}$                                \\
-		  $k_\mathrm{B}$ & \SI{1.380649e-23}{\joule\per\kelvin} & $0.6950348009119888 \mathrm{EK^{-1}}$
+		  $k_\mathrm{B}$ & \SI{1.380649e-23}{\joule\per\kelvin} & $\num{0.6950348009119888} \mathrm{\,E\,K^{-1}}$         \\
+		\bottomrule
 	\end{tabular}
-	\caption{The Defining Relationship: $k_{\mathrm{B}} = \SI{1.380649e-23}{\joule\per\kelvin}  =\SI{1.380649e-23}{\joule\per\kelvin}  \times 15.0341165706272096\times 10^{22} \frac{\mathrm{E}}{J} = 0.6950348009119888 \mathrm{EK^{-1}}$.}
+	\caption{The Defining Relationship: $k_{\mathrm{B}} = \SI{1.380649e-23}{\joule\per\kelvin}  =\SI{1.380649e-23}{\joule\per\kelvin}  \times \num{15.0341165706272096e22} \frac{\mathrm{E}}{\mathrm{J}} = \num{0.6950348009119888} \mathrm{E\,K^{-1}}$.}
+	\end{threeparttable}
 \end{table}
 
 \end{document}
