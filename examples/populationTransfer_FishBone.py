@@ -71,8 +71,8 @@ def init_special(pd):
     )
 
 
-bath_length = 90
-a = [5] * bath_length
+bath_length = 50
+a = [15] * bath_length
 b = [2]
 c = [4]
 pd = np.array([[a, b, [], []], [a, b, [], []]], dtype=object)
@@ -84,7 +84,7 @@ etn = init_special(pd)
 Spectral Density Parameters
 '''
 eth.domain = [-350, 350]
-temp = 0.00001
+temp = 77.
 # set the spectral densities on the two e-b bath chain.
 eth.sd[0, 0] = lambda w: sd_zero_temp_prime(w) * temp_factor(temp, w)
 eth.sd[1, 0] = lambda w: sd_zero_temp_prime(w) * temp_factor(temp, w)

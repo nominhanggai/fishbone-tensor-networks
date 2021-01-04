@@ -87,4 +87,4 @@ def sd_zero_temp_prime(w):
 def lorentzian(eta, w):
     lambd = 5245.
     Omega = 77.
-    return 0.5 * lambd * Omega ** 2 * eta * w / ((w ** 2 - Omega ** 2) + eta ** 2 * w ** 2)
+    return 0.5 * lambd * Omega ** 2 * eta * w / ((w ** 2 - Omega ** 2)**2 + eta ** 2 * w ** 2)

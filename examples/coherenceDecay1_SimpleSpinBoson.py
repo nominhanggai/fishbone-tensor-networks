@@ -63,7 +63,7 @@ c1 = c[0, 0, 0]
 c2 = c[0, 1, 0]
 p.append(c1*c2)
 
-for tn in range(1000):
+for tn in range(10):
     for j in range(0, bath_length):
         print("j==", j, tn )
         etn.update_bond(j, 10, 1e-5)

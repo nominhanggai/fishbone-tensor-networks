@@ -30,7 +30,7 @@ def temp_factor(temp, w):
     return 0.5 * (1. + 1. / tanh(beta * w / 2.))
 
 
-bath_length = 12
+bath_length = 120
 a = [20] * bath_length
 
 pd = a + [2]
@@ -54,7 +54,7 @@ s3 = 0.2
 w1 = 26;
 w2 = 51;
 w3 = 85
-temp = 77.
+
 
 
 def sd_back(Sk, sk, w, wk):
@@ -80,11 +80,11 @@ def sd_zero_temp(w):
     return sd_back(S1, s1, w, w1) + sd_back(S2, s2, w, w2) + sd_back(S3, s3, w, w3) + \
            sd_high(gamma, Omega_1, g1, w) + sd_high(gamma, Omgea_2, g2, w) + sd_high(gamma, Omgea_3, g3, w)
 
-
+temp = np.float64(0.000000001)
 eth.sd = lambda w: sd_zero_temp(w) * temp_factor(temp, w)
 
 eth.build(g=350)
-etn.U = eth.get_u(dt=0.0001)
+etn.U = eth.get_u(dt=0.00001)
 
 p = []
 be = etn.B[-1]
@@ -110,3 +110,4 @@ for tn in range(2000):
     p.append(c1 * c2.conj() + c3 * c4.conj())
 print("population", [np.abs(x) for x in p])
 print("population", [np.abs(x) for x in p[::10]])
+
