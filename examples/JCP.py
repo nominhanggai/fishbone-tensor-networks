@@ -67,7 +67,7 @@ def init_special(pd):
 
 
 bath_length = 50
-phys_dim = 25
+phys_dim = 15
 a = [int(np.ceil(phys_dim - N*(phys_dim - 2) / bath_length)) for N in range(bath_length)]
 a = a[::-1]
 # a = [phys_dim] * bath_length
@@ -84,7 +84,7 @@ Spectral Density Parameters
 g=350
 eth.domain = [-g, g]
 temp = 300.
-reorg = 20.
+reorg = 200.
 # set the spectral densities on the two e-b bath chain.
 eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 eth.sd[1, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
@@ -118,21 +118,37 @@ label = label1 + [(-1,0)] + label2
 label_odd = label[0::2]
 label_even = label[1::2]
 p = []
+bond_dim =100
+threshold = 1e-3
 for tn in range(200):
-    print("Step Number:", tn)
     for idx in label_odd:
-        etn.update_bond(*idx, 100, 1e-3)
+        print("Step Number:", tn, "Bond", idx)
+        etn.update_bond(*idx, bond_dim, threshold)
     etn.U = U_one
     for idx in label_even:
-        etn.update_bond(*idx, 100, 1e-3)
+        print("Step Number:", tn, "Bond", idx)
+        etn.update_bond(*idx, bond_dim, threshold)
     etn.U = U_half
     for idx in label_odd:
-        etn.update_bond(*idx, 100, 1e-3)
+        print("Step Number:", tn, "Bond", idx)
+        etn.update_bond(*idx, bond_dim, threshold)
     t = etn.get_theta2(-1, 0)
     c = einsum('LIURlJDr,LiURljDr->IJij', t, t.conj())
     # t.shape is {vL i vU vR; VL' j vD' vR'}
     c = c.reshape(4, 4)
     p.append(np.diagonal(c))
+    p0 = pd[0][0]
+    p1 = pd[1][0]
+    for i, d in enumerate(p0):
+        th = etn.get_theta1(0,i)
+        rh = einsum('LiR,LjR->ij', th.conj(), th)
+        c = _c(d)
+        print("Occu", 0, i, d, np.abs(np.trace(c.T@c@rh)))
+    for i, d in enumerate(p1):
+        th = etn.get_theta1(1,i)
+        rh = einsum('LiR,LjR->ij', th.conj(), th)
+        c = _c(d)
+        print("Occu", 1, i, d, np.abs(np.trace(c.T@c@rh)))
 
 '''
 Output the population on state |+D><+D|

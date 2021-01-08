@@ -1,12 +1,13 @@
-from fishbonett.stuff import lorentzian, temp_factor
+from fishbonett.stuff import sd_zero_temp
 from scipy.integrate import *
 
 eta = 4.11
-f = lambda w: lorentzian(4.11, w)/w *4
+f = lambda w: sd_zero_temp(w)/w
 g=1000
 a = quad(f, 0, g)
 print(a)
 
+exit()
 from fishbonett.stuff import sigma_z, sigma_x
 from fishbonett.model import _c
 import numpy as np
