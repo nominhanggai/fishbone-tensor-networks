@@ -81,7 +81,7 @@ etn = init_special(pd)
 '''
 Spectral Density Parameters
 '''
-g=350
+g=500
 eth.domain = [-g, g]
 temp = 300.
 reorg = 200.
@@ -105,7 +105,8 @@ Build the system and get evolution operators
 eth.build(g, ncap=20000)
 print(eth.w_list)
 print(eth.k_list)
-time_step = 0.001
+# exit()
+time_step = 0.005
 U_one = eth.get_u(dt=time_step)
 U_half = eth.get_u(dt=time_step/2.)
 etn.U = U_half
@@ -118,9 +119,9 @@ label = label1 + [(-1,0)] + label2
 label_odd = label[0::2]
 label_even = label[1::2]
 p = []
-bond_dim =100
+bond_dim =1000
 threshold = 1e-3
-for tn in range(200):
+for tn in range(40):
     for idx in label_odd:
         print("Step Number:", tn, "Bond", idx)
         etn.update_bond(*idx, bond_dim, threshold)
