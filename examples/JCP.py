@@ -3,7 +3,7 @@ from fishbonett.fishbone import init, FishBoneNet
 import numpy as np
 from numpy import pi
 from fishbonett.stuff import sigma_z, sigma_x, sigma_1, temp_factor, drude1
-
+from opt_einsum import contract as einsum
 
 def init_special(pd):
     """
@@ -67,7 +67,7 @@ def init_special(pd):
 
 
 bath_length = 50
-phys_dim = 30
+phys_dim = 25
 a = [int(np.ceil(phys_dim - N*(phys_dim - 2) / bath_length)) for N in range(bath_length)]
 a = a[::-1]
 # a = [phys_dim] * bath_length
@@ -84,7 +84,7 @@ Spectral Density Parameters
 g=350
 eth.domain = [-g, g]
 temp = 300.
-reorg = 200.
+reorg = 20.
 # set the spectral densities on the two e-b bath chain.
 eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 eth.sd[1, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
@@ -105,7 +105,7 @@ Build the system and get evolution operators
 eth.build(g, ncap=20000)
 print(eth.w_list)
 print(eth.k_list)
-time_step = 0.005
+time_step = 0.001
 U_one = eth.get_u(dt=time_step)
 U_half = eth.get_u(dt=time_step/2.)
 etn.U = U_half
@@ -118,18 +118,18 @@ label = label1 + [(-1,0)] + label2
 label_odd = label[0::2]
 label_even = label[1::2]
 p = []
-for tn in range(40):
+for tn in range(200):
     print("Step Number:", tn)
     for idx in label_odd:
-        etn.update_bond(*idx, 100, 1e-3)
+        etn.update_bond(*idx, 500, 1e-3)
     etn.U = U_one
     for idx in label_even:
-        etn.update_bond(*idx, 100, 1e-3)
+        etn.update_bond(*idx, 500, 1e-3)
     etn.U = U_half
     for idx in label_odd:
-        etn.update_bond(*idx, 100, 1e-3)
+        etn.update_bond(*idx, 500, 1e-3)
     t = etn.get_theta2(-1, 0)
-    c = np.einsum('LIURlJDr,LiURljDr->IJij', t, t.conj())
+    c = einsum('LIURlJDr,LiURljDr->IJij', t, t.conj())
     # t.shape is {vL i vU vR; VL' j vD' vR'}
     c = c.reshape(4, 4)
     p.append(np.diagonal(c))
