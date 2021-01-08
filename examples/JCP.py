@@ -121,13 +121,13 @@ p = []
 for tn in range(200):
     print("Step Number:", tn)
     for idx in label_odd:
-        etn.update_bond(*idx, 500, 1e-3)
+        etn.update_bond(*idx, 100, 1e-3)
     etn.U = U_one
     for idx in label_even:
-        etn.update_bond(*idx, 500, 1e-3)
+        etn.update_bond(*idx, 100, 1e-3)
     etn.U = U_half
     for idx in label_odd:
-        etn.update_bond(*idx, 500, 1e-3)
+        etn.update_bond(*idx, 100, 1e-3)
     t = etn.get_theta2(-1, 0)
     c = einsum('LIURlJDr,LiURljDr->IJij', t, t.conj())
     # t.shape is {vL i vU vR; VL' j vD' vR'}
