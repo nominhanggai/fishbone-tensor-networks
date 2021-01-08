@@ -80,11 +80,14 @@ def sd_zero_temp(w):
     return sd_back(S1, s1, w, w1) + sd_back(S2, s2, w, w2) + sd_back(S3, s3, w, w3) + \
            sd_high(gamma, Omega_1, g1, w) + sd_high(gamma, Omgea_2, g2, w) + sd_high(gamma, Omgea_3, g3, w)
 
-temp = np.float64(0.000000001)
+temp = np.float64(300)
 eth.sd = lambda w: sd_zero_temp(w) * temp_factor(temp, w)
 
 eth.build(g=350)
 etn.U = eth.get_u(dt=0.00001)
+print(eth.w_list)
+print(eth.k_list)
+exit()
 
 p = []
 be = etn.B[-1]

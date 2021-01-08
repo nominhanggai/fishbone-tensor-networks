@@ -87,8 +87,13 @@ def sd_zero_temp_prime(w):
 def lorentzian(eta, w):
     lambd = 5245.
     Omega = 77.
-    return 0.5 * lambd * (Omega ** 2) * eta * w / ((w ** 2 - Omega ** 2)**2 + (eta**2) * (w ** 2))
+    return 0.5 * lambd * (Omega ** 2) * eta * w / ((w ** 2 - Omega ** 2) ** 2 + (eta ** 2) * (w ** 2))
 
-def drude1(w,lam):
-    gam = 10./1.8836515673088531 # T-1
-    return 2*np.pi * lam * gam * w /(w**2 + gam**2)
+
+def drude1(w, lam):
+    gam = 10. / 1.8836515673088531  # T-1
+    return 2 * lam * gam * w / (w ** 2 + gam ** 2)
+
+
+def brownian(w, lam, gam, w0=1):
+    return 2 * lam * gam * w0 ** 2 * w / ((w0 ** 2 - w ** 2) + gam ** 2 * w ** 2)

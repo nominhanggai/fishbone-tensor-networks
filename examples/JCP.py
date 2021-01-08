@@ -7,9 +7,8 @@ from fishbonett.stuff import sigma_z, sigma_x, sigma_1, temp_factor, drude1
 
 def init_special(pd):
     """
-    Initialize the SimpleTTN class.
+    Initialize the FishBoneNet class.
     """
-
     def g_state(dim):
         tensor = np.zeros(dim)
         tensor[(0,) * len(dim)] = 1.
@@ -68,7 +67,10 @@ def init_special(pd):
 
 
 bath_length = 50
-a = [15] * bath_length
+phys_dim = 30
+a = [int(np.ceil(phys_dim - N*(phys_dim - 2) / bath_length)) for N in range(bath_length)]
+a = a[::-1]
+# a = [phys_dim] * bath_length
 b = [2]
 c = [4]
 pd = np.array([[a, b, [], []], [a, b, [], []]], dtype=object)
@@ -79,11 +81,13 @@ etn = init_special(pd)
 '''
 Spectral Density Parameters
 '''
-eth.domain = [-350, 350]
+g=350
+eth.domain = [-g, g]
 temp = 300.
+reorg = 200.
 # set the spectral densities on the two e-b bath chain.
-eth.sd[0, 0] = lambda w: drude1(w, 2.) * temp_factor(temp, w)
-eth.sd[1, 0] = lambda w: drude1(w, 2.) * temp_factor(temp, w)
+eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
+eth.sd[1, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 
 '''
 Hamiltonians that are needed to be assigned
@@ -98,10 +102,12 @@ eth.h2ee = [a]
 '''
 Build the system and get evolution operators
 '''
-eth.build(g=350)
-
-U_half = eth.get_u(dt=0.001)
-U_one = eth.get_u(dt=0.0005)
+eth.build(g, ncap=20000)
+print(eth.w_list)
+print(eth.k_list)
+time_step = 0.005
+U_one = eth.get_u(dt=time_step)
+U_half = eth.get_u(dt=time_step/2.)
 etn.U = U_half
 '''
 Run the evolution
@@ -112,16 +118,16 @@ label = label1 + [(-1,0)] + label2
 label_odd = label[0::2]
 label_even = label[1::2]
 p = []
-for tn in range(200):
+for tn in range(40):
     print("Step Number:", tn)
     for idx in label_odd:
-        etn.update_bond(*idx, 100, 1e-6)
+        etn.update_bond(*idx, 100, 1e-3)
     etn.U = U_one
     for idx in label_even:
-        etn.update_bond(*idx, 100, 1e-6)
+        etn.update_bond(*idx, 100, 1e-3)
     etn.U = U_half
     for idx in label_odd:
-        etn.update_bond(*idx, 100, 1e-6)
+        etn.update_bond(*idx, 100, 1e-3)
     t = etn.get_theta2(-1, 0)
     c = np.einsum('LIURlJDr,LiURljDr->IJij', t, t.conj())
     # t.shape is {vL i vU vR; VL' j vD' vR'}
