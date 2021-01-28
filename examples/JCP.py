@@ -66,9 +66,9 @@ def init_special(pd):
     )
 
 
-bath_length = 50
-phys_dim = 15
-a = [int(np.ceil(phys_dim - (phys_dim - 2) / (N/bath_length)**0.06)) for N in range(bath_length)]
+bath_length = 100
+phys_dim = 100
+a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.06)) for N in range(bath_length)]
 a = a[::-1]
 print(a)
 # a = [phys_dim] * bath_length
@@ -122,7 +122,9 @@ label_even = label[1::2]
 p = []
 bond_dim =1000
 threshold = 3e-2
-for tn in range(200):
+num_steps = 200
+
+for tn in range(num_steps):
     for idx in label_odd:
         print("Step Number:", tn, "Bond", idx)
         etn.update_bond(*idx, bond_dim, threshold)
