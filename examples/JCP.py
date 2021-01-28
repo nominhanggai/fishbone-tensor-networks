@@ -150,7 +150,16 @@ for tn in range(200):
         rh = einsum('LiR,LjR->ij', th.conj(), th)
         c = _c(d)
         print("Occu", 1, i, d, np.abs(np.trace(c.T@c@rh)))
-
+    for i, d in enumerate(p0):
+        th = etn.get_theta1(0,i)
+        rh = einsum('LiR,LjR->ij', th.conj(), th)
+        c = _c(d)
+        print("Occu", 0, i, d, np.abs(np.trace(c.T@c@rh)))
+    for i, d in enumerate(p1):
+        th = etn.get_theta1(1,i)
+        rh = einsum('LiR,LjR->ij', th.conj(), th)
+        c = _c(d)
+        print("Occu", 1, i, d, np.abs(np.trace(c.T@c@rh)))
 '''
 Output the population on state |+D><+D|
 '''
