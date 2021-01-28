@@ -81,10 +81,10 @@ etn = init_special(pd)
 '''
 Spectral Density Parameters
 '''
-g=500
+g=350
 eth.domain = [-g, g]
 temp = 300.
-reorg = 200.
+reorg = 500.
 # set the spectral densities on the two e-b bath chain.
 eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 eth.sd[1, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
@@ -106,7 +106,7 @@ eth.build(g, ncap=20000)
 print(eth.w_list)
 print(eth.k_list)
 # exit()
-time_step = 0.005
+time_step = 0.0001
 U_one = eth.get_u(dt=time_step)
 U_half = eth.get_u(dt=time_step/2.)
 etn.U = U_half
@@ -120,8 +120,8 @@ label_odd = label[0::2]
 label_even = label[1::2]
 p = []
 bond_dim =1000
-threshold = 1e-3
-for tn in range(40):
+threshold = 1e-7
+for tn in range(200):
     for idx in label_odd:
         print("Step Number:", tn, "Bond", idx)
         etn.update_bond(*idx, bond_dim, threshold)

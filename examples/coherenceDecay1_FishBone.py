@@ -6,10 +6,10 @@ from fishbonett.stuff import temp_factor, sigma_z, sigma_0
 
 
 
-bath_length = 120
-a = [8]*bath_length
+bath_length = 12
+a = [5,6,7,8,9,10,11,12,13,14,15,16]
 b = [2]
-pd = np.array([[a, b, [], []], ], dtype=object)
+pd = np.array([[a, b, [], a], ], dtype=object)
 
 eth = FishBoneH(pd)
 etn = init(pd)
@@ -24,14 +24,21 @@ s = 2
 j = lambda x: lambd * ((x / Omega) ** s) * np.exp(-x / Omega)
 
 eth.sd[0, 0] = j
+# eth.sd[0, 1] = j
 
 
 eth.he_dy = [(sigma_0 + sigma_z)/4]*2
 eth.h1e = [1000. / 2 * sigma_z]*2
+eth.h1v = eth.h1e
+eth.hv_dy = [(sigma_0 + sigma_z)/3]*2
+
 
 eth.build(g)
+print(eth._H[0][11])
+print(eth._H[0][12])
 etn.U = eth.get_u(dt=0.0001)
 
+print(len(etn.ttnS[0]))
 
 p = []
 
