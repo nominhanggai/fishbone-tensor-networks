@@ -68,7 +68,7 @@ def init_special(pd):
 
 bath_length = 100
 phys_dim = 100
-a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.06)) for N in range(bath_length)]
+a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.2)) for N in range(bath_length)]
 a = a[::-1]
 print(a)
 # a = [phys_dim] * bath_length
@@ -107,7 +107,7 @@ eth.build(g, ncap=20000)
 print(eth.w_list)
 print(eth.k_list)
 # exit()
-time_step = 0.0001
+time_step = 0.001
 U_one = eth.get_u(dt=time_step)
 U_half = eth.get_u(dt=time_step/2.)
 etn.U = U_half
@@ -120,8 +120,8 @@ label = label1 + [(-1,0)] + label2
 label_odd = label[0::2]
 label_even = label[1::2]
 p = []
-bond_dim =1000
-threshold = 3e-2
+bond_dim = 1000
+threshold = 5e-3
 num_steps = 200
 
 for tn in range(num_steps):
@@ -153,18 +153,8 @@ for tn in range(num_steps):
         rh = einsum('LiR,LjR->ij', th.conj(), th)
         c = _c(d)
         print("Occu", 1, i, d, np.abs(np.trace(c.T@c@rh)))
-    for i, d in enumerate(p0):
-        th = etn.get_theta1(0,i)
-        rh = einsum('LiR,LjR->ij', th.conj(), th)
-        c = _c(d)
-        print("Occu", 0, i, d, np.abs(np.trace(c.T@c@rh)))
-    for i, d in enumerate(p1):
-        th = etn.get_theta1(1,i)
-        rh = einsum('LiR,LjR->ij', th.conj(), th)
-        c = _c(d)
-        print("Occu", 1, i, d, np.abs(np.trace(c.T@c@rh)))
 '''
 Output the population on state |+D><+D|
 '''
 print("population", [np.abs(x[1]) for x in p])
-# print("population", [np.abs(x) for x in p[::4]])
+
