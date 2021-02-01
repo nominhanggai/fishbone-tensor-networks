@@ -68,7 +68,7 @@ def init_special(pd):
 
 bath_length = 100
 phys_dim = 100
-a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.2)) for N in range(bath_length)]
+a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.1)) for N in range(bath_length)]
 a = a[::-1]
 print(a)
 # a = [phys_dim] * bath_length
@@ -121,7 +121,7 @@ label_odd = label[0::2]
 label_even = label[1::2]
 p = []
 bond_dim = 1000
-threshold = 5e-3
+threshold = 1e-2
 num_steps = 200
 
 for tn in range(num_steps):
