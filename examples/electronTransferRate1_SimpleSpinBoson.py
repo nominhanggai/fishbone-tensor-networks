@@ -11,7 +11,9 @@ print(a)
 
 pd = a[::-1] + [2]
 eth = SpinBoson(pd)
+print("ETH Complete")
 etn = SpinBoson1D(pd)
+print("ETN Complete")
 # set the initial state of the system. It's in the high-energy state |0>:
 # if you doubt this, pls check the definition of sigma_z
 etn.B[-1][0, 1, 0] = 0.
