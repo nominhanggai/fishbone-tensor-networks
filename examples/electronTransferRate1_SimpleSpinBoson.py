@@ -47,7 +47,7 @@ print(len(etn.B))
 p = []
 occu = []
 # time = 0.03644 T = 3644 steps if the time step is 1e-5
-num_steps = 50
+num_steps = 200
 etn.U = U_half
 bond_dim = 200
 threshold = 1e-3
