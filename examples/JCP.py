@@ -68,7 +68,7 @@ def init_special(pd):
 
 bath_length = 100
 phys_dim = 100
-a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.1)) for N in range(bath_length)]
+a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**1)) for N in range(bath_length)]
 a = a[::-1]
 print(a)
 # a = [phys_dim] * bath_length
