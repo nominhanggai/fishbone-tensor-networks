@@ -86,8 +86,8 @@ Spectral Density Parameters
 g=350
 eth.domain = [-g, g]
 temp = 300.
-reorg = 200.
-reorg2 = 200.
+reorg = 500.
+reorg2 = reorg
 # set the spectral densities on the two e-b bath chain.
 eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 eth.sd[0, 1] = lambda w: drude1(w, reorg2) * temp_factor(temp, w)
@@ -116,7 +116,7 @@ eth.build(g, ncap=20000)
 print(eth.w_list)
 print(eth.k_list)
 # exit()
-time_step = 0.005
+time_step = 0.001
 U_one = eth.get_u(dt=time_step)
 U_half = eth.get_u(dt=time_step/2.)
 etn.U = U_half
@@ -131,7 +131,7 @@ label_even = label[1::2]
 p = []
 bond_dim = 300
 threshold = 1e-2
-num_steps = 100
+num_steps = 200
 
 for tn in range(num_steps):
     for idx in label_odd:
@@ -165,8 +165,8 @@ for tn in range(num_steps):
 '''
 Output the population on state |+D><+D|
 '''
-print("population", [np.abs(x[0]) for x in p])
-print("population", [np.abs(x[1]) for x in p])
-print("population", [np.abs(x[2]) for x in p])
-print("population", [np.abs(x[3]) for x in p])
+print("pop1={", ','.join(map(str, [np.abs(x[0]) for x in p])), "};")
+print("pop2={", ','.join(map(str, [np.abs(x[1]) for x in p])), "};")
+print("pop3={", ','.join(map(str, [np.abs(x[2]) for x in p])), "};")
+print("pop4={", ','.join(map(str, [np.abs(x[3]) for x in p])), "};")
 

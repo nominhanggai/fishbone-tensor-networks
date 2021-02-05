@@ -84,9 +84,7 @@ def sd_zero_temp_prime(w):
 # The parameters in lorentzian() are from  dx.doi.org/10.1021/jp400462f
 
 
-def lorentzian(eta, w):
-    lambd = 5245.
-    Omega = 77.
+def lorentzian(eta, w, lambd = 5245.,Omega = 77.):
     return 0.5 * lambd * (Omega ** 2) * eta * w / ((w ** 2 - Omega ** 2) ** 2 + (eta ** 2) * (w ** 2))
 
 
