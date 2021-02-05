@@ -69,7 +69,7 @@ def init_special(pd):
 
 
 bath_length = 100
-phys_dim = 50
+phys_dim = 90
 a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.2)) for N in range(bath_length)]
 a = a[::-1]
 print(a)
@@ -87,7 +87,7 @@ g=350
 eth.domain = [-g, g]
 temp = 300.
 reorg = 200.
-reorg2 = 100.
+reorg2 = 200.
 # set the spectral densities on the two e-b bath chain.
 eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 eth.sd[0, 1] = lambda w: drude1(w, reorg2) * temp_factor(temp, w)
@@ -116,7 +116,7 @@ eth.build(g, ncap=20000)
 print(eth.w_list)
 print(eth.k_list)
 # exit()
-time_step = 0.001
+time_step = 0.005
 U_one = eth.get_u(dt=time_step)
 U_half = eth.get_u(dt=time_step/2.)
 etn.U = U_half
@@ -130,8 +130,8 @@ label_odd = label[0::2]
 label_even = label[1::2]
 p = []
 bond_dim = 300
-threshold = 2e-3
-num_steps = 300
+threshold = 1e-2
+num_steps = 100
 
 for tn in range(num_steps):
     for idx in label_odd:
