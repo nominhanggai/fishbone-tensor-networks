@@ -67,7 +67,7 @@ def init_special(pd):
 
 
 bath_length = 100
-phys_dim = 100
+phys_dim = 20
 a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**1)) for N in range(bath_length)]
 a = a[::-1]
 print(a)
@@ -85,7 +85,7 @@ Spectral Density Parameters
 g=350
 eth.domain = [-g, g]
 temp = 300.
-reorg = 500.
+reorg = 50.
 # set the spectral densities on the two e-b bath chain.
 eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 eth.sd[1, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
@@ -94,7 +94,8 @@ eth.sd[1, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
 Hamiltonians that are needed to be assigned
 '''
 eth.he_dy = [(sigma_1 + sigma_z) / 2] * 2
-eth.h1e = [0. * sigma_z] * 2
+eth.he_dy = [(sigma_z) / 2] * 2
+eth.h1e = [sigma_z] * 2
 v = 100.
 annih = _c(*b)
 a = v * (kron(annih, annih.T) + kron(annih.T, annih))
@@ -121,8 +122,8 @@ label_odd = label[0::2]
 label_even = label[1::2]
 p = []
 bond_dim = 1000
-threshold = 1e-2
-num_steps = 200
+threshold = 5e-3
+num_steps = 100
 
 for tn in range(num_steps):
     for idx in label_odd:
@@ -140,7 +141,8 @@ for tn in range(num_steps):
     c = einsum('LIURlJDr,LiURljDr->IJij', t, t.conj())
     # t.shape is {vL i vU vR; VL' j vD' vR'}
     c = c.reshape(4, 4)
-    p.append(np.diagonal(c))
+    c = np.trace(c@c)
+    p.append(np.abs(c))
     p0 = pd[0][0]
     p1 = pd[1][0]
     for i, d in enumerate(p0):
@@ -156,5 +158,5 @@ for tn in range(num_steps):
 '''
 Output the population on state |+D><+D|
 '''
-print("population", [np.abs(x[1]) for x in p])
+print("population", [np.abs(x) for x in p])
 

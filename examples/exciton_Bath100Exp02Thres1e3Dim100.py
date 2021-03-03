@@ -2,8 +2,9 @@ from fishbonett.model import FishBoneH, kron, _c
 from fishbonett.fishbone import init, FishBoneNet
 import numpy as np
 from numpy import pi
-from fishbonett.stuff import sigma_z, sigma_x, sigma_1, sigma_p, sigma_m, temp_factor, drude1
+from fishbonett.stuff import sigma_z, sigma_x, sigma_1, sigma_p, sigma_m, temp_factor, drude1, lorentzian
 from opt_einsum import contract as einsum
+import multiprocessing as mp
 
 def init_special(pd):
     """
@@ -69,7 +70,7 @@ def init_special(pd):
 
 
 bath_length = 100
-phys_dim = 90
+phys_dim = 20
 a = [int(np.ceil(phys_dim - (phys_dim - 2) * (N/bath_length)**0.2)) for N in range(bath_length)]
 a = a[::-1]
 print(a)
@@ -83,28 +84,31 @@ etn = init_special(pd)
 '''
 Spectral Density Parameters
 '''
-g=350
+g = 650
 eth.domain = [-g, g]
-temp = 300.
-reorg = 500.
+temp = 77.
+reorg = 200.
 reorg2 = reorg
+eta = 4.11
 # set the spectral densities on the two e-b bath chain.
-eth.sd[0, 0] = lambda w: drude1(w, reorg) * temp_factor(temp, w)
-eth.sd[0, 1] = lambda w: drude1(w, reorg2) * temp_factor(temp, w)
+j1 = lambda w: drude1(w, reorg2) * temp_factor(temp, w)
+j2 = lambda w: lorentzian(eta, w, lambd=reorg, Omega=440) * temp_factor(temp, w)
+eth.sd[0, 0] = j1
+eth.sd[0, 1] = j1
 
 '''
 Hamiltonians that are needed to be assigned
 '''
-h1e_mat = np.array([[  0,   10,  150,    0],
-                    [ 10,  400,    0,  150],
-                    [150,    0, 1000,   10],
-                    [  0,  150,   10, 1400]])
+h1e_mat = np.array([[  0.00000,  16.13109,  200.02550,  60.49158],
+                    [ 16.13109,  49.19982,   12.09832, 207.28449],
+                    [200.02550,  12.09832,  369.40193,  46.78016],
+                    [ 60.49158,  207.28449,  46.78016, 449.25082]])
 
 eth.h1e = [h1e_mat]
 eth.h1v = [h1e_mat]
 
-he_dy = np.diag([1.0, 1.0, 0.0, 0.0])
-hv_dy = np.diag([0.0, 0.0, 1.0, 1.0])
+he_dy = np.diag([0.7, 1.0, 0.0, 0.0])
+hv_dy = np.diag([0.0, 0.0, 0.65, 1.1])
 
 eth.hv_dy = [hv_dy,]
 eth.he_dy = [he_dy,]
@@ -130,18 +134,26 @@ label_odd = label[0::2]
 label_even = label[1::2]
 p = []
 bond_dim = 300
-threshold = 1e-2
+threshold = 1e-3
 num_steps = 200
 
+def update_bond(a):
+    idx, bond_dim, threshold = a
+    print("Step Number:", tn, "Bond", idx)
+    etn.update_bond(*idx, bond_dim, threshold)
 for tn in range(num_steps):
+    # pool = mp.Pool(mp.cpu_count())
+    # pool.map(update_bond, zip(label_odd, [bond_dim]*len(label_odd), [threshold]*len(label_odd)))
     for idx in label_odd:
         print("Step Number:", tn, "Bond", idx)
         etn.update_bond(*idx, bond_dim, threshold)
     etn.U = U_one
+    # pool.map(update_bond, zip(label_even, [bond_dim] * len(label_even), [threshold] * len(label_even)))
     for idx in label_even:
         print("Step Number:", tn, "Bond", idx)
         etn.update_bond(*idx, bond_dim, threshold)
     etn.U = U_half
+    # pool.map(update_bond, zip(label_odd, [bond_dim] * len(label_odd), [threshold] * len(label_odd)))
     for idx in label_odd:
         print("Step Number:", tn, "Bond", idx)
         etn.update_bond(*idx, bond_dim, threshold)
