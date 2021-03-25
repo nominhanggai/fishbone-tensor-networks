@@ -4,7 +4,7 @@ from fishbonett.fishbone import SpinBoson1D
 from fishbonett.backwardSpinBoson import SpinBoson
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, drude1
 
-bath_length = 100
+bath_length = 10
 phys_dim = 20
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 # freq 47.46823245   11.65575389 1286.44557149 1031.29582863  964.64706021
