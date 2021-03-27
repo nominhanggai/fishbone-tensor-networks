@@ -17,25 +17,24 @@ def calc_U(H, dt):
     """
     return expm(-dt * 1j * H)
 
-f = lambda w: sd_zero_temp(w)
-leng = 2
-domain = [0,350]
+f = lambda w: sd_zero_temp(w)*temp_factor(300,w)
+leng = 50
+domain = [-351,350]
 
-# def get_coupling(j, domain, g, ncap=20000, n=leng):
-#     alphaL, betaL = rc.recurrenceCoefficients(
-#         n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
-#     )
-#     w_list = g * np.array(alphaL)
-#     k_list = g * np.sqrt(np.array(betaL))
-#     k_list[0] = k_list[0] / g
-#     return w_list, k_list
+def get_coupling(j, domain, g, ncap=20000, n=leng):
+    alphaL, betaL = rc.recurrenceCoefficients(
+        n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
+    )
+    w_list = g * np.array(alphaL)
+    k_list = g * np.sqrt(np.array(betaL))
+    k_list[0] = k_list[0] / g
+    return w_list, k_list
 
-# w, k= get_coupling(j=f, domain=domain, g=1, ncap=50000, n = leng)
-w = np.array([147.99138037, 150.89261887])
-k = np.array([74.76990594, 76.06207614])
-k[1] = 0
+w, k= get_coupling(j=f, domain=domain, g=1, ncap=50000, n = leng)
+
+
 print(w,k)
-
+exit()
 
 coup = np.diag(w) + np.diag(k[1:],1)+ np.diag(k[1:],-1)
 freq, coef= np.linalg.eig(coup)
