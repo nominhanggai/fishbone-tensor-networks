@@ -1,10 +1,10 @@
 import numpy as np
 from scipy.optimize import curve_fit
-from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
+from fishbonett.starSpinBoson import SpinBoson, SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp
 from scipy.linalg import expm
 bath_length = 50
-phys_dim = 20
+phys_dim = 50
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -40,13 +40,11 @@ print(eth.k_list)
 # ~ 0.5 ps ~ 0.1T
 p = []
 
-bond_dim =  100000
+bond_dim = 100000
 threshold = 1e-5
 dt = 0.0005
 num_steps = 200
-print(eth.freq)
-print(eth.coef)
-print(eth.coef.T@eth.coup@eth.coef)
+
 # exit()
 for tn in range(num_steps):
     U1, U2 = eth.get_u(2*tn*dt, dt,mode='normal')

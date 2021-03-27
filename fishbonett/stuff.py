@@ -89,7 +89,7 @@ def lorentzian(eta, w, lambd = 5245.,Omega = 77.):
 
 
 def drude1(w, lam, gam = 100.):
-    gam = gam/ 1.8836515673088531
+    gam = gam/1.8836515673088531
     return 2 * lam * gam * w / (w ** 2 + gam ** 2)
 
 def brownian(w, lam, gam, w0=1):
