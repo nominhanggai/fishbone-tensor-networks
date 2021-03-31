@@ -18,7 +18,7 @@ def calc_U(H, dt):
     return expm(-dt * 1j * H)
 
 f = lambda w: sd_zero_temp(w)*temp_factor(300,w)
-leng = 50
+leng = 6
 domain = [-351,350]
 
 def get_coupling(j, domain, g, ncap=20000, n=leng):
@@ -32,14 +32,14 @@ def get_coupling(j, domain, g, ncap=20000, n=leng):
 
 w, k= get_coupling(j=f, domain=domain, g=1, ncap=50000, n = leng)
 
-
-print(w,k)
-exit()
-
 coup = np.diag(w) + np.diag(k[1:],1)+ np.diag(k[1:],-1)
 freq, coef= np.linalg.eig(coup)
+indexes = np.abs(coef[0,:]).argsort()[::-1]
+freq = freq[indexes]
+coef0 = coef[0,:][indexes]
 
-print(coef, freq)
+print(coef0, freq)
+exit()
 print(w,k)
 he_dy = (np.eye(2) + sigma_z) / 2
 h1e = 0.5 * sigma_z

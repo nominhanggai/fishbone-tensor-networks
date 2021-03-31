@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import curve_fit
 from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
-from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp
+from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
 from scipy.linalg import expm
 from time import time
 
@@ -24,32 +24,30 @@ etn.B[-1][0, 0, 0] = 1. / np.sqrt(2)
 
 # spectral density parameters
 g = 350
-eth.domain = [-g-1, g]
-temp = 0.0005
-j = lambda w: sd_zero_temp(w)*temp_factor(300,w)
+eth.domain = [-g, g]
+temp = 300
+j = lambda w: drude1(w,500)*temp_factor(temp,w)
 
 eth.sd = j
 
 eth.he_dy = (np.eye(2) + sigma_z)/2
-eth.h1e = 50*sigma_z + 20*sigma_x
+eth.h1e = 0*sigma_z + 100*sigma_x
 
 eth.build(g=350., ncap=20000)
-print(eth.w_list)
-print(eth.k_list)
+# print(eth.w_list)
+# print(eth.k_list)
 
 # U_one = eth.get_u(dt=0.002, t=0.2)
 
 # ~ 0.5 ps ~ 0.1T
 p = []
 
-bond_dim =  100000
+bond_dim = 100000
 threshold = 1e-5
 dt = 0.0005
 num_steps = 80
-print(eth.freq)
-print(eth.coef)
-print(eth.coef.T@eth.coup@eth.coef)
-t = 0
+
+s_dim = np.empty([0,0])
 
 t = 0.
 for tn in range(num_steps):
@@ -74,6 +72,9 @@ for tn in range(num_steps):
         print("j==", j, tn)
         etn.update_bond(j, bond_dim, threshold,swap=1)
 
+    dim = [len(s) for s in etn.S]
+    s_dim = np.append(s_dim, dim)
+
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
     p = p + [np.abs(rho[0, 1])]
@@ -84,4 +85,5 @@ for tn in range(num_steps):
 pop = [x for x in p]
 print("population", pop)
 print(t)
+s_dim.astype('float32').tofile('heatmap.dat')
 # print(occu)

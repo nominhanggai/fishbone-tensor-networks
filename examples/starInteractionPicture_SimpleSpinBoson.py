@@ -25,8 +25,8 @@ etn.B[-1][0, 0, 0] = 1. / np.sqrt(2)
 # spectral density parameters
 g = 350
 eth.domain = [-g-1, g]
-temp = 0.0005
-j = lambda w: sd_zero_temp(w)*temp_factor(300,w)
+temp = 300
+j = lambda w: sd_zero_temp(w)*temp_factor(temp,w)
 
 eth.sd = j
 
@@ -42,14 +42,13 @@ print(eth.k_list)
 # ~ 0.5 ps ~ 0.1T
 p = []
 
-bond_dim =  100000
+bond_dim = 100000
 threshold = 1e-5
 dt = 0.0005
 num_steps = 80
-print(eth.freq)
-print(eth.coef)
-print(eth.coef.T@eth.coup@eth.coef)
-# exit()
+
+s_dim = np.empty([0,0])
+
 t = 0.
 for tn in range(num_steps):
     U1, U2 = eth.get_u(2*tn*dt, dt,mode='normal')
@@ -73,6 +72,9 @@ for tn in range(num_steps):
         print("j==", j, tn)
         etn.update_bond(j, bond_dim, threshold,swap=1)
 
+    dim = [len(s) for s in etn.S]
+    s_dim = np.append(s_dim, dim)
+
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
     p = p + [np.abs(rho[0, 1])]
@@ -82,5 +84,5 @@ for tn in range(num_steps):
 pop = [x for x in p]
 print("population", pop)
 print(t)
-
+s_dim.astype('float32').tofile('heatmap_star_int.dat')
 # print(occu)

@@ -84,17 +84,20 @@ def sd_zero_temp_prime(w):
 # The parameters in lorentzian() are from  dx.doi.org/10.1021/jp400462f
 
 
-def lorentzian(eta, w, lambd = 5245.,Omega = 77.):
-    return 0.5 * lambd * (Omega ** 2) * eta * w / ((w ** 2 - Omega ** 2) ** 2 + (eta ** 2) * (w ** 2))
+def lorentzian(eta, w, lambd=5245., omega=77.):
+    return 0.5 * lambd * (omega ** 2) * eta * w / ((w ** 2 - omega ** 2) ** 2 + (eta ** 2) * (w ** 2))
 
 
-def drude1(w, lam, gam = 100.):
-    gam = gam/1.8836515673088531
+def drude1(w, lam, gam=100.):
+    gam = gam / 1.8836515673088531
     return 2 * lam * gam * w / (w ** 2 + gam ** 2)
+
 
 def brownian(w, lam, gam, w0=1):
     return 2 * lam * gam * w0 ** 2 * w / ((w0 ** 2 - w ** 2) + gam ** 2 * w ** 2)
 
+
 def natphys(w, lam):
-    return lam * np.pi * 0.5 * (1000 * w ** 5 * np.exp(- np.sqrt(w / 0.57)) + 4.3 * w ** 5 * np.exp(-np.sqrt(w / 1.9))) / (
-                362880. * (1000. * 0.57 ** 5 + 4.3 * 1.9 ** 5))
+    return lam * np.pi * 0.5 * (
+                1000 * w ** 5 * np.exp(- np.sqrt(w / 0.57)) + 4.3 * w ** 5 * np.exp(-np.sqrt(w / 1.9))) / (
+                   362880. * (1000. * 0.57 ** 5 + 4.3 * 1.9 ** 5))
