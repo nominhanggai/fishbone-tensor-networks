@@ -30,6 +30,13 @@ def temp_factor(temp, w):
     return 0.5 * (1. + 1. / np.tanh(beta * w / 2.))
 
 
+'''Entanglement Entropy'''
+def rlogr(si):
+    return (-1) *si*np.log2(si)
+def entang(s):
+    return sum([rlogr(si) for si in s])
+
+
 '''Spectral densities'''
 
 
@@ -99,5 +106,5 @@ def brownian(w, lam, gam, w0=1):
 
 def natphys(w, lam):
     return lam * np.pi * 0.5 * (
-                1000 * w ** 5 * np.exp(- np.sqrt(w / 0.57)) + 4.3 * w ** 5 * np.exp(-np.sqrt(w / 1.9))) / (
+            1000 * w ** 5 * np.exp(- np.sqrt(w / 0.57)) + 4.3 * w ** 5 * np.exp(-np.sqrt(w / 1.9))) / (
                    362880. * (1000. * 0.57 ** 5 + 4.3 * 1.9 ** 5))

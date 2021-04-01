@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import curve_fit
 from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
-from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
+from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, entang
 from scipy.linalg import expm
 from time import time
 
@@ -24,14 +24,14 @@ etn.B[-1][0, 0, 0] = 1. / np.sqrt(2)
 
 # spectral density parameters
 g = 350
-eth.domain = [-g, g]
+eth.domain = [-g-1, g]
 temp = 300
-j = lambda w: drude1(w,500)*temp_factor(temp,w)
+j = lambda w: sd_zero_temp(w)*temp_factor(temp,w)
 
 eth.sd = j
 
 eth.he_dy = (np.eye(2) + sigma_z)/2
-eth.h1e = 0*sigma_z + 100*sigma_x
+eth.h1e = 50*sigma_z + 20*sigma_x
 
 eth.build(g=350., ncap=20000)
 # print(eth.w_list)
@@ -43,7 +43,7 @@ eth.build(g=350., ncap=20000)
 p = []
 
 bond_dim = 100000
-threshold = 1e-5
+threshold = 1e-12
 dt = 0.0005
 num_steps = 80
 
@@ -72,7 +72,7 @@ for tn in range(num_steps):
         print("j==", j, tn)
         etn.update_bond(j, bond_dim, threshold,swap=1)
 
-    dim = [len(s) for s in etn.S]
+    dim = [entang(s) for s in etn.S]
     s_dim = np.append(s_dim, dim)
 
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
