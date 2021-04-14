@@ -35,7 +35,7 @@ for tn in range(80):
         print("j==", j, tn)
         etn.update_bond(j, 10000, 1e-5)
 
-    dim = [entang(s) for s in etn.S]
+    dim = [len(s) for s in etn.S]
     s_dim = np.append(s_dim, dim)
 
     theta = etn.get_theta1(bath_length) # c.shape vL i vR

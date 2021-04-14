@@ -108,3 +108,9 @@ def natphys(w, lam):
     return lam * np.pi * 0.5 * (
             1000 * w ** 5 * np.exp(- np.sqrt(w / 0.57)) + 4.3 * w ** 5 * np.exp(-np.sqrt(w / 1.9))) / (
                    362880. * (1000. * 0.57 ** 5 + 4.3 * 1.9 ** 5))
+
+def lemmer(w, lam, k, wm):
+    return lam**2 * (k/(k**2 + (w-wm)**2) -
+                   k/(k**2 + (w+wm)**2)
+                   )
+

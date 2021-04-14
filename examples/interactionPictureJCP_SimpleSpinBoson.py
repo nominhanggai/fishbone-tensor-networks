@@ -2,12 +2,13 @@ import numpy as np
 from scipy.optimize import curve_fit
 # from fishbonett.starSpinBoson import SpinBoson, SpinBoson1D
 from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
-from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
+from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer
 from scipy.linalg import expm
 from time import time
 
-bath_length = 120
-phys_dim = 100
+bath_length = 60
+phys_dim = 30
+bond_dim = 60
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -24,17 +25,17 @@ etn.B[-1][0, 0, 0] = 1.
 
 
 # spectral density parameters
-g = 800
+g = 1000
 eth.domain = [-g, g]
-temp = 300
-j = lambda w: drude1(w,5000)*temp_factor(temp,w)
+temp = 129.2425
+j = lambda w: lemmer(w, lam=333.564*2, k=4.16955, wm=333.564) * temp_factor(temp,w)
 
 eth.sd = j
 
 eth.he_dy = (sigma_z)/2
-eth.h1e = 0*sigma_z + 100*sigma_x
+eth.h1e = 0*sigma_z/2 + (-333.564)*sigma_x / 2
 
-eth.build(g=350., ncap=20000)
+eth.build(g=1., ncap=20000)
 # print(eth.w_list)
 # print(eth.k_list)
 
@@ -43,10 +44,10 @@ eth.build(g=350., ncap=20000)
 # ~ 0.5 ps ~ 0.1T
 p = []
 
-bond_dim = 120
+
 threshold = 1e-5
-dt = 0.0005
-num_steps = 200
+dt = 0.0006
+num_steps = 300
 
 s_dim = np.empty([0,0])
 
@@ -78,13 +79,13 @@ for tn in range(num_steps):
 
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
-    p = p + [np.abs(rho[0, 0])]
+    pop = np.einsum('ij,ji', rho, sigma_z)
+    p = p + [pop]
     t1 = time()
     t = t + t1 - t0
 
 # t1 = time()
-pop = [x for x in p]
+pop = [x.real for x in p]
 print("population", pop)
 print(t)
 s_dim.astype('float32').tofile('heatmap_JCP.dat')
-# print(occu)

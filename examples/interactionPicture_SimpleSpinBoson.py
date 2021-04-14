@@ -43,7 +43,7 @@ eth.build(g=350., ncap=20000)
 p = []
 
 bond_dim = 100000
-threshold = 1e-12
+threshold = 1e-5
 dt = 0.0005
 num_steps = 80
 
@@ -72,7 +72,7 @@ for tn in range(num_steps):
         print("j==", j, tn)
         etn.update_bond(j, bond_dim, threshold,swap=1)
 
-    dim = [entang(s) for s in etn.S]
+    dim = [len(s) for s in etn.S]
     s_dim = np.append(s_dim, dim)
 
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
