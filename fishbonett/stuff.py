@@ -99,6 +99,9 @@ def drude1(w, lam, gam=100.):
     gam = gam / 1.8836515673088531
     return 2 * lam * gam * w / (w ** 2 + gam ** 2)
 
+def drude(w, lam, gam=100.):
+    return 2 * lam * gam * w / (w ** 2 + gam ** 2)
+
 
 def brownian(w, lam, gam, w0=1):
     return 2 * lam * gam * w0 ** 2 * w / ((w0 ** 2 - w ** 2) + gam ** 2 * w ** 2)
@@ -114,3 +117,8 @@ def lemmer(w, lam, k, wm):
                    k/(k**2 + (w+wm)**2)
                    )
 
+def _c(dim: int):
+    op = np.zeros((dim, dim))
+    for i in range(dim - 1):
+        op[i, i + 1] = np.sqrt(i + 1)
+    return op
