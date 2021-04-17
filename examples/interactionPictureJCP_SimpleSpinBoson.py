@@ -7,8 +7,8 @@ from scipy.linalg import expm
 from time import time
 
 bath_length = 200
-phys_dim = 20
-bond_dim = 100
+phys_dim = 10
+bond_dim = 1000
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -45,7 +45,7 @@ eth.build(g=1., ncap=20000)
 p = []
 
 
-threshold = 1e-5
+threshold = 1e-3
 dt = 0.001
 num_steps = 100
 
@@ -87,5 +87,8 @@ for tn in range(num_steps):
 # t1 = time()
 pop = [x.real for x in p]
 print("population", pop)
+pop = np.array([[(i+1)*dt,x.real] for i, x in enumerate(p)])
 print(t)
 s_dim.astype('float32').tofile('heatmap_JCP.dat')
+print(pop)
+pop.astype('float32').tofile('pop.dat')
