@@ -6,9 +6,9 @@ from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
 from scipy.linalg import expm
 from time import time
 
-bath_length = 200
-phys_dim = 10
-bond_dim = 1000
+bath_length = 800
+phys_dim = 5
+bond_dim = 100
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -25,19 +25,19 @@ etn.B[-1][0, 0, 0] = 1.
 
 
 # spectral density parameters
-g = 500
+g = 2000
 eth.domain = [-g, g]
-temp = 226.00253972894595
-j = lambda w: drude(w, lam=785.3981499999999/2, gam=19.634953749999998) * temp_factor(temp,w)
+temp = 226.00253972894595/5
+j = lambda w: drude(w, lam=785.3981499999999/2/5, gam=20*19.634953749999998/5) * temp_factor(temp,w)
 
 eth.sd = j
 
 eth.he_dy = sigma_z
-eth.h1e =  (78.53981499999999)*sigma_x
+eth.h1e =  (78.53981499999999/5)*sigma_x
 
 eth.build(g=1., ncap=20000)
-# print(eth.w_list)
-# print(eth.k_list)
+print(eth.w_list)
+print(eth.k_list)
 
 # U_one = eth.get_u(dt=0.002, t=0.2)
 
@@ -46,8 +46,8 @@ p = []
 
 
 threshold = 1e-3
-dt = 0.001
-num_steps = 100
+dt = 0.004/8
+num_steps = 800
 
 s_dim = np.empty([0,0])
 
@@ -90,5 +90,5 @@ print("population", pop)
 pop = np.array([[(i+1)*dt,x.real] for i, x in enumerate(p)])
 print(t)
 s_dim.astype('float32').tofile('heatmap_JCP.dat')
-print(pop)
+
 pop.astype('float32').tofile('pop.dat')
