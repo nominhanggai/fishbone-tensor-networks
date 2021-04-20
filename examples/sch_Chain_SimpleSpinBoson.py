@@ -6,7 +6,7 @@ from fishbonett.stuff import sd_zero_temp, drude1,sigma_z, sigma_x, temp_factor,
 from time import time
 
 bath_length = 200
-phys_dim = 100
+phys_dim = 200
 bond_dim = 100
 
 a = [phys_dim] * bath_length
