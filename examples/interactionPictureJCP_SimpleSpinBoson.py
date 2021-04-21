@@ -1,14 +1,14 @@
 import numpy as np
 from scipy.optimize import curve_fit
 # from fishbonett.starSpinBoson import SpinBoson, SpinBoson1D
-from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
+from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D, calc_U
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude
 from scipy.linalg import expm
 from time import time
 
-bath_length = 800
-phys_dim = 5
-bond_dim = 100
+bath_length = 150
+phys_dim = 10
+bond_dim = 1000
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -25,15 +25,15 @@ etn.B[-1][0, 0, 0] = 1.
 
 
 # spectral density parameters
-g = 2000
+g = 500
 eth.domain = [-g, g]
-temp = 226.00253972894595/5
-j = lambda w: drude(w, lam=785.3981499999999/2/5, gam=20*19.634953749999998/5) * temp_factor(temp,w)
+temp = 226.00253972894595
+j = lambda w: drude(w, lam=0.3*0.1*785.3981499999999/2, gam=19.634953749999998) * temp_factor(temp,w)
 
 eth.sd = j
 
 eth.he_dy = sigma_z
-eth.h1e =  (78.53981499999999/5)*sigma_x
+eth.h1e =  (78.53981499999999)*sigma_x
 
 eth.build(g=1., ncap=20000)
 print(eth.w_list)
@@ -45,9 +45,9 @@ print(eth.k_list)
 p = []
 
 
-threshold = 1e-3
-dt = 0.004/8
-num_steps = 800
+threshold = 1e-4
+dt = 0.001
+num_steps = 100
 
 s_dim = np.empty([0,0])
 
@@ -79,7 +79,10 @@ for tn in range(num_steps):
 
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
-    pop = np.einsum('ij,ji', rho, sigma_z)
+    ul = calc_U(eth.h1e, -2*tn*dt)
+    sigma_z_t= ul @ sigma_z @ (ul.T.conj())
+
+    pop = np.einsum('ij,ji', rho, sigma_z_t)
     p = p + [pop]
     t1 = time()
     t = t + t1 - t0

@@ -10,7 +10,7 @@ phys_dim = 200
 bond_dim = 100
 
 a = [phys_dim] * bath_length
-a = [np.ceil(phys_dim - (phys_dim-2)*(N/ bath_length)**0.2) for N in range(bath_length)]
+a = [np.ceil(phys_dim - (phys_dim-2)*(N/ bath_length)) for N in range(bath_length)]
 a = [int(x) for x in a]
 
 pd = a[::-1] + [2]
@@ -23,10 +23,10 @@ etn.B[-1][0, 0, 0] = 1
 
 eth.he_dy = sigma_z
 eth.h1e = 78.53981499999999*sigma_x
-g = 10000
+g = 500
 eth.domain = [-g, g]
 temp = 226.00253972894595
-eth.sd = lambda w: drude(w, lam=785.3981499999999/2, gam=19.634953749999998) * temp_factor(temp,w)
+eth.sd = lambda w: drude(w, lam=785.3981499999999*0.5/2, gam=19.634953749999998) * temp_factor(temp,w)
 
 eth.build(g=1)
 dt = 0.001/8
