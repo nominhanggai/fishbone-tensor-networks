@@ -79,8 +79,9 @@ for tn in range(num_steps):
 
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
-    ul = calc_U(eth.h1e, -2*tn*dt)
-    sigma_z_t= ul @ sigma_z @ (ul.T.conj())
+    # ul = calc_U(eth.h1e, -2*tn*dt)
+    # sigma_z_t= ul @ sigma_z @ (ul.T.conj())
+    sigma_z_t= sigma_z
 
     pop = np.einsum('ij,ji', rho, sigma_z_t)
     p = p + [pop]
