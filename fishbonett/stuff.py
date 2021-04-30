@@ -123,5 +123,8 @@ def _c(dim: int):
         op[i, i + 1] = np.sqrt(i + 1)
     return op
 
-def _num(dim: int):
-    _c(dim).T@_c(dim)
+
+'''Obtain Occupation Number'''
+
+def _num(dim: int, theta):
+    return _c(dim).T@_c(dim)
