@@ -122,3 +122,6 @@ def _c(dim: int):
     for i in range(dim - 1):
         op[i, i + 1] = np.sqrt(i + 1)
     return op
+
+def _num(dim: int):
+    _c(dim).T@_c(dim)
