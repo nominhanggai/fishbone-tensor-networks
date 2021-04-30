@@ -126,5 +126,5 @@ def _c(dim: int):
 
 '''Obtain Occupation Number'''
 
-def _num(dim: int, theta):
+def _num(dim: int):
     return _c(dim).T@_c(dim)
