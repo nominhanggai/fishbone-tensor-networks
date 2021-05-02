@@ -31,10 +31,17 @@ def temp_factor(temp, w):
 
 
 '''Entanglement Entropy'''
+
 def rlogr(si):
     return (-1) *si*np.log2(si)
+
+
 def entang(s):
-    return sum([rlogr(si) for si in s])
+    etg = 0.0
+    for si in s:
+        if si !=0:
+            etg += rlogr(si)
+    return etg
 
 
 '''Spectral densities'''
