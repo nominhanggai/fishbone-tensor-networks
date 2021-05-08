@@ -1,11 +1,11 @@
 import numpy as np
 from scipy.optimize import curve_fit
-from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
+from fishbonett.backwardSpinBoson_ParallelU import SpinBoson, SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, entang
 from scipy.linalg import expm
 from time import time
 
-bath_length = 50
+bath_length = 200
 phys_dim = 50
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]

@@ -6,8 +6,8 @@ from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
 from scipy.linalg import expm
 from time import time
 
-bath_length = 150
-phys_dim = 10
+bath_length = 200
+phys_dim = 30
 bond_dim = 1000
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
@@ -27,8 +27,8 @@ etn.B[-1][0, 0, 0] = 1.
 # spectral density parameters
 g = 500
 eth.domain = [-g, g]
-temp = 226.00253972894595
-j = lambda w: drude(w, lam=0.3*0.1*785.3981499999999/2, gam=19.634953749999998) * temp_factor(temp,w)
+temp = 226.00253972894595*0.5*1
+j = lambda w: drude(w, lam=4.0*78.53981499999999/2, gam=0.25*4*19.634953749999998) * temp_factor(temp,w)
 
 eth.sd = j
 
@@ -45,7 +45,7 @@ print(eth.k_list)
 p = []
 
 
-threshold = 1e-4
+threshold = 1e-3
 dt = 0.001
 num_steps = 100
 
