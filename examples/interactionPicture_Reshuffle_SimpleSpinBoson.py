@@ -29,7 +29,7 @@ g = 500
 eth.domain = [-g, g]
 temp = 226.00253972894595*0.5*4
 j = lambda w: drude(w, lam=10.0*78.53981499999999/2, gam=0.25*4*19.634953749999998) * temp_factor(temp,w)
-# j = lambda w: 0
+
 eth.sd = j
 
 eth.he_dy = sigma_z
@@ -41,13 +41,16 @@ eth.build(g=1., ncap=20000)
 # print(len(eth.w_list))
 # exit()
 
-# b = np.array([np.abs(eth.get_dk(t=i*0.1/100)) for i in range(200)])
+# b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(200)])
+
 # bj, freq, coef = eth.get_dk(1, star=True)
 # indexes = np.abs(freq).argsort()
 # bj = bj[indexes]
 # bj = np.array(bj)
 # print(b.shape)
+
 # b.astype('float32').tofile('./output/dk.dat')
+
 # bj.astype('float32').tofile('./output/j0.dat')
 # freq.astype('float32').tofile('./output/freq.dat')
 # coef.astype('float32').tofile('./output/coef.dat')
@@ -72,55 +75,68 @@ num_steps = 100
 
 s_dim = np.empty([0,0])
 num_l = np.empty([0,0])
-t = 0.
-tt0=time()
-for tn in range(num_steps):
-    U1, U2 = eth.get_u(2*tn*dt, dt,mode='normal')
 
-    t0 = time()
-    etn.U = U1
-    for j in range(bath_length-1,0,-1):
-        print("j==", j, tn)
+t0 = time()
+
+for tn in range(num_steps):
+    speed = 0.8
+    move = int(np.floor(tn/speed))
+    U1_normal, U1_reverse = eth.get_u(2*tn*dt, dt,mode='normal')
+    etn.U = U1_normal
+    for j in range(bath_length-1-move,-1,-1):
+        print("j==", j, tn, "forward")
         etn.update_bond(j, bond_dim, threshold, swap=1)
 
-    etn.update_bond(0, bond_dim, threshold, swap=0)
-    etn.update_bond(0, bond_dim, threshold, swap=0)
-    t1 = time()
-    t = t + t1 - t0
+    U2_normal, U2_reverse = eth.get_u((2*tn+1) * dt, dt, mode='reverse')
 
-    U1, U2 = eth.get_u((2*tn+1) * dt, dt, mode='reverse')
-
-    t0 = time()
-    etn.U = U2
-    for j in range(1, bath_length):
-        print("j==", j, tn)
+    etn.U = U2_reverse
+    for j in range(0, bath_length-move):
+        print("j==", j, tn, "back")
         etn.update_bond(j, bond_dim, threshold,swap=1)
+
+
+
+    etn.U = U1_reverse
+    for j in range(bath_length-move, bath_length):
+        print("j==", j, tn, "right")
+        etn.update_bond(j, bond_dim, threshold,swap=1)
+
+    etn.U = U2_normal
+    for j in range(bath_length-1, bath_length-1-move, -1):
+        print("j==", j, tn, 'left')
+        etn.update_bond(j, bond_dim, threshold, swap=1)
+    if move != int(np.floor((tn+1)/speed)):
+        move_end = int(np.floor((tn+1)/speed))
+        for n in range(move, move_end):
+            moving_bond = n + 1
+            print(f"MOVE SYSTEM LEFT TO {moving_bond}")
+            etn.update_bond(bath_length - moving_bond, bond_dim, threshold, swap=-1)
+        move = move_end # This definition of move is for the expectation value
+    else:
+        print("NOT MOVING")
 
     dim = [len(s) for s in etn.S]
     s_dim = np.append(s_dim, dim)
-    print("Length", len(dim))
-    theta = etn.get_theta1(bath_length) # c.shape vL i vR
-    rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
-    # ul = calc_U(eth.h1e, -2*tn*dt)
-    # sigma_z_t= ul @ sigma_z @ (ul.T.conj())
-    sigma_z_t= sigma_z
 
-    pop = np.einsum('ij,ji', rho, sigma_z_t)
+    theta = etn.get_theta1(bath_length-move) # c.shape vL i vR
+    print(theta.shape)
+    rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
+
+    pop = np.einsum('ij,ji', rho, sigma_z)
     p = p + [pop]
-    t1 = time()
-    t = t + t1 - t0
-    numExp = []
-    for i, pd in enumerate(a[::-1]):
-        theta = etn.get_theta1(i)
-        rho = np.einsum('LiR,LjR->ij', theta, theta.conj())
-        numExp.append(np.einsum('ij,ji', rho, _num(pd)).real)
-    num_l = np.append(num_l, numExp)
-tt1 = time()
-print(tt1-tt0)
+
+    # numExp = []
+    # for i, pd in enumerate(a[::-1]):
+    #     theta = etn.get_theta1(i)
+    #     rho = np.einsum('LiR,LjR->ij', theta, theta.conj())
+    #     numExp.append(np.einsum('ij,ji', rho, _num(pd)).real)
+    # num_l = np.append(num_l, numExp)
+t1 = time()
+print(t1-t0)
 pop = [x.real for x in p]
 print("population", pop)
 pop = np.array(pop)
 
-s_dim.astype('float32').tofile('./output/dim.dat')
-pop.astype('float32').tofile('./output/pop.dat')
-num_l.astype('float32').tofile('./output/num_ic.dat')
+s_dim.astype('float32').tofile('./output/dim_sh.dat')
+pop.astype('float32').tofile('./output/pop_sh.dat')
+# num_l.astype('float32').tofile('./output/num_ic_shuffle.dat')
