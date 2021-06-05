@@ -91,13 +91,13 @@ for tn in range(num_steps):
         etn.update_bond(j, bond_dim, threshold, swap=1)
 
     U2_normal, U2_reverse = eth.get_u((2*tn+1) * dt, dt, mode='reverse')
-    etn.U = U2_normal
+    etn.U = U1_normal
     for j in range(bath_length-1, bath_length - move -1, -1):
         print("j==", j, tn, "On Right, To Left")
         etn.update_bond(j, bond_dim, threshold, swap=1)
 
     ## System tensor jumps to the left end
-    etn.U = U1_normal
+    etn.U = U2_normal
     for j in range(bath_length-move-1, -1, -1):
         print("j==", j, tn, "On Left, To Left")
         etn.update_bond(j, bond_dim, threshold, swap=1)
