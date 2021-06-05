@@ -77,44 +77,45 @@ s_dim = np.empty([0,0])
 num_l = np.empty([0,0])
 
 t0 = time()
-
+pos_sys = bath_length
 for tn in range(num_steps):
     speed = 1
     move = int(np.floor(tn/speed))
+    etn.update_on_body(eth.h1e, pos_sys, dt)
 
-
-
-    U1_normal, U1_reverse = eth.get_u(2*tn*dt, dt,mode='normal')
+    U1_normal, U1_reverse = eth.get_u(2*tn*dt, 2*dt, factor=2, inc_sys=False)
     etn.U = U1_reverse
     for j in range(bath_length - move, bath_length, 1):
         print("j==", j, tn, "On Right, To Right")
         etn.update_bond(j, bond_dim, threshold, swap=1)
 
-    U2_normal, U2_reverse = eth.get_u((2*tn+1) * dt, dt, mode='reverse')
+    # U2_normal, U2_reverse = eth.get_u((2*tn+1) * dt, dt, mode='reverse')
     etn.U = U1_normal
     for j in range(bath_length-1, bath_length - move -1, -1):
         print("j==", j, tn, "On Right, To Left")
         etn.update_bond(j, bond_dim, threshold, swap=1)
 
     ## System tensor jumps to the left end
-    etn.U = U2_normal
+    etn.U = U1_normal
     for j in range(bath_length-move-1, -1, -1):
         print("j==", j, tn, "On Left, To Left")
         etn.update_bond(j, bond_dim, threshold, swap=1)
 
-    etn.U = U2_reverse
+    etn.U = U1_reverse
     for j in range(0, bath_length-move-1):
         print("j==", j, tn, "On Left, To Right")
         etn.update_bond(j, bond_dim, threshold, swap=1)
 
     print("j==", bath_length - move -1, tn, f"Moving to Left by {move+1}")
-    etn.update_bond(bath_length - move -1, bond_dim, threshold, swap=0)
+    pos_sys = bath_length-move-1
+    etn.update_bond(pos_sys, bond_dim, threshold, swap=0)
 
+    etn.update_on_body(eth.h1e, pos_sys, dt)
 
     dim = [len(s) for s in etn.S]
     s_dim = np.append(s_dim, dim)
 
-    theta = etn.get_theta1(bath_length-move-1) # c.shape vL i vR
+    theta = etn.get_theta1(pos_sys) # c.shape vL i vR
     print(theta.shape)
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
 

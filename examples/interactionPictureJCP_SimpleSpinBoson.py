@@ -75,7 +75,7 @@ num_l = np.empty([0,0])
 t = 0.
 tt0=time()
 for tn in range(num_steps):
-    U1, U2 = eth.get_u(2*tn*dt, dt,mode='normal')
+    U1, U2 = eth.get_u(2*tn*dt, 2*dt, factor=2)
 
     t0 = time()
     etn.U = U1
@@ -87,8 +87,6 @@ for tn in range(num_steps):
     etn.update_bond(0, bond_dim, threshold, swap=0)
     t1 = time()
     t = t + t1 - t0
-
-    U1, U2 = eth.get_u((2*tn+1) * dt, dt, mode='reverse')
 
     t0 = time()
     etn.U = U2
