@@ -28,7 +28,7 @@ etn.B[-1][0, 0, 0] = 1.
 g = 500
 eth.domain = [-g, g]
 temp = 226.00253972894595*0.5*1
-j = lambda w: drude(w, lam=10.0*78.53981499999999/2, gam=0.25*4*19.634953749999998) * temp_factor(temp,w)
+j = lambda w: drude(w, lam=4.0*78.53981499999999/2, gam=0.25*4*19.634953749999998) * temp_factor(temp,w)
 
 eth.sd = j
 

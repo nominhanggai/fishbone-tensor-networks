@@ -6,7 +6,7 @@ from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
 from scipy.linalg import expm
 from time import time
 
-bath_length = 200
+bath_length = 100
 phys_dim = 20
 bond_dim = 1000
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
@@ -26,9 +26,9 @@ etn.B[-1][0, 0, 0] = 1.
 
 # spectral density parameters
 g = 500
-eth.domain = [-g, g]
+eth.domain = [0, g]
 temp = 226.00253972894595*0.5*1
-j = lambda w: drude(w, lam=10.0*78.53981499999999/2, gam=0.25*4*19.634953749999998) * temp_factor(temp,w)
+j = lambda w: drude(w, lam=4.0*78.53981499999999/2, gam=0.25*4*19.634953749999998) #* temp_factor(temp,w)
 # j = lambda w: 0
 eth.sd = j
 
@@ -41,8 +41,8 @@ eth.build(g=1., ncap=20000)
 # print(len(eth.w_list))
 # exit()
 
-# b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(200)])
-# bj, freq, coef = eth.get_dk(1, star=True)
+# b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(1)])
+bj, freq, coef = eth.get_dk(1, star=True)
 # indexes = np.abs(freq).argsort()
 # bj = bj[indexes]
 # bj = np.array(bj)
@@ -52,9 +52,9 @@ eth.build(g=1., ncap=20000)
 # freq.astype('float32').tofile('./output/freq.dat')
 # coef.astype('float32').tofile('./output/coef.dat')
 
-# print(freq)
-# print(coef)
-# exit()
+print(repr(freq))
+print(repr(bj))
+exit()
 
 print(eth.w_list)
 print(eth.k_list)
@@ -99,11 +99,9 @@ for tn in range(num_steps):
     print("Length", len(dim))
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
-    # ul = calc_U(eth.h1e, -2*tn*dt)
-    # sigma_z_t= ul @ sigma_z @ (ul.T.conj())
-    sigma_z_t= sigma_z
+    sigma_z= sigma_z
 
-    pop = np.einsum('ij,ji', rho, sigma_z_t)
+    pop = np.einsum('ij,ji', rho, sigma_z)
     p = p + [pop]
     t1 = time()
     t = t + t1 - t0
