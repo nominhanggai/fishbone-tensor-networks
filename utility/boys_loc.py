@@ -111,7 +111,7 @@ H = np.diag([0, -0.1331, -0.2734])
 # H = np.diag([0,  -0.0964])
 # H = np.diag([0, -0.1288])
 print(u.T@H@u)
-print(u@H@u.T)
+print(repr(u@H@u.T*8065.54429))
 
 # print(u@test_mat_3[:,:,2]@u.T)
 # print(test_mat_3[:,:,0])
