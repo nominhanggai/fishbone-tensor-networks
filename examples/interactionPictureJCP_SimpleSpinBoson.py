@@ -27,9 +27,9 @@ etn.B[-1][0, 0, 0] = 1.
 # spectral density parameters
 g = 500
 eth.domain = [-g, g]
-temp = 226.00253972894595*0.5*2
+temp = 226.00253972894595*0.5*2*2
 
-j = lambda w: drude(w, lam=0.5*78.53981499999999*2, gam=0.25*4*19.634953749999998)* temp_factor(temp,w)
+j = lambda w: drude(w, lam=0.5*78.53981499999999/2, gam=0.25*4*19.634953749999998)* temp_factor(temp,w)
 # j = lambda w: 0
 eth.sd = j
 
@@ -43,7 +43,7 @@ eth.build(g=1., ncap=20000)
 # exit()
 
 # b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(1)])
-bj, freq, coef = eth.get_dk(1, star=True)
+# bj, freq, coef = eth.get_dk(1, star=True)
 # indexes = np.abs(freq).argsort()
 # bj = bj[indexes]
 # bj = np.array(bj)
@@ -53,8 +53,8 @@ bj, freq, coef = eth.get_dk(1, star=True)
 # freq.astype('float32').tofile('./output/freq.dat')
 # coef.astype('float32').tofile('./output/coef.dat')
 
-print(repr(freq))
-print(repr(bj))
+# print(repr(freq))
+# print(repr(bj))
 # exit()
 
 print(eth.w_list)

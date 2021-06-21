@@ -32,7 +32,7 @@ etn.B[-1][0, 0, 0] = 1.
 g = 3500
 eth.domain = [-g, g]
 # temp = 226.00253972894595*0.5*1
-temp = 5.5
+temp = 295
 
 def lorentzian (w, wi, delta, ki):
     return np.pi * (ki**2/np.pi/wi) * w * delta/((w-wi)**2 + delta**2)

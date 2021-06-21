@@ -99,25 +99,30 @@ def boys_loc(mat_mu, u_final):
     boys_value = boys_func(mat_mu_after)
     return u_final,mat_mu_after,boys_value, boys_value_0
 
-u_final = np.eye(3)
+u_final = np.eye(2)
 boys_value =0; boys_value_0 = 1;
 while(np.abs(boys_value - boys_value_0)>0.001):
-    u_final, mu_mat_3, boys_value, boys_value_0 = boys_loc(mu_mat_3, u_final)
+    u_final, mu_mat_2_config1, boys_value, boys_value_0 = boys_loc(mu_mat_2_config1, u_final)
     print(boys_value, boys_value_0)
 
 
 u = u_final
 H = np.diag([0, -0.1331, -0.2734])
-# H = np.diag([0,  -0.0964])
-# H = np.diag([0, -0.1288])
-print(u.T@H@u)
+H = np.diag([0,  -0.0964])
+H = np.diag([0, -0.1288])
+print(u@H@u.T)
 print(repr(u@H@u.T*8065.54429))
 
 # print(u@test_mat_3[:,:,2]@u.T)
 # print(test_mat_3[:,:,0])
 
 """
+ev
  [[-0.00284977 -0.01795822 -0.00842691]
  [-0.01795822 -0.19976618  0.07138905]
  [-0.00842691  0.07138905 -0.20388406]]
+cm^-1
+[[  -22.98492311,  -144.84282895,   -67.96758061],
+[ -144.84282895, -1611.22293977,   575.79158116],
+[  -67.96758061,   575.79158116, -1644.435891  ]]
 """
