@@ -2,11 +2,11 @@ import numpy as np
 from scipy.optimize import curve_fit
 # from fishbonett.starSpinBoson import SpinBoson, SpinBoson1D
 from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D, calc_U
-from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num
+from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sd_back_zero_temp
 from scipy.linalg import expm
 from time import time
 
-bath_length = 100
+bath_length = 200
 phys_dim = 20
 bond_dim = 1000
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
@@ -25,16 +25,18 @@ etn.B[-1][0, 0, 0] = 1.
 
 
 # spectral density parameters
-g = 500
+g = 200
 eth.domain = [-g, g]
-temp = 226.00253972894595*0.5*2*2
-
-j = lambda w: drude(w, lam=0.5*78.53981499999999/2, gam=0.25*4*19.634953749999998)* temp_factor(temp,w)
+temp = 226.00253972894595*0.5*2*0.000001
+temp = 0.1
+j = lambda w: drude(w, lam=78.53981499999999/2, gam=0.25*4*19.634953749999998)* temp_factor(temp,w)
+j = lambda w: sd_back_zero_temp(w)
+eth.domain = [0.1,g]
 # j = lambda w: 0
 eth.sd = j
 
-eth.he_dy = sigma_z
-eth.h1e =  78.53981499999999 * sigma_x
+eth.he_dy = sigma_z + np.diag([1,1])
+eth.h1e =  78.53981499999999 * sigma_x + np.diag([78.53981499999999/2 * 2, 0])
 
 eth.build(g=1., ncap=20000)
 # print(eth.w_list,eth.k_list)
@@ -43,9 +45,12 @@ eth.build(g=1., ncap=20000)
 # exit()
 
 # b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(1)])
-# bj, freq, coef = eth.get_dk(1, star=True)
+j0, freq, coef, reorg = eth.get_dk(1, star=True)
 # indexes = np.abs(freq).argsort()
-# bj = bj[indexes]
+print(repr(j0))
+print(f"Reorg={reorg}\n Freq={repr(freq)}")
+
+exit()
 # bj = np.array(bj)
 # print(b.shape)
 # b.astype('float32').tofile('./output/dk.dat')
@@ -100,7 +105,7 @@ for tn in range(num_steps):
     print("Length", len(dim))
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
-    sigma_z= sigma_z
+    sigma_z= np.diag([1,0])
 
     pop = np.einsum('ij,ji', rho, sigma_z)
     p = p + [pop]

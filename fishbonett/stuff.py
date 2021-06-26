@@ -48,7 +48,7 @@ def entang(s):
 
 
 def sd_back(Sk, sk, w, wk):
-    return Sk / (sk * np.sqrt(2 / np.pi)) * w * \
+    return np.pi* Sk / (sk * np.sqrt(2 / np.pi)) * w * \
            np.exp(-np.log(np.abs(w) / wk) ** 2 / (2 * sk ** 2))
 
 
@@ -80,6 +80,25 @@ def sd_zero_temp(w):
            + sd_high(gamma, Omega_2, g2, w) \
            + sd_high(gamma, Omega_3, g3, w)
 
+def sd_back_zero_temp(w):
+    gamma = 5.
+    Omega_1 = 181
+    Omega_2 = 221
+    Omega_3 = 240
+    g1 = 0.0173
+    g2 = 0.0246
+    g3 = 0.0182
+    S1 = 0.39
+    S2 = 0.23
+    S3 = 0.23
+    s1 = 0.4
+    s2 = 0.25
+    s3 = 0.2
+    w1 = 26
+    w2 = 51
+    w3 = 85
+    return sd_back(S1, s1, w, w1) + sd_back(S2, s2, w, w2) \
+           + sd_back(S3, s3, w, w3)
 
 def sd_zero_temp_prime(w):
     S1 = 0.39
