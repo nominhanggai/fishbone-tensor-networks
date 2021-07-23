@@ -36,169 +36,33 @@ colors_mma_detai = [(0.368417, 0.506779, 0.709798), (0.880722, 0.611041, 0.14205
 font = {'family' : 'Latin Modern Sans',
         'size'   : 10}
 mpl.rc('font', **font)
+mpl.rcParams['text.usetex'] = True
+    
+wid = 3.375
+fig_pop = plt.figure(dpi=800,figsize=(wid,wid*0.7))
+gs = fig_pop.add_gridspec(1, 1, hspace=0.001, wspace=0.001)
+grid = gs.subplots(sharex='col', sharey='row',)    
+b = np.fromfile('./dk.dat', np.float32).reshape(101,200).T
+b = b[:, ::20]
+print(b.shape)
+grid.set_ylim([0,150])
+grid.set_xlim([80,200])
+colors_pop = colors_mma_detai*100
+grid.set_prop_cycle(color = colors_pop)
+grid.text(0.5,-0.2, f'Bath Mode Index',
+                       transform=grid.transAxes,ha='center',usetex=False,fontsize=10)
+grid.text(-0.17,0.1, 'Interaction Stregnth $|d_n(t)|$',
+                       transform=grid.transAxes,ha='left',usetex=False,fontsize=10,rotation=90)
+grid.plot(b,lw=1.8,solid_capstyle='round',dash_capstyle='round',dash_joinstyle='bevel')
+grid.tick_params(axis="y",direction="in", pad=4)
+grid.tick_params(axis="x",direction="in", pad=4)
+fig_pop.subplots_adjust(left=0.17,right=0.97,bottom=0.2,top=0.98)
 
-    
-def occu(coup,thres='0001',phys_d=[10,20,40,60,80],geom = ['ic','c','s','is'],ylim=None,
-        freq='', direc = 'data1', tmp=''):
-    occu = []
-    legends = []
-    linestyle_str = []
-    line_geom = {'ic': 'solid', 'c': 'dotted', 's': 'dashed', 'is': (0, (2.5, 2, 2.5, 1))}
-    # legends = it.product(['IC','C','S','IS'], phys_d[0:4])
-    # legends = [a + f'{b}' for a, b in legends]
-    for i, pd in it.product(geom, phys_d):
-        file = f'./{direc}/num_{i}{freq}_{coup}{tmp}_{pd}_{thres}.dat'
-        if path.exists(file):
-            b = np.fromfile(file, np.float32)
-            b = np.sum(b.reshape(100,200), axis=1)
-            print(len(b))
-            occu.append(b)
-            print(i.upper(), pd, 'right')
-            legends.append(i.upper() + f'{pd}')
-            linestyle_str.append(line_geom[i])
-        else:
-            print(i.upper(), pd, 'not exist',file)
-
-
-    
-    # linestyle_str = ['solid']*k + ['dotted']*k + ['dashed']*k + [(0, (2.5, 2, 2.5, 1))]*k+[(1, (3, 10, 1, 1))]*k
-    linestyle_str = linestyle_str*len(colors_mma_detai)
-    colors_pop = colors_mma_detai*len(occu)
-    
-    fig_pop = plt.figure(dpi=800,figsize=(3.41667,3.41667*0.7))
-    ax = fig_pop.add_subplot(111)
-    
-    ax.set_prop_cycle(color = colors_pop,linestyle=linestyle_str)
-    ax.plot(np.array(occu).T,lw=1)
-    # ax.set_aspect(aspect=70,adjustable='box')
-    ax.tick_params(axis="y",direction="in", pad=4,width=2)
-    ax.tick_params(axis="x",direction="in", pad=4,width=2)
-    
-    [i.set_linewidth(2) for i in ax.spines.values()]
-    ax.set_xlim([0,100])
-    ax.set_ylim(ylim)
-    # ax.set_yticks(np.arange(0,1.0,0.1))
-    freq_ = freq.replace('_','')
-    tmp_ = tmp.replace('_','')
-    ax.text(.5,1.05, f'$\eta_0={coup}$ $\omega_0={freq_}$ $T={tmp_}$',
-                       transform=ax.transAxes,ha='center',usetex=True)
-    # ax.set_xlabel('$\Delta t$',usetex=True)
-    ax.legend(list(legends),loc="upper left",ncol=4,frameon=False,
-              handlelength=1.2,columnspacing=0.3,handletextpad=0.2,
-              fontsize=5,borderaxespad=0)
-    fig_pop.tight_layout(w_pad=0,pad=0,h_pad=0,rect=[0,0,1,1])
-    # fig_pop.subplots_adjust(left=0,right=1,bottom=0,top=1)
-    # ax.set_axis_off()
-    plt.savefig(f'occu{freq}_{coup}_{tmp_}_{thres}.pdf')
-
-
-
-def bond(coup,thres='0001',phys_d=[10,20,40,60,80],geom = ['ic','c','s'],ylim=[0,1],
-        freq='', tmp='', direc = 'data1',head='pop',spacing=5):
-    a = []
-    gl = len(geom)
-    pl = len(phys_d)
-    x_ticks = [[0,100],[0,100],[0,100, 200]]*3
-    y_ticks = [[50,100,150,200,250],[50, 150, 500, 1000],[0,500, 1000]]*3
-    for i, pd in it.product(geom, phys_d):
-        file = f'./{direc}/{head}_{i}_{freq}_{coup}_{tmp}_{pd}_{thres}.dat'
-        if path.exists(file):
-            b = np.fromfile(file, np.float32)
-            a.append(b.reshape(100,201).T)
-            print(i, pd, 'right')
-        else:
-            print(i.upper(), pd, 'not exist',file)
-            a.append(np.full([100,201],None).T)
-    wid = 3.375
-    fig = plt.figure(dpi=800,figsize=(wid,wid))
-    # fig.text(0.5, 0.04, 'common X', ha='center')
-    fig.text(-0.0, 0.52, 'Bond Dimension', va='center', rotation='vertical')
-    fig.text(0.5, 0.0, 'Bond Index', ha='center')
-    
-    gs = fig.add_gridspec(gl, pl, hspace=0., wspace=0.)
-    grid = gs.subplots(sharex='col', sharey='row')
-    fig.suptitle(f'$\eta_0={coup}$, $\omega_0={freq}$, $T_0={tmp}$  ',usetex=True)
-    
-    
-    lw = [0.8]*20
-    # ytick = [range(0,51,10),range(0,299,70),range(0,801,200),range(0,801,200)]
-    for m,n in it.product(range(gl),range(pl)):
-        print(geom[m], phys_d[n])
-        print(pl*m+n)
-        grid[m,n].text(.1,.8, geom[m].upper()+str(phys_d[n]),
-                       transform=grid[m,n].transAxes)
-        # grid[m,n].set_yticks(range(0,1000,300))
-        grid[m,n].set_xticks(x_ticks[n])
-        grid[m,n].set_xlim([0,200])
-        # grid[m,n].set_yticks(y_ticks[m])
-        # grid[m,n].set_ylim(y_lim[m])
-        grid[m,n].tick_params(axis="y",direction="in", pad=5)
-        grid[m,n].tick_params(axis="x",direction="in", pad=5)
-        grid[m,n].set_prop_cycle(color = colors)
-        # grid[m,n].grid(False)
-        grid[m,n].plot(a[pl*m+n][:,::spacing], lw=lw[m])
-    fig.subplots_adjust(left=0.15,right=None,bottom=None,top=None)
-    fig.savefig(f'hm{freq}_{coup}_{tmp}_{thres}.pdf')
-
-
-def pop(coup,thres='0001',phys_d=[10,20,40,60,80],geom = ['ic','c','s','is'],ylim=[0,1],
-        freq='', direc = 'data1', tmp=''):
-    pop = []
-    legends = []
-    linestyle_str = []
-    line_geom = {'ic': 'solid', 'c': 'dotted', 's': 'dashed', 'is': (0, (2.5, 2, 2.5, 1))}
-    # legends = it.product(['IC','C','S','IS'], phys_d[0:4])
-    # legends = [a + f'{b}' for a, b in legends]
-    for i, pd in it.product(geom, phys_d):
-        file = f'./{direc}/pop_{i}{freq}_{coup}{tmp}_{pd}_{thres}.dat'
-        if path.exists(file):
-            b = np.fromfile(file, np.float32)
-            b = np.insert(b, 0, 1.0)
-            b = np.array([x/2+.5 for x in b])
-            b = ([i*0.05 for i in range(101)],b)
-            pop.append((b))
-            print(i.upper(), pd, 'right')
-            legends.append(i.upper() + f'{pd}')
-            linestyle_str.append(line_geom[i])
-        else:
-            print(i.upper(), pd, 'not exist',file)
-            # pop.append([None]*101)
-
-    
-    
-    # linestyle_str = ['solid']*k + ['dotted']*k + ['dashed']*k + [(0, (2.5, 2, 2.5, 1))]*k+[(1, (3, 10, 1, 1))]*k
-    linestyle_str = linestyle_str*len(colors_mma_detai)
-    colors_pop = colors_mma_detai*len(pop)
-    wid = 3.375
-    fig_pop = plt.figure(dpi=800,figsize=(wid,wid*0.7))
-    ax = fig_pop.add_subplot(111)
-    
-    ax.set_prop_cycle(color = colors_pop,linestyle=linestyle_str)
-    
-    for cur in pop: 
-        ln = ax.plot(*cur,lw=1.5,solid_capstyle='round',dash_capstyle='round')
-    # ax.set_aspect(aspect=70,adjustable='box')
-    ax.tick_params(axis="y",direction="in", pad=4,width=None)
-    ax.tick_params(axis="x",direction="in", pad=4,width=None)
-    # ax.set_xlabel('$t\Delta/\pi$',usetex=True)
-    # [i.set_linewidth(2) for i in ax.spines.values()]
-    ax.set_xlim([0,5])
-    ax.set_ylim(ylim)
-    # ax.set_yticks(np.arange(0,1.0,0.1))
-    freq_ = freq.replace('_','')
-    tmp_ = tmp.replace('_','')
-    ax.text(0.98,0.06, f'$\eta_0={coup}$, $\omega_0={freq_}$, $T={tmp_}$',
-                       transform=ax.transAxes,ha='right',usetex=True,fontsize=10)
-    # ax.set_xlabel('$\Delta t$',usetex=True)
-    ax.legend(list(legends),loc="upper right",ncol=5,frameon=False,
+legends = [r'$t\Delta/\pi=0$', r'$t\Delta/\pi=1$', r'$t\Delta/\pi=2$', r'$t\Delta/\pi=3$', r'$t\Delta/\pi=4$', r'$t\Delta/\pi=5$']
+grid.legend(list(legends),loc=(0.03, 0.3),ncol=1,frameon=False,
               handlelength=1.2,columnspacing=0.3,handletextpad=0.2,
               fontsize=10,borderaxespad=0)
-    # fig_pop.tight_layout(w_pad=0,pad=0,h_pad=0,rect=[0,0,1,1])
-    # fig_pop.subplots_adjust(left=0.5,right=1,bottom=0,top=1)
-    # ax.set_axis_off()
-
-    plt.savefig(f'pop{freq}_{coup}_{tmp_}_{thres}.pdf')
-    
+fig_pop.savefig(f'dk.pdf')
 def pop_grid(freq, coup=None,thres='0001',phys_d=[10,40,60],geom = ['ic','c','s'],ylim=[0.3,1], direc = 'whole', tmp=None,):   
     
    
@@ -291,16 +155,6 @@ def pop_grid(freq, coup=None,thres='0001',phys_d=[10,40,60],geom = ['ic','c','s'
 #     # occu(i,thres='00001',direc='whole',freq=f'_{freq}', tmp=f'_{tmp}', phys_d=phys_d)
 #     # bond(i,ylim=[0.4,1],thres='0001',direc='whole',freq=f'_{freq}', tmp=f'_{tmp}', head='hm', phys_d=phys_d,geom=geom)
 #     # bond(i,ylim=[-0.6,1],thres='00001',direc='whole',freq=f'_{freq}', tmp=f'_{tmp}', head='hm', phys_d=phys_d)
-phys_d =[[10,40,60],[10,20,40,60,80,100],[10,20,40,60,80],[10,20,40,60,80,100]]
-
-# phys_d =[[10,20, 40]]*4
-
-pop_grid(coup=[1.0,4.0],tmp=[1.0,4.0],freq='4.0',phys_d=phys_d)
-
-bond(4.0,ylim=None,thres='0001',direc='whole',freq=f'0.25', tmp=f'4.0', head='hm', geom=['ic','c','s'], phys_d=[10,20,40])
-
-
-
 
 
 

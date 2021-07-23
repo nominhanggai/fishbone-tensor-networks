@@ -25,13 +25,13 @@ etn.B[-1][0, 0, 0] = 1.
 
 
 # spectral density parameters
-g = 200
+g = 500
 eth.domain = [-g, g]
-temp = 226.00253972894595*0.5*2*0.000001
-temp = 0.1
-j = lambda w: drude(w, lam=78.53981499999999/2, gam=0.25*4*19.634953749999998)* temp_factor(temp,w)
-j = lambda w: sd_back_zero_temp(w)
-eth.domain = [0.1,g]
+temp = 226.00253972894595*0.5*1
+# temp = 0.1
+j = lambda w: drude(w, lam=4.0*78.53981499999999/2, gam=0.25*4*19.634953749999998)* temp_factor(temp,w)
+# j = lambda w: sd_back_zero_temp(w)
+eth.domain = [-g,g]
 # j = lambda w: 0
 eth.sd = j
 
@@ -44,23 +44,23 @@ eth.build(g=1., ncap=20000)
 # print(len(eth.w_list))
 # exit()
 
-# b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(1)])
+b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(101)])
 j0, freq, coef, reorg = eth.get_dk(1, star=True)
 # indexes = np.abs(freq).argsort()
 print(repr(j0))
 print(f"Reorg={reorg}\n Freq={repr(freq)}")
 
-exit()
+# exit()
 # bj = np.array(bj)
 # print(b.shape)
-# b.astype('float32').tofile('./output/dk.dat')
+b.astype('float32').tofile('./output/dk.dat')
 # bj.astype('float32').tofile('./output/j0.dat')
 # freq.astype('float32').tofile('./output/freq.dat')
 # coef.astype('float32').tofile('./output/coef.dat')
 
 # print(repr(freq))
 # print(repr(bj))
-# exit()
+exit()
 
 print(eth.w_list)
 print(eth.k_list)

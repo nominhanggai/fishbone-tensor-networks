@@ -14,7 +14,7 @@ s1_mu = [28.7418,0.0702,-1.3821]
 s3s2_mu = np.array([-1.42466459, -0.11795590, 0.10055223])*2.5412
 s3s1_mu = np.array([0.22303506,0.40015346,-0.17319997])*2.5412
 s2s1_mu = np.array([0.15068858,-2.56353252,0.98092125])*2.5412
-# Above are dipole moments at the LET geometry. 2.5412 Debye = 1 a.u. diople
+# Above are dipole moments at the LE geometry. 2.5412 Debye = 1 a.u. diople
 s3s2_elem = np.zeros([3,3]); s3s2_elem[0, 1]=1; s3s2_elem=s3s2_elem+s3s2_elem.T
 s3s1_elem = np.zeros([3,3]); s3s1_elem[0, 2]=1; s3s1_elem=s3s1_elem+s3s1_elem.T
 s2s1_elem = np.zeros([3,3]); s2s1_elem[1, 2]=1; s2s1_elem=s2s1_elem+s2s1_elem.T
