@@ -1,8 +1,6 @@
 import numpy as np
-from scipy.optimize import curve_fit
 from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, entang
-from scipy.linalg import expm
 from time import time
 
 bath_length = 200
@@ -40,7 +38,7 @@ eth.sd = j
 eth.he_dy = (np.eye(2) + sigma_z)/2
 # Gamma = 10 * delta = 10; e = a factor * Gamma
 Gamma = 10
-eth.h1e = 0.5*10*Gamma*sigma_z - 0.5*sigma_x
+eth.h1e = 0.5*0*Gamma*sigma_z - 0.5*sigma_x
 
 eth.build(g=1., ncap=20000)
 
