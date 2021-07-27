@@ -4,7 +4,7 @@ from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
 from time import time
 
 bath_length = 200
-phys_dim = 20
+phys_dim = 10
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
