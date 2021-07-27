@@ -4,7 +4,7 @@ from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1
 from time import time
 
 bath_length = 200
-phys_dim = 20
+phys_dim = 10
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -21,33 +21,33 @@ etn.B[-1][0, 0, 0] = 1
 
 
 # spectral density parameters
-g = 3
-eth.domain = [0, g]
+g = 5
+eth.domain = [-g, g]
 
 def ohmic(omega, alpha, omega_c):
-    return 1/2 * np.pi * alpha * omega * np.exp(-np.abs(omega)/omega_c)
+    return 2 * np.pi * alpha * omega * np.exp(-np.abs(omega)/omega_c)
 
 # omega_c = delta = 1; Reorg E (namely, Gamma) = 2*alpha*omega_c = 2*alpha
 # Gamma := 10 * delta = 10; thus, alpha = 5
 # kb*T = 10*delta -> delta = 10/kb = 10/0.695034800911
-temp = 1/0.6950348009119888
-j = lambda w: ohmic(w, alpha=5, omega_c=1)#*temp_factor(temp,w)
+temp = 10/0.695034800911
+j = lambda w: ohmic(w, alpha=5, omega_c=1)*temp_factor(temp,w)
 
 eth.sd = j
 
-eth.he_dy = sigma_z
+eth.he_dy = (np.eye(2) + sigma_z)/2
 # Gamma = 10 * delta = 10; e = a factor * Gamma
 Gamma = 10
-eth.h1e = 0.*sigma_z + 0.5*sigma_x
+eth.h1e = 0.5*0*Gamma*sigma_z - 0.5*sigma_x
 
-eth.build(g=1, ncap=50000)
+eth.build(g=1., ncap=20000)
 
 p = []
 
 bond_dim = 100000
-threshold = 1e-4
-dt = 0.025
-num_steps = 400
+threshold = 1e-3
+dt = 0.05
+num_steps = 200
 
 s_dim = np.empty([0,0])
 
