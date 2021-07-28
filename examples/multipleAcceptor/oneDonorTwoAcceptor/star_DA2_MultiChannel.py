@@ -1,9 +1,9 @@
 import numpy as np
-from fishbonett.backwardSpinBosonMultiChannel import SpinBoson, SpinBoson1D, calc_U
+from fishbonett.starSpinBosonMultiChannel import SpinBoson, SpinBoson1D, calc_U
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sigma_1
 from time import time
 
-bath_length = 200
+bath_length = (162)*2
 phys_dim = 20
 bond_dim = 1000
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
@@ -120,16 +120,17 @@ back_freq = [  0.63503484,   0.83242449,   1.03233903,   1.24251728,
        199.82262995, 199.90445368, 199.96111833, 199.99262015]
 
 
-coup_num_LE = list([1.15*x for x in back_coup])
-coup_num_CT1 = list([-1.15*x for x in back_coup])
+coup_num_LE = coup_num_LE #+ list([1.15*x for x in back_coup])
+coup_num_CT1 = coup_num_CT1 #+ list([-1.15*x for x in back_coup])
+# coup_num_CT1 = coup_num_CT1 + list([-1.15*x for x in back_coup])
 
-coup_mat = [x * np.diag([1, 1]) for x, y in zip(coup_num_LE, coup_num_CT1)]
-freq_num =  back_freq
-# reorg = sum([(coup_num_1[i]-coup_num_2[i]) ** 2 / freq_num[i] for i in range(len(freq_num))])
-# print("Reorg",reorg)
-
+coup_mat = [np.diag([x, y]) for x, y in zip(coup_num_LE, coup_num_CT1)]
+freq_num = freq_num #+ back_freq
+reorg = sum([(coup_num_LE[i]-coup_num_CT1[i]) ** 2 / freq_num[i] for i in range(len(freq_num))])
+print("Reorg",reorg)
+print(f"Len {len(coup_mat)}")
 # exit()
-temp = 95
+temp = 5
 eth = SpinBoson(pd, coup_mat=coup_mat, freq=freq_num, temp=temp)
 etn = SpinBoson1D(pd)
 
@@ -141,9 +142,9 @@ etn.B[-1][0, 0, 0] = 1.
 
 # spectral density parameters
 
-eth.h1e =  134.56223*sigma_x + np.diag([0, -2000])
+eth.h1e =  3*134.56223*sigma_x + np.diag([0, -2000])
 
-eth.build(n=0)
+# eth.build(n=0)
 # exit()
 # print(eth.w_list,eth.k_list)
 #
@@ -153,7 +154,7 @@ eth.build(n=0)
 # b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(100)])
 # print(b.shape)
 # bj, freq, coef = eth.get_dk(1, star=True)
-coef = eth.get_dk(1, star=True)
+# coef = eth.get_dk(1, star=True)
 # indexes = np.abs(freq).argsort()
 # bj = bj[indexes]
 # bj = np.array(bj)
@@ -180,8 +181,8 @@ p = []
 
 
 threshold = 1e-3
-dt = 0.001/4
-num_steps = 200
+dt = 0.001/8
+num_steps = 50*4
 
 s_dim = np.empty([0,0])
 num_l = np.empty([0,0])
@@ -223,6 +224,6 @@ pop = [x.real for x in p]
 print("population", pop)
 pop = np.array(pop)
 
-s_dim.astype('float32').tofile('./output/dim.dat')
-pop.astype('float32').tofile('./output/pop.dat')
-num_l.astype('float32').tofile('./output/num_ic.dat')
+# s_dim.astype('float32').tofile('./output/dim.dat')
+# pop.astype('float32').tofile('./output/pop.dat')
+# num_l.astype('float32').tofile('./output/num_ic.dat')

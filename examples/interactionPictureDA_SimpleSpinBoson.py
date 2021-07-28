@@ -144,7 +144,3 @@ print(tt1-tt0)
 pop = [x.real for x in p]
 print("population", pop)
 pop = np.array(pop)
-
-s_dim.astype('float32').tofile('./DA2/dim.dat')
-pop.astype('float32').tofile('./DA2/pop.dat')
-num_l.astype('float32').tofile('./DA2/num_ic.dat')

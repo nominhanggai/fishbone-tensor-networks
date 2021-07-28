@@ -130,7 +130,7 @@ reorg = sum([(coup_num_LE[i]-coup_num_CT1[i]) ** 2 / freq_num[i] for i in range(
 print("Reorg",reorg)
 print(f"Len {len(coup_mat)}")
 # exit()
-temp = 300
+temp = 5
 eth = SpinBoson(pd, coup_mat=coup_mat, freq=freq_num, temp=temp)
 etn = SpinBoson1D(pd)
 
@@ -142,7 +142,7 @@ etn.B[-1][0, 0, 0] = 1.
 
 # spectral density parameters
 
-eth.h1e =  134.56223*sigma_x + np.diag([0, -2000])
+eth.h1e =  3*134.56223*sigma_x + np.diag([0, -2000])
 
 # eth.build(n=0)
 # exit()
@@ -182,7 +182,7 @@ p = []
 
 threshold = 1e-3
 dt = 0.001/8
-num_steps = 50*4*2
+num_steps = 50*4
 
 s_dim = np.empty([0,0])
 num_l = np.empty([0,0])
@@ -218,12 +218,6 @@ for tn in range(num_steps):
     p = p + [pop]
     t1 = time()
     t = t + t1 - t0
-    numExp = []
-    for i, pd in enumerate(a[::-1]):
-        theta = etn.get_theta1(i)
-        rho = np.einsum('LiR,LjR->ij', theta, theta.conj())
-        numExp.append(np.einsum('ij,ji', rho, _num(pd)).real)
-    num_l = np.append(num_l, numExp)
 tt1 = time()
 print(tt1-tt0)
 pop = [x.real for x in p]
