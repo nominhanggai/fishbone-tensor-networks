@@ -22,7 +22,7 @@ etn.B[-1][0, 0, 0] = 1
 
 # spectral density parameters
 g = 3
-eth.domain = [0, g]
+eth.domain = [-g, g]
 
 def ohmic(omega, alpha, omega_c):
     return 1/2 * np.pi * alpha * omega * np.exp(-np.abs(omega)/omega_c)
@@ -31,7 +31,7 @@ def ohmic(omega, alpha, omega_c):
 # Gamma := 10 * delta = 10; thus, alpha = 5
 # kb*T = 10*delta -> delta = 10/kb = 10/0.695034800911
 temp = 1/0.6950348009119888
-j = lambda w: ohmic(w, alpha=5, omega_c=1)#*temp_factor(temp,w)
+j = lambda w: ohmic(w, alpha=5, omega_c=1)*temp_factor(temp,w)
 
 eth.sd = j
 
@@ -42,12 +42,18 @@ eth.h1e = 0.*sigma_z + 0.5*sigma_x
 
 eth.build(g=1, ncap=50000)
 
+j,f,_,_ = eth.get_dk(t=0, star=True)
+
+print(repr(j))
+print(repr(f))
+# exit()
+
 p = []
 
 bond_dim = 100000
-threshold = 1e-4
-dt = 0.025
-num_steps = 400
+threshold = 1e-3
+dt = 0.05
+num_steps = 200
 
 s_dim = np.empty([0,0])
 
