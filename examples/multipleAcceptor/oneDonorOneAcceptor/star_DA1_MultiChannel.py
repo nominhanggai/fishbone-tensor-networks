@@ -23,10 +23,11 @@ coup_num_LE = coup_num_LE * freq_num / np.sqrt(2)  # + list([1.15*x for x in bac
 coup_num_CT = coup_num_CT * freq_num / np.sqrt(2)  # + list([-1.15*x for x in back_coup])
 
 coup_mat = [np.diag([x, y]) for x, y in zip(coup_num_LE, coup_num_CT)]
-reorg = sum([(coup_num_LE[i] - coup_num_CT[i]) ** 2 / freq_num[i] for i in range(len(freq_num))])
-print("Reorg", reorg)
+reorg1 = sum([(coup_num_LE[i]) ** 2 / freq_num[i] for i in range(len(freq_num))])
+reorg2 = sum([(coup_num_CT[i]) ** 2 / freq_num[i] for i in range(len(freq_num))])
+print("Reorg", reorg1, reorg2)
 print(f"Len {len(coup_mat)}")
-# exit()
+exit()
 temp = 300
 eth = SpinBoson(pd, coup_mat=coup_mat, freq=freq_num, temp=temp)
 etn = SpinBoson1D(pd)
@@ -38,7 +39,7 @@ etn.B[-1][0, 0, 0] = 1.
 
 # spectral density parameters
 
-eth.h1e = 134.56223 * sigma_x + np.diag([0, -2000])
+eth.h1e = 134.56223 * sigma_x + np.diag([4339.26283, 0]) + np.diag([reorg1, reorg2])
 
 # eth.build(n=0)
 # exit()
