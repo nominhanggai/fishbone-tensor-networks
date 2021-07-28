@@ -1,5 +1,6 @@
 import numpy as np
-from fishbonett.backwardSpinBosonMultiChannel import SpinBoson, SpinBoson1D, calc_U
+from fishbonett.backwardSpinBosonMultiChannel import SpinBoson, calc_U
+from fishbonett.spinBosonMPS import SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sigma_1
 from examples.multipleAcceptor.oneDonorOneAcceptor.electronicParametersAndVibronicCouplingDA import coupMol2_CT, freqMol2_LE, coupMol2_LE
 from time import time
