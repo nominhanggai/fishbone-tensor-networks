@@ -2,16 +2,14 @@ import numpy as np
 from fishbonett.starSpinBosonMultiChannel import SpinBoson
 from fishbonett.spinBosonMPS import SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sigma_1
-from electronicParametersAndVibronicCouplingDA import freqMol2_LE, freqMol1_GR, coupMol2_LE, coupMol2_CT, coupMol1_CT, \
-    coupMol1_LE
+from electronicParametersAndVibronicCouplingDA import freqMol2_LE, freqMol1_GR, coupMol2_LE, coupMol2_CT, coupMol1_CT, coupMol1_LE
 from time import time
 
 bath_length = 162 * 2
 phys_dim = 20
 bond_dim = 1000
-a = [np.ceil(phys_dim - N * (phys_dim - 2) / bath_length) for N in range(bath_length)]
-a = [int(x) for x in a]
-
+# a = [np.ceil(phys_dim - N * (phys_dim - 2) / bath_length) for N in range(bath_length)]
+# a = [int(x) for x in a]
 a = [phys_dim] * bath_length
 print(a)
 pd = a[::-1] + [2]
@@ -77,8 +75,8 @@ eth.h1e = 134.56223 * sigma_x + np.diag([4339.26283, 0]) + np.diag([reorg1, reor
 p = []
 
 threshold = 1e-3
-dt = 0.001 / 8
-num_steps = 50 * 4 * 2
+dt = 0.001 / 10
+num_steps = 400
 
 s_dim = np.empty([0, 0])
 num_l = np.empty([0, 0])
@@ -118,7 +116,7 @@ print(tt1 - tt0)
 pop = [x.real for x in p]
 print("population", pop)
 pop = np.array(pop)
-
+pop.astype('float32').tofile('./output/pop.dat')
 # s_dim.astype('float32').tofile('./output/dim.dat')
-# pop.astype('float32').tofile('./output/pop.dat')
+#
 # num_l.astype('float32').tofile('./output/num_ic.dat')
