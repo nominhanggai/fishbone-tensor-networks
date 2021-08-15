@@ -10,7 +10,7 @@ phys_dim = 20
 bond_dim = 1000
 # a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 # a = [int(x) for x in a]
-a = [phys_dim]*bath_length
+a = [phys_dim] * bath_length
 print(a)
 pd = a[::-1] + [2]
 coup_num_LE = np.array(coupMol2_LE)
@@ -26,8 +26,7 @@ reorg2 = sum([(coup_num_CT[i]) ** 2 / freq_num[i] for i in range(len(freq_num))]
 print("Reorg", reorg1, reorg2)
 print(f"Len {len(coup_mat)}")
 
-# exit()
-temp = 95
+temp = 300
 eth = SpinBoson(pd, coup_mat=coup_mat, freq=freq_num, temp=temp)
 etn = SpinBoson1D(pd)
 
@@ -36,10 +35,8 @@ etn = SpinBoson1D(pd)
 etn.B[-1][0, 1, 0] = 0.
 etn.B[-1][0, 0, 0] = 1.
 
-
-# spectral density parameters
-
 eth.h1e = 134.56223 * sigma_x + np.diag([4339.26283, 0]) + np.diag([reorg1, reorg2])
+
 eth.build(n=0)
 
 # exit()
@@ -78,8 +75,8 @@ p = []
 
 
 threshold = 1e-3
-dt = 0.001 / 8
-num_steps = 50 * 4 * 2
+dt = 0.001/10
+num_steps = 300
 
 s_dim = np.empty([0,0])
 num_l = np.empty([0,0])
@@ -120,3 +117,4 @@ print(tt1-tt0)
 pop = [x.real for x in p]
 print("population", pop)
 pop = np.array(pop)
+pop.astype('float32').tofile('./output/pop.dat')
