@@ -1,9 +1,8 @@
 import numpy as np
 from fishbonett.starSpinBosonMultiChannel import SpinBoson
 from fishbonett.spinBosonMPS import SpinBoson1D
-from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sigma_1
-from electronicParametersAndVibronicCouplingDA import freqMol2_LE, freqMol1_GR, coupMol2_LE, coupMol2_CT, coupMol1_CT, \
-    coupMol1_LE
+from fishbonett.stuff import sigma_x
+from examples.multipleAcceptor.electronicParametersAndVibronicCouplingDA import freqMol2_LE, coupMol2_LE, coupMol2_CT
 from time import time
 
 bath_length = 162 * 2
