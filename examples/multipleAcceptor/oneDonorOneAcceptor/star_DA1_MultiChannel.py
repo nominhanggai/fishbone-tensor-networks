@@ -2,7 +2,7 @@ import numpy as np
 from fishbonett.starSpinBosonMultiChannel import SpinBoson
 from fishbonett.spinBosonMPS import SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sigma_1
-from electronicParametersAndVibronicCouplingDA import freqMol2_LE, freqMol1_GR, coupMol2_LE, coupMol2_CT, coupMol1_CT, coupMol1_LE
+from examples.multipleAcceptor.electronicParametersAndVibronicCouplingDA import freqMol2_LE, freqMol1_GR, coupMol2_LE, coupMol2_CT, coupMol1_CT, coupMol1_LE
 from time import time
 
 bath_length = 162 * 2
@@ -25,7 +25,7 @@ reorg1 = sum([(coup_num_LE[i]) ** 2 / freq_num[i] for i in range(len(freq_num))]
 reorg2 = sum([(coup_num_CT[i]) ** 2 / freq_num[i] for i in range(len(freq_num))])
 print("Reorg", reorg1, reorg2)
 print(f"Len {len(coup_mat)}")
-exit()
+
 temp = 300
 eth = SpinBoson(pd, coup_mat=coup_mat, freq=freq_num, temp=temp)
 etn = SpinBoson1D(pd)
