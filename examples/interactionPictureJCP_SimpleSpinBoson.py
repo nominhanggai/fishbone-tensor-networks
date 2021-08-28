@@ -25,26 +25,29 @@ etn.B[-1][0, 0, 0] = 1.
 
 
 # spectral density parameters
-g = 500
-eth.domain = [-g, g]
+g = 1500
+eth.domain = [-1, g]
 temp = 226.00253972894595*0.5*1
-# temp = 0.1
+temp = 0.1
 j = lambda w: drude(w, lam=4.0*78.53981499999999/2, gam=0.25*4*19.634953749999998)* temp_factor(temp,w)
+j = lambda w: (drude(w, lam=800, gam=100000)
+               # +drude(w, lam=80, gam=700) + drude(w, lam=80, gam=900)
+               )*temp_factor(temp,w)
 # j = lambda w: sd_back_zero_temp(w)
 eth.domain = [-g,g]
 # j = lambda w: 0
 eth.sd = j
 
 eth.he_dy = sigma_z + np.diag([1,1])
-eth.h1e =  78.53981499999999 * sigma_x + np.diag([78.53981499999999/2 * 2, 0])
+eth.h1e = 78.53981499999999 * sigma_x + np.diag([78.53981499999999/2 * 2, 0])
 
-eth.build(g=1., ncap=20000)
+eth.build(g=1., ncap=40000)
 # print(eth.w_list,eth.k_list)
 #
 # print(len(eth.w_list))
 # exit()
 
-b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(101)])
+b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(100)])
 j0, freq, coef, reorg = eth.get_dk(1, star=True)
 # indexes = np.abs(freq).argsort()
 print(repr(j0))

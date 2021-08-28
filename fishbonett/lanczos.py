@@ -10,10 +10,10 @@ from math import fsum
 
 
 def lanczos(A, p):
-    A = np.array(A, dtype=np.longdouble)
-    q = np.array(p, dtype=np.longdouble).copy()
+    A = np.array(A)
+    q = np.array(p).copy()
     n = k = A.shape[0]
-    Q = np.zeros((n, k + 1),dtype=np.longdouble)
+    Q = np.zeros((n, k + 1))
     Q[:, 0] = q / np.linalg.norm(q)
     # print(Q[:,0])
     alpha = 0
@@ -22,12 +22,18 @@ def lanczos(A, p):
     for i in range(k):
         if i == 0:
             q = np.dot(A, Q[:, i])
+            # print(f"q1 {q}")
         else:
             q = np.dot(A, Q[:, i]) - beta * Q[:, i - 1]
+            # print(f"q1 {q}")
         alpha = np.dot(q.T, Q[:, i])
+        # print(f"alpha {alpha}")
         q = q - Q[:, i] * alpha
+        # print(f"q2 {q}")
         q = q - np.dot(Q[:, :i], np.dot(Q[:, :i].T, q))  # full re-orthogonalization
+        # print(f"q3 {q}")
         beta = np.linalg.norm(q)
+        # print(f"beta {beta}")
         Q[:, i + 1] = q / beta
         # print(beta)
 
