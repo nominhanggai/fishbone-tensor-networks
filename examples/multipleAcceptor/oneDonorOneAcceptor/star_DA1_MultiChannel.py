@@ -2,7 +2,7 @@ import numpy as np
 from fishbonett.starSpinBosonMultiChannel import SpinBoson
 from fishbonett.spinBosonMPS import SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sigma_1
-from examples.multipleAcceptor.electronicParametersAndVibronicCouplingDA import freqMol2_LE, freqMol1_GR, coupMol2_LE, coupMol2_CT, coupMol1_CT, coupMol1_LE, coupMol1_LE_CT
+from examples.multipleAcceptor.electronicParametersAndVibronicCouplingDA import *
 from time import time
 
 bath_length = 162 * 2
@@ -14,8 +14,9 @@ a = [phys_dim] * bath_length
 print(a)
 pd = a[::-1] + [2]
 coup_num_LE = np.array(coupMol2_LE)
-coup_num_CT = np.array(coupMol2_LE) + np.array(coupMol1_LE_CT)
-freq_num = np.array(freqMol2_LE)
+coup_num_CT = np.array(coupMol2_LE) + np.array(coupMol2_LE_CT)
+# coup_num_CT = np.array(coupMol1_CT)
+freq_num = np.array(freqMol2_CT)
 
 coup_num_LE = coup_num_LE * freq_num / np.sqrt(2)  # + list([1.15*x for x in back_coup])
 coup_num_CT = coup_num_CT * freq_num / np.sqrt(2)  # + list([-1.15*x for x in back_coup])
