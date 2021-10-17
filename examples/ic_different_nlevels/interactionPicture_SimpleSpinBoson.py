@@ -1,11 +1,11 @@
 import numpy as np
 from scipy.optimize import curve_fit
-from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
+from fishbonett.backwardSpinBosonTestBed import SpinBoson, SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude, entang
 from time import time
 
-bath_length = 200
-phys_dim = 15
+bath_length = 100
+phys_dim = 50
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -22,15 +22,15 @@ etn.B[-1][0, 0, 0] = 1
 
 
 # spectral density parameters
-g = 350
+g = 2000
 eth.domain = [-g, g]
 temp = 300
-j = lambda w: drude(w, lam=4000, gam=100) * temp_factor(temp, w)
+j = lambda w: drude(w, lam=200, gam=200) * temp_factor(temp, w)
 
 eth.sd = j
 
 eth.he_dy = np.diag([1,-1])/2
-eth.h1e = np.diag([0,0]) + 120*sigma_x
+eth.h1e = np.diag([250,-250]) + 120*sigma_x
 
 eth.build(g=350., ncap=20000)
 # print(eth.w_list)
@@ -42,9 +42,9 @@ eth.build(g=350., ncap=20000)
 p = []
 
 bond_dim = 2000
-threshold = 1e-3
+threshold = 1e-6
 dt = 0.0005
-num_steps = 100
+num_steps = 10
 
 s_dim = np.empty([0,0])
 

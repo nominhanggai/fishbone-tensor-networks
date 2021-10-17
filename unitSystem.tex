@@ -1,3 +1,5 @@
+%!TEX TS-program = pdflatex
+
 \documentclass{article}
 \usepackage[letterpaper,total={5.5in, 8in}]{geometry}
 \usepackage{siunitx,float}
@@ -11,6 +13,7 @@
 %\maketitle
 
 \section*{The System of Units}
+
 \renewcommand{\arraystretch}{1.2}
 
 We define a new time unit $\mathrm{T}$ such that a wave number $\tilde{\nu}$ has the same numerical value as the corresponding angular wave frequency $\omega=\tilde{\nu} 2\pi c$ ($c$ is the speed of light). 
@@ -21,10 +24,10 @@ We define a new time unit $\mathrm{T}$ such that a wave number $\tilde{\nu}$ has
 		\toprule
 		               & SI                                 & New                                       \\
 		\midrule
-		         $\nu$ & \SI{1}{\per\centi\meter}           & $1\mathrm{cm^{-1}}$                       \\
-		      $\omega$ & \SI{1.8836515673088531e11}{\per\s} & $1\mathrm{T}^{-1}$                        \\
-		 Time Unit(SI) & \SI{1}{\s}                         & $\num{1.8836515673088531e11}\mathrm{\,T}$ \\
-		Time Unit(New) & \SI{5.308837458876145e-12}{\s}     & $1\mathrm{T}$                             \\
+		         $\tilde{\nu}$ & \SI{1}{\per\centi\meter}           & $1\mathrm{cm^{-1}}$                       \\
+		      $\omega$ & $1.8836515673088531\times 10^{11}$ \SI{}{\per\s} & $1\mathrm{T}^{-1}$                        \\
+		 Time Unit(SI) & \SI{1}{\s}                         & ${1.8836515673088531\times 10^{11}}\mathrm{\,T}$ \\
+		Time Unit(New) & $5.308837458876145\times 10^{12}$\SI{}{\s}     & $1\mathrm{T}$                             \\
 		\bottomrule
 	\end{tabular}
 	\caption{The Defining Relationship: $\omega = 2\pi c \nu.$ $c =\SI{2.99792458e10}{\centi\meter\per\s}$.}
@@ -39,14 +42,14 @@ With the time unit defined, we further define a new energy unit $\mathrm{E}$ suc
 		\toprule
 		                 & SI                                 & New                                           \\
 		\midrule
-		         $\hbar$ & \SI{1.054571817e-34}{\joule\s}     & $1\mathrm{E\cdot T}$                          \\
-		   Time Unit(SI) & \SI{1}{\s}                         & $\num{1.8836515673088531e10} \mathrm{\,T}$ \\
+		         $\hbar$ & $1.054571817\times 10^{-34}$\SI{}{\joule\s}     & $1\mathrm{E\cdot T}$                          \\
+		   Time Unit(SI) & \SI{1}{\s}                         & $1.8836515673088531\times10^{10} \mathrm{\,T}$ \\
 		  Time Unit(New) & \SI{5.308837458876145e-12}{\s}     & $1\mathrm{T}$                                 \\
-		 Energy Unit(SI) & \SI{1}{\joule}                     & $\num{5.0341165706272096e22} \mathrm{\,E}$ \\
-		Energy Unit(New) & \SI{1.986445855931795e-23}{\joule} & $1 \mathrm{E}$                                \\
+		 Energy Unit(SI) & \SI{1}{\joule}                     & $5.0341165706272096\times 10^{22} \mathrm{\,E}$ \\
+		Energy Unit(New) & $1.986445855931795\times10^{-23}$\SI{}{\joule} & $1 \mathrm{E}$                                \\
 		\bottomrule
 	\end{tabular}
-	\caption{The Defining Relationship: $\hbar = \SI{1.054571817e-34}{\joule\s}  =1\mathrm{ET}$.}
+	\caption{The Defining Relationship: $\hbar = 1.054571817\times10^{-34}\SI{}{\joule\s}  =1\mathrm{ET}$.}
 	\end{threeparttable}
 \end{table}
 
@@ -58,12 +61,30 @@ With the two units defined, we calculate the value of Boltzmann's constant in th
 		\toprule
 		                 & SI                                   & New                                           \\
 		\midrule
-		 Energy Unit(SI) & \SI{1}{\joule}                       & $\num{5.0341165706272096e22} \mathrm{\,E}$ \\
-		Energy Unit(New) & \SI{1.986445855931795e-23}{\joule}   & $1 \mathrm{E}$                                \\
-		  $k_\mathrm{B}$ & \SI{1.380649e-23}{\joule\per\kelvin} & $\num{0.6950348009119888} \mathrm{\,E\,K^{-1}}$         \\
+		 Energy Unit(SI) & \SI{1}{\joule}                       & $5.0341165706272096\times10^{22} \mathrm{\,E}$ \\
+		Energy Unit(New) & $1.986445855931795\times10^{-23}$\SI{}{\joule}   & $1 \mathrm{E}$                                \\
+		  $k_\mathrm{B}$ & $1.380649\times10^{23}$\SI{}{\joule\per\kelvin} & $0.6950348009119888 \mathrm{\,E\,K^{-1}}$         \\
 		\bottomrule
 	\end{tabular}
 	\caption{The Defining Relationship: $k_{\mathrm{B}} = \SI{1.380649e-23}{\joule\per\kelvin}  =\SI{1.380649e-23}{\joule\per\kelvin}  \times \num{15.0341165706272096e22} \frac{\mathrm{E}}{\mathrm{J}} = \num{0.6950348009119888} \mathrm{E\,K^{-1}}$.}
+	\end{threeparttable}
+\end{table}
+
+Now we list the necessary unit conversion coefficients from atomic units to this new set of units
+\begin{table}[H]
+	\centering
+	\begin{threeparttable}
+		\begin{tabular}{rll}
+			\toprule
+			& a.u.                                   & New                                           \\
+			\midrule
+			Mass & 1\, a.u.                       & $1.627096855727954\times10^{11} \mathrm{\,M}$ \\
+			Mass & $6.145915631756325\times10^{-12}$\, a.u.   & $1\,\mathrm{M}$                                \\
+			Length& 1\, a.u.                      & $5.29177210903\times 10^{-9}$ \SI{}{\centi\meter} \\
+			Energy& 1\, a.u.                      & $2.1947463068\times10^5$ E \\
+			\bottomrule
+		\end{tabular}
+		\caption{The Defining Relationship: .}
 	\end{threeparttable}
 \end{table}
 

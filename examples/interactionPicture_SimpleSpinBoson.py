@@ -6,7 +6,7 @@ from scipy.linalg import expm
 from time import time
 
 bath_length = 200
-phys_dim = 50
+phys_dim = 10
 a = [np.ceil(phys_dim - N*(phys_dim -2)/ bath_length) for N in range(bath_length)]
 a = [int(x) for x in a]
 
@@ -45,7 +45,7 @@ p = []
 bond_dim = 100000
 threshold = 1e-5
 dt = 0.0005
-num_steps = 80
+num_steps = 10
 
 s_dim = np.empty([0,0])
 
@@ -85,5 +85,5 @@ for tn in range(num_steps):
 pop = [x for x in p]
 print("population", pop)
 print(t)
-s_dim.astype('float32').tofile('heatmap.dat')
+# s_dim.astype('float32').tofile('heatmap.dat')
 # print(occu)

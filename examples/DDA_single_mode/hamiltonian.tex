@@ -1,0 +1,198 @@
+%!TEX TS-program = pdflatex
+
+\documentclass{article}
+\usepackage[letterpaper]{geometry}
+\usepackage{siunitx,float,amsmath,amssymb,braket}
+\sisetup{load-configurations = abbreviations}
+\usepackage{threeparttable,booktabs}
+%opening
+%\author{}
+
+\begin{document}
+
+%\maketitle
+\section*{Ladder Operators}
+
+Useful formula:
+$$
+\begin{aligned}
+	a &=\sqrt{\frac{m \omega}{2 \hbar}}\left(\hat{x}+\frac{i}{m \omega} \hat{p}\right) \\
+	a^{\dagger} &=\sqrt{\frac{m \omega}{2 \hbar}}\left(\hat{x}-\frac{i}{m \omega} \hat{p}\right)
+\end{aligned}
+$$
+This leads to the useful representation of $\hat{x}$ and $\hat{p}$,
+$$
+\begin{aligned}
+	&\hat{x}=\sqrt{\frac{\hbar}{2 m \omega}}\left(a^{\dagger}+a\right) \\
+	&\hat{p}=i \sqrt{\frac{\hbar m \omega}{2}}\left(a^{\dagger}-a\right).
+\end{aligned}
+$$
+
+\section*{The Hamiltonian}
+The Hamiltonian for the one-vibration DDA system is
+\begin{align*}
+	\hat{H}&=\frac{P^{2}}{2 M_s}+\sum_{i} \frac{M_{s} \Omega^{2}}{2} \left(R-\frac{c_{i}}{M_{s} \Omega^{2}}\right)^{2}\ket{i}\bra{i}+\sum_{ij}E_{ij}\ket{i}\bra{j}+\hat{H}_{B}\\
+	\hat{H}_{B}&=\sum_j \frac{M_{B} \omega_{j}^{2}}{2} \left(Q_{j}-c^{\prime}_{j} \frac{R}{M_{B} \omega_{j}^{2}}\right)^{2} + \sum_j\frac{P_j^2}{2M_B}
+\end{align*}
+where $\hat{P}=-i\hbar\frac{\partial}{\partial R}$.
+
+Transform the Hamiltonian into the mass-weighted coordinates, that is, $R\to \tilde{R}=\sqrt{M_s}R$ and $P\to \tilde{P}=P/\sqrt{M_s}$ (the same for $P_j$ and $R_j$).
+\begin{align*}
+	\hat{H} &= \frac{\tilde{P}^{2}}{2}
+	+\sum_{i} \frac{\Omega^{2}}{2} \left(\tilde{R}-\frac{c_{i}}{M_{s}^{1/2} \Omega^{2}}\right)^{2}\ket{i}\bra{i}
+	+\sum_{ij}E_{ij}\ket{i}\bra{j}+\hat{H}_{S B}\\
+	\hat{H}_{B} &= \sum_j \frac{\omega_{j}^{2}}{2} \left(\tilde{Q}_{j}-c^{\prime}_{j} \frac{\tilde{R}}{\sqrt{M_sM_{B}} \omega_{j}^{2}}\right)^{2} + \sum_j\frac{\tilde{P}_j^2}{2}
+\end{align*}
+
+Expand the first equation:
+\begin{align*}
+	\hat{H} &= 
+	\frac{\tilde{P}^{2}}{2}
+	+ \frac{\Omega^{2}\tilde{R}^2}{2}
+	+ \sum_i \frac{c_{i}^2}{2M_{s} \Omega^{2}} \ket{i}\bra{i}
+	+ \sum_{ij}E_{ij}\ket{i}\bra{j}
+	- \sum_{i}\frac{c_{i}}{\sqrt{M_s}} \tilde{R}\ket{i}\bra{i}
+	+\hat{H}_{S B}.
+\end{align*}
+and move the oscillator terms to the second equation, we have
+\begin{align}
+	\hat{H} &= 
+	\sum_i \frac{c_{i}^2}{2M_{s} \Omega^{2}} \ket{i}\bra{i}
+	+ \sum_{ij}E_{ij}\ket{i}\bra{j}
+	- \sum_{i}\frac{c_{i}}{\sqrt{M_s}} \tilde{R}\ket{i}\bra{i}
+	+\hat{H}_{S B}.
+	\label{eq:sys+coupling}
+\end{align}
+
+Expand the second equation:
+\begin{align*}
+	\frac{\tilde{P}^{2}}{2}
+	+ \left( \Omega^{2}+\sum_j \frac{ c'^ 2_{j}}{M_sM_B \omega_{j}^{2}}\right)\frac{\tilde{R}^2}{2}
+	+ \sum_j \frac{\omega_{j}^{2}\tilde{Q}_j^2}{2}
+	+ \sum_j\frac{\tilde{P}_j^2}{2}
+	- \sum_j  \frac{c^{\prime}_{j}}{\sqrt{M_sM_B}} \tilde{Q}_{j}\tilde{R}
+\end{align*}
+
+Diagonalize the second equation:
+\begin{align*}
+		\frac{\tilde{P}^{2}}{2}
+		+ \frac{\Omega^{2}\tilde{R}^2}{2}
+		+ \sum_{j=1}^N \frac{\omega_{j}^{2}}{2} \left(\tilde{Q}_{j}-c^{\prime}_{j} \frac{\tilde{R}}{\sqrt{M_sM_B} \omega_{j}^{2}}\right)^{2} \to \sum_{j=1}^{N+1}\frac{\omega'_j}{2}  \hat{X}_j
+\end{align*}
+\begin{align*}
+	\begin{bmatrix}
+	\tilde{Q}_1 & \tilde{Q}_2 & \cdots & \tilde{Q}_{N-1} &  \tilde{Q}_N & \tilde{R}
+\end{bmatrix}
+	\begin{bmatrix}
+		\frac{\omega_1^2}{2}        & 0                           & \cdots & 0                           & \frac{c_1'}{2\sqrt{M_sM_B}}                                    \\
+		0                           & \frac{\omega_2^2}{2}        & \cdots & 0                           & \frac{c_2'}{2\sqrt{M_sM_B}}                                    \\
+		0                           & \vdots                      & \ddots & 0                           & \vdots                                                         \\
+		0                           & 0                           & \cdots & \frac{\omega_{N}^2}{2}      & \frac{c_N'}{2\sqrt{M_sM_B}}                                    \\
+		\frac{c_1'}{2\sqrt{M_sM_B}} & \frac{c_2'}{2\sqrt{M_sM_B}} & \cdots & \frac{c_N'}{2\sqrt{M_sM_B}} & (\Omega^{2}+\sum_j \frac{ c'^ 2_{j}}{M_sM_B \omega_{j}^{2}})/2
+	\end{bmatrix}
+	\begin{bmatrix}
+	\tilde{Q}_1\\
+	\tilde{Q}_2\\
+	\vdots \\
+	\tilde{Q}_{N-1}\\
+	\tilde{Q}_N\\
+	\tilde{R}
+\end{bmatrix}.
+\end{align*}
+We obtain a set of frequencies $\mathrm{diag}(\frac{\omega_{j}'^2}{2}) $ and a unitary matrix $U$ ($U$ is returned by \textsf{numpy.linalg.eig()}):
+\begin{align*}
+		\begin{bmatrix}
+		\tilde{Q}_1'\\
+		\tilde{Q}_2'\\
+		\vdots \\
+		\tilde{Q}_{N-1}'\\
+		\tilde{Q}_N'\\
+		\tilde{Q}'
+	\end{bmatrix} = U
+	\begin{bmatrix}
+	\tilde{Q}_1\\
+	\tilde{Q}_2\\
+	\vdots \\
+	\tilde{Q}_{N-1}\\
+	\tilde{Q}_N\\
+	\tilde{R}
+\end{bmatrix}.
+\end{align*}
+so that 
+\begin{align*}
+	\tilde{R}=U^T[N+1,:]
+	\begin{bmatrix}\tilde{Q}_1'\\
+		\tilde{Q}_2'\\
+		\vdots \\
+		\tilde{Q}_{N-1}'\\
+		\tilde{Q}_N'\\
+		\tilde{Q}'
+	\end{bmatrix}=\sum_{j}U_{j,N+1}\tilde{Q}_j.
+\end{align*}
+
+Substitute the expansion $\tilde{R}=\sum_{j}U_{j,N+1}\tilde{Q}_j$ into \eqref{eq:sys+coupling} we have
+\begin{align*}
+	\hat{H} &= 
+	\sum_{ij}E_{ij}\ket{i}\bra{j}
+	+ \sum_i \frac{c_{i}^2}{2M_{s} \Omega^{2}} \ket{i}\bra{i}
+	- \sum_{i}\left(\sum_{j}U_{j,N+1}\frac{c_{i}}{\sqrt{M_s}}\right) \tilde{Q}_j\ket{i}\bra{i}
+	+\hat{H}_{B}.
+\end{align*}
+Use the ladder operators\footnote{$\tilde{Q}_j$'s are mass-weighted coordinates so there's no mass in this equation.} $\tilde{Q}_j=\sqrt{\frac{\hbar}{2 \omega'_j}}\left(a^{\dagger}_j+a_j\right)$  we obtain
+\begin{align}
+	\hat{H} &= 
+	\sum_{ij}E_{ij}\ket{i}\bra{j}
+	+ \sum_i \frac{c_{i}^2}{2M_{s} \Omega^{2}} \ket{i}\bra{i}
+	- \sum_{i}\underbrace{\left(\sum_{j}U_{j,N+1}\sqrt{\frac{\hbar }{2 M_s\omega'_j}}\right)}_{c_j} c_i \ket{i}\bra{i}\left(a^{\dagger}_j+a_j\right)
+	+\hat{H}_{B}.\\
+	&= 
+	\sum_{ij}E_{ij}\ket{i}\bra{j}
+	+ \sum_i \frac{c_{i}^2}{2M_{s} \Omega^{2}} \ket{i}\bra{i}
+	- \sum_{ij} c_ic_j \ket{i}\bra{i}\left(a^{\dagger}_j+a_j\right)
+	+\hat{H}_{B}
+	\label{eq:sys+coupling_new}
+\end{align}
+
+\section*{Initial Density Matrix, Shifting the Coordinate System}
+Suppose the initial density matrix for the vibrational modes is $\rho_B = \exp[-\beta (\frac{\tilde{P}^{2}}{2}
++ \frac{\Omega^{2}(\tilde{R}-\tilde{R}_0)^2}{2})-\beta(\sum_j \frac{\omega_{j}^{2}}{2} \left(\tilde{Q}_{j}-c^{\prime}_{j} \frac{\tilde{R}}{\sqrt{M_sM_{B}} \omega_{j}^{2}}\right)^{2} + \sum_j\frac{\tilde{P}_j^2}{2})]$. 
+We set $\tilde{\mathcal{R}}=\tilde{R}-\tilde{R}_0$ ($\tilde{R}=\tilde{\mathcal{R}}+\tilde{R}_0$) and $\tilde{\mathcal{Q}}=\tilde{Q}-c^{\prime}_{j} \frac{\tilde{\mathcal{R}}_0}{\sqrt{M_sM_{B}} \omega_{j}^{2}}
+$.
+Put them back to the density matrix we get
+\begin{align*}
+	\rho_B =& \exp[-\beta (\frac{\tilde{P}^{2}}{2}
+	+ \frac{\Omega^{2}\tilde{\mathcal{R}}^2}{2})-\beta(\sum_j \frac{\omega_{j}^{2}}{2} \left(\mathcal{\tilde{Q}}_{j}-c^{\prime}_{j} \frac{\tilde{\mathcal{R}}}{\sqrt{M_sM_{B}} \omega_{j}^{2}}\right)^{2} + \sum_j\frac{\tilde{P}_j^2}{2})]\\
+	=&e^{-\beta H_R}
+\end{align*}
+where 
+\begin{align*}
+	H_R = \frac{\tilde{P}^{2}}{2}
+	+ \frac{\Omega^{2}\tilde{\mathcal{R}}^2}{2}+\sum_j \frac{\omega_{j}^{2}}{2} \left(\mathcal{\tilde{Q}}_{j}-c^{\prime}_{j} \frac{\tilde{\mathcal{R}}}{\sqrt{M_sM_{B}} \omega_{j}^{2}}\right)^{2} + \sum_j\frac{\tilde{P}_j^2}{2}
+\end{align*}
+
+Accordingly, the Hamiltonian becomes
+\begin{align*}
+	\hat{H} &= 
+	\sum_i\frac{\Omega^2}{2}\left(\tilde{R}_0-\frac{c_{i}}{M_{s}^{1/2} \Omega^{2}}\right)^2\ket{i}\bra{i}
+	+\sum_{i} \Omega^{2} \left(\tilde{R}_0-\frac{c_{i}}{M_{s}^{1/2} \Omega^{2}}\right)\tilde{\mathcal{R}}\ket{i}\bra{i}
+	+\sum_{ij}E_{ij}\ket{i}\bra{j}+\hat{H}_{S B}\\
+	\hat{H}_{B} &= 
+	\frac{\tilde{P}^{2}}{2}
+	+ \left( \Omega^{2}+\sum_j \frac{ c'^ 2_{j}}{M_sM_B \omega_{j}^{2}}\right)\frac{\tilde{\mathcal{R}}^2}{2}
+	+ \sum_j \frac{\omega_{j}^{2}\tilde{\mathcal{Q}}_j^2}{2}
+	+ \sum_j\frac{\tilde{P}_j^2}{2}
+	- \sum_j  \frac{c^{\prime}_{j}}{\sqrt{M_sM_B}} \tilde{\mathcal{Q}}_{j}\tilde{\mathcal{R}}
+\end{align*}
+
+Compared to the Hamiltonian in the last section, the only difference is that the reorganization energy and vibration coupling change by $\tilde{R}_0=R_0\sqrt{M_s}$. Thus, we can replace the $c'_j$s in the last section with $(c_j'-\tilde{R}_0\sqrt{M_s}\Omega^2)=(c_j'-R_0M_s\Omega^2)$ to make the initial density matrix shifted.
+
+\section*{Ohmic to Lorentzian}
+If the spectral density for the bath-reaction-coordinate coupling is Ohmic:
+\begin{align*}
+	J(\omega)=\frac{1}{2}\pi\xi\omega e^{\omega/\omega_c}
+\end{align*}
+The effective bath that the electronic system senses has  the following spectral density 
+\begin{align}
+	J_\mathrm{eff} = \sum_i \frac{\pi\xi\omega\Omega^4}{2(\Omega^2-\omega^2)^2 + \pi^2\omega^2\xi^2/(2M_s^2)} R_0^i\ket{i}\bra{i}
+\end{align}
+\end{document}
