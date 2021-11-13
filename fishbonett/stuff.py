@@ -32,15 +32,16 @@ def temp_factor(temp, w):
 
 '''Entanglement Entropy'''
 
+
 def rlogr(si):
-    return (-1) *si*np.log2(si)
+    return (-1) * si * np.log2(si)
 
 
 def entang(s):
     etg = 0.0
     for si in s:
-        if si !=0:
-            etg += rlogr(si)
+        if si != 0:
+            etg += rlogr(si**2)
     return etg
 
 
@@ -48,7 +49,7 @@ def entang(s):
 
 
 def sd_back(Sk, sk, w, wk):
-    return np.pi* Sk / (sk * np.sqrt(2 / np.pi)) * w * \
+    return np.pi * Sk / (sk * np.sqrt(2 / np.pi)) * w * \
            np.exp(-np.log(np.abs(w) / wk) ** 2 / (2 * sk ** 2))
 
 
@@ -80,6 +81,7 @@ def sd_zero_temp(w):
            + sd_high(gamma, Omega_2, g2, w) \
            + sd_high(gamma, Omega_3, g3, w)
 
+
 def sd_back_zero_temp(w):
     gamma = 5.
     Omega_1 = 181
@@ -99,6 +101,7 @@ def sd_back_zero_temp(w):
     w3 = 85
     return sd_back(S1, s1, w, w1) + sd_back(S2, s2, w, w2) \
            + sd_back(S3, s3, w, w3)
+
 
 def sd_zero_temp_prime(w):
     S1 = 0.39
@@ -125,6 +128,7 @@ def drude1(w, lam, gam=100.):
     gam = gam / 1.8836515673088531
     return 2 * lam * gam * w / (w ** 2 + gam ** 2)
 
+
 def drude(w, lam, gam=100.):
     return 2 * lam * gam * w / (w ** 2 + gam ** 2)
 
@@ -138,10 +142,12 @@ def natphys(w, lam):
             1000 * w ** 5 * np.exp(- np.sqrt(w / 0.57)) + 4.3 * w ** 5 * np.exp(-np.sqrt(w / 1.9))) / (
                    362880. * (1000. * 0.57 ** 5 + 4.3 * 1.9 ** 5))
 
+
 def lemmer(w, lam, k, wm):
-    return lam**2 * (k/(k**2 + (w-wm)**2) -
-                   k/(k**2 + (w+wm)**2)
-                   )
+    return lam ** 2 * (k / (k ** 2 + (w - wm) ** 2) -
+                       k / (k ** 2 + (w + wm) ** 2)
+                       )
+
 
 def _c(dim: int):
     op = np.zeros((dim, dim))
@@ -152,5 +158,6 @@ def _c(dim: int):
 
 '''Obtain Occupation Number'''
 
+
 def _num(dim: int):
-    return _c(dim).T@_c(dim)
+    return _c(dim).T @ _c(dim)
