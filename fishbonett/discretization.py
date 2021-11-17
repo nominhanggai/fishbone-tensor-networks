@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 def J(x):
     J = x ** 2 * np.exp(-x)
     return J
+
 def get_coupling(n, j, domain, g, ncap=20000):#j=weight function
         alphaL, betaL = rc.recurrenceCoefficients(
             n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
