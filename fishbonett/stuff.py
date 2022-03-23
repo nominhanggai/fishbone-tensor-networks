@@ -34,7 +34,7 @@ def temp_factor(temp, w):
 
 
 def rlogr(si):
-    return (-1) * si * np.log2(si)
+    return (-1) * si * np.log(si)
 
 
 def entang(s):
