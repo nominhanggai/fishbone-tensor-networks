@@ -1,13 +1,17 @@
+from ast import arg
 import numpy as np
-from backwardSpinBosonMultiChannel import SpinBoson
+from fishbonett.backwardSpinBosonMultiChannel import SpinBoson
 from spinBosonMPS_LBO import SpinBoson1D
+from fishbonett.stuff import sigma_x, _num
 from bath_discrete import *
 from time import time
+from sys import argv
 
-bath_length = int((101 * 2 -2)/4/4)
+bath_length = 101 * 2
+#phys_dim = 100
 bond_dim = 2000
-dim = 200
-a = [dim] * bath_length
+num_good_mode = 2 #int(argv[2])
+a = [2000]*num_good_mode+ [600]*(bath_length-num_good_mode-100) + [200]*100
 print(a)
 
 pd = a[::-1] + [3]
@@ -31,7 +35,7 @@ etn.B[-1][0, 1, 0] = 0.
 etn.B[-1][0, 0, 0] = 1.
 # 4339 is the calculeted gap
 
-delta23 = 50
+delta23 = 50 #int(argv[1])
 coupling_mat = np.array([
     [0, 299.99987267649203, 0],
     [299.99987267649203, 0, delta23],
@@ -43,11 +47,14 @@ eth.build(n=0)
 # ~ 0.5 ps ~ 0.1T
 p1 = []
 p2 = []
+p2 = []
 
-threshold = 1e-4
-dt = 0.001/4
-num_steps = 50
-eps_LBO = 1e-16
+threshold = 1e-3 #float(argv[3])
+dt = 0.001/5
+num_steps = 450
+eps_LBO = 1e-4
+gpu = True
+
 t = 0.
 tt0 = time()
 for tn in range(num_steps):
@@ -57,10 +64,11 @@ for tn in range(num_steps):
     etn.U = U1
     for j in range(bath_length-1,0,-1):
         print("j==", j, tn)
-        etn.update_bond(j, bond_dim, threshold, eps_LBO, swap=1, toarray=False)
+        etn.update_bond(j, bond_dim, threshold, eps_LBO=eps_LBO, swap=1, gpu=gpu)
 
-    etn.update_bond(0, bond_dim, threshold, eps_LBO, swap=0, toarray=False)
-    etn.update_bond(0, bond_dim, threshold, eps_LBO, swap=0, toarray=False)
+    etn.update_bond(0, bond_dim, threshold, eps_LBO=eps_LBO, swap=0, gpu=gpu)
+    etn.update_bond(0, bond_dim, threshold, eps_LBO=eps_LBO, swap=0, gpu=gpu)
+
     t1 = time()
     t = t + t1 - t0
 
@@ -69,7 +77,15 @@ for tn in range(num_steps):
     etn.U = U2
     for j in range(1, bath_length):
         print("j==", j, tn)
-        etn.update_bond(j, bond_dim, threshold, eps_LBO, swap=1, toarray=False)
+        etn.update_bond(j, bond_dim, threshold, eps_LBO=eps_LBO, swap=1, gpu=gpu)
+
+    # for j in range(0, bath_length):
+    #     vib_psi = etn.get_theta1(j)
+    #     phys_d = vib_psi.shape[1]
+    #     num = _num(phys_d)
+    #     num = np.einsum('LiR,ij,LjR', vib_psi, num, vib_psi.conj()).real
+    #     print("j==", j, tn, "PHYS_D", phys_d, "NUM", num)
+
     theta = etn.get_theta1(bath_length) # c.shape vL i vR
     rho = np.einsum('LiR,LjR->ij',  theta, theta.conj())
 
@@ -86,6 +102,6 @@ print(tt1-tt0)
 
 p1 = np.array(p1)
 p2 = np.array(p2)
-# p1.astype('float32').tofile(f'./output/pop1_{delta23}.dat')
-# p2.astype('float32').tofile(f'./output/pop2_{delta23}.dat')
+p1.astype('float32').tofile(f'./output/pop1_{delta23}_{num_good_mode}_{threshold}.dat')
+p2.astype('float32').tofile(f'./output/pop2_{delta23}_{num_good_mode}_{threshold}.dat')
 

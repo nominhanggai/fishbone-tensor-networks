@@ -1,14 +1,15 @@
 import numpy as np
+import copy
+import itertools as it
 
-dict = {(0, 0): 0, (1, 1): 1, (2, 2): 2, (0, 1): (3, 4), (1, 2): (5, 6), (0, 2): (7, 8)}
 
-
-def read_rho(id, t):
-    r = np.fromfile(f"pop1_50_10_0.0005_{id}.dat")
-    return np.array(r[t])
+def read_rho(label, t):
+    r = np.load(f"output/density_mat_{label}.npy")
+    return r[t]
 
 
 def map_basis_op(index, t, dict):
+    # print(index, t)
     if index[0] == index[1]:
         id_ = dict[index]
         return read_rho(id_, t)
@@ -24,28 +25,49 @@ def map_basis_op(index, t, dict):
         return r1 + 1j * r2 - (1 + 1j) * (r3 + r4) / 2
     if index[0] > index[1]:
         index_ = (index[1], index[0])
-        return map_basis_op(index_, t, dict).conj()
-
-def B_mat(d):
-    r = np.eye(d**2).reshape(d, d, d**2)
-    r = np.transpose(r, [2,0,1])
-    print(r.shape)
-    B = np.einsum('Lih,Mij,Kjk,Nhk->MNKL', r.conj(), r, r, r.conj())
-    B = B.reshape(d ** 4, d ** 4)
-    print(B)
-    C = np.einsum('Mij,Kjk,Nkl->MNKil', r, r, r.conj())
-    C = C.reshape(d ** 4, d ** 4)
-    print(C)
-    return B, C
-
-if __name__ == "__main__":
-    B, C = B_mat(2)
-    print(np.linalg.norm(B-C))
-    d = 3
-    r = np.eye(d ** 2).reshape(d, d, d ** 2)
-    r = np.transpose(r, [2, 0, 1])
-    print(np.einsum('Mij,Nji', r, r))
+        id1 = dict[index_][0]
+        id2 = dict[index_][1]
+        r1 = read_rho(id1, t)
+        r2 = read_rho(id2, t)
+        id3 = dict[(index_[0], index_[0])]
+        id4 = dict[(index_[1], index_[1])]
+        r3 = read_rho(id3, t)
+        r4 = read_rho(id4, t)
+        return r1 - 1j * r2 - (1 - 1j) * (r3 + r4) / 2
 
 
+def transfer_mat(lt_map):
+    """
+    Args:
+        lt_map (): a list of dynamical maps in the Liouville space, i.e., the basis is {|n>|m>}.
+
+    Returns:
+        T: a list of same number of transfer tensors as the dynamical maps.
+        T_norm: the corresponding matrix norm of elements in T
+    """
+    T1 = lt_map[0]
+    T = [T1]
+    T_norm = [np.linalg.norm(T1)]
+    for N in range(1, len(lt_map)):
+        TN = lt_map[N] - np.einsum('Nij,Njk->ik', T, lt_map[0:N][::-1])
+        T.append(TN)
+        T_norm.append(np.linalg.norm(TN))
+    return T, T_norm
 
 
+def dynamical_maps(t, d):
+    r = np.zeros([d * d, d * d], dtype=np.complex128)
+    for n, index in it.product(range(d), repeat=2):
+        r[:, n] = map_basis_op(index, t, dict).reshape(d * d)
+    return r
+
+
+def predict_density_mat(t, T, r_init):
+    assert t >= len(T)
+    r = copy.deepcopy(r_init)
+    diff = t - len(r_init)
+    for i in range(diff):
+        r_relevant = r[:-len(T) - 1:-1]
+        rho = np.einsum('Nij,Njk->ik', T, r_relevant)
+        r = np.append(r, [rho], axis=0)
+    return r
