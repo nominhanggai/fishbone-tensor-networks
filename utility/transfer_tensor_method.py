@@ -63,7 +63,7 @@ def dynamical_maps(t, d):
 
 
 def predict_density_mat(t, T, r_init):
-    assert t >= len(T)
+    assert t >= len(T) == len(r_init) and len(T) > 0
     r = copy.deepcopy(r_init)
     diff = t - len(r_init)
     for i in range(diff):
