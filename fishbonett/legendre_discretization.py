@@ -26,7 +26,7 @@ def get_Vn_squared(J, n: int, domain, ncap=60000):
     weight = lambda x: 1 * np.pi
     alpha, beta = get_coupling(n, weight, domain=domain, ncap=ncap)
     M = np.diag(alpha) + np.diag(beta[1:], -1) + np.diag(beta[1:], 1)
-    eigval, eigvec = np.linalg.eig(M)
+    eigval, eigvec = np.linalg.eigh(M)
     W = (eigvec[0, :]) ** 2 * (domain[1] - domain[0])
     V_squared = [J(w) * W[i] for i, w in enumerate(eigval)]
     return eigval, np.array(V_squared)
