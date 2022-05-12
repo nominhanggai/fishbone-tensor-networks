@@ -6,37 +6,6 @@ from legendre_discretization import get_vn_squared, get_approx_func
 Calculate fermi's golden rule rate for electron transfer reactions, given a spectral density.
 """
 
-k = 0.69
-
-
-def fgr_rate_riemann_sum(c, e, kbT, dt, t, _w, _v_sq):
-    w = np.array(_w)
-    v_sq = np.array(_v_sq)
-    t_grid = np.array([n * dt for n in range(int(t / dt))])
-    print("t_grid:", t_grid, len(t_grid))
-    print("Calculating w_t_tensor_in_exponent...")
-    j_factor = (-v_sq * 4 / np.pi / w ** 2).reshape(len(w), 1)
-    print("Finished j factor")
-    coth = 1 / np.tanh(w / (2 * kbT)).reshape(len(w), 1)
-    print("Finished coth")
-    wt_grid = np.outer(w, t_grid)
-    summand_1 = coth * (1 - np.cos(wt_grid))
-    print("Finished summand 1", summand_1.shape)
-    print(wt_grid.shape)
-    summand_2 = 1j * np.sin(wt_grid)
-    print("Finished summand 2", summand_2.shape, np.sin(wt_grid).shape)
-    exponent = np.sum(j_factor * (summand_1 - summand_2), axis=0)
-    print("Finished exponent", exponent.shape)
-    t_tensor = np.exp(exponent) * np.exp(1j * e * t_grid) * dt
-    import matplotlib.pyplot as plt
-    plt.plot(t_grid, t_tensor.real, 'o', label='real')
-    plt.plot(t_grid, t_tensor.imag, 'o', label='imag')
-    plt.legend()
-    plt.savefig('w_t_tensor.png')
-    real_part = np.sum(t_tensor).real
-    return 2 * (c ** 2) * real_part
-
-
 def fgr_rate(c, e, kbT, _w, _v_sq):
     w = np.array(_w)
     v_sq = np.array(_v_sq)
@@ -60,7 +29,7 @@ if __name__ == "__main__":
     reorg_e = 3000
     Omega = 200
     Omega2 = 400
-    kbT = 0.69 * 3
+    kbT = 0.69 * 300
     eta = 200
     domain = [0, 3000]
     C_DA = 500
