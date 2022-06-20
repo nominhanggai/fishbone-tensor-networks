@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import integrate
 from legendre_discretization import get_vn_squared, get_approx_func
-from golden_rule_rate import *
+from golden_rule_rate import fgr_rate, fgr_rate_by_order
 import itertools as it
 from mcmc_integrator import mcmc_time_ordered
 
@@ -168,7 +168,7 @@ def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max, ni
     return -2 * c12 ** 2 * c23 ** 2 * result
 
 
-def fgr_rate3_correction_by_order(c_list, e_list, kbT, _w, s_list, t1, order):
+def fgr_rate3_correction_order_quad(c_list, e_list, kbT, _w, s_list, t1, order):
     c = c_list
     s = {1: s_list[0], 2: s_list[1], 3: s_list[2]}
     E = {1: e_list[0], 2: e_list[1], 3: e_list[2]}
@@ -248,7 +248,7 @@ def fgr_rate3_correction_by_order(c_list, e_list, kbT, _w, s_list, t1, order):
     return -2 * integral
 
 
-def fgr_rate3_correction_by_order_mcmc(c_list, e_list, kbT, _w, s_list, t1, order, N, burn_in=1000):
+def fgr_rate3_correction_order_mcmc(c_list, e_list, kbT, _w, s_list, t1, order, N, burn_in=1000):
     c = c_list
     s = {1: s_list[0], 2: s_list[1], 3: s_list[2]}
     E = {1: e_list[0], 2: e_list[1], 3: e_list[2]}
@@ -328,7 +328,7 @@ def fgr_rate3_correction_by_order_mcmc(c_list, e_list, kbT, _w, s_list, t1, orde
     return -2 * integral
 
 
-def fgr_rate3_correction_by_order_vegas(c_list, e_list, kbT, w, s_list, t_max, order, nitn=10, neval=1000):
+def fgr_rate3_correction_order_vegas(c_list, e_list, kbT, w, s_list, t_max, order, nitn=10, neval=1000):
     c = np.array(c_list)
     e_list = np.array(e_list)
     s_list = np.array(s_list)
@@ -351,8 +351,8 @@ def fgr_rate3_correction_by_order_vegas(c_list, e_list, kbT, w, s_list, t_max, o
 
     delta = {}
     for i in range(order + 2):
-        k, l = sub_list[i]
-        delta[i] = s[k] - s[l]
+        l, r = sub_list[i]
+        delta[i] = s[l] - s[r]
 
     coth = 1 / np.tanh(w / (2 * kbT))
     const_exponent = np.sum(-coth * [delta[i] ** 2 for i in range(order + 2)], axis=0) / (2 * w_sq * np.pi)
@@ -469,8 +469,8 @@ if __name__ == "__main__":
 
     start1 = time()
     fgr_rate3_correction_1 = np.vectorize(
-        lambda ei: fgr_rate3_correction_by_order([C_DA, C_DA, aa_coupling], [0, -ei, -ei], kbT, w, [-v * 0, v, v],
-                                                 1000, 0)
+        lambda ei: fgr_rate3_correction_order_quad([C_DA, C_DA, aa_coupling], [0, -ei, -ei], kbT, w, [-v * 0, v, v],
+                                                   1000, 0)
     )(e)
     end1 = time()
     print("finished")
@@ -480,8 +480,8 @@ if __name__ == "__main__":
     #     )(e)
 
     fgr_rate3_correction_1_vegas = np.vectorize(
-        lambda ei: fgr_rate3_correction_by_order_vegas([C_DA, C_DA, aa_coupling], [0, -ei, -ei], kbT, w, [-v * 0, v, v],
-                                                     1000, 0, nitn=10, neval=1000)
+        lambda ei: fgr_rate3_correction_order_vegas([C_DA, C_DA, aa_coupling], [0, -ei, -ei], kbT, w, [-v * 0, v, v],
+                                                    1000, 0, nitn=10, neval=1000)
     )(e)
 
     end2 = time()
