@@ -27,6 +27,17 @@ $$
 	&\hat{p}=i \sqrt{\frac{\hbar m \omega}{2}}\left(a^{\dagger}-a\right).
 \end{aligned}
 $$
+A quick note of calculating a reorgnization energy from the systm-bath coupling of the form $H_{SB}=cA_{s}\otimes (a^\dagger+a)$.
+\begin{align}
+	\frac{p^2}{2}+\frac{m\omega^2}{2}(x-R_0)^2 & = \frac{p^2}{2}+\frac{m\omega^2 x^2}{2} + m\omega^2R_0x + \frac{m\omega^2R_0^2}{2} \\
+	& = \omega a^\dagger a + m\omega^2R_0\sqrt{\frac{\hbar}{2 m \omega}}\left(a^{\dagger}+a\right) \frac{m\omega^2R_0^2}{2} \\
+	& = \omega a^\dagger a + \omega\sqrt{m\omega/2}R_0\sqrt{\hbar}\left(a^{\dagger}+a\right) + \frac{m\omega^2R_0^2}{2}
+\end{align}
+we indetify that $\frac{m\omega^2R_0^2}{2}$ is the reogrnization energy and the coupling $c=\omega\sqrt{m\omega/2}\sqrt{\hbar}R_0$, thus $R_0=\frac{c}{\omega\sqrt{m\omega/2}\sqrt{\hbar}}$. Hence, the reorgnization energy $\lambda$ is
+\begin{align}
+	\lambda = \frac{m\omega^2R_0^2}{2} = \frac{m\omega^2}{2} \left(\frac{c}{\omega\sqrt{m\omega/2}\sqrt{\hbar}}\right)^2 = \frac{m\omega^2}{2} \left(\frac{c^2}{\hbar\omega^2 m\omega/2}\right) = \frac{c^2}{\hbar\omega}
+\end{align}
+
 
 \section*{The Hamiltonian}
 The Hamiltonian for the one-vibration DDA system is
@@ -195,4 +206,5 @@ The effective bath that the electronic system senses has  the following spectral
 \begin{align}
 	J_\mathrm{eff} = \sum_i \frac{\pi\xi\omega\Omega^4}{2(\Omega^2-\omega^2)^2 + \pi^2\omega^2\xi^2/(2M_s^2)} R_0^i\ket{i}\bra{i}
 \end{align}
+
 \end{document}
