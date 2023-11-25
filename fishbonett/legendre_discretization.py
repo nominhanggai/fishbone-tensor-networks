@@ -62,7 +62,7 @@ if __name__ == '__main__':
     lorentzian1 = lambda w: lorentzian(10, w, 10, 1000) + lorentzian(10, w, 10, 2000)\
     + lorentzian(10, w, 10, 3000) + lorentzian(10, w, 10, 4000)
     J = lorentzian1
-    J_approx = get_approx_func(J, 2000, [0, 5000], 0.05)
+    J_approx = get_approx_func(J, 1000, [-1000, 5000], 2)
     print("Get approx func:", J_approx(10))
 
     x = np.linspace(0, 5000, 1000)
@@ -73,4 +73,4 @@ if __name__ == '__main__':
     plt.plot(x, J(x), 'r-', label='original')
     plt.plot(x, disc, 'k-', label='approx')
     plt.legend()
-    plt.show()
+    plt.savefig("legendre_discretization.png")

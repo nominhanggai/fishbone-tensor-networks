@@ -42,10 +42,10 @@ eth.he_dy = sigma_z + np.diag([1,1])
 eth.h1e = 78.53981499999999 * sigma_x + np.diag([78.53981499999999/2 * 2, 0])
 
 eth.build(g=1., ncap=40000)
-# print(eth.w_list,eth.k_list)
-#
-# print(len(eth.w_list))
-# exit()
+print(eth.w_list,eth.k_list)
+
+print(len(eth.w_list))
+exit()
 
 b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(100)])
 j0, freq, coef, reorg = eth.get_dk(1, star=True)
