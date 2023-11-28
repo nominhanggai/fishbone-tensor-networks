@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import curve_fit
-from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D
+from fishbonett.backwardSpinBoson import SpinBoson
+from fishbonett.spinBosonMPS import SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, lorentzian
 from scipy.linalg import expm
 from time import time

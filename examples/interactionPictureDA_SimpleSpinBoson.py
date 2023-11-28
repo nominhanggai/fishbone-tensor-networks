@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.optimize import curve_fit
 # from fishbonett.starSpinBoson import SpinBoson, SpinBoson1D
-from fishbonett.backwardSpinBoson import SpinBoson, SpinBoson1D, calc_U
+from fishbonett.backwardSpinBoson import SpinBoson
+from fishbonett.spinBosonMPS import SpinBoson1D
 from fishbonett.stuff import sigma_x, sigma_z, temp_factor, sd_zero_temp, drude1, lemmer, drude, _num, sigma_1
 from scipy.linalg import expm
 from time import time
@@ -65,23 +66,23 @@ eth.build(g=1., ncap=20000)
 # exit()
 
 # b = np.array([np.abs(eth.get_dk(t=i*0.2/100)) for i in range(1)])
-bj, freq, coef, reorg = eth.get_dk(1, star=True)
-print("Reorg Ene", reorg)
+# bj, freq, coef, reorg = eth.get_dk(1, star=True)
+# print("Reorg Ene", reorg)
 
-exit()
+# exit()
 # indexes = np.abs(freq).argsort()
-bj = bj
-bj = np.array([freq, bj]).T
-print(bj.shape)
+# bj = bj
+# bj = np.array([freq, bj]).T
+# print(bj.shape)
 # print(b.shape)
 # b.astype('float32').tofile('./DA2/dk.dat')
-bj.astype('float32').tofile('./output/bj_300.dat')
+# bj.astype('float32').tofile('./output/bj_300.dat')
 # freq.astype('float32').tofile('./output/freq.dat')
 # coef.astype('float32').tofile('./DA2/coef.dat')
 # print(coef.shape)
 
 # print(repr(bj))
-exit()
+# exit()
 
 
 print(eth.w_list)

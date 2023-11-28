@@ -48,11 +48,12 @@ p = []
 occu = []
 # time = 0.03644 T = 3644 steps if the time step is 1e-5
 num_steps = 200
-etn.U = U_half
 bond_dim = 200
 threshold = 1e-3
 
 for tn in range(num_steps):
+    etn.U = U_half
+    print("len U", len(etn.U))
     for j in range(0, bath_length, 2):
         print("Step Number:", tn, "Bond", j)
         print("j==", j, tn)
