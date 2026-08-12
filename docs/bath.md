@@ -118,6 +118,25 @@ So the reorganization-energy window and the light-cone mode count are each doing
 real work: drop either and the bath correlation function is wrong by tens of
 percent; keep both and it is faithful for the entire propagation.
 
+The same holds at **finite temperature**.  There the correlation function carries
+the detailed-balance factor,
+$C(t) = \tfrac{1}{\pi}\int_0^\infty d\omega\, J(\omega)[\coth(\tfrac{\beta\omega}{2})
+\cos\omega t - i\sin\omega t]$, and the automatic bath uses a **signed** domain
+(thermofield / T-TEDOPA) with more modes to cover both frequency halves — for
+$k_B T = 1$ here, $(-34.9, 34.9)$ and 156 modes.  It reproduces the thermal $C(t)$
+just as faithfully (peak error $7 \times 10^{-3}$), while too few modes or too
+narrow a domain fail in the same way:
+
+```{figure} img/bath_correlation_finiteT.png
+:alt: Finite-temperature bath correlation function; the auto thermofield bath (156 modes on a signed domain) lands on the exact thermal C(t), with an inset showing the relative error stays ~1e-3 while too-few-modes and too-narrow-domain discretizations rise toward 1.
+:width: 100%
+
+Finite temperature ($k_B T = 1$).  The automatic thermofield bath (156 modes on
+the signed domain, markers) reproduces the thermal correlation function (lines);
+the inset shows the same separation between the faithful automatic choice and the
+degraded discretizations.
+```
+
 ## TEDOPA: discretization then chain mapping
 
 `fishbonett` uses the TEDOPA construction (Chin *et al.* 2010; Prior *et al.*
