@@ -117,6 +117,30 @@ res = fb.run(dt=0.02, t_max=1.0, bond_dim=80, observables={"sz": sigma_z})
 res.expect["sz"]     # shape (n_steps, 4): <sz> on each of the 4 sites vs time
 ```
 
+### Observables: per-site, single-site and multi-site
+
+Each entry of `observables` is one of three forms (mix them freely):
+
+```python
+res = fb.run(dt=0.02, t_max=1.0, bond_dim=80, observables={
+    "sz":   sigma_z,                             # bare op -> measured on EVERY site
+    "sz2":  (sigma_z, 2),                        # (op, i) -> just site 2
+    "zz13": (np.kron(sigma_z, sigma_z), (1, 3)), # (op, (i, j)) -> two-site correlation
+})
+res.expect["sz"]     # (n_steps, n_sites)   -- per-site
+res.expect["sz2"]    # (n_steps,)           -- one site
+res.expect["zz13"]   # (n_steps,)           -- <sigma_z(1) sigma_z(3)>
+```
+
+For `(op, sites)` the operator is `(D, D)` with `D` the product of the site
+dimensions in the given order, so it works for a composite operator on any set of
+sites (e.g. a spin-vibration observable on adjacent sites).
+{py:class}`~fishbonett.treebone.TreeFishbone` evaluates multi-site operators by
+contracting only the subtree spanning the requested sites (via the joint reduced
+density matrix), not the whole state.  The 1D comb
+{py:class}`~fishbonett.simulate.Fishbone` supports the per-site and single-site
+forms; use ``TreeFishbone`` for multi-site correlations.
+
 ## Composite systems and multichannel baths
 
 The "system" need not be a bare two-level spin, and each of its degrees of

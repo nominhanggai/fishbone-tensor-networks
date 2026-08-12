@@ -561,14 +561,30 @@ class Fishbone:
                 rho = np.einsum("LiUDR,LjUDR->ij", th, th.conj())
                 rdms[step, cn] = rho / np.trace(rho).real
 
+        from fishbonett.treebone import _parse_observable
         expect = {}
-        for name, O in observables.items():
-            O = np.asarray(O)
-            expect[name] = np.array(
-                [[np.trace(rdms[tn, cn] @ O).real for cn in range(self.nc)]
-                 for tn in range(n_steps)])
-        rdm = np.array([[rdms[tn, cn] for cn in range(self.nc)]
-                        for tn in range(n_steps)])
+        for name, spec in observables.items():
+            kind, O, sites = _parse_observable(spec)
+            if kind == "persite":
+                arr = np.full((n_steps, self.nc), np.nan)
+                for cn in range(self.nc):
+                    if O.shape == (self.de[cn], self.de[cn]):
+                        for tn in range(n_steps):
+                            arr[tn, cn] = np.trace(rdms[tn, cn] @ O).real
+                expect[name] = arr
+            elif len(sites) == 1:                          # single site
+                i = sites[0]
+                expect[name] = np.array([np.trace(rdms[tn, i] @ O).real
+                                         for tn in range(n_steps)])
+            else:                                          # multi-site correlation
+                raise ValueError("multi-site correlations are not available on the "
+                                 "1D comb Fishbone; use "
+                                 "fishbonett.treebone.TreeFishbone for those")
+        if len(set(self.de)) == 1:
+            rdm = np.array([[rdms[tn, cn] for cn in range(self.nc)]
+                            for tn in range(n_steps)])
+        else:
+            rdm = rdms
         t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=expect, rdm=rdm, method="fishbone",
                       meta={"n_sites": self.nc})

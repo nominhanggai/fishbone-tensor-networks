@@ -206,6 +206,84 @@ def test_multichannel_single_bath():
     assert np.max(np.abs(r.expect["sz"][:, 0] - sz_ex)) < 2e-3
 
 
+def test_general_observables_single_and_two_site():
+    """Observable spec: bare op (per-site), (op, i) single-site, (op, [i, j])
+    composite -- validated vs exact including a two-site correlation."""
+    C = 0.4 * np.kron(sigma_z, sigma_z)
+    fb = TreeFishbone(sites=[0.3 * sigma_z + sigma_x, -0.2 * sigma_z + sigma_x],
+                      edges=[(0, 1, C)], baths=[_bath(2, 4, sigma_z), _bath(2, 4, sigma_z)])
+    zz = np.kron(sigma_z, sigma_z)
+    r = fb.run(dt=0.02, n_steps=10, bond_dim=40, trunc_eps=1e-12,
+               observables={"z0": (sigma_z, 0), "zz": (zz, [0, 1]), "sz": sigma_z})
+    assert r.expect["z0"].shape == (10,)          # single site
+    assert r.expect["zz"].shape == (10,)          # two-site correlation
+    assert r.expect["sz"].shape == (10, 2)        # per-site
+
+    dims, edges, site_H, edge_H = fb.hamiltonians()
+    tot = int(np.prod(dims))
+
+    def emb(op, s):
+        m = [np.eye(x) for x in dims]; m[s] = op
+        o = m[0]
+        for x in m[1:]:
+            o = np.kron(o, x)
+        return o
+
+    H = np.zeros((tot, tot), complex)
+    for i, h in enumerate(site_H):
+        if np.any(h):
+            H += emb(h, i)
+    for (a, b), Ce in edge_H.items():
+        H += _embed2(Ce.reshape(dims[a], dims[b], dims[a], dims[b]), a, b, dims)
+    E, U = np.linalg.eigh(H)
+    p0 = np.zeros(tot, complex); p0[0] = 1
+    c = U.conj().T @ p0
+    zzf = emb(sigma_z, 0) @ emb(sigma_z, 1)
+    zz_ex = np.array([(U @ (np.exp(-1j * E * t) * c)).conj()
+                      @ (zzf @ (U @ (np.exp(-1j * E * t) * c))) for t in r.t]).real
+    assert np.max(np.abs(r.expect["zz"] - zz_ex)) < 2e-3
+
+
+def test_multichannel_star_on_spin_of_spin_vibration_tree():
+    """A multichannel bath attached to the spin site of a spin+vibration tree
+    (the two features combined)."""
+    from fishbonett.model import _c
+    dv = 3
+    bvi = _c(dv); nv = bvi.T @ bvi
+    mc = Bath(J=[lambda w: 0.2 * w * np.exp(-w / 5.0),
+                 lambda w: 0.1 * w * np.exp(-w / 8.0)],
+              coupling=[sigma_z, sigma_x], domain=(0.0, 40.0), n_modes=2, phys_dim=4)
+    fb = TreeFishbone(sites=[0.25 * sigma_z + sigma_x, 1.5 * nv],
+                      edges=[(0, 1, 0.4 * np.kron(sigma_z, bvi + bvi.T))],
+                      baths=[mc, None])
+    r = fb.run(dt=0.02, n_steps=8, bond_dim=40, trunc_eps=1e-12,
+               observables={"sz_spin": (sigma_z, 0)})
+    dims, edges, site_H, edge_H = fb.hamiltonians()
+    assert dims[0] == 2 and dims[1] == dv           # spin + vibration on own sites
+    tot = int(np.prod(dims))
+
+    def emb(op, s):
+        m = [np.eye(x) for x in dims]; m[s] = op
+        o = m[0]
+        for x in m[1:]:
+            o = np.kron(o, x)
+        return o
+
+    H = np.zeros((tot, tot), complex)
+    for i, h in enumerate(site_H):
+        if np.any(h):
+            H += emb(h, i)
+    for (a, b), Ce in edge_H.items():
+        H += _embed2(Ce.reshape(dims[a], dims[b], dims[a], dims[b]), a, b, dims)
+    E, U = np.linalg.eigh(H)
+    p0 = np.zeros(tot, complex); p0[0] = 1
+    c = U.conj().T @ p0
+    szf = emb(sigma_z, 0)
+    sz_ex = np.array([(U @ (np.exp(-1j * E * t) * c)).conj()
+                      @ (szf @ (U @ (np.exp(-1j * E * t) * c))) for t in r.t]).real
+    assert np.max(np.abs(r.expect["sz_spin"] - sz_ex)) < 2e-3
+
+
 def test_multichannel_requires_legendre():
     def Jz(w):
         return 0.2 * w * np.exp(-w / 5.0)
