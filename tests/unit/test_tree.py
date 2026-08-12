@@ -3,9 +3,9 @@ diagonalization of the star Hamiltonian (interaction- and Schroedinger-picture
 <sigma_z> agree because sigma_z commutes with the bath)."""
 import numpy as np
 
-from fishbonett.tree import (_star_transform, run_tree_tdvp, run_tree_tebd,
-                             build_balanced_tree, build_tree_mpo, tree_depth,
-                             hamiltonian_from_mpo, _hamiltonian_direct,
+from fishbonett.tree import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
+                             run_tree_tebd, build_balanced_tree, build_tree_mpo,
+                             tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
                              anih, crea, SZ, SX)
 
 DOMAIN = (-25.0, 36.0)
@@ -78,3 +78,11 @@ def test_tree_tebd_matches_exact():
                           nsteps=12, D=30, trunc_eps=1e-12)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3
+
+
+def test_tree_tdvp2_matches_exact():
+    n_chain, d, V = 3, 5, 1.0
+    t, sz = run_tree_tdvp2(_Jb, DOMAIN, V=V, n_chain=n_chain, phys_dim=d, dt=0.05,
+                           nsteps=12, D=40, trunc_eps=1e-13)
+    sz_ex = _exact_sz(n_chain, d, V, t)
+    assert np.max(np.abs(sz - sz_ex)) < 5e-3    # 2nd-order Trotter
