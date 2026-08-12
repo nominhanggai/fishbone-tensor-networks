@@ -83,10 +83,10 @@ r.max_bond           # peak bond dimension per step (adaptive methods)
 ## Fishbone geometries
 
 A **fishbone** is a chain of electronic sites, each carrying its own bath (or two
-baths — one on each side).  Use {py:class}`~fishbonett.fishbone_sim.Fishbone`:
+baths — one on each side).  Use {py:class}`~fishbonett.simulate.Fishbone`:
 
 ```python
-from fishbonett.fishbone_sim import Fishbone
+from fishbonett.simulate import Fishbone
 
 def bath(op):
     return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),

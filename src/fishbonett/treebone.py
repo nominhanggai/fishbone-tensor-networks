@@ -245,7 +245,7 @@ def _bath_ops(d):
 class TreeFishbone:
     """Electronic sites wired into an *arbitrary tree*, each with one or more baths.
 
-    Generalises :class:`fishbonett.fishbone_sim.Fishbone` (a 1D chain) to any
+    Generalises :class:`fishbonett.simulate.Fishbone` (a 1D chain) to any
     loop-free electronic topology.
 
     Parameters
