@@ -1,0 +1,9 @@
+# Normalize line endings to LF in the repository; check out native on Windows.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending-normalized.
+*.npy binary
+*.npz binary
+*.pdf binary
+*.png binary
+*.dat binary

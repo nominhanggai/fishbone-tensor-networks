@@ -8,8 +8,6 @@ Created on Tue Nov 16 15:20:02 2021
 
 import numpy as np
 
-import matplotlib.pyplot as plt
-
 
 def get_recursion(n, j, domain, g=1, ncap=20000):  # j=weight function
     """
@@ -57,6 +55,7 @@ def get_approx_func(J, n, domain, epsilon):
 
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
     from fishbonett.stuff import lorentzian
     drude = lambda x, gam, lam: 2 * lam * gam * x / (x ** 2 + gam ** 2)
     lorentzian1 = lambda w: lorentzian(10, w, 10, 1000) + lorentzian(10, w, 10, 2000)\
