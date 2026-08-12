@@ -365,7 +365,7 @@ class SpinBoson:
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.models.interaction_picture import SpinBoson as _IPBuilder
+        from fishbonett.models.interaction_picture import SpinBosonIP as _IPBuilder
         from fishbonett.states.mps import SpinBosonMPS
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes

@@ -42,7 +42,7 @@
    fishbonett.bath.auto
 ```
 
-## Operators and spectral densities
+## Operators, linear algebra and spectral densities
 
 ```{eval-rst}
 .. autosummary::
@@ -50,6 +50,7 @@
    :recursive:
 
    fishbonett.operators
+   fishbonett.linalg
    fishbonett.spectral_densities
 ```
 
