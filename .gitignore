@@ -11,6 +11,7 @@ dist/
 .coverage
 htmlcov/
 docs/_build/
+docs/generated/
 
 # Virtual environments
 .venv/
