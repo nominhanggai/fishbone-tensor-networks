@@ -1,38 +1,45 @@
-*.png
+# Python
 __pycache__/
-.*
-.dat
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+docs/_build/
 
-## LaTeX FILES
-# LaTeX temporary files
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+
+# Simulation output artifacts (data written by example runs)
+*.dat
+examples/**/output/
+
+# NOTE: tests/_golden/*.npy are regression fixtures and ARE tracked.
+
+## LaTeX build artifacts (unitSystem.tex etc.)
 *.aux
-*.log
 *.toc
 *.ent
-
-# PDF output - usually a bad idea to keep this in Git
-#*.pdf
-
-# Latexmk
 *.fdb_latexmk
-
-# SyncTeX
 *.synctex.gz
 *.synctex(busy)
-
-# LaTeX Beamer
 *.snm
 *.vrb
 *.nav
-*.out
-
-# BibTeX
 *.bbl
 *.blg
-
-# 'tikz/external' library files
 *.dpth
 *.dep
-*.log
-*.ent
 *.auxlock
