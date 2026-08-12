@@ -2,8 +2,8 @@
 of a small spin-boson chain."""
 import numpy as np
 
-from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_dtdvp, crea, anih, numb,
-                            SX, SZ)
+from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp, crea,
+                            anih, numb, SX, SZ)
 
 DOMAIN = (-25.0, 36.0)
 
@@ -51,6 +51,15 @@ def test_tdvp1_matches_exact_diagonalization():
                       D=40, krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.isclose(sz[0], 0.99, atol=0.02)          # starts near |up>
+    assert np.max(np.abs(sz - sz_ex)) < 1e-6
+
+
+def test_tdvp2_matches_exact_and_grows_bonds():
+    n_chain, d, V = 3, 5, 1.0
+    t, sz, maxd = run_tdvp2(_Jb, DOMAIN, V=V, n_chain=n_chain, d=d, dt=0.05,
+                            nsteps=12, chi_max=40, eps=1e-12, krylov=25)
+    sz_ex = _exact_sz(n_chain, d, V, t)
+    assert maxd[-1] > 1                                 # bonds grew from product state
     assert np.max(np.abs(sz - sz_ex)) < 1e-6
 
 

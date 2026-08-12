@@ -8,8 +8,8 @@ Run with:  python benchmarks/mpo_tdvp.py
 """
 import numpy as np
 
-from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_dtdvp, crea, anih, numb,
-                            SX, SZ)
+from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp, crea,
+                            anih, numb, SX, SZ)
 
 DOMAIN = (-25.0, 36.0)
 
@@ -55,13 +55,16 @@ def main():
     n_chain, d, V = 3, 6, 1.0
     t, sz1 = run_tdvp1(Jb, DOMAIN, V=V, n_chain=n_chain, d=d, dt=0.05, nsteps=30,
                        D=40, krylov=25)
+    _, sz2, md2 = run_tdvp2(Jb, DOMAIN, V=V, n_chain=n_chain, d=d, dt=0.05,
+                            nsteps=30, chi_max=40, eps=1e-12, krylov=25)
     _, szd, maxd = run_dtdvp(Jb, DOMAIN, V=V, n_chain=n_chain, d=d, dt=0.05,
                              nsteps=30, prec=1e-8, Dlim=40, Dplusmax=6, krylov=25)
     sz_ex = exact_sz(n_chain, d, V, t)
-    print(f"{'t':>6} {'exact':>10} {'TDVP1':>10} {'DTDVP':>10}")
+    print(f"{'t':>6} {'exact':>10} {'TDVP1':>10} {'TDVP2':>10} {'DTDVP':>10}")
     for i in range(0, len(t), 5):
-        print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz1[i]:>+10.5f} {szd[i]:>+10.5f}")
-    print(f"max|TDVP1 - exact| = {np.max(np.abs(sz1 - sz_ex)):.2e}")
+        print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz1[i]:>+10.5f} {sz2[i]:>+10.5f} {szd[i]:>+10.5f}")
+    print(f"max|TDVP1 - exact| = {np.max(np.abs(sz1 - sz_ex)):.2e}   (fixed bond)")
+    print(f"max|TDVP2 - exact| = {np.max(np.abs(sz2 - sz_ex)):.2e}   (two-site, maxD={md2[-1]})")
     print(f"max|DTDVP - exact| = {np.max(np.abs(szd - sz_ex)):.2e}   (adaptive, maxD={maxd[-1]})")
 
 
