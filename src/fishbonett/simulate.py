@@ -157,19 +157,23 @@ def _decompose_h(h):
 class SpinBoson:
     """A system coupled to a :class:`Bath`.
 
-    The system need not be two-level: ``h`` may be any ``(d, d)`` Hamiltonian, so
-    a composite system (e.g. a spin tensored with a vibrational mode) is described
-    by giving the full ``h`` and a ``coupling`` that acts on the whole space (for
-    a bath that sees only the spin, ``coupling = sigma_z (x) I_vib``).  Arbitrary
-    system dimensions and initial states are supported by ``method='tebd'``; the
-    MPO/tree methods still assume a two-level ``sigma_z``-coupled system.
+    ``h`` may be any ``(d, d)`` Hamiltonian (not only two-level) and ``method='tebd'``
+    supports an arbitrary system dimension and initial state.  When the system has
+    *distinct* internal degrees of freedom (e.g. a spin **and** a vibration),
+    prefer to keep each on its own site with
+    :class:`~fishbonett.treebone.TreeFishbone` (a spin site and a vibration site
+    joined by an edge, with the bath on the spin) -- putting ``spin (x) vibration``
+    on a single ``d = 2*d_vib`` site here works but defeats the MPS advantage.
+    Passing a multichannel :class:`Bath` (``coupling`` a list) routes through the
+    tree so the spin stays on its own site.  The MPO/tree ``method`` values still
+    assume a two-level ``sigma_z``-coupled system.
 
     Parameters
     ----------
     h : (d, d) array
         System Hamiltonian.
-    coupling : (d, d) array
-        System operator coupling to the bath.
+    coupling : (d, d) array, or list of (d, d) arrays
+        System operator(s) coupling to the bath (a list for a multichannel bath).
     bath : Bath
     """
 
