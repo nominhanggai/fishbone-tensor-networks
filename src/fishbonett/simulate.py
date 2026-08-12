@@ -19,14 +19,12 @@ by hand-writing a TEBD sweep loop::
     result.expect['sz']      # <sigma_z>(t)
     result.max_bond          # peak bond dimension per step (adaptive methods)
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
 from fishbonett.stuff import sigma_x, sigma_z
 from fishbonett.bath.orthpol import make_orthpol_discretizer
-from fishbonett.models.hamiltonian import FishBoneH
-from fishbonett.states.comb import FishBoneNet
 from fishbonett import mpo as _mpo
 from fishbonett import tree as _tree
 
@@ -362,229 +360,59 @@ class SpinBoson:
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms), method="tebd")
 
 
-# -- multi-bath fishbone (1D chain of electronic sites, each with baths) ------
-def _as_pair(entry):
-    """Normalise a per-site bath spec to (left_bath, right_bath)."""
-    if entry is None:
-        return (None, None)
-    if isinstance(entry, (tuple, list)):
-        if len(entry) == 1:
-            return (entry[0], None)
-        if len(entry) == 2:
-            return (entry[0], entry[1])
-        raise ValueError("a site takes at most two baths (left, right)")
-    return (entry, None)
-
-
+# -- 1D fishbone: a specialization of TreeFishbone to a linear backbone -------
 class Fishbone:
     """A 1D chain of electronic sites, each coupled to one or two baths.
 
-    Parameters
-    ----------
-    sites : list of (d, d) array
-        Electronic site Hamiltonians, one per site.
-    baths : list
-        One entry per site: a single :class:`Bath` (a left/``eb`` bath), a
-        ``(left, right)`` pair of baths (two baths per site), or ``None``.  Each
-        :class:`Bath` may carry its own ``coupling`` operator (default
-        ``sigma_z`` for a left bath, ``sigma_x`` for a right bath).
-    backbone : list of (d*d, d*d) array, optional
-        Nearest-neighbour couplings between electronic sites ``i`` and ``i+1``
-        (length ``n_sites - 1``).  Default: uncoupled sites.
-
-    Notes
-    -----
-    All baths must share the same frequency ``domain`` (a limitation of the
-    underlying comb Hamiltonian).  For an arbitrary (non-1D) electronic topology
-    use :class:`fishbonett.treebone.TreeFishbone`.
+    A convenience specialization of :class:`~fishbonett.treebone.TreeFishbone`
+    (which handles *any* loop-free electronic topology) to a **linear** backbone:
+    site ``i`` is joined to site ``i+1`` by ``backbone[i]``.  Each ``baths`` entry
+    is a single :class:`Bath` (one bath -- may be multichannel), a ``(left, right)``
+    pair (two baths per site -- the fishbone), or ``None``.  A left bath defaults
+    to a ``sigma_z`` coupling and a right bath to ``sigma_x`` when the :class:`Bath`
+    itself sets none.  ``run`` and the returned :class:`Result` are exactly those
+    of :meth:`fishbonett.treebone.TreeFishbone.run`.
     """
 
     def __init__(self, sites, baths, backbone=None):
         self.sites = [np.asarray(h, complex) for h in sites]
         self.nc = len(self.sites)
+        self.de = [h.shape[0] for h in self.sites]
         if len(baths) != self.nc:
             raise ValueError("baths must have one entry per site")
-        self.baths = [_as_pair(b) for b in baths]
-        self.de = [h.shape[0] for h in self.sites]
+        self.baths = list(baths)
         if backbone is None:
             backbone = [np.zeros((self.de[i] * self.de[i + 1],) * 2, complex)
                         for i in range(self.nc - 1)]
         if len(backbone) != max(self.nc - 1, 0):
             raise ValueError("backbone must have n_sites - 1 entries")
         self.backbone = [np.asarray(b, complex) for b in backbone]
-        self._check_domain()
 
-    def _check_domain(self):
-        doms = []
-        for lb, rb in self.baths:
-            for b in (lb, rb):
-                if b is not None:
-                    doms.append(tuple(b.domain))
-        if doms and len(set(doms)) != 1:
-            raise ValueError("all baths must share the same frequency domain")
-        self.domain = list(doms[0]) if doms else [0.0, 1.0]
+    @staticmethod
+    def _site_baths(entry):
+        """Map a per-site bath spec to the TreeFishbone form, defaulting a
+        left/right pair's couplings to sigma_z / sigma_x when unset."""
+        if entry is None:
+            return None
+        if isinstance(entry, (tuple, list)):
+            out = []
+            for pos, b in enumerate(entry):
+                if b is None:
+                    continue
+                if b.coupling is None:
+                    b = replace(b, coupling=(sigma_z if pos == 0 else sigma_x))
+                out.append(b)
+            return out
+        return entry
 
-    def _build_pd(self):
-        pd = np.empty([self.nc, 4], dtype=object)
-        for n, ((lb, rb), de) in enumerate(zip(self.baths, self.de)):
-            pd[n, 0] = [lb.phys_dim] * lb.n_modes if lb is not None else []
-            pd[n, 1] = [de]
-            pd[n, 2] = []
-            pd[n, 3] = [rb.phys_dim] * rb.n_modes if rb is not None else []
-        return pd
+    def _tree(self):
+        from fishbonett.treebone import TreeFishbone
+        edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]
+        return TreeFishbone(sites=self.sites, edges=edges,
+                            baths=[self._site_baths(b) for b in self.baths])
 
-    def _discretizer(self):
-        discs = set()
-        for lb, rb in self.baths:
-            for b in (lb, rb):
-                if b is not None:
-                    discs.add(b.discretization)
-        if len(discs) > 1:
-            raise ValueError("all baths must use the same discretization")
-        for lb, rb in self.baths:
-            for b in (lb, rb):
-                if b is not None:
-                    return b.discretizer()
-        return None
-
-    def _build_h(self, g, ncap):
-        pd = self._build_pd()
-        ham = FishBoneH(pd)
-        ham.domain = self.domain
-        he_dy, hv_dy, h1e, h1v = [], [], [], []
-        for n, ((lb, rb), de, hsite) in enumerate(
-                zip(self.baths, self.de, self.sites)):
-            two_bath = rb is not None
-            if lb is not None:
-                ham.sd[n, 0] = lb.spectral_density()
-                lc = lb.coupling if lb.coupling is not None else sigma_z
-                he_dy.append(np.asarray(lc, complex))
-            else:
-                he_dy.append(np.eye(de))
-            if rb is not None:
-                ham.sd[n, 1] = rb.spectral_density()
-                rc = rb.coupling if rb.coupling is not None else sigma_x
-                hv_dy.append(np.asarray(rc, complex))
-            else:
-                hv_dy.append(np.eye(de))
-            # Route the site energy: two-bath sites carry it on h1v (the vb bond;
-            # the comb builder's two-bath branch skips h1e), one-bath sites on h1e
-            # (the eb bond for a single site, or the backbone bond for a chain).
-            if two_bath:
-                h1e.append(np.zeros((de, de), complex))
-                h1v.append(hsite)
-            else:
-                h1e.append(hsite)
-                h1v.append(np.zeros((de, de), complex))
-        ham.he_dy = he_dy
-        ham.hv_dy = hv_dy
-        ham.h1e = h1e
-        ham.h1v = h1v
-        if self.nc > 1:
-            ham.h2ee = list(self.backbone)
-        ham.build(g=g, ncap=ncap, discretizer=self._discretizer())
-        return ham
-
-    def _init_net(self, pd, initial):
-        def g_state(dim):
-            t = np.zeros(dim, complex)
-            t[(0,) * len(dim)] = 1.0
-            return t
-
-        nc = self.nc
-        eb_t = [[g_state([1, d, 1]) for d in pd[i, 0]] for i in range(nc)]
-        e_t = [[g_state([1, d, 1, 1, 1]) for d in pd[i, 1]] for i in range(nc)]
-        v_t = [[g_state([1, d, 1]) for d in pd[i, 2]] for i in range(nc)]
-        vb_t = [[g_state([1, d, 1]) for d in pd[i, 3]] for i in range(nc)]
-        eb_s = [[np.ones(1) for _ in ch] for ch in eb_t]
-        e_s = [[np.ones(1) for _ in ch] for ch in e_t]
-        v_s = [[np.ones(1) for _ in ch] for ch in v_t]
-        vb_s = [[np.ones(1) for _ in ch] for ch in vb_t]
-        main_s = [[np.ones(1)] for _ in range(nc)]
-        vb_and_main = [vb_s[i] + main_s[i] for i in range(nc)]
-        for i in range(nc):
-            vec = self._initial_vec(initial, i)
-            e_t[i][0][:] = 0.0
-            for a in range(len(vec)):
-                e_t[i][0][0, a, 0, 0, 0] = vec[a]
-        return FishBoneNet((eb_t, e_t, v_t, vb_t), (eb_s, e_s, v_s, vb_and_main))
-
-    def _initial_vec(self, initial, i):
-        de = self.de[i]
-        if initial is None or (isinstance(initial, str) and initial == "up"):
-            v = np.zeros(de, complex); v[0] = 1.0
-            return v
-        if isinstance(initial, str) and initial == "down":
-            v = np.zeros(de, complex); v[min(1, de - 1)] = 1.0
-            return v
-        if isinstance(initial, str) and initial == "ground":
-            w, U = np.linalg.eigh(self.sites[i])
-            return U[:, int(np.argmin(w))].astype(complex)
-        item = initial[i] if isinstance(initial, (list, tuple)) else initial
-        v = np.asarray(item, complex)
-        return v / np.linalg.norm(v)
-
-    def run(self, *, dt, t_max=None, n_steps=None, bond_dim=100, trunc_eps=1e-10,
-            observables=None, initial="up", g=1.0, ncap=20000):
-        """Propagate the fishbone and return a :class:`Result` with per-site data.
-
-        Each operator in ``observables`` is a *single-site* electronic operator
-        that is measured on **every** electronic site, so ``expect[name]`` has
-        shape ``(n_steps, n_sites)`` and ``expect[name][t, i]`` is its expectation
-        on site ``i`` at step ``t``.  ``rdm`` has shape ``(n_steps, n_sites, d, d)``
-        (the reduced density matrix of each site).  For a two-level chain the
-        default measures ``sigma_z``/``sigma_x`` on every site."""
-        if n_steps is None:
-            if t_max is None:
-                raise ValueError("provide either t_max or n_steps")
-            n_steps = int(round(t_max / dt))
-        if observables is None:
-            observables = {"sz": sigma_z, "sx": sigma_x} if all(
-                d == 2 for d in self.de) else {}
-        ham = self._build_h(g, ncap)
-        pd = self._build_pd()
-        state = self._init_net(pd, initial)
-        state.U = ham.get_u(dt=dt)
-
-        n_bond = [ham._L[cn] - 1 for cn in range(self.nc)]
-        e_index = [ham._ebL[cn] for cn in range(self.nc)]
-        rdms = np.empty((n_steps, self.nc), dtype=object)
-        for step in range(n_steps):
-            if self.nc > 1:
-                for i in range(self.nc - 1):
-                    state.update_bond(-1, i, bond_dim, trunc_eps)
-            for cn in range(self.nc):
-                for j in range(n_bond[cn]):
-                    state.update_bond(cn, j, bond_dim, trunc_eps)
-            for cn in range(self.nc):
-                th = state.get_theta1(cn, e_index[cn])
-                rho = np.einsum("LiUDR,LjUDR->ij", th, th.conj())
-                rdms[step, cn] = rho / np.trace(rho).real
-
-        from fishbonett.treebone import _parse_observable
-        expect = {}
-        for name, spec in observables.items():
-            kind, O, sites = _parse_observable(spec)
-            if kind == "persite":
-                arr = np.full((n_steps, self.nc), np.nan)
-                for cn in range(self.nc):
-                    if O.shape == (self.de[cn], self.de[cn]):
-                        for tn in range(n_steps):
-                            arr[tn, cn] = np.trace(rdms[tn, cn] @ O).real
-                expect[name] = arr
-            elif len(sites) == 1:                          # single site
-                i = sites[0]
-                expect[name] = np.array([np.trace(rdms[tn, i] @ O).real
-                                         for tn in range(n_steps)])
-            else:                                          # multi-site correlation
-                raise ValueError("multi-site correlations are not available on the "
-                                 "1D comb Fishbone; use "
-                                 "fishbonett.treebone.TreeFishbone for those")
-        if len(set(self.de)) == 1:
-            rdm = np.array([[rdms[tn, cn] for cn in range(self.nc)]
-                            for tn in range(n_steps)])
-        else:
-            rdm = rdms
-        t = np.arange(1, n_steps + 1) * dt
-        return Result(t=t, expect=expect, rdm=rdm, method="fishbone",
-                      meta={"n_sites": self.nc})
+    def run(self, **kwargs):
+        """Propagate the 1D fishbone (delegates to the general tree engine).  See
+        :meth:`fishbonett.treebone.TreeFishbone.run` for the arguments, the
+        observable spec and the per-site :class:`Result` layout."""
+        return self._tree().run(**kwargs)

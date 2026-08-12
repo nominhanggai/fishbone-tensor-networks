@@ -42,9 +42,10 @@ def _embed_two(op4, sa, sb, dims):
     return full
 
 
-def _exact(sites, specs, backbone, d, ts):
-    """specs[i] = list of (n_modes, coupling_op, side in {'L','R'}); returns
-    list of <sigma_z on site i>(t)."""
+def _build_exact(sites, specs, backbone, d):
+    """Build and diagonalize the full fishbone Hamiltonian.  ``specs[i]`` is a
+    list of ``(n_modes, coupling_op, side in {'L','R'})``.  Returns
+    ``(E, U, cc, e_idx, dims)`` for evaluating any observable exactly."""
     nc = len(sites)
     de = [h.shape[0] for h in sites]
     dims, e_idx, slots = [], [], []
@@ -78,12 +79,23 @@ def _exact(sites, specs, backbone, d, ts):
     E, U = np.linalg.eigh(H)
     p0 = np.zeros(tot, complex); p0[0] = 1
     cc = U.conj().T @ p0
+    return E, U, cc, e_idx, dims
+
+
+def _expect_t(E, U, cc, op_full, ts):
+    """``<op_full>(t)`` under the exact evolution."""
     out = []
-    for i in range(nc):
-        sz = _embed(sigma_z, e_idx[i], dims)
-        out.append(np.array([(U @ (np.exp(-1j * E * t) * cc)).conj()
-                             @ (sz @ (U @ (np.exp(-1j * E * t) * cc))) for t in ts]).real)
-    return out
+    for t in ts:
+        psi = U @ (np.exp(-1j * E * t) * cc)
+        out.append((psi.conj() @ (op_full @ psi)).real)
+    return np.array(out)
+
+
+def _exact(sites, specs, backbone, d, ts):
+    """List of ``<sigma_z on site i>(t)``."""
+    E, U, cc, e_idx, dims = _build_exact(sites, specs, backbone, d)
+    return [_expect_t(E, U, cc, _embed(sigma_z, e_idx[i], dims), ts)
+            for i in range(len(sites))]
 
 
 def _check(sites, baths, backbone, specs, d, tol, dt=0.02, ns=12):
@@ -136,9 +148,38 @@ def test_result_shapes_and_normalization():
             assert abs(np.trace(res.rdm[tn, cn]).real - 1.0) < 1e-6
 
 
-def test_domain_mismatch_raises():
+def test_multi_site_observable_vs_exact():
+    # As a specialization of the general tree engine, the 1D Fishbone now
+    # supports the full observable interface -- including a composite operator
+    # across two sites, which the old comb engine could not measure.
+    sites = [0.3 * sigma_z + 0.7 * sigma_x, -0.2 * sigma_z + 0.5 * sigma_x]
+    baths = [_bath(2, 4, sigma_z), _bath(2, 4, sigma_z)]
+    backbone = [0.35 * np.kron(sigma_z, sigma_z)]
+    specs = [[(2, sigma_z, "L")], [(2, sigma_z, "L")]]
+    zz = np.kron(sigma_z, sigma_z)
+    fb = Fishbone(sites=sites, baths=baths, backbone=backbone)
+    res = fb.run(dt=0.02, n_steps=12, bond_dim=40, trunc_eps=1e-12,
+                 observables={"z0": (sigma_z, 0), "zz": (zz, (0, 1))})
+    assert res.expect["z0"].shape == (12,)
+    assert res.expect["zz"].shape == (12,)
+    E, U, cc, e_idx, dims = _build_exact(sites, specs, backbone, 4)
+    ex_z0 = _expect_t(E, U, cc, _embed(sigma_z, e_idx[0], dims), res.t)
+    ex_zz = _expect_t(E, U, cc,
+                      _embed(sigma_z, e_idx[0], dims) @ _embed(sigma_z, e_idx[1], dims),
+                      res.t)
+    assert np.max(np.abs(res.expect["z0"] - ex_z0)) < 1e-3
+    assert np.max(np.abs(res.expect["zz"] - ex_zz)) < 2e-3
+
+
+def test_per_bath_domains_allowed():
+    # As a specialization of the general tree engine, each bath discretizes
+    # independently, so baths on different frequency domains are allowed.
     b1 = Bath(J=_J, domain=(0.0, 40.0), n_modes=2, phys_dim=4, coupling=sigma_z)
     b2 = Bath(J=_J, domain=(0.0, 30.0), n_modes=2, phys_dim=4, coupling=sigma_z)
-    with pytest.raises(ValueError):
-        Fishbone(sites=[sigma_z, sigma_z], baths=[b1, b2],
-                 backbone=[np.zeros((4, 4))])
+    fb = Fishbone(sites=[sigma_z, sigma_z], baths=[b1, b2],
+                  backbone=[np.zeros((4, 4))])
+    res = fb.run(dt=0.02, n_steps=4, bond_dim=20)
+    assert res.rdm.shape == (4, 2, 2, 2)
+    for tn in range(4):
+        for cn in range(2):
+            assert abs(np.trace(res.rdm[tn, cn]).real - 1.0) < 1e-6

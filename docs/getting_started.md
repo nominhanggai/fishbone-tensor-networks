@@ -44,9 +44,13 @@ switching engines is a one-word change.
 
 ## The fishbone geometry
 
-{py:class}`fishbonett.fishbone_sim.Fishbone` describes a 1D chain of electronic
-sites, each coupled to one bath (a comb) or two baths — one on each side of the
-site (the fishbone). It is declared the same way and returns per-site data:
+A fishbone is a set of electronic sites, each coupled to one bath (a comb) or two
+baths — one on each side of the site (the fishbone).
+{py:class}`~fishbonett.simulate.Fishbone` is the 1D-chain specialization (a linear
+backbone) of the general tree engine
+{py:class}`~fishbonett.treebone.TreeFishbone`, to which it delegates; both return
+per-site data. For a non-chain topology, use ``TreeFishbone`` with an edge list.
+The 1D chain is declared the same way as the single-site system:
 
 ```python
 from fishbonett.simulate import Fishbone
@@ -58,7 +62,8 @@ def bath(op):                                        # one bath, coupling operat
 fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
               baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site
               backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2)  # nearest-neighbour
-res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
+res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, trunc_eps=1e-7,
+             observables={"sz": sigma_z})
 res.expect["sz"]         # (n_steps, n_sites): sigma_z measured on each site
 res.rdm                  # (n_steps, n_sites, d, d): reduced density matrix per site
 ```
