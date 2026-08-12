@@ -8,6 +8,8 @@
    :recursive:
 
    fishbonett.mps
+   fishbonett.mpo
+   fishbonett.tree
    fishbonett.fishbone
    fishbonett.model
    fishbonett.int_pic_hsb_spin_boson
@@ -22,6 +24,7 @@
 
    fishbonett.common
    fishbonett.legendre_discretization
+   fishbonett.orthpol_discretization
    fishbonett.lanczos
    fishbonett.recurrence_coefficients
 ```
