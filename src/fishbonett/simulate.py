@@ -72,6 +72,11 @@ class Bath:
         Bath discretization: uniform-measure Gauss-Legendre star, or the
         measure-adapted ORTHPOL star (resolves IR-divergent / sharply peaked baths).
     extra_breaks, m_per : ORTHPOL quadrature options.
+    coupling : (d, d) array, optional
+        System operator this bath couples to.  Only used by the multi-bath
+        :class:`~fishbonett.fishbone_sim.Fishbone` interface (a single
+        :class:`SpinBoson` takes its coupling operator directly); defaults to
+        ``sigma_z`` there when unset.
     """
     J: object
     domain: tuple
@@ -83,6 +88,7 @@ class Bath:
     discretization: str = "legendre"
     extra_breaks: tuple = ()
     m_per: int = 60
+    coupling: object = None
 
     def spectral_density(self):
         if self.thermalized or (self.temperature is None and self.beta is None):
