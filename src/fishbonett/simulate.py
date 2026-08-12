@@ -62,10 +62,17 @@ class Bath:
         Spectral density ``J(w)``.  If ``temperature`` (or ``beta``) is given and
         ``thermalized`` is False, ``J`` is treated as the zero-temperature density
         and thermalized internally.
-    domain : (float, float)
-        Signed bath frequency window.
-    n_modes, phys_dim : int
-        Number of discretized modes and the local boson Hilbert-space dimension.
+    domain : (float, float), optional
+        Signed bath frequency window.  If omitted, it is chosen automatically as
+        the window covering 99.9% of the reorganization energy
+        ``lambda = (1/pi) int J(w)/w dw`` (signed when a temperature is set).
+    n_modes : int, optional
+        Number of discretized modes.  If omitted, it is chosen automatically from
+        the light-cone of the interaction-picture chain couplings ``d_j(t)`` for
+        the propagation time (so it depends on ``t_max``); see
+        :func:`fishbonett.bath.auto.auto_n_modes`.
+    phys_dim : int
+        The local boson Hilbert-space dimension of each mode.
     temperature, beta : float, optional
         Temperature (or inverse temperature) for thermalization.
     thermalized : bool
@@ -84,8 +91,8 @@ class Bath:
         must be ``'legendre'`` (shared Gauss nodes).  Defaults to ``sigma_z``.
     """
     J: object
-    domain: tuple
-    n_modes: int = 40
+    domain: tuple = None
+    n_modes: int = None
     phys_dim: int = 20
     temperature: float = None
     beta: float = None
@@ -133,6 +140,34 @@ class Bath:
         if self.discretization == "legendre":
             return None
         raise ValueError(f"unknown discretization {self.discretization!r}")
+
+    def _auto_domain(self):
+        from fishbonett.bath.auto import auto_domain
+        signed = self.temperature is not None or self.beta is not None
+        Js = self.J if isinstance(self.J, (list, tuple)) else [self.J]
+        doms = [auto_domain(Jc, signed=signed) for Jc in Js]      # cover every channel
+        return (min(d[0] for d in doms), max(d[1] for d in doms))
+
+    def resolved(self, t_max=None):
+        """A copy with automatic ``domain`` / ``n_modes`` filled in.
+
+        ``domain`` (if unset) becomes the window covering 99.9% of the
+        reorganization energy; ``n_modes`` (if unset) the light-cone extent of the
+        interaction-picture chain couplings up to ``t_max``.  Returns ``self`` when
+        both are already given.  Called by ``run`` with the propagation time."""
+        domain = self.domain if self.domain is not None else self._auto_domain()
+        n_modes = self.n_modes
+        if n_modes is None:
+            if t_max is None:
+                raise ValueError("Bath.n_modes is automatic and needs the "
+                                 "propagation time; call from run() (which supplies "
+                                 "t_max) or set n_modes explicitly")
+            from fishbonett.bath.auto import auto_n_modes
+            n_modes = auto_n_modes(self.spectral_density(), domain, t_max,
+                                   discretizer=self.discretizer())
+        if domain is self.domain and n_modes == self.n_modes:
+            return self
+        return replace(self, domain=tuple(domain), n_modes=int(n_modes))
 
 
 @dataclass
@@ -249,7 +284,7 @@ class SpinBoson:
     def _run_mpo(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial,
                  krylov, kw):
         self._check_system()
-        b = self.bath
+        b = self.bath.resolved(n_steps * dt)
         # The MPO drivers take a half-step and advance 2*dt of physical time per
         # sweep; pass dt/2 so one sweep advances the user's physical dt (matching
         # the tree/tebd drivers, so every method reaches the same t_max).
@@ -279,7 +314,7 @@ class SpinBoson:
     def _run_tree(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial,
                   krylov, kw):
         self._check_system()
-        b = self.bath
+        b = self.bath.resolved(n_steps * dt)
         common = dict(hsys=self.h, cop=self.coupling,
                       init=self._initial_state(initial),
                       n_chain=b.n_modes, phys_dim=b.phys_dim, dt=dt,
@@ -331,7 +366,7 @@ class SpinBoson:
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
         from fishbonett.models.backward import SpinBoson as _BackwardBuilder
         from fishbonett.states.mps import SpinBosonMPS
-        b = self.bath
+        b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
         d_sys = self.h.shape[0]
         pd = [b.phys_dim] * n + [d_sys]
