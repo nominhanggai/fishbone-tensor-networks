@@ -24,7 +24,6 @@
    fishbonett.fishbone
    fishbonett.model
    fishbonett.models.interaction_picture
-   fishbonett.int_pic_hsb_spin_boson
 ```
 
 ## Bath discretization and chain mapping
