@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 import scipy.linalg
-from opt_einsum import contract as einsum
+from fishbonett.contract import contract as einsum
 
 from fishbonett.mps import SpinBosonMPS
 
