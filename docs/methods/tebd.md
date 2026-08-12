@@ -35,7 +35,7 @@ built as trees rather than fattened onto one site — see
 
 ## General systems
 
-Every `SpinBoson` engine accepts a general system — a Hermitian `h` of any
+Every `BosonicBath` engine accepts a general system — a Hermitian `h` of any
 dimension `d`, a Hermitian coupling operator `O` of the same dimension, and an
 arbitrary initial state:
 
@@ -58,13 +58,13 @@ from the ground state of its Hamiltonian:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, SpinBoson
+from fishbonett.simulate import Bath, BosonicBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
 
-model = SpinBoson(h=0.5 * sigma_z + sigma_x,   # biased two-level system
+model = BosonicBath(h=0.5 * sigma_z + sigma_x,   # biased two-level system
                   coupling=sigma_x,            # transverse coupling (not sigma_z)
                   bath=bath)
 
@@ -85,4 +85,4 @@ way — just pass a `(3, 3)` `h` and `coupling` and a length-3 `initial` vector.
 - Cost per step is `O(n_modes)` two-site updates; the bond dimension is set by the
   physical system–bath entanglement and capped at `bond_dim`.
 - For the underlying builder see {py:mod}`fishbonett.models.interaction_picture`, and for the
-  canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.SpinBosonMPS`.
+  canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.BosonicBathMPS`.

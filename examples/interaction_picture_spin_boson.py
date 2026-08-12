@@ -9,8 +9,8 @@ Run with:  python examples/interaction_picture_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.backwardSpinBosonMultiChannel import SpinBoson
-from fishbonett.mps import SpinBosonMPS
+from fishbonett.backwardSpinBosonMultiChannel import BosonicBath
+from fishbonett.mps import BosonicBathMPS
 from fishbonett.stuff import sigma_x, sigma_z
 
 
@@ -22,11 +22,11 @@ def main():
     n_boson = 2 * len(freq)
     pd = [10] * n_boson + [2]                           # boson dims + spin
 
-    eth = SpinBoson(pd, coup_mat=coup_mat, freq=freq, temp=100.0)
+    eth = BosonicBath(pd, coup_mat=coup_mat, freq=freq, temp=100.0)
     eth.h1e = 130.0 * sigma_x + np.diag([0.0, -200.0])  # system Hamiltonian
     eth.build(n=0)
 
-    etn = SpinBosonMPS(pd)
+    etn = BosonicBathMPS(pd)
     etn.B[-1][0, 0, 0] = 1.0                            # start in |0>
 
     dt, n_steps, chi, eps = 1e-3, 30, 40, 1e-6

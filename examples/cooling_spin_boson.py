@@ -9,14 +9,14 @@ Run with:  python examples/cooling_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.coolingC_SpinBoson import SpinBoson
+from fishbonett.coolingC_SpinBoson import BosonicBath
 from fishbonett.stuff import drude, sigma_x, sigma_z, temp_factor
 
 
 def main():
     n_boson = 20
     pd = [12] * n_boson + [2]
-    eth = SpinBoson(pd, betaOmega=0.2)
+    eth = BosonicBath(pd, betaOmega=0.2)
 
     g = 1000.0
     temp = 226.0

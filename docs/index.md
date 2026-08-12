@@ -20,9 +20,9 @@ api
 
 - A declarative high-level interface ({py:mod}`fishbonett.simulate`,
   {py:mod}`fishbonett.treebone`): describe a bath and system as `Bath` /
-  `SpinBoson` / `Fishbone` / `TreeFishbone` objects and propagate with one
+  `BosonicBath` / `Fishbone` / `TreeFishbone` objects and propagate with one
   `run(dt=..., t_max=..., method=...)` call over any of the engines below.
-- One canonical TEBD engine ({py:class}`fishbonett.states.mps.SpinBosonMPS`) with leg
+- One canonical TEBD engine ({py:class}`fishbonett.states.mps.BosonicBathMPS`) with leg
   swaps, adaptive bond dimension, optional local basis optimization, and an
   optional CuPy GPU backend.
 - Self-contained TEDOPA bath discretization / chain mapping (no external Fortran

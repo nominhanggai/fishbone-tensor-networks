@@ -1,14 +1,14 @@
 """Matrix-product-state ansatz for a spin-boson chain (the *state*, separate from
 the propagation algorithms in :mod:`fishbonett.evolve`).
 
-:class:`SpinBosonMPS` holds the chain tensors ``B``/``S`` and their canonical
+:class:`BosonicBathMPS` holds the chain tensors ``B``/``S`` and their canonical
 form, the per-bond gate store ``U``, and the local-basis-optimization projectors
 ``R``.  It provides the wavefunction accessors (:meth:`get_theta1`,
 :meth:`get_theta2`) and the canonical-form primitive :meth:`split_truncate_theta`
 (single / adaptive SVD split, optional LBO, optional CuPy GPU).  The
 swap-network TEBD sweep that applies the gates lives in
 :func:`fishbonett.evolve.tebd.update_bond`; :meth:`update_bond` is a thin wrapper
-around it.  This single state replaces the ~20 near-identical ``SpinBoson1D``
+around it.  This single state replaces the ~20 near-identical ``BosonicBath1D``
 copies that used to live inside the individual driver modules; every truncation
 scheme they implemented is selected per :meth:`update_bond` call:
 
@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 
 
-class SpinBosonMPS:
+class BosonicBathMPS:
     """Matrix-product state of a boson chain terminated by a system (spin) site.
 
     Parameters
@@ -61,7 +61,7 @@ class SpinBosonMPS:
     """
 
     def __init__(self, pd, svd_expansion_factor=1.5):
-        self.pd_spin = pd[-1]
+        self.pd_sys = pd[-1]
         self.pd_boson = pd[0:-1]
         self.pre_factor = svd_expansion_factor
         self.B = [self._ground(d) for d in pd]
@@ -213,5 +213,7 @@ class SpinBosonMPS:
         _mempool.free_all_blocks()
 
 
-# Backwards-compatible alias for the historical class name.
-SpinBoson1D = SpinBosonMPS
+# Backwards-compatible aliases for the historical class names.
+BosonicBath1D = BosonicBathMPS
+SpinBosonMPS = BosonicBathMPS   # deprecated
+SpinBoson1D = BosonicBathMPS    # deprecated

@@ -31,14 +31,14 @@ call. Declare the bath and the system, then `run`:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, SpinBoson
+from fishbonett.simulate import Bath, BosonicBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             domain=(-25, 36), temperature=1.0,       # T-TEDOPA thermalization
             n_modes=40, phys_dim=20,
             discretization="orthpol")                # or the default "legendre"
-model = SpinBoson(h=sigma_x, coupling=sigma_z, bath=bath)
+model = BosonicBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 result = model.run(dt=0.05, t_max=4.0, method="tree-tdvp2", bond_dim=200,
                    observables={"sz": sigma_z})
@@ -87,9 +87,9 @@ observables — and {doc}`bath` covers bath discretization and finite temperatur
 ## Low-level engines
 
 For finer control the underlying engines are available directly: build a model /
-bath object (for example {py:class}`~fishbonett.model.SpinBoson` or
+bath object (for example {py:class}`~fishbonett.model.BosonicBath` or
 {py:class}`~fishbonett.model.FishBoneH`), discretize with `build(...)`, construct
-the {py:class}`~fishbonett.mps.SpinBosonMPS` (or {py:class}`~fishbonett.fishbone.FishBoneNet`)
+the {py:class}`~fishbonett.mps.BosonicBathMPS` (or {py:class}`~fishbonett.fishbone.FishBoneNet`)
 state, obtain the Trotter gates with `get_u(...)`, sweep with `update_bond(...)`,
 and read out observables from `get_theta1(...)`. The high-level interface above is
 a thin wrapper over exactly this loop.
