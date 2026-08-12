@@ -82,31 +82,18 @@ r.max_bond           # peak bond dimension per step (adaptive methods)
 
 ## Fishbone geometries
 
-A **fishbone** is a chain of electronic sites, each carrying its own bath (or two
-baths — one on each side).  Use {py:class}`~fishbonett.simulate.Fishbone`:
+A **fishbone** is a set of electronic sites, each carrying its own bath (or two
+baths — one on each side).  The electronic sites need not form a chain: the
+general engine {py:class}`~fishbonett.treebone.TreeFishbone` wires them into
+*any* loop-free tree via an edge list — for example a central site coupled to
+three others (a star), each with its own bath:
 
 ```python
-from fishbonett.simulate import Fishbone
+from fishbonett.treebone import TreeFishbone
 
 def bath(op):
     return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
                 n_modes=20, phys_dim=10, coupling=op)
-
-fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
-              baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site
-              backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2)
-# sigma_z is measured on *every* electronic site:
-res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
-res.expect["sz"]        # shape (n_steps, n_sites); [t, i] = <sz> on site i at step t
-res.rdm                 # shape (n_steps, n_sites, d, d)
-```
-
-The topology need not be 1D.  {py:class}`~fishbonett.treebone.TreeFishbone` wires
-the electronic sites into *any* loop-free tree via an edge list — for example a
-central site coupled to three others (a star), each with its own bath:
-
-```python
-from fishbonett.treebone import TreeFishbone
 
 C = 0.3 * np.kron(sigma_z, sigma_z)
 fb = TreeFishbone(
@@ -115,6 +102,36 @@ fb = TreeFishbone(
     baths=[bath(sigma_z) for _ in range(4)])
 res = fb.run(dt=0.02, t_max=1.0, bond_dim=80, observables={"sz": sigma_z})
 res.expect["sz"]     # shape (n_steps, 4): <sz> on each of the 4 sites vs time
+```
+
+The 1D chain is the most common case, so it has a convenience specialization,
+{py:class}`~fishbonett.simulate.Fishbone`, which takes a linear backbone instead
+of an edge list and delegates to the same engine (so it has the identical
+observable interface and {py:class}`~fishbonett.simulate.Result` layout):
+
+```python
+from fishbonett.simulate import Fishbone
+
+fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
+              baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site
+              backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2)  # site i <-> i+1
+# sigma_z is measured on *every* electronic site:
+res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, trunc_eps=1e-7,
+             observables={"sz": sigma_z})
+res.expect["sz"]        # shape (n_steps, n_sites); [t, i] = <sz> on site i at step t
+res.rdm                 # shape (n_steps, n_sites, d, d)
+```
+
+```{note}
+Both classes run on the one general tree-TEBD engine.  On a 1D chain this *is* the
+comb algorithm and costs the same at equal truncation.  The one thing to watch: an
+interior backbone site with two baths is a high-degree (degree-4) tree tensor, so
+its cost scales with the **square** of its bond dimensions.  Retaining singular
+values far below the physical entanglement — an over-tight `trunc_eps` — then
+inflates those bonds for no accuracy gain (e.g. a backbone bond of true rank 3 held
+at `1e-10` can carry 15 values and run ~30x slower).  For heavily-entangled
+multi-bath chains, set `trunc_eps` to the accuracy you actually need (`1e-7` is
+usually ample) rather than leaning on the `1e-10` default.
 ```
 
 ### Observables: per-site, single-site and multi-site
@@ -135,11 +152,11 @@ res.expect["zz13"]   # (n_steps,)           -- <sigma_z(1) sigma_z(3)>
 For `(op, sites)` the operator is `(D, D)` with `D` the product of the site
 dimensions in the given order, so it works for a composite operator on any set of
 sites (e.g. a spin-vibration observable on adjacent sites).
-{py:class}`~fishbonett.treebone.TreeFishbone` evaluates multi-site operators by
-contracting only the subtree spanning the requested sites (via the joint reduced
-density matrix), not the whole state.  The 1D comb
-{py:class}`~fishbonett.simulate.Fishbone` supports the per-site and single-site
-forms; use ``TreeFishbone`` for multi-site correlations.
+The engine evaluates multi-site operators by contracting only the subtree
+spanning the requested sites (via the joint reduced density matrix), not the
+whole state.  All three forms work identically through
+{py:class}`~fishbonett.simulate.Fishbone`, since it delegates to the same
+engine.
 
 ## Composite systems and multichannel baths
 

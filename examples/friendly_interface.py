@@ -30,14 +30,17 @@ def fishbone():
     J = lambda w: 0.2 * w * np.exp(-w / 5.0)
 
     def bath(op):
-        return Bath(J=J, domain=(0.0, 40.0), n_modes=6, phys_dim=5, coupling=op)
+        return Bath(J=J, domain=(0.0, 40.0), n_modes=4, phys_dim=5, coupling=op)
 
     fb = Fishbone(
         sites=[0.5 * sigma_z + sigma_x] * 3,                 # 3 two-level sites
         baths=[(bath(sigma_z), bath(sigma_x))] * 3,          # two baths per site
         backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2,      # nearest-neighbour
     )
-    res = fb.run(dt=0.02, t_max=0.3, bond_dim=30, observables={"sz": sigma_z})
+    # trunc_eps sets the accuracy: an interior two-bath site is a high-degree tree
+    # tensor, so an over-tight eps inflates its bonds for negligible accuracy gain.
+    res = fb.run(dt=0.02, t_max=0.2, bond_dim=30, trunc_eps=1e-7,
+                 observables={"sz": sigma_z})
     print("  <sz>(t_end) per site:", np.round(res.expect["sz"][-1], 4))
 
 
