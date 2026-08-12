@@ -15,12 +15,12 @@ from fishbonett.stuff import sigma_x, sigma_z
 
 
 def spin_boson():
-    """A single two-level system coupled to one bath, several methods."""
+    """A single two-level system coupled to one bath, several engines."""
     bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5.0),
                 domain=(-25.0, 36.0), temperature=1.0,
-                n_modes=10, phys_dim=8, discretization="orthpol")
+                n_modes=6, phys_dim=6, discretization="orthpol")
     model = SpinBoson(h=sigma_x, coupling=sigma_z, bath=bath)
-    for method in ("tebd", "mpo-tdvp1", "tree-tdvp"):
+    for method in ("tebd", "mpo-tdvp1", "mpo-tdvp2", "tree-tebd"):
         res = model.run(dt=0.05, t_max=0.5, method=method, bond_dim=30,
                         observables={"sz": sigma_z})
         print(f"  {method:11s} <sz>(t_end) = {res.expect['sz'][-1]:+.4f}")
@@ -43,7 +43,7 @@ def fishbone():
 
 
 if __name__ == "__main__":
-    print("Spin-boson (one bath, three methods):")
+    print("Spin-boson (one bath, several methods -- all agree):")
     spin_boson()
     print("Fishbone (three sites, two baths each):")
     fishbone()

@@ -185,9 +185,12 @@ class SpinBoson:
     def _run_mpo(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, krylov, kw):
         eps, V = self._require_standard()
         b = self.bath
-        common = dict(eps_bias=eps, V=V, n_chain=b.n_modes, d=b.phys_dim, dt=dt,
-                      nsteps=n_steps, krylov=krylov, discretizer=b.discretizer(),
-                      observe=_mpo.measure_rdm, **kw)
+        # The MPO drivers take a half-step and advance 2*dt of physical time per
+        # sweep; pass dt/2 so one sweep advances the user's physical dt (matching
+        # the tree/tebd drivers, so every method reaches the same t_max).
+        common = dict(eps_bias=eps, V=V, n_chain=b.n_modes, d=b.phys_dim,
+                      dt=dt / 2.0, nsteps=n_steps, krylov=krylov,
+                      discretizer=b.discretizer(), observe=_mpo.measure_rdm, **kw)
         sd, dom = b.spectral_density(), b.domain
         maxb = None
         if _MPO_METHODS[m] == "run_tdvp1":
@@ -247,16 +250,19 @@ class SpinBoson:
         etn.B[-1][:] = 0.0
         etn.B[-1][0, 0, 0], etn.B[-1][0, 1, 0] = g[0], g[1]
 
+        # Each iteration is a symmetric forward/backward pair over hdt = dt/2, so
+        # it advances the user's physical dt (matching the tree/mpo drivers).
+        hdt = dt / 2.0
         rdms, maxb = [], []
         for tn in range(n_steps):
-            t0 = 2 * tn * dt
-            u1, _ = eth.get_u(t0, dt, mode="normal")
+            t0 = 2 * tn * hdt
+            u1, _ = eth.get_u(t0, hdt, mode="normal")
             etn.U = u1
             for j in range(n - 1, 0, -1):
                 etn.update_bond(j, bond_dim, trunc_eps, swap=1)
             etn.update_bond(0, bond_dim, trunc_eps, swap=0)
             etn.update_bond(0, bond_dim, trunc_eps, swap=0)
-            _, u2 = eth.get_u(t0 + dt, dt, mode="reverse")
+            _, u2 = eth.get_u(t0 + hdt, hdt, mode="reverse")
             etn.U = u2
             for j in range(1, n):
                 etn.update_bond(j, bond_dim, trunc_eps, swap=1)
@@ -264,6 +270,6 @@ class SpinBoson:
             rho = np.einsum("LiR,LjR->ij", theta, theta.conj())
             rdms.append(rho / np.trace(rho).real)
             maxb.append(max((len(s) for s in etn.S), default=1))
-        t = np.arange(1, n_steps + 1) * 2 * dt
+        t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
                       max_bond=np.array(maxb), rdm=np.asarray(rdms), method="tebd")

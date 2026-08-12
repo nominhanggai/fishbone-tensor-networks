@@ -71,6 +71,21 @@ def test_orthpol_discretization_runs():
     assert np.all(np.isfinite(r.expect["sz"]))
 
 
+def test_methods_share_time_grid_and_agree():
+    """dt/t_max mean the same physical time for every method family."""
+    model = _model()
+    methods = ["tebd", "mpo-tdvp1", "mpo-tdvp2", "tree-tdvp", "tree-tdvp2",
+               "tree-tebd"]
+    results = {m: model.run(dt=0.05, t_max=0.5, method=m, bond_dim=40,
+                            trunc_eps=1e-12, observables={"sz": sigma_z})
+               for m in methods}
+    ref = results["tebd"]
+    assert len(ref.t) == 10 and abs(ref.t[-1] - 0.5) < 1e-12
+    for m, r in results.items():
+        assert np.allclose(r.t, ref.t)                       # same time grid
+        assert abs(r.expect["sz"][-1] - ref.expect["sz"][-1]) < 5e-2  # agree
+
+
 def test_general_coupling_requires_tebd():
     bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=N, phys_dim=D)
     model = SpinBoson(h=V * sigma_x, coupling=sigma_x, bath=bath)   # non-sigma_z
