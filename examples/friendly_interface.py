@@ -9,8 +9,7 @@ Run with:  python examples/friendly_interface.py
 """
 import numpy as np
 
-from fishbonett.simulate import Bath, SpinBoson
-from fishbonett.fishbone_sim import Fishbone
+from fishbonett.simulate import Bath, SpinBoson, Fishbone
 from fishbonett.stuff import sigma_x, sigma_z
 
 

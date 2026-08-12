@@ -8,7 +8,6 @@
    :recursive:
 
    fishbonett.simulate
-   fishbonett.fishbone_sim
    fishbonett.treebone
 ```
 

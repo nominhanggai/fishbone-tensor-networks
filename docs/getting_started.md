@@ -49,7 +49,7 @@ sites, each coupled to one bath (a comb) or two baths — one on each side of th
 site (the fishbone). It is declared the same way and returns per-site data:
 
 ```python
-from fishbonett.fishbone_sim import Fishbone
+from fishbonett.simulate import Fishbone
 
 def bath(op):                                        # one bath, coupling operator op
     return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
