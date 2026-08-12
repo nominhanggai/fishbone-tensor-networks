@@ -87,6 +87,60 @@ def test_methods_share_time_grid_and_agree():
         assert abs(r.expect["sz"][-1] - ref.expect["sz"][-1]) < 5e-2  # agree
 
 
+def test_composite_spin_vibration_system():
+    """System = spin (x) vibration; bath couples only through the spin.  Validated
+    vs exact diagonalization of the discretized star."""
+    from fishbonett.models.backward import SpinBoson as Builder, _c
+    dv, nm, dph = 2, 2, 4
+    I2, Iv = np.eye(2), np.eye(dv)
+    bv = _c(dv); nv = bv.T @ bv
+    h_sys = (0.25 * np.kron(sigma_z, Iv) + np.kron(sigma_x, Iv)
+             + 1.5 * np.kron(I2, nv) + 0.3 * np.kron(sigma_z, bv + bv.T))
+    coup = np.kron(sigma_z, Iv)
+    bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=nm, phys_dim=dph)
+    model = SpinBoson(h=h_sys, coupling=coup, bath=bath)
+    r = model.run(dt=0.02, n_steps=10, method="tebd", bond_dim=40, trunc_eps=1e-12,
+                  observables={"sz": coup}, initial="up")
+    assert r.rdm.shape == (10, 2 * dv, 2 * dv)
+
+    builder = Builder([dph] * nm + [2 * dv])
+    builder.domain = [0.0, 40.0]; builder.sd = _J
+    builder.he_dy = coup; builder.h1e = h_sys
+    builder.build(g=1)
+    freq = builder.freq
+    j0 = builder.k_list[0] * builder.coef[0, :]
+    dims = [2 * dv] + [dph] * nm
+
+    def emb(op, s):
+        m = [np.eye(x) for x in dims]; m[s] = op
+        o = m[0]
+        for x in m[1:]:
+            o = np.kron(o, x)
+        return o
+
+    b = _c(dph)
+    H = emb(h_sys, 0)
+    for k in range(nm):
+        H = H + freq[k] * emb(b.T @ b, 1 + k)
+        H = H + j0[k] * (emb(coup, 0) @ emb(b + b.T, 1 + k))
+    E, U = np.linalg.eigh(H)
+    p0 = np.zeros(int(np.prod(dims)), complex); p0[0] = 1
+    c = U.conj().T @ p0
+    szf = emb(coup, 0)
+    sz_ex = np.array([(U @ (np.exp(-1j * E * t) * c)).conj()
+                      @ (szf @ (U @ (np.exp(-1j * E * t) * c))) for t in r.t]).real
+    assert np.max(np.abs(r.expect["sz"] - sz_ex)) < 1e-3
+
+
+def test_general_system_dim_requires_tebd():
+    """MPO/tree methods reject a non-two-level system with a clear error."""
+    h4 = np.diag([0.0, 1.0, 2.0, 3.0])
+    bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=N, phys_dim=D)
+    model = SpinBoson(h=h4, coupling=np.eye(4), bath=bath)
+    with pytest.raises(ValueError):
+        model.run(dt=0.05, n_steps=2, method="mpo-tdvp1")
+
+
 def test_general_coupling_requires_tebd():
     bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=N, phys_dim=D)
     model = SpinBoson(h=V * sigma_x, coupling=sigma_x, bath=bath)   # non-sigma_z
