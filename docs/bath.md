@@ -93,14 +93,26 @@ rel = lambda d, n: np.max(np.abs(C_disc(d, n, ts) - C_exact(ts))) / abs(C_exact(
 print(rel(bath.domain, bath.n_modes))             # 7.5e-3
 ```
 
-The automatic bath reproduces $C(t)$ to better than 1% over the whole run, and
-degrading either choice breaks it:
+The automatic bath reproduces $C(t)$ to better than 1% over the whole run, while
+degrading either choice breaks it — the peak relative error
+$\max_t |C_{\mathrm{disc}}(t) - C(t)| / |C(0)|$ on $[0, t_{max}]$ is:
 
-| discretization | ``max|C_disc(t) - C(t)| / |C(0)|`` on $[0, t_{max}]$ |
-|----------------|------------------------------------------------------|
-| **auto domain + auto `n_modes`** | **7.5e-3** |
-| auto domain, too few modes (20) | 5.5e-1 |
-| too-narrow domain $(0,10)$, auto modes | 4.1e-1 |
+| discretization | peak relative error |
+|----------------|:-------------------:|
+| **auto domain + auto `n_modes`** | **7.5 × 10⁻³** |
+| auto domain, too few modes (20) | 5.5 × 10⁻¹ |
+| too-narrow domain $(0, 10)$, auto modes | 4.1 × 10⁻¹ |
+
+```{figure} img/bath_correlation.png
+:alt: Real and imaginary parts of the bath correlation function C(t); the auto-discretized bath lands exactly on the exact curve, with an inset showing its relative error stays ~1e-2 while too-few-modes and too-narrow-domain discretizations rise toward 1.
+:width: 100%
+
+The automatic bath (markers) reproduces both the real and imaginary parts of the
+exact correlation function (lines).  **Inset:** the relative error stays around
+$10^{-2}$ for the automatic choice, but a too-small mode count develops a
+finite-size recurrence and a too-narrow domain misses spectral weight — each wrong
+by tens of percent.
+```
 
 So the reorganization-energy window and the light-cone mode count are each doing
 real work: drop either and the bath correlation function is wrong by tens of
