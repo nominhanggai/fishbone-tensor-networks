@@ -123,6 +123,27 @@ So the reorganization-energy window and the light-cone mode count are each doing
 real work: drop either and the bath correlation function is wrong by tens of
 percent; keep both and it is faithful for the entire propagation.
 
+A **structured** bath is handled the same way.  Take a more realistic density — a
+weak Ohmic background plus two underdamped vibrational peaks,
+$J(\omega) = 0.05\,\omega\,e^{-\omega/2.5} + \sum_{k} \frac{2\lambda_k\gamma_k
+\Omega_k^2\,\omega}{(\Omega_k^2-\omega^2)^2 + \gamma_k^2\omega^2}$ with peaks at
+$\Omega = 6, 13$.  Its correlation function is strongly oscillatory (the two peaks
+beat against each other), yet the automatic construction covers **both** peaks —
+the 99.9% reorganization-energy window reaches out to $\omega_{hi} = 32.1$ — and
+the light cone asks for 118 modes, which sample the peaks finely enough to
+reproduce $C(t)$ to $4\times10^{-3}$:
+
+```{figure} img/bath_structured.png
+:alt: Left, a structured spectral density with two peaks, the star modes sampling it within the auto domain edge at 32.1; right, the strongly oscillatory correlation function with the auto-discretized bath (markers) on the exact curve and an inset error around 1e-3.
+:width: 100%
+:align: center
+
+**Left:** a structured spectral density (Ohmic background + two vibrational peaks);
+the automatic domain reaches past both peaks and the 118 star modes (markers)
+sample them.  **Right:** the resulting oscillatory correlation function, reproduced
+by the automatic bath to $\sim\!10^{-3}$ (inset).
+```
+
 The same holds at **finite temperature**.  There the correlation function carries
 the detailed-balance factor,
 $C(t) = \tfrac{1}{\pi}\int_0^\infty d\omega\, J(\omega)[\coth(\tfrac{\beta\omega}{2})
