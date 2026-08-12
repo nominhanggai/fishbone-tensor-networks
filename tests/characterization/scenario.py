@@ -60,7 +60,7 @@ def run_multichannel_ic(SpinBoson, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
 
         def ub(j, swap):
             if lbo:
-                etn.update_bond(j, bond_dim, threshold, 1e-9, swap)
+                etn.update_bond(j, bond_dim, threshold, swap, eps_lbo=1e-9)
             else:
                 etn.update_bond(j, bond_dim, threshold, swap)
 
