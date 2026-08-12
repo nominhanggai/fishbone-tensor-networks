@@ -30,9 +30,15 @@ def test_auto_domain_covers_reorg_energy():
     assert covered >= 0.999 - 1e-3
 
 
-def test_auto_domain_signed_for_temperature():
-    lo, hi = auto_domain(_ohmic, signed=True)
-    assert hi > 0 and lo == pytest.approx(-hi)
+def test_auto_domain_thermal_is_asymmetric():
+    """A finite-temperature (thermofield) domain is signed but asymmetric: the
+    negative branch J(w) n_beta is thermally suppressed, so its edge sits closer to
+    zero than the positive edge, and it widens with temperature."""
+    lo, hi = auto_domain(_ohmic, beta=1.0)
+    assert lo < 0 < hi and abs(lo) < hi              # asymmetric, negative tighter
+    lo_hot, hi_hot = auto_domain(_ohmic, beta=0.5)   # T = 2 > 1
+    assert abs(lo_hot) > abs(lo)                     # hotter -> wider negative wing
+    assert hi_hot == pytest.approx(hi, rel=1e-3)     # positive edge ~ unchanged
 
 
 def test_auto_n_modes_grows_with_tmax():

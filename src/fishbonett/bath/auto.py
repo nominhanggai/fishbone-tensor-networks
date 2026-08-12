@@ -5,7 +5,10 @@ density itself:
 
 * the frequency **domain**, from the reorganization energy
   :math:`\\lambda = \\tfrac{1}{\\pi}\\int_0^\\infty J(\\omega)/\\omega\\,d\\omega` --
-  choose the window that captures a target fraction (default 99.9%) of it;
+  choose the window that captures a target fraction (default 99.9%) of it.  At
+  finite temperature the two halves of the thermofield density are truncated
+  independently, giving an *asymmetric* window whose thermally-suppressed negative
+  edge sits closer to zero;
 * the number of **modes**, from the interaction-picture chain couplings
   :math:`d_j(t)`.  These form a light-cone along the chain, so a run of length
   ``t_max`` only excites the first ``j_max`` sites.
@@ -42,19 +45,46 @@ def reorganization_energy(J):
     return float(cum[-1] / np.pi)
 
 
-def auto_domain(J, coverage=0.999, signed=False):
+def _tail_cutoff(density, lam, coverage, lo=1e-8, hi=1e10, n=4000):
+    """Frequency beyond which the reorganization-energy *tail* of ``density`` drops
+    below ``(1 - coverage) * lam``, i.e. the modes past the cutoff carry less than
+    ``1 - coverage`` of the reorganization energy ``lam``.
+
+    The tail ``(1/pi) int_w^inf density(w')/w' dw'`` converges at high frequency even
+    when the density's *total* reorganization energy diverges at ``w -> 0`` (as each
+    thermal branch ``J(w) n_beta`` / ``J(w)(n_beta + 1)`` does), so this is the
+    well-defined way to place a high-frequency cutoff on a thermalized branch."""
+    w = np.geomspace(lo, hi, n)
+    with np.errstate(over="ignore", under="ignore", divide="ignore",
+                     invalid="ignore"):
+        f = np.array([float(density(x)) for x in w]) / w
+        f = np.nan_to_num(f, nan=0.0, posinf=0.0, neginf=0.0)
+        seg = 0.5 * (f[1:] + f[:-1]) * np.diff(w)             # per-interval reorg energy
+        tail = np.concatenate([np.cumsum(seg[::-1])[::-1], [0.0]]) / np.pi
+    below = np.nonzero(tail <= (1.0 - coverage) * lam)[0]
+    return float(w[below[0]]) if below.size else float(w[-1])
+
+
+def auto_domain(J, coverage=0.999, beta=None):
     """Frequency window capturing ``coverage`` of the reorganization energy.
 
-    Returns ``(0, w_hi)`` for a zero-temperature bath, or ``(-w_hi, w_hi)`` when
-    ``signed`` (a thermofield / T-TEDOPA density lives on both frequency halves)."""
-    w, cum = _reorg_profile(J)
-    total = cum[-1]
-    if total <= 0:
+    At zero temperature (``beta is None``) returns ``(0, w_hi)`` from the ordinary
+    reorganization energy of ``J``.  At finite temperature the thermalized
+    (thermofield / T-TEDOPA) density lives on **both** frequency halves,
+    ``J_beta(+w) = J(w)(n_beta + 1)`` and ``J_beta(-w) = J(w) n_beta``; each half is
+    truncated by its *own* reorganization-energy tail, giving an **asymmetric**
+    ``(-w_lo, w_hi)`` whose negative edge is closer to zero because the negative
+    branch is thermally suppressed."""
+    lam = reorganization_energy(J)
+    if lam <= 0:
         raise ValueError("reorganization energy is non-positive; set `domain` "
                          "explicitly")
-    idx = min(int(np.searchsorted(cum, coverage * total)), len(w) - 1)
-    w_hi = float(w[idx])
-    return (-w_hi, w_hi) if signed else (0.0, w_hi)
+    if beta is None:
+        return (0.0, _tail_cutoff(J, lam, coverage))
+    nb = lambda x: 1.0 / np.expm1(beta * x)
+    w_hi = _tail_cutoff(lambda x: J(x) * (nb(x) + 1.0), lam, coverage)   # J_beta(+w)
+    w_lo = _tail_cutoff(lambda x: J(x) * nb(x), lam, coverage)           # J_beta(-w)
+    return (-w_lo, w_hi)
 
 
 def auto_n_modes(sd, domain, t_max, *, buffer=10, rel_threshold=1e-3, n_t=80,
