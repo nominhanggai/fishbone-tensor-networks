@@ -49,6 +49,63 @@ heavy-tailed density (e.g. Drude, $J\sim 1/\omega$) has a slowly-converging
 reorganization integral, so its 99.9% window is wide — set `domain` explicitly if
 you want a tighter one.
 
+### Are the automatic choices good?
+
+The single quantity that a discretized bath has to reproduce is the **bath
+correlation function**
+
+$$
+C(t) = \frac{1}{\pi}\int_0^\infty d\omega\, J(\omega)
+       \big[\coth(\tfrac{\beta\omega}{2})\cos\omega t - i\sin\omega t\big]
+       \;\xrightarrow{\;T=0\;}\;
+       \frac{1}{\pi}\int_0^\infty d\omega\, J(\omega)\,e^{-i\omega t},
+$$
+
+which is what enters the influence functional.  The discretized bath gives
+$C_{\mathrm{disc}}(t) = \sum_k g_k^2\, e^{-i\omega_k t}$ (with $g_k^2 = J(\omega_k)
+w_k/\pi$ the Gauss couplings), and it tests **both** automatic choices at once: the
+`domain` fixes the spectral mass — and hence $C(0)$ and the short-time behaviour —
+while `n_modes` sets how long $C_{\mathrm{disc}}$ tracks the exact $C$ before the
+finite mode count produces a spurious recurrence.
+
+For an Ohmic bath with an exponential cutoff, $J(\omega) = \eta\,\omega\,
+e^{-\omega/\omega_c}$, the correlation function is analytic,
+$C(t) = (\eta/\pi)\,(1/\omega_c + i t)^{-2}$, so the discretization error is exact
+to read off:
+
+```python
+import numpy as np
+from fishbonett.simulate import Bath
+from fishbonett.bath.legendre import get_vn_squared
+
+eta, wc, t_max = 0.2, 5.0, 4.0
+J = lambda w: eta * w * np.exp(-w / wc)
+C_exact = lambda t: (eta / np.pi) / (1 / wc + 1j * t) ** 2      # analytic C(t)
+
+def C_disc(domain, n_modes, ts):
+    freq, v_sq = get_vn_squared(J, n_modes, list(domain))       # star nodes, g^2*pi
+    return (np.asarray(v_sq)[None, :] / np.pi
+            * np.exp(-1j * np.outer(ts, freq))).sum(axis=1)
+
+bath = Bath(J=J, phys_dim=10).resolved(t_max)     # -> domain=(0, 34.9), n_modes=91
+ts = np.linspace(0, t_max, 400)
+rel = lambda d, n: np.max(np.abs(C_disc(d, n, ts) - C_exact(ts))) / abs(C_exact(0))
+print(rel(bath.domain, bath.n_modes))             # 7.5e-3
+```
+
+The automatic bath reproduces $C(t)$ to better than 1% over the whole run, and
+degrading either choice breaks it:
+
+| discretization | ``max|C_disc(t) - C(t)| / |C(0)|`` on $[0, t_{max}]$ |
+|----------------|------------------------------------------------------|
+| **auto domain + auto `n_modes`** | **7.5e-3** |
+| auto domain, too few modes (20) | 5.5e-1 |
+| too-narrow domain $(0,10)$, auto modes | 4.1e-1 |
+
+So the reorganization-energy window and the light-cone mode count are each doing
+real work: drop either and the bath correlation function is wrong by tens of
+percent; keep both and it is faithful for the entire propagation.
+
 ## TEDOPA: discretization then chain mapping
 
 `fishbonett` uses the TEDOPA construction (Chin *et al.* 2010; Prior *et al.*
