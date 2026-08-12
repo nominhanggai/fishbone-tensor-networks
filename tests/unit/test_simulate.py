@@ -1,8 +1,8 @@
-"""Tests for the high-level SpinBoson / Bath / Result interface."""
+"""Tests for the high-level BosonicBath / Bath / Result interface."""
 import numpy as np
 import pytest
 
-from fishbonett.simulate import Bath, SpinBoson, Result
+from fishbonett.simulate import Bath, BosonicBath, Result
 from fishbonett.stuff import sigma_x, sigma_z
 from fishbonett.tree import _star_transform, anih, crea, SZ, SX
 
@@ -16,7 +16,7 @@ def _J(w):
 def _model(discretization="legendre"):
     bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=N, phys_dim=D,
                 discretization=discretization)
-    return SpinBoson(h=V * sigma_x, coupling=sigma_z, bath=bath)
+    return BosonicBath(h=V * sigma_x, coupling=sigma_z, bath=bath)
 
 
 def _embed(op, s, dims):
@@ -112,7 +112,7 @@ def test_methods_share_time_grid_and_agree():
 
 
 def test_spinboson_multichannel_routes_to_star():
-    """SpinBoson with a multichannel bath (sz AND sx) keeps the spin on its own
+    """BosonicBath with a multichannel bath (sz AND sx) keeps the spin on its own
     site and matches the tree star engine."""
     from fishbonett.treebone import TreeFishbone
 
@@ -125,7 +125,7 @@ def test_spinboson_multichannel_routes_to_star():
     mc = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
     h = 0.3 * sigma_z + 0.8 * sigma_x
-    r = SpinBoson(h=h, coupling=[sigma_z, sigma_x], bath=mc).run(
+    r = BosonicBath(h=h, coupling=[sigma_z, sigma_x], bath=mc).run(
         dt=0.02, n_steps=10, bond_dim=40, observables={"sz": sigma_z})
     assert r.expect["sz"].shape == (10,)          # single-system, not per-site
     assert r.rdm.shape == (10, 2, 2)
@@ -137,7 +137,7 @@ def test_spinboson_multichannel_routes_to_star():
 def test_composite_spin_vibration_system():
     """System = spin (x) vibration; bath couples only through the spin.  Validated
     vs exact diagonalization of the discretized star."""
-    from fishbonett.models.interaction_picture import SpinBosonIP as Builder, _c
+    from fishbonett.models.interaction_picture import BosonicBathIP as Builder, _c
     dv, nm, dph = 2, 2, 4
     I2, Iv = np.eye(2), np.eye(dv)
     bv = _c(dv); nv = bv.T @ bv
@@ -145,7 +145,7 @@ def test_composite_spin_vibration_system():
              + 1.5 * np.kron(I2, nv) + 0.3 * np.kron(sigma_z, bv + bv.T))
     coup = np.kron(sigma_z, Iv)
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=nm, phys_dim=dph)
-    model = SpinBoson(h=h_sys, coupling=coup, bath=bath)
+    model = BosonicBath(h=h_sys, coupling=coup, bath=bath)
     r = model.run(dt=0.02, n_steps=10, method="tebd", bond_dim=40, trunc_eps=1e-12,
                   observables={"sz": coup}, initial="up")
     assert r.rdm.shape == (10, 2 * dv, 2 * dv)
@@ -187,7 +187,7 @@ def test_general_coupling_matches_exact(method):
     sd = lambda w: 0.2 * w * np.exp(-w / 5.0)
     bath = Bath(J=sd, domain=(0.0, 40.0), n_modes=3, phys_dim=5)
     h, O = 0.5 * sigma_z + sigma_x, sigma_x
-    r = SpinBoson(h=h, coupling=O, bath=bath).run(
+    r = BosonicBath(h=h, coupling=O, bath=bath).run(
         dt=0.02, n_steps=10, method=method, bond_dim=60, trunc_eps=1e-12,
         observables={"sz": sigma_z})
     ex = _exact_general(h, O, sigma_z, r.t, 3, 5, (0.0, 40.0), sd, [1, 0])
@@ -204,7 +204,7 @@ def test_multilevel_system_matches_exact(method):
     h = np.diag([0.0, 0.8, 1.7]) + 0.3 * (a3 + a3.T)
     O = a3 + a3.T
     n3 = np.diag([0.0, 1.0, 2.0])
-    r = SpinBoson(h=h, coupling=O, bath=bath).run(
+    r = BosonicBath(h=h, coupling=O, bath=bath).run(
         dt=0.02, n_steps=10, method=method, bond_dim=60, trunc_eps=1e-12,
         observables={"n": n3}, initial=[1, 0, 0])
     ex = _exact_general(h, O, n3, r.t, 3, 5, (0.0, 30.0), sd, [1, 0, 0])
@@ -215,8 +215,8 @@ def test_mpo_rejects_non_hermitian_operators():
     """The MPO/tree engines still require Hermitian h / coupling of matching dim."""
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=N, phys_dim=D)
     with pytest.raises(ValueError):                      # non-Hermitian coupling
-        SpinBoson(h=sigma_z, coupling=np.array([[0, 1], [0, 0]], complex),
+        BosonicBath(h=sigma_z, coupling=np.array([[0, 1], [0, 0]], complex),
                   bath=bath).run(dt=0.05, n_steps=2, method="mpo-tdvp1")
     with pytest.raises(ValueError):                      # coupling / h dim mismatch
-        SpinBoson(h=np.eye(3), coupling=sigma_z, bath=bath).run(
+        BosonicBath(h=np.eye(3), coupling=sigma_z, bath=bath).run(
             dt=0.05, n_steps=2, method="tree-tdvp")

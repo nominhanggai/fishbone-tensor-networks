@@ -1,7 +1,7 @@
 # Propagation methods
 
 Every propagation method is selected by the `method` argument of
-{py:meth}`SpinBoson.run <fishbonett.simulate.SpinBoson.run>`.  A method name
+{py:meth}`BosonicBath.run <fishbonett.simulate.BosonicBath.run>`.  A method name
 encodes three orthogonal choices:
 
 1. **State ansatz** — a matrix-product state (MPS), a matrix-product operator
@@ -32,12 +32,12 @@ spin-boson model through all nine and prints the final population:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, SpinBoson
+from fishbonett.simulate import Bath, BosonicBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
-model = SpinBoson(h=sigma_x, coupling=sigma_z, bath=bath)
+model = BosonicBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 for method in ["tebd",
                "mpo-tdvp1", "mpo-tdvp2", "mpo-dtdvp",

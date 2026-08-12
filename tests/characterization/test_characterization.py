@@ -26,9 +26,9 @@ def _load(name):
 
 def _run(name):
     from fishbonett.stuff import sigma_x, sigma_z, _num
-    from fishbonett.mps import SpinBosonMPS
-    from fishbonett.backwardSpinBosonMultiChannel import SpinBoson
-    return run_multichannel_ic(SpinBoson, SpinBosonMPS, sigma_x, sigma_z, _num,
+    from fishbonett.mps import BosonicBathMPS
+    from fishbonett.backwardSpinBosonMultiChannel import BosonicBath
+    return run_multichannel_ic(BosonicBath, BosonicBathMPS, sigma_x, sigma_z, _num,
                                lbo=(name == "lbo"))
 
 

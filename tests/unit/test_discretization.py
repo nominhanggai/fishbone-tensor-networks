@@ -33,10 +33,10 @@ def test_recurrence_needs_no_orthpol():
 def test_continuous_bath_driver_builds_without_orthpol():
     """A continuous-bath interaction-picture driver builds its chain via the
     orthpol-free get_coupling and diagonalises it."""
-    from fishbonett.backwardSpinBoson import SpinBoson
+    from fishbonett.backwardSpinBoson import BosonicBath
 
     n_boson = 4
-    eth = SpinBoson([6] * n_boson + [2])
+    eth = BosonicBath([6] * n_boson + [2])
     eth.domain = [0.0, 50.0]
     eth.sd = lambda w: 0.5 * w * np.exp(-w / 10.0)
     eth.he_dy = np.diag([1.0, -1.0])

@@ -7,7 +7,7 @@ returns the same {py:class}`~fishbonett.simulate.Result`.
 
 | you want to model | use | page |
 |-------------------|-----|------|
-| one system (spin or `d`-level) coupled to a bath | {py:class}`~fishbonett.simulate.SpinBoson` | {doc}`spin_boson` |
+| one system (spin or `d`-level) coupled to a bath | {py:class}`~fishbonett.simulate.BosonicBath` | {doc}`spin_boson` |
 | a 1D chain of electronic sites, each with bath(s) | {py:class}`~fishbonett.simulate.Fishbone` | {doc}`fishbone` |
 | electronic sites in any loop-free tree, each with bath(s) | {py:class}`~fishbonett.treebone.TreeFishbone` | {doc}`fishbone` |
 | a system with internal structure (e.g. spin **+** vibration) | `TreeFishbone` (one site per DOF) | {doc}`composite_multichannel` |

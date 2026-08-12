@@ -5,13 +5,13 @@ so a simulation is specified declaratively and run with a single call instead of
 by hand-writing a TEBD sweep loop::
 
     import numpy as np
-    from fishbonett.simulate import Bath, SpinBoson
+    from fishbonett.simulate import Bath, BosonicBath
     from fishbonett.stuff import sigma_x, sigma_z
 
     bath = Bath(J=lambda w: 0.5 * w * np.exp(-w / 5),
                 domain=(-25, 36), temperature=1.0,
                 n_modes=40, phys_dim=20, discretization='orthpol')
-    model = SpinBoson(h=0.5 * eps * sigma_z + V * sigma_x, coupling=sigma_z, bath=bath)
+    model = BosonicBath(h=0.5 * eps * sigma_z + V * sigma_x, coupling=sigma_z, bath=bath)
     result = model.run(dt=0.01, t_max=4.0, method='tree-tdvp2', bond_dim=200,
                        observables={'sz': sigma_z, 'sx': sigma_x})
 
@@ -28,7 +28,7 @@ from fishbonett.bath.orthpol import make_orthpol_discretizer
 from fishbonett import mpo as _mpo
 from fishbonett import tree as _tree
 
-__all__ = ["Bath", "SpinBoson", "Fishbone", "Result", "thermalize"]
+__all__ = ["Bath", "BosonicBath", "Fishbone", "Result", "thermalize", "SpinBoson"]
 
 _MPO_METHODS = {"tdvp1": "run_tdvp1", "mpo-tdvp1": "run_tdvp1",
                 "tdvp2": "run_tdvp2", "mpo-tdvp2": "run_tdvp2",
@@ -188,7 +188,7 @@ def _decompose_h(h):
     return float((h[0, 0] - h[1, 1]).real), float(h[0, 1].real)
 
 
-class SpinBoson:
+class BosonicBath:
     """A system coupled to a :class:`Bath`.
 
     ``h`` may be any ``(d, d)`` Hermitian Hamiltonian (not only two-level) and the
@@ -365,8 +365,8 @@ class SpinBoson:
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.models.interaction_picture import SpinBosonIP as _IPBuilder
-        from fishbonett.states.mps import SpinBosonMPS
+        from fishbonett.models.interaction_picture import BosonicBathIP as _IPBuilder
+        from fishbonett.states.mps import BosonicBathMPS
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
         d_sys = self.h.shape[0]
@@ -378,7 +378,7 @@ class SpinBoson:
         builder.h_sys = self.h
         builder.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
 
-        state = SpinBosonMPS(pd)               # the MPS being evolved
+        state = BosonicBathMPS(pd)               # the MPS being evolved
         psi0 = self._initial_state(initial)
         state.B[-1][:] = 0.0
         for a in range(d_sys):
@@ -465,3 +465,7 @@ class Fishbone:
         :meth:`fishbonett.treebone.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout."""
         return self._tree().run(**kwargs)
+
+
+#: Deprecated back-compat alias for the high-level :class:`BosonicBath` interface.
+SpinBoson = BosonicBath

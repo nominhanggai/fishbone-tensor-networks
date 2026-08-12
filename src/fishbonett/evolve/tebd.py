@@ -1,6 +1,6 @@
 """Swap-network TEBD propagation for a matrix-product state.
 
-The state (:class:`fishbonett.states.mps.SpinBosonMPS`) holds the tensors and
+The state (:class:`fishbonett.states.mps.BosonicBathMPS`) holds the tensors and
 their canonical form; this module holds the *algorithm* -- applying the two-site
 Trotter gate stored on the state and re-splitting the bond.  Keeping the two
 separate is why the state module is called ``states.mps`` and this one
@@ -23,7 +23,7 @@ def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
 
     Parameters
     ----------
-    state : fishbonett.states.mps.SpinBosonMPS
+    state : fishbonett.states.mps.BosonicBathMPS
         The MPS whose bond ``i`` is updated in place.
     swap : {0, 1}
         1 transposes the two physical legs during the gate (moves a distant bath
