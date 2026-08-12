@@ -44,7 +44,8 @@ def _exact_sz(bath, ts):
 
 
 @pytest.mark.parametrize("method,step", [("tebd", 2), ("mpo-tdvp1", 2),
-                                         ("mpo-tdvp2", 2), ("tree-tdvp", 1),
+                                         ("mpo-tdvp2", 2), ("mpo-ip-tdvp1", 2),
+                                         ("mpo-ip-tdvp2", 2), ("tree-tdvp", 1),
                                          ("tree-tdvp2", 1), ("tree-tebd", 1)])
 def test_method_matches_exact(method, step):
     model = _model()
@@ -74,8 +75,8 @@ def test_orthpol_discretization_runs():
 def test_methods_share_time_grid_and_agree():
     """dt/t_max mean the same physical time for every method family."""
     model = _model()
-    methods = ["tebd", "mpo-tdvp1", "mpo-tdvp2", "tree-tdvp", "tree-tdvp2",
-               "tree-tebd"]
+    methods = ["tebd", "mpo-tdvp1", "mpo-tdvp2", "mpo-ip-tdvp1", "mpo-ip-tdvp2",
+               "tree-tdvp", "tree-tdvp2", "tree-tebd"]
     results = {m: model.run(dt=0.05, t_max=0.5, method=m, bond_dim=40,
                             trunc_eps=1e-12, observables={"sz": sigma_z})
                for m in methods}

@@ -2,8 +2,8 @@
 of a small spin-boson chain."""
 import numpy as np
 
-from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp, crea,
-                            anih, numb, SX, SZ)
+from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp,
+                            run_ip_tdvp1, run_ip_tdvp2, crea, anih, numb, SX, SZ)
 
 DOMAIN = (-25.0, 36.0)
 
@@ -61,6 +61,20 @@ def test_tdvp2_matches_exact_and_grows_bonds():
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert maxd[-1] > 1                                 # bonds grew from product state
     assert np.max(np.abs(sz - sz_ex)) < 1e-6
+
+
+def test_ip_mpo_matches_exact():
+    """Interaction-picture star MPO (time-dependent, rebuilt each step) vs the same
+    exact dynamics.  Looser tol: the IP midpoint rule is O(dt^2) in time."""
+    n_chain, d, V = 3, 5, 1.0
+    t, sz = run_ip_tdvp1(_Jb, DOMAIN, V=V, n_chain=n_chain, d=d, dt=0.02,
+                         nsteps=15, D=40, krylov=25)
+    sz_ex = _exact_sz(n_chain, d, V, t)
+    assert np.max(np.abs(sz - sz_ex)) < 5e-3
+    t2, sz2, maxd = run_ip_tdvp2(_Jb, DOMAIN, V=V, n_chain=n_chain, d=d, dt=0.02,
+                                 nsteps=15, chi_max=40, eps=1e-12, krylov=25)
+    assert maxd[-1] > 1                                 # bonds grew
+    assert np.max(np.abs(sz2 - sz_ex)) < 5e-3
 
 
 def test_dtdvp_grows_bonds_and_tracks_dynamics():
