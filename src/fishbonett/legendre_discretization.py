@@ -33,7 +33,6 @@ def get_legendre_recursion(n, domain):
     a = np.repeat(a, n)
     _temp = (r-l)/2
     b = np.vectorize(lambda x: _temp * x / np.sqrt(4 * x ** 2 - 1))(np.arange(1, n))
-    print("Finished calculating recursion coefficients.")
     return a, b
 
 
@@ -43,7 +42,6 @@ def get_vn_squared(j, n: int, domain):
     freq, eig_vec = np.linalg.eigh(M)
     W = (eig_vec[0, :]) ** 2 * (domain[1] - domain[0])
     V_squared = [j(w) * W[n] for n, w in enumerate(freq)]
-    print("Finished calculating V_squared.")
     return freq, np.array(V_squared)
 
 
