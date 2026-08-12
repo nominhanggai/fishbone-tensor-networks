@@ -9,6 +9,7 @@
 
    fishbonett.simulate
    fishbonett.fishbone_sim
+   fishbonett.treebone
 ```
 
 ## State engines and models
