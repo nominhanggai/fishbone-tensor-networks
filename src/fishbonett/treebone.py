@@ -369,11 +369,12 @@ class TreeFishbone:
         if len(self.baths) != self.ns:
             raise ValueError("baths must have one entry per site")
 
-    def hamiltonians(self):
+    def hamiltonians(self, t_max=None):
         """The chain-mapped physical tree: ``(dims, edges, site_H, edge_H)`` where
         ``site_H[node]`` is the on-site Hamiltonian and ``edge_H[(a, b)]`` the
         two-site coupling.  Electronic sites are nodes ``0..n_sites-1``; each bath
-        is a chain of nodes hanging off its site."""
+        is a chain of nodes hanging off its site.  ``t_max`` sizes any bath whose
+        ``n_modes`` is automatic (see :meth:`fishbonett.simulate.Bath.resolved`)."""
         dims = list(self.de)
         edges = [(i, j) for (i, j, _) in self.edges]
         site_H = [self.sites[i].copy() for i in range(self.ns)]
@@ -381,6 +382,7 @@ class TreeFishbone:
         node = self.ns
         for i in range(self.ns):
             for bath in self.baths[i]:
+                bath = bath.resolved(t_max)          # fill automatic domain/n_modes
                 d = bath.phys_dim
                 a, ad, x, numb = _bath_ops(d)
                 if getattr(bath, "is_multichannel", False):
@@ -435,9 +437,9 @@ class TreeFishbone:
             node += 1
         return node
 
-    def _build(self, dt):
+    def _build(self, dt, t_max=None):
         """Physical tree plus the single-site and two-site Trotter gates."""
-        dims, edges, site_H, edge_H = self.hamiltonians()
+        dims, edges, site_H, edge_H = self.hamiltonians(t_max)
         site_gates = [expm(-1j * H * dt) if np.any(H) else None for H in site_H]
         edge_gates = {}
         for (a_, b_), H in edge_H.items():
@@ -483,7 +485,7 @@ class TreeFishbone:
                 d == 2 for d in self.de) else {}
         parsed = [(name, _parse_observable(spec))
                   for name, spec in observables.items()]
-        dims, edges, site_gates, edge_gates = self._build(dt)
+        dims, edges, site_gates, edge_gates = self._build(dt, n_steps * dt)
         st = TreeTEBD(dims, edges, root=0)
         for i in range(self.ns):
             st.set_physical(i, self._initial_vec(initial, i))

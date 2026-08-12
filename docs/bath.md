@@ -14,11 +14,40 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             discretization="legendre")              # or "orthpol"
 ```
 
-- **`domain`** — the (signed) frequency window the spectral density is sampled on.
-- **`n_modes`** — the number of discretized modes (convergence parameter).
+- **`domain`** — the (signed) frequency window the spectral density is sampled on
+  (optional — see *Automatic defaults*).
+- **`n_modes`** — the number of discretized modes (optional — see below).
 - **`phys_dim`** — the local boson Hilbert-space truncation per mode.
 - **`temperature` / `beta`** — finite-temperature thermalization (below).
 - **`discretization`** — `"legendre"` (default) or `"orthpol"`.
+
+## Automatic defaults
+
+`domain` and `n_modes` can both be left unspecified; they are then derived from
+the spectral density and the propagation time:
+
+```python
+bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), temperature=1.0, phys_dim=20)
+# domain and n_modes chosen automatically at run() time
+```
+
+- **`domain`** defaults to the window that captures **99.9% of the reorganization
+  energy** $\lambda = \tfrac{1}{\pi}\int_0^\infty J(\omega)/\omega\,d\omega$
+  ($(0, \omega_{hi})$, or $(-\omega_{hi}, \omega_{hi})$ when a temperature is set,
+  since a thermofield density lives on both frequency halves).
+- **`n_modes`** defaults to the **light-cone extent** of the interaction-picture
+  chain couplings $d_j(t)$: the coupling to chain site $j$ stays negligible until
+  the excitation front reaches it, so a run of length `t_max` only needs the first
+  $j_{max}$ sites (plus a buffer).  Because `n_modes` depends on `t_max`, it is
+  resolved when you call `run`.
+
+Both live in {py:mod}`fishbonett.bath.auto`
+({py:func}`~fishbonett.bath.auto.reorganization_energy`,
+{py:func}`~fishbonett.bath.auto.auto_domain`,
+{py:func}`~fishbonett.bath.auto.auto_n_modes`) and can be called directly.  A
+heavy-tailed density (e.g. Drude, $J\sim 1/\omega$) has a slowly-converging
+reorganization integral, so its 99.9% window is wide — set `domain` explicitly if
+you want a tighter one.
 
 ## TEDOPA: discretization then chain mapping
 
