@@ -35,10 +35,10 @@
    :recursive:
 
    fishbonett.common
-   fishbonett.legendre_discretization
-   fishbonett.orthpol_discretization
-   fishbonett.lanczos
-   fishbonett.recurrence_coefficients
+   fishbonett.bath.legendre
+   fishbonett.bath.orthpol
+   fishbonett.bath.lanczos
+   fishbonett.bath.recurrence
 ```
 
 ## Operators and spectral densities
