@@ -15,6 +15,8 @@ centre on the active edge.
 import numpy as np
 from scipy.linalg import expm
 
+from fishbonett.contract import contract
+
 from fishbonett.common import get_bath_nn_paras
 from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.model import _c
@@ -236,11 +238,90 @@ class TreeTEBD:
         rho = np.tensordot(A, A.conj(), axes=(bonds, bonds))  # [phys, phys*]
         return rho / np.trace(rho).real
 
+    def _spanning_subtree(self, sites):
+        """Set of nodes on the minimal subtree connecting ``sites``."""
+        sub = set(sites)
+        base = sites[0]
+        for s in sites[1:]:
+            sub.update(self.path(base, s))
+        return sub
+
+    def joint_rdm(self, sites):
+        """Joint reduced density matrix of ``sites`` (ordered), shape
+        ``(prod d_s, prod d_s)``.  Contracts the double layer over the spanning
+        subtree; with the orthogonality centre inside it, tensors outside are
+        isometric so the leaving bonds contract to identity and only the spanning
+        subtree is touched (no exponential full contraction)."""
+        sites = [int(s) for s in sites]
+        if len(sites) == 1:
+            return self.rdm(sites[0])
+        sub = self._spanning_subtree(sites)
+        self.move_oc_to(sites[0])
+        counter = [0]
+
+        def new():
+            counter[0] += 1
+            return counter[0]
+
+        bond_ket, bond_bra, leave = {}, {}, {}
+        phys_ket, phys_bra = {}, {}
+        operands = []
+        for n in sub:
+            legs_k, legs_b = [], []
+            for m in self.order[n]:
+                if m in sub:                        # internal bond: ket & bra kept
+                    key = frozenset((n, m))
+                    if key not in bond_ket:
+                        bond_ket[key], bond_bra[key] = new(), new()
+                    legs_k.append(bond_ket[key]); legs_b.append(bond_bra[key])
+                else:                               # leaving bond: capped (identity)
+                    if (n, m) not in leave:
+                        leave[(n, m)] = new()
+                    legs_k.append(leave[(n, m)]); legs_b.append(leave[(n, m)])
+            if n in sites:                          # keep this physical leg open
+                phys_ket[n], phys_bra[n] = new(), new()
+                legs_k.append(phys_ket[n]); legs_b.append(phys_bra[n])
+            else:                                   # trace this physical leg
+                pt = new()
+                legs_k.append(pt); legs_b.append(pt)
+            operands += [self.T[n], legs_k, self.T[n].conj(), legs_b]
+        out = [phys_ket[s] for s in sites] + [phys_bra[s] for s in sites]
+        operands.append(out)
+        rho = contract(*operands)
+        d = int(np.prod([self.dims[s] for s in sites]))
+        rho = rho.reshape(d, d)
+        return rho / np.trace(rho).real
+
+    def expectation(self, operator, sites):
+        """Expectation of ``operator`` acting on ``sites`` (an int or a list of
+        site indices).  ``operator`` is ``(D, D)`` with ``D = prod`` of the site
+        dimensions in the given order."""
+        sites = [sites] if np.isscalar(sites) or isinstance(sites, (int, np.integer)) \
+            else list(sites)
+        rho = self.joint_rdm(sites)
+        return np.trace(rho @ np.asarray(operator)).real
+
 
 def _bath_ops(d):
     a = _c(d)                       # annihilation
     ad = a.T                        # creation
     return a, ad, a + ad, ad @ a    # a, a^dag, x = a+a^dag, number
+
+
+def _parse_observable(spec):
+    """Normalise an observable spec to ``(kind, operator, sites)``.
+
+    A bare ``(d, d)`` operator is measured on every matching site (``kind
+    "persite"``); ``(operator, i)`` or ``(operator, (i, j, ...))`` targets a
+    specific site or a composite of sites (``kind "sites"``)."""
+    if isinstance(spec, tuple):
+        op, where = spec
+        if np.isscalar(where) or isinstance(where, (int, np.integer)):
+            sites = [int(where)]
+        else:
+            sites = [int(s) for s in where]
+        return "sites", np.asarray(op), sites
+    return "persite", np.asarray(spec), None
 
 
 class TreeFishbone:
@@ -379,11 +460,20 @@ class TreeFishbone:
 
     def run(self, *, dt, t_max=None, n_steps=None, bond_dim=100, trunc_eps=1e-10,
             observables=None, initial="up"):
-        """Propagate and return a :class:`~fishbonett.simulate.Result` with per-site
-        data.  Each operator in ``observables`` is a *single-site* operator measured
-        on **every** electronic site: ``expect[name]`` has shape
-        ``(n_steps, n_sites)`` with ``expect[name][t, i]`` the expectation on site
-        ``i`` at step ``t``; ``rdm`` has shape ``(n_steps, n_sites, d, d)``."""
+        """Propagate and return a :class:`~fishbonett.simulate.Result`.
+
+        Each entry of ``observables`` is one of:
+
+        * a bare ``(d, d)`` operator -- measured on **every** matching site;
+          ``expect[name]`` is then ``(n_steps, n_sites)`` (NaN where the operator
+          dimension does not match a site);
+        * ``(operator, i)`` -- the operator on the single site ``i``;
+        * ``(operator, (i, j, ...))`` -- a composite operator on those sites
+          (``operator`` is ``(D, D)`` with ``D`` = product of the site dimensions
+          in that order, e.g. a two-site correlation ``sigma_z (x) sigma_z``).
+          For the last two forms ``expect[name]`` is ``(n_steps,)``.
+
+        ``rdm`` holds the single-site reduced density matrices per step."""
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
@@ -391,26 +481,29 @@ class TreeFishbone:
         if observables is None:
             observables = {"sz": sigma_z, "sx": sigma_x} if all(
                 d == 2 for d in self.de) else {}
+        parsed = [(name, _parse_observable(spec))
+                  for name, spec in observables.items()]
         dims, edges, site_gates, edge_gates = self._build(dt)
         st = TreeTEBD(dims, edges, root=0)
         for i in range(self.ns):
             st.set_physical(i, self._initial_vec(initial, i))
 
+        expect = {name: (np.full((n_steps, self.ns), np.nan) if kind == "persite"
+                         else np.full(n_steps, np.nan))
+                  for name, (kind, _O, _s) in parsed}
         rdms = np.empty((n_steps, self.ns), dtype=object)
         for tn in range(n_steps):
             st.step(site_gates, edge_gates, bond_dim, trunc_eps)
             for i in range(self.ns):
                 rdms[tn, i] = st.rdm(i)
+            for name, (kind, O, sites) in parsed:
+                if kind == "persite":
+                    for i in range(self.ns):
+                        if O.shape == (self.de[i], self.de[i]):
+                            expect[name][tn, i] = np.trace(rdms[tn, i] @ O).real
+                else:
+                    expect[name][tn] = st.expectation(O, sites)
             st.move_oc_to(0)
-        expect = {}
-        for name, O in observables.items():
-            O = np.asarray(O)
-            arr = np.full((n_steps, self.ns), np.nan)     # NaN where dims mismatch
-            for i in range(self.ns):
-                if O.shape == (self.de[i], self.de[i]):
-                    for tn in range(n_steps):
-                        arr[tn, i] = np.trace(rdms[tn, i] @ O).real
-            expect[name] = arr
         if len(set(self.de)) == 1:                        # uniform sites -> dense
             rdm = np.array([[rdms[tn, i] for i in range(self.ns)]
                             for tn in range(n_steps)])
