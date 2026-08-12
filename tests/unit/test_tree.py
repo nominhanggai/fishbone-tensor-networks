@@ -51,7 +51,7 @@ def test_tree_mpo_reproduces_direct_hamiltonian():
         d = 3
         dcoup = rng.standard_normal(n_modes) + 1j * rng.standard_normal(n_modes)
         nodes, root, _ = build_balanced_tree(n_modes, d)
-        build_tree_mpo(nodes, root, dcoup, 0.7, 0.4)
+        build_tree_mpo(nodes, root, dcoup, 0.7 * SX + 0.5 * 0.4 * SZ, SZ)
         Hmpo = hamiltonian_from_mpo(nodes, root, n_modes, d)
         Hdir = _hamiltonian_direct(dcoup, 0.7, 0.4, d, n_modes)
         assert np.abs(Hmpo - Hdir).max() < 1e-12

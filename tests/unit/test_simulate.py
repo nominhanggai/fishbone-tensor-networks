@@ -43,6 +43,30 @@ def _exact_sz(bath, ts):
                      @ (sz @ (U @ (np.exp(-1j * E * t) * c))) for t in ts]).real
 
 
+def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
+    """Exact evolution of a *general* (ds-level) system coupled to the discretized
+    star through operator ``O``; positive-domain (T=0) spectral density ``sd``."""
+    freq, Vn, _ = _star_transform(sd, nm, domain)
+    ds = h.shape[0]
+    dims = [ds] + [dph] * nm
+    a = anih(dph)
+    H = _embed(np.asarray(h, complex), 0, dims)
+    for k in range(nm):
+        H = H + freq[k] * _embed(crea(dph) @ a, 1 + k, dims)
+        H = H + Vn[k] * (_embed(np.asarray(O, complex), 0, dims)
+                         @ _embed(a + crea(dph), 1 + k, dims))
+    E, U = np.linalg.eigh(H)
+    p0 = np.zeros(int(np.prod(dims)), complex)
+    v = np.asarray(init, complex); v = v / np.linalg.norm(v)
+    stride = int(np.prod(dims[1:]))                      # |init> (x) |vac...vac>
+    for i in range(ds):
+        p0[i * stride] = v[i]
+    c = U.conj().T @ p0
+    ob = _embed(np.asarray(obs_op, complex), 0, dims)
+    return np.array([(U @ (np.exp(-1j * E * t) * c)).conj()
+                     @ (ob @ (U @ (np.exp(-1j * E * t) * c))) for t in ts]).real
+
+
 @pytest.mark.parametrize("method,step", [("tebd", 2), ("mpo-tdvp1", 2),
                                          ("mpo-tdvp2", 2), ("mpo-ip-tdvp1", 2),
                                          ("mpo-ip-tdvp2", 2), ("tree-tdvp", 1),
@@ -155,17 +179,44 @@ def test_composite_spin_vibration_system():
     assert np.max(np.abs(r.expect["sz"] - sz_ex)) < 1e-3
 
 
-def test_general_system_dim_requires_tebd():
-    """MPO/tree methods reject a non-two-level system with a clear error."""
-    h4 = np.diag([0.0, 1.0, 2.0, 3.0])
-    bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=N, phys_dim=D)
-    model = SpinBoson(h=h4, coupling=np.eye(4), bath=bath)
-    with pytest.raises(ValueError):
-        model.run(dt=0.05, n_steps=2, method="mpo-tdvp1")
+@pytest.mark.parametrize("method", ["mpo-tdvp1", "mpo-tdvp2", "mpo-ip-tdvp1",
+                                    "tree-tdvp", "tree-tebd"])
+def test_general_coupling_matches_exact(method):
+    """The MPO/tree engines handle a non-sigma_z (sigma_x) coupling, validated vs
+    exact diagonalization of the discretized star."""
+    sd = lambda w: 0.2 * w * np.exp(-w / 5.0)
+    bath = Bath(J=sd, domain=(0.0, 40.0), n_modes=3, phys_dim=5)
+    h, O = 0.5 * sigma_z + sigma_x, sigma_x
+    r = SpinBoson(h=h, coupling=O, bath=bath).run(
+        dt=0.02, n_steps=10, method=method, bond_dim=60, trunc_eps=1e-12,
+        observables={"sz": sigma_z})
+    ex = _exact_general(h, O, sigma_z, r.t, 3, 5, (0.0, 40.0), sd, [1, 0])
+    assert np.max(np.abs(r.expect["sz"] - ex)) < 3e-3
 
 
-def test_general_coupling_requires_tebd():
-    bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=N, phys_dim=D)
-    model = SpinBoson(h=V * sigma_x, coupling=sigma_x, bath=bath)   # non-sigma_z
-    with pytest.raises(ValueError):
-        model.run(dt=0.05, n_steps=2, method="mpo-tdvp1")
+@pytest.mark.parametrize("method", ["mpo-tdvp1", "mpo-tdvp2", "tree-tdvp",
+                                    "tree-tebd"])
+def test_multilevel_system_matches_exact(method):
+    """The MPO/tree engines handle a three-level system, validated vs exact."""
+    sd = lambda w: 0.15 * w * np.exp(-w / 6.0)
+    bath = Bath(J=sd, domain=(0.0, 30.0), n_modes=3, phys_dim=5)
+    a3 = anih(3)
+    h = np.diag([0.0, 0.8, 1.7]) + 0.3 * (a3 + a3.T)
+    O = a3 + a3.T
+    n3 = np.diag([0.0, 1.0, 2.0])
+    r = SpinBoson(h=h, coupling=O, bath=bath).run(
+        dt=0.02, n_steps=10, method=method, bond_dim=60, trunc_eps=1e-12,
+        observables={"n": n3}, initial=[1, 0, 0])
+    ex = _exact_general(h, O, n3, r.t, 3, 5, (0.0, 30.0), sd, [1, 0, 0])
+    assert np.max(np.abs(r.expect["n"] - ex)) < 3e-3
+
+
+def test_mpo_rejects_non_hermitian_operators():
+    """The MPO/tree engines still require Hermitian h / coupling of matching dim."""
+    bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=N, phys_dim=D)
+    with pytest.raises(ValueError):                      # non-Hermitian coupling
+        SpinBoson(h=sigma_z, coupling=np.array([[0, 1], [0, 0]], complex),
+                  bath=bath).run(dt=0.05, n_steps=2, method="mpo-tdvp1")
+    with pytest.raises(ValueError):                      # coupling / h dim mismatch
+        SpinBoson(h=np.eye(3), coupling=sigma_z, bath=bath).run(
+            dt=0.05, n_steps=2, method="tree-tdvp")

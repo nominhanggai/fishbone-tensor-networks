@@ -57,7 +57,8 @@ for method in ["tebd",
   (`mpo-tdvp2`, `mpo-dtdvp`, `tree-tdvp2`, `tree-tebd`); they grow the bonds from
   a product state and report the peak bond in `result.max_bond`.
 - **Non-`sigma_z` coupling, a non-two-level system, or a custom initial state?**
-  Only `tebd` supports these (see {doc}`tebd`).
+  Every engine supports these — a Hermitian `h` of any dimension, a Hermitian
+  coupling `O`, and any `initial` state (see {doc}`../systems/spin_boson`).
 - **Long chains where entanglement piles up in the middle?** The `tree-*`
   methods keep the high-bond region `O(log n)` edges deep instead of `O(n)`
   (see {doc}`tree`).

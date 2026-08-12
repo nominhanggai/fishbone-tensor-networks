@@ -26,8 +26,9 @@ r = model.run(dt=0.02, t_max=2.0, method="mpo-tdvp1", bond_dim=100,
 
 ## System dimension and initial state
 
-The interaction-picture `tebd` method (see {doc}`../methods/tebd`) supports an
-**arbitrary system dimension** and initial state.  The `initial=` argument takes:
+**Every** method — `tebd`, the MPO engines and the tree engines — supports an
+arbitrary system dimension, a general Hermitian coupling and an arbitrary initial
+state.  The `initial=` argument takes:
 
 - `"up"` (default) — the first basis state $|0\rangle$;
 - `"down"` — the second basis state $|1\rangle$;
@@ -46,8 +47,10 @@ r = SpinBoson(h=h3, coupling=coup3, bath=bath).run(
 ```
 
 ```{note}
-The MPO and tree `method` values (`mpo-*`, `tree-*`) assume a **two-level**,
-`sigma_z`-coupled system and start from `"up"`.  For anything else, use `tebd`.
+`h` and `coupling` must be **Hermitian** and of the same dimension (the
+interaction-picture engines diagonalize the coupling).  A *multichannel* bath (a
+list of couplings) is the one case routed through the tree automatically — see
+{doc}`composite_multichannel`.
 ```
 
 ## Result

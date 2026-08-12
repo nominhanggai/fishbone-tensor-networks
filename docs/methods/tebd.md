@@ -1,9 +1,10 @@
 # `tebd` — interaction-picture MPS TEBD
 
-The `tebd` method is the package's most flexible engine: an interaction-picture,
-swap-network time-evolving block decimation on a matrix-product state.  It is the
-**only** method that accepts a general (non-`sigma_z`) system–bath coupling, a
-system of arbitrary dimension, and an arbitrary initial system state.
+The `tebd` method is an interaction-picture, swap-network time-evolving block
+decimation on a matrix-product state.  Like every engine in the package it accepts
+a general (non-`sigma_z`) system–bath coupling, a system of arbitrary dimension,
+and an arbitrary initial system state; `tebd` reaches these through leg swaps on a
+single MPS.
 
 ## Theory
 
@@ -32,15 +33,23 @@ is what makes the ansatz efficient, and it is why composite systems should be
 built as trees rather than fattened onto one site — see
 {doc}`../systems/composite_multichannel`.
 
-## What only `tebd` supports
+## General systems
+
+Every `SpinBoson` engine accepts a general system — a Hermitian `h` of any
+dimension `d`, a Hermitian coupling operator `O` of the same dimension, and an
+arbitrary initial state:
 
 - **A general coupling operator** `O` — pass any `(d, d)` Hermitian `coupling`.
 - **A non-two-level system** — `h` may be any `(d, d)` Hamiltonian.
 - **An arbitrary initial state** via `initial=`: `"up"` (default), `"down"`,
   `"ground"` (the ground state of `h`), or an explicit length-`d` state vector.
 
-The Schrödinger-picture MPO and the tree engines instead assume a two-level,
-`sigma_z`-coupled system.
+`tebd` reaches these on a single MPS via leg swaps; the MPO and tree engines carry
+`h` and `O` as matrices in their finite-state-machine operators (their
+interaction-picture gates diagonalize `O`).  Only a *multichannel* bath — one bath
+coupled through several operators at once — is handled elsewhere (it routes through
+the tree so the system stays on its own site; see
+{doc}`../systems/composite_multichannel`).
 
 ## Example
 
