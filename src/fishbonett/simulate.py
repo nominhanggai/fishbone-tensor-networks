@@ -127,13 +127,20 @@ def _decompose_h(h):
 
 
 class SpinBoson:
-    """A two-level system coupled to a :class:`Bath`.
+    """A system coupled to a :class:`Bath`.
+
+    The system need not be two-level: ``h`` may be any ``(d, d)`` Hamiltonian, so
+    a composite system (e.g. a spin tensored with a vibrational mode) is described
+    by giving the full ``h`` and a ``coupling`` that acts on the whole space (for
+    a bath that sees only the spin, ``coupling = sigma_z (x) I_vib``).  Arbitrary
+    system dimensions and initial states are supported by ``method='tebd'``; the
+    MPO/tree methods still assume a two-level ``sigma_z``-coupled system.
 
     Parameters
     ----------
-    h : (2, 2) array
+    h : (d, d) array
         System Hamiltonian.
-    coupling : (2, 2) array
+    coupling : (d, d) array
         System operator coupling to the bath.
     bath : Bath
     """
@@ -160,8 +167,12 @@ class SpinBoson:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
             n_steps = int(round(t_max / dt))
-        obs_ops = observables if observables is not None else {
-            "sz": sigma_z, "sx": sigma_x}
+        if observables is not None:
+            obs_ops = observables
+        elif self.h.shape[0] == 2:
+            obs_ops = {"sz": sigma_z, "sx": sigma_x}
+        else:
+            obs_ops = {}                    # general system: return the RDM only
         m = method.lower().replace("_", "-")
         if m == "tebd":
             return self._run_tebd(dt, n_steps, bond_dim, trunc_eps, obs_ops,
@@ -183,6 +194,10 @@ class SpinBoson:
                 for name, O in obs_ops.items()}
 
     def _require_standard(self):
+        if self.h.shape[0] != 2:
+            raise ValueError("the MPO/tree methods assume a two-level system; use "
+                             "method='tebd' for a general system dimension "
+                             "(e.g. spin (x) vibration)")
         if not np.allclose(self.coupling, sigma_z, atol=1e-9):
             raise ValueError("the MPO/tree methods assume a sigma_z system-bath "
                              "coupling; use method='tebd' for a general coupling")
@@ -232,59 +247,69 @@ class SpinBoson:
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
                       rdm=np.asarray(rdms), method=m)
 
-    def _initial_spin(self, initial):
+    def _initial_state(self, initial):
+        """Initial system state as a ``d_sys``-vector.  ``"up"``/``"down"`` are the
+        first two basis states, ``"ground"`` the ground state of ``h``; a vector
+        (e.g. an explicit spin (x) vibration state) is accepted and normalized."""
+        d = self.h.shape[0]
         if isinstance(initial, str):
             if initial == "up":
-                return np.array([1.0, 0.0], dtype=complex)
+                v = np.zeros(d, complex); v[0] = 1.0; return v
             if initial == "down":
-                return np.array([0.0, 1.0], dtype=complex)
+                v = np.zeros(d, complex); v[min(1, d - 1)] = 1.0; return v
             if initial == "ground":
                 w, U = np.linalg.eigh(self.h)
                 return U[:, int(np.argmin(w))].astype(complex)
             raise ValueError(f"unknown initial state {initial!r}")
-        v = np.asarray(initial, complex)
+        v = np.asarray(initial, complex).reshape(-1)
+        if v.shape[0] != d:
+            raise ValueError(f"initial state has length {v.shape[0]}, expected "
+                             f"the system dimension {d}")
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.backwardSpinBoson import SpinBoson as _SB
-        from fishbonett.mps import SpinBosonMPS
+        from fishbonett.models.backward import SpinBoson as _BackwardBuilder
+        from fishbonett.states.mps import SpinBosonMPS
         b = self.bath
         n = b.n_modes
-        pd = [b.phys_dim] * n + [2]
-        eth = _SB(pd)
-        eth.domain = list(b.domain)
-        eth.sd = b.spectral_density()
-        eth.he_dy = self.coupling
-        eth.h1e = self.h
-        eth.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
-        etn = SpinBosonMPS(pd)
-        g = self._initial_spin(initial)
-        etn.B[-1][:] = 0.0
-        etn.B[-1][0, 0, 0], etn.B[-1][0, 1, 0] = g[0], g[1]
+        d_sys = self.h.shape[0]
+        pd = [b.phys_dim] * n + [d_sys]
+        builder = _BackwardBuilder(pd)         # interaction-picture gate builder
+        builder.domain = list(b.domain)
+        builder.sd = b.spectral_density()
+        builder.he_dy = self.coupling
+        builder.h1e = self.h
+        builder.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
+
+        state = SpinBosonMPS(pd)               # the MPS being evolved
+        psi0 = self._initial_state(initial)
+        state.B[-1][:] = 0.0
+        for a in range(d_sys):
+            state.B[-1][0, a, 0] = psi0[a]
 
         # Each iteration is a symmetric forward/backward pair over hdt = dt/2, so
         # it advances the user's physical dt (matching the tree/mpo drivers).
         hdt = dt / 2.0
-        rdms, maxb = [], []
-        for tn in range(n_steps):
-            t0 = 2 * tn * hdt
-            u1, _ = eth.get_u(t0, hdt, mode="normal")
-            etn.U = u1
+        rdms, max_bond = [], []
+        for step in range(n_steps):
+            t0 = 2 * step * hdt
+            u_fwd, _ = builder.get_u(t0, hdt, mode="normal")
+            state.U = u_fwd
             for j in range(n - 1, 0, -1):
-                etn.update_bond(j, bond_dim, trunc_eps, swap=1)
-            etn.update_bond(0, bond_dim, trunc_eps, swap=0)
-            etn.update_bond(0, bond_dim, trunc_eps, swap=0)
-            _, u2 = eth.get_u(t0 + hdt, hdt, mode="reverse")
-            etn.U = u2
+                state.update_bond(j, bond_dim, trunc_eps, swap=1)
+            state.update_bond(0, bond_dim, trunc_eps, swap=0)
+            state.update_bond(0, bond_dim, trunc_eps, swap=0)
+            _, u_bwd = builder.get_u(t0 + hdt, hdt, mode="reverse")
+            state.U = u_bwd
             for j in range(1, n):
-                etn.update_bond(j, bond_dim, trunc_eps, swap=1)
-            theta = etn.get_theta1(n)
+                state.update_bond(j, bond_dim, trunc_eps, swap=1)
+            theta = state.get_theta1(n)
             rho = np.einsum("LiR,LjR->ij", theta, theta.conj())
             rdms.append(rho / np.trace(rho).real)
-            maxb.append(max((len(s) for s in etn.S), default=1))
+            max_bond.append(max((len(s) for s in state.S), default=1))
         t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
-                      max_bond=np.array(maxb), rdm=np.asarray(rdms), method="tebd")
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms), method="tebd")
 
 
 # -- multi-bath fishbone (1D chain of electronic sites, each with baths) ------
@@ -374,20 +399,20 @@ class Fishbone:
 
     def _build_h(self, g, ncap):
         pd = self._build_pd()
-        eth = FishBoneH(pd)
-        eth.domain = self.domain
+        ham = FishBoneH(pd)
+        ham.domain = self.domain
         he_dy, hv_dy, h1e, h1v = [], [], [], []
         for n, ((lb, rb), de, hsite) in enumerate(
                 zip(self.baths, self.de, self.sites)):
             two_bath = rb is not None
             if lb is not None:
-                eth.sd[n, 0] = lb.spectral_density()
+                ham.sd[n, 0] = lb.spectral_density()
                 lc = lb.coupling if lb.coupling is not None else sigma_z
                 he_dy.append(np.asarray(lc, complex))
             else:
                 he_dy.append(np.eye(de))
             if rb is not None:
-                eth.sd[n, 1] = rb.spectral_density()
+                ham.sd[n, 1] = rb.spectral_density()
                 rc = rb.coupling if rb.coupling is not None else sigma_x
                 hv_dy.append(np.asarray(rc, complex))
             else:
@@ -401,14 +426,14 @@ class Fishbone:
             else:
                 h1e.append(hsite)
                 h1v.append(np.zeros((de, de), complex))
-        eth.he_dy = he_dy
-        eth.hv_dy = hv_dy
-        eth.h1e = h1e
-        eth.h1v = h1v
+        ham.he_dy = he_dy
+        ham.hv_dy = hv_dy
+        ham.h1e = h1e
+        ham.h1v = h1v
         if self.nc > 1:
-            eth.h2ee = list(self.backbone)
-        eth.build(g=g, ncap=ncap, discretizer=self._discretizer())
-        return eth
+            ham.h2ee = list(self.backbone)
+        ham.build(g=g, ncap=ncap, discretizer=self._discretizer())
+        return ham
 
     def _init_net(self, pd, initial):
         def g_state(dim):
@@ -461,25 +486,25 @@ class Fishbone:
         if observables is None:
             observables = {"sz": sigma_z, "sx": sigma_x} if all(
                 d == 2 for d in self.de) else {}
-        eth = self._build_h(g, ncap)
+        ham = self._build_h(g, ncap)
         pd = self._build_pd()
-        etn = self._init_net(pd, initial)
-        etn.U = eth.get_u(dt=dt)
+        state = self._init_net(pd, initial)
+        state.U = ham.get_u(dt=dt)
 
-        n_bond = [eth._L[cn] - 1 for cn in range(self.nc)]
-        e_index = [eth._ebL[cn] for cn in range(self.nc)]
+        n_bond = [ham._L[cn] - 1 for cn in range(self.nc)]
+        e_index = [ham._ebL[cn] for cn in range(self.nc)]
         rdms = np.empty((n_steps, self.nc), dtype=object)
-        for tn in range(n_steps):
+        for step in range(n_steps):
             if self.nc > 1:
                 for i in range(self.nc - 1):
-                    etn.update_bond(-1, i, bond_dim, trunc_eps)
+                    state.update_bond(-1, i, bond_dim, trunc_eps)
             for cn in range(self.nc):
                 for j in range(n_bond[cn]):
-                    etn.update_bond(cn, j, bond_dim, trunc_eps)
+                    state.update_bond(cn, j, bond_dim, trunc_eps)
             for cn in range(self.nc):
-                th = etn.get_theta1(cn, e_index[cn])
+                th = state.get_theta1(cn, e_index[cn])
                 rho = np.einsum("LiUDR,LjUDR->ij", th, th.conj())
-                rdms[tn, cn] = rho / np.trace(rho).real
+                rdms[step, cn] = rho / np.trace(rho).real
 
         expect = {}
         for name, O in observables.items():
