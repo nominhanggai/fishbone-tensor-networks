@@ -1,9 +1,9 @@
 import numpy as np
 from scipy import integrate
-from legendre_discretization import get_vn_squared, get_approx_func
-from golden_rule_rate import fgr_rate, fgr_rate_by_order
+from fishbonett.legendre_discretization import get_vn_squared, get_approx_func
+from fishbonett.rates.golden_rule import fgr_rate, fgr_rate_by_order
 import itertools as it
-from mcmc_integrator import mcmc_time_ordered
+from fishbonett.rates.mcmc import mcmc_time_ordered
 
 """
 Calculate fermi's golden rule rate for 2-state (2 acceptors) electron transfer reactions, given spectral densities.

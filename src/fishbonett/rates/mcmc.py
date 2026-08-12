@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 
@@ -92,7 +94,7 @@ def mcmc_time_ordered(func, dim, interval, N, burn_in=1000):
             samples.append(samples[i])
             mc_points.append(mc_points[i])
     nominator = np.array([np.exp(1j*np.angle(func(*p))) for p in mc_points])
-    samples = np.array(samples) / np.math.factorial(dim) * (t_max - t_min) ** dim
+    samples = np.array(samples) / math.factorial(dim) * (t_max - t_min) ** dim
     return np.mean(nominator) / np.mean(1/samples[burn_in:]), nominator, samples
 
 
@@ -115,7 +117,7 @@ if __name__ == "__main__":
 
 
     N = 500000
-    _, a = mcmc_time_ordered(f5, 5, [0, 1], N=N)
+    _, _, a = mcmc_time_ordered(f5, 5, [0, 1], N=N)
     print("finished")
     inv_samples = 1 / a
 
