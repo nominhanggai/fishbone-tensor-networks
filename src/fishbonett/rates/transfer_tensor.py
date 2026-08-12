@@ -39,7 +39,8 @@ def map_basis_op(index, t, basis_map):
 def transfer_mat(lt_map):
     """
     Args:
-        lt_map (): a list of dynamical maps in the Liouville space, i.e., the basis is {|n>|m>}.
+        lt_map (): a list of dynamical maps in the Liouville space, i.e., the
+            basis is ``{|n>|m>}``.
 
     Returns:
         T: a list of same number of transfer tensors as the dynamical maps.

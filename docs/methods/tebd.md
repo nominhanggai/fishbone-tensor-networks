@@ -59,7 +59,7 @@ from the ground state of its Hamiltonian:
 ```python
 import numpy as np
 from fishbonett.simulate import Bath, SpinBoson
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
@@ -84,5 +84,5 @@ way — just pass a `(3, 3)` `h` and `coupling` and a length-3 `initial` vector.
   handles a signed `domain` (thermofield / T-TEDOPA) directly; see {doc}`../bath`.
 - Cost per step is `O(n_modes)` two-site updates; the bond dimension is set by the
   physical system–bath entanglement and capped at `bond_dim`.
-- For the underlying builder see {py:mod}`fishbonett.models.backward`, and for the
+- For the underlying builder see {py:mod}`fishbonett.models.interaction_picture`, and for the
   canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.SpinBosonMPS`.

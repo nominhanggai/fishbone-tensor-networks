@@ -137,7 +137,7 @@ def test_spinboson_multichannel_routes_to_star():
 def test_composite_spin_vibration_system():
     """System = spin (x) vibration; bath couples only through the spin.  Validated
     vs exact diagonalization of the discretized star."""
-    from fishbonett.models.backward import SpinBoson as Builder, _c
+    from fishbonett.models.interaction_picture import SpinBoson as Builder, _c
     dv, nm, dph = 2, 2, 4
     I2, Iv = np.eye(2), np.eye(dv)
     bv = _c(dv); nv = bv.T @ bv
@@ -152,7 +152,7 @@ def test_composite_spin_vibration_system():
 
     builder = Builder([dph] * nm + [2 * dv])
     builder.domain = [0.0, 40.0]; builder.sd = _J
-    builder.he_dy = coup; builder.h1e = h_sys
+    builder.coupling = coup; builder.h_sys = h_sys
     builder.build(g=1)
     freq = builder.freq
     j0 = builder.k_list[0] * builder.coef[0, :]

@@ -11,6 +11,18 @@ pip install -e ".[test,docs]"    # development
 
 Core dependencies are `numpy`, `scipy` and `opt_einsum`; Python ≥ 3.10 is required.
 
+### Why `opt_einsum` is a core dependency
+
+The tree and MPO engines contract many-operand tensor networks in their inner
+loop. `opt_einsum` evaluates such a contraction as a sequence of pairwise
+`tensordot`/BLAS calls, whereas `numpy.einsum` — even with `optimize="greedy"`
+and a pre-computed path — still falls back to its unvectorized `c_einsum` C loop
+for the actual multi-operand contraction. On the tree engine the difference is
+about **100×** (measured: 0.51 s vs 55 s for the same `tree-tdvp2` step), so
+`opt_einsum` is a hard requirement rather than a convenience: `numpy`'s
+`optimize=` option chooses a good contraction *order* but cannot match the
+per-contraction throughput.
+
 ## A first simulation
 
 The high-level interface ({py:mod}`fishbonett.simulate`) propagates the population
@@ -20,7 +32,7 @@ call. Declare the bath and the system, then `run`:
 ```python
 import numpy as np
 from fishbonett.simulate import Bath, SpinBoson
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             domain=(-25, 36), temperature=1.0,       # T-TEDOPA thermalization

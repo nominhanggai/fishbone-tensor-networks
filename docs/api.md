@@ -23,6 +23,7 @@
    fishbonett.tree
    fishbonett.fishbone
    fishbonett.model
+   fishbonett.models.interaction_picture
    fishbonett.int_pic_hsb_spin_boson
 ```
 
@@ -38,6 +39,7 @@
    fishbonett.bath.orthpol
    fishbonett.bath.lanczos
    fishbonett.bath.recurrence
+   fishbonett.bath.auto
 ```
 
 ## Operators and spectral densities
@@ -47,7 +49,8 @@
    :toctree: generated
    :recursive:
 
-   fishbonett.stuff
+   fishbonett.operators
+   fishbonett.spectral_densities
 ```
 
 ## Rate theory and diabatization
