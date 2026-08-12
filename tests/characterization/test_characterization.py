@@ -26,13 +26,10 @@ def _load(name):
 
 def _run(name):
     from fishbonett.stuff import sigma_x, sigma_z, _num
-    if name == "plain":
-        from fishbonett.backwardSpinBosonMultiChannel import SpinBoson, SpinBoson1D
-        return run_multichannel_ic(SpinBoson, SpinBoson1D, sigma_x, sigma_z, _num,
-                                   lbo=False)
+    from fishbonett.mps import SpinBosonMPS
     from fishbonett.backwardSpinBosonMultiChannel import SpinBoson
-    from fishbonett.spinBosonMPS_LBO import SpinBoson1D as LBOEngine
-    return run_multichannel_ic(SpinBoson, LBOEngine, sigma_x, sigma_z, _num, lbo=True)
+    return run_multichannel_ic(SpinBoson, SpinBosonMPS, sigma_x, sigma_z, _num,
+                               lbo=(name == "lbo"))
 
 
 @pytest.mark.parametrize("name", ["plain", "lbo"])
