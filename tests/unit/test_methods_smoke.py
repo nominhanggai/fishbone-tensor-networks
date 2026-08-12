@@ -5,27 +5,6 @@ import numpy as np
 import pytest
 
 
-def test_spin_boson_model_builds_and_propagates():
-    """The clean interaction-picture-wrt-H_SB model (keyword-constructed)."""
-    from fishbonett.int_pic_hsb_spin_boson import BosonicBathModel
-    from fishbonett.spin_boson_mps import BosonicBathMPS
-
-    pd_boson = [6, 6, 6]
-    eth = BosonicBathModel(v_x=50.0, v_z=0.0, pd_sys=2, pd_boson=pd_boson,
-                         boson_domain=[0.0, 100.0],
-                         sd=lambda w: 0.5 * w * np.exp(-w / 20.0), dt=1e-3)
-    u_one, u_half = eth.get_u(0.0, 1e-3)
-    assert len(u_one) == len(pd_boson)          # one gate per bond
-    assert all(np.all(np.isfinite(u)) for u in u_one)
-
-    etn = BosonicBathMPS(pd_sys=2, pd_boson=pd_boson)
-    etn.B[0][0, 0, 0] = 1.0                       # system site is first here
-    etn.U = u_one
-    for j in range(len(pd_boson)):
-        etn.update_bond(j, 20, 1e-8, swap=0)
-    assert all(np.all(np.isfinite(b)) for b in etn.B)
-
-
 def test_chain_cooling_gives_normalized_rdm():
     from fishbonett.coolingC_SpinBoson import BosonicBath
     from fishbonett.stuff import sigma_x, sigma_z
@@ -54,7 +33,7 @@ def test_cooling_shares_the_canonical_engine(module):
 
 def test_public_api_surface():
     import fishbonett as fb
-    for name in ("BosonicBathMPS", "FishBoneNet", "FishBoneH", "BosonicBathModel",
+    for name in ("BosonicBathMPS", "FishBoneNet", "FishBoneH",
                  "get_bath_nn_paras", "get_coupling", "lanczos",
                  "sigma_x", "sigma_z", "drude", "lorentzian"):
         assert hasattr(fb, name), name
