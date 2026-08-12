@@ -32,9 +32,13 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), temperature=1.0, phys_dim=20)
 ```
 
 - **`domain`** defaults to the window that captures **99.9% of the reorganization
-  energy** $\lambda = \tfrac{1}{\pi}\int_0^\infty J(\omega)/\omega\,d\omega$
-  ($(0, \omega_{hi})$, or $(-\omega_{hi}, \omega_{hi})$ when a temperature is set,
-  since a thermofield density lives on both frequency halves).
+  energy** $\lambda = \tfrac{1}{\pi}\int_0^\infty J(\omega)/\omega\,d\omega$:
+  $(0, \omega_{hi})$ at zero temperature.  With a temperature set, the thermofield
+  density lives on both frequency halves, $J_\beta(+\omega) = J(\omega)(n_\beta+1)$
+  and $J_\beta(-\omega) = J(\omega)\,n_\beta$; each half is truncated by **its own**
+  reorganization-energy tail, so the window is **asymmetric**,
+  $(-\omega_{lo}, \omega_{hi})$, with the thermally-suppressed negative edge much
+  closer to zero (and widening with temperature).
 - **`n_modes`** defaults to the **light-cone extent** of the interaction-picture
   chain couplings $d_j(t)$: the coupling to chain site $j$ stays negligible until
   the excitation front reaches it, so a run of length `t_max` only needs the first
@@ -122,21 +126,22 @@ percent; keep both and it is faithful for the entire propagation.
 The same holds at **finite temperature**.  There the correlation function carries
 the detailed-balance factor,
 $C(t) = \tfrac{1}{\pi}\int_0^\infty d\omega\, J(\omega)[\coth(\tfrac{\beta\omega}{2})
-\cos\omega t - i\sin\omega t]$, and the automatic bath uses a **signed** domain
-(thermofield / T-TEDOPA) with more modes to cover both frequency halves — for
-$k_B T = 1$ here, $(-34.9, 34.9)$ and 156 modes.  It reproduces the thermal $C(t)$
-just as faithfully (peak error $7 \times 10^{-3}$), while too few modes or too
-narrow a domain fail in the same way:
+\cos\omega t - i\sin\omega t]$, and the automatic bath uses the **asymmetric signed
+domain** above (thermofield / T-TEDOPA), each half sized by its own
+reorganization-energy tail — for $k_B T = 1$ here, $(-4.3, 34.9)$ and 100 modes.
+It reproduces the thermal $C(t)$ just as faithfully (peak error
+$7.6 \times 10^{-3}$) at far fewer modes than a symmetric window would need, while
+too few modes or too narrow a domain fail in the same way:
 
 ```{figure} img/bath_correlation_finiteT.png
 :alt: Finite-temperature bath correlation function; the auto thermofield bath (156 modes on a signed domain) lands on the exact thermal C(t), with an inset showing the relative error stays ~1e-3 while too-few-modes and too-narrow-domain discretizations rise toward 1.
 :width: 80%
 :align: center
 
-Finite temperature ($k_B T = 1$).  The automatic thermofield bath (156 modes on
-the signed domain, markers) reproduces the thermal correlation function (lines);
-the inset shows the same separation between the faithful automatic choice and the
-degraded discretizations.
+Finite temperature ($k_B T = 1$).  The automatic thermofield bath (100 modes on
+the asymmetric signed domain $(-4.3, 34.9)$, markers) reproduces the thermal
+correlation function (lines); the inset shows the same separation between the
+faithful automatic choice and the degraded discretizations.
 ```
 
 ## TEDOPA: discretization then chain mapping

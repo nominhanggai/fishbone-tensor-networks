@@ -143,9 +143,10 @@ class Bath:
 
     def _auto_domain(self):
         from fishbonett.bath.auto import auto_domain
-        signed = self.temperature is not None or self.beta is not None
+        beta = self.beta if self.beta is not None else (
+            1.0 / self.temperature if self.temperature is not None else None)
         Js = self.J if isinstance(self.J, (list, tuple)) else [self.J]
-        doms = [auto_domain(Jc, signed=signed) for Jc in Js]      # cover every channel
+        doms = [auto_domain(Jc, beta=beta) for Jc in Js]          # cover every channel
         return (min(d[0] for d in doms), max(d[1] for d in doms))
 
     def resolved(self, t_max=None):
