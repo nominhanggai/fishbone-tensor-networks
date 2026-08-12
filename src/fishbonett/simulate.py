@@ -32,7 +32,9 @@ __all__ = ["Bath", "SpinBoson", "Result", "thermalize"]
 
 _MPO_METHODS = {"tdvp1": "run_tdvp1", "mpo-tdvp1": "run_tdvp1",
                 "tdvp2": "run_tdvp2", "mpo-tdvp2": "run_tdvp2",
-                "dtdvp": "run_dtdvp", "mpo-dtdvp": "run_dtdvp"}
+                "dtdvp": "run_dtdvp", "mpo-dtdvp": "run_dtdvp",
+                "mpo-ip-tdvp1": "run_ip_tdvp1", "ip-tdvp1": "run_ip_tdvp1",
+                "mpo-ip-tdvp2": "run_ip_tdvp2", "ip-tdvp2": "run_ip_tdvp2"}
 _TREE_METHODS = {"tree-tdvp": "run_tree_tdvp", "tree-tdvp1": "run_tree_tdvp",
                  "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
 
@@ -146,7 +148,8 @@ class SpinBoson:
         """Propagate and return a :class:`Result`.
 
         ``method`` is one of ``'tebd'`` (interaction-picture swap network),
-        ``'mpo-tdvp1' | 'mpo-tdvp2' | 'mpo-dtdvp'`` (Schroedinger-picture MPO), or
+        ``'mpo-tdvp1' | 'mpo-tdvp2' | 'mpo-dtdvp'`` (Schroedinger-picture MPO),
+        ``'mpo-ip-tdvp1' | 'mpo-ip-tdvp2'`` (interaction-picture star MPO), or
         ``'tree-tdvp' | 'tree-tdvp2' | 'tree-tebd'`` (interaction-picture tree).
         ``observables`` maps names to (2, 2) operators; the default measures
         ``sigma_z`` and ``sigma_x``.
@@ -168,7 +171,8 @@ class SpinBoson:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   krylov, engine_kw)
         raise ValueError(f"unknown method {method!r}; choose from tebd, "
-                         "mpo-tdvp1/tdvp2/dtdvp, tree-tdvp/tdvp2/tebd")
+                         "mpo-tdvp1/tdvp2/dtdvp, mpo-ip-tdvp1/tdvp2, "
+                         "tree-tdvp/tdvp2/tebd")
 
     # -- dispatchers ---------------------------------------------------------
     def _expect_from_rdm(self, rdms, obs_ops):
@@ -192,12 +196,18 @@ class SpinBoson:
                       dt=dt / 2.0, nsteps=n_steps, krylov=krylov,
                       discretizer=b.discretizer(), observe=_mpo.measure_rdm, **kw)
         sd, dom = b.spectral_density(), b.domain
+        driver = _MPO_METHODS[m]
         maxb = None
-        if _MPO_METHODS[m] == "run_tdvp1":
+        if driver == "run_tdvp1":
             t, rdms = _mpo.run_tdvp1(sd, dom, D=bond_dim, **common)
-        elif _MPO_METHODS[m] == "run_tdvp2":
+        elif driver == "run_ip_tdvp1":
+            t, rdms = _mpo.run_ip_tdvp1(sd, dom, D=bond_dim, **common)
+        elif driver == "run_tdvp2":
             t, rdms, maxb = _mpo.run_tdvp2(sd, dom, chi_max=bond_dim,
                                            eps=trunc_eps, **common)
+        elif driver == "run_ip_tdvp2":
+            t, rdms, maxb = _mpo.run_ip_tdvp2(sd, dom, chi_max=bond_dim,
+                                              eps=trunc_eps, **common)
         else:
             t, rdms, maxb = _mpo.run_dtdvp(sd, dom, Dlim=bond_dim, **common)
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
