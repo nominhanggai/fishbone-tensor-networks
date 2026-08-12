@@ -10,6 +10,7 @@ using matrix-product-state (MPS) and tree-tensor-network (TEBD) methods.
 :caption: Contents
 
 getting_started
+methods
 api
 ```
 
