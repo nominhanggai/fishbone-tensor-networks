@@ -1,0 +1,82 @@
+"""Benchmark: tree tensor-network engine (interaction picture).
+
+Validates the tree-MPO against the direct star Hamiltonian, and the tree-TDVP and
+tree-TEBD propagators against exact diagonalization of a small spin-boson star,
+and shows the log-depth advantage over a chain.
+
+Run with:  python benchmarks/tree_engine.py
+"""
+import numpy as np
+
+from fishbonett.tree import (_star_transform, run_tree_tdvp, run_tree_tebd,
+                             build_balanced_tree, build_tree_mpo, tree_depth,
+                             hamiltonian_from_mpo, _hamiltonian_direct,
+                             anih, crea, SZ, SX)
+
+
+def Jb(w):
+    aw = abs(w)
+    if aw < 1e-12:
+        return 0.0
+    nb = 1.0 / np.expm1(aw)
+    j = 0.2 * aw * np.exp(-aw / 5.0)
+    return j * (nb + 1.0) if w > 0 else j * nb
+
+
+def embed(op, site, dims):
+    mats = [np.eye(dm) for dm in dims]
+    mats[site] = op
+    out = mats[0]
+    for m in mats[1:]:
+        out = np.kron(out, m)
+    return out
+
+
+def exact_sz(n_chain, d, V, ts):
+    freq, Vn, _ = _star_transform(Jb, n_chain, (-25.0, 36.0))
+    dims = [2] + [d] * n_chain
+    H = embed(V * SX, 0, dims)
+    for k in range(n_chain):
+        H = H + freq[k] * embed(crea(d) @ anih(d), 1 + k, dims)
+        H = H + Vn[k] * (embed(SZ, 0, dims) @ embed(anih(d) + crea(d), 1 + k, dims))
+    E, Uv = np.linalg.eigh(H)
+    psi0 = np.zeros(int(np.prod(dims)), dtype=complex)
+    psi0[0] = 1.0
+    coef = Uv.conj().T @ psi0
+    szop = embed(SZ, 0, dims)
+    return np.array([(Uv @ (np.exp(-1j * E * t) * coef)).conj()
+                     @ (szop @ (Uv @ (np.exp(-1j * E * t) * coef))) for t in ts]).real
+
+
+def main():
+    print("=== tree-MPO vs direct star Hamiltonian ===")
+    rng = np.random.default_rng(0)
+    for n in (1, 2, 3, 4, 5):
+        dcoup = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+        nodes, root, _ = build_balanced_tree(n, 3)
+        build_tree_mpo(nodes, root, dcoup, 0.7, 0.4)
+        H = hamiltonian_from_mpo(nodes, root, n, 3)
+        print(f"  n_modes={n}: max|H_mpo - H_direct|="
+              f"{np.abs(H - _hamiltonian_direct(dcoup, 0.7, 0.4, 3, n)).max():.1e}")
+
+    print("\n=== tree dynamics vs exact diagonalization ===")
+    n_chain, d, V, dt, nsteps = 3, 6, 1.0, 0.05, 20
+    t, sz_tdvp = run_tree_tdvp(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
+                               dt=dt, nsteps=nsteps, D=40, krylov=25)
+    _, sz_tebd = run_tree_tebd(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
+                               dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-12)
+    sz_ex = exact_sz(n_chain, d, V, t)
+    print(f"{'t':>6} {'exact':>10} {'tree-TDVP':>11} {'tree-TEBD':>11}")
+    for i in range(0, nsteps, 4):
+        print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz_tdvp[i]:>+11.5f} {sz_tebd[i]:>+11.5f}")
+    print(f"max|tree-TDVP - exact| = {np.max(np.abs(sz_tdvp - sz_ex)):.2e}  (2nd-order Trotter)")
+    print(f"max|tree-TEBD - exact| = {np.max(np.abs(sz_tebd - sz_ex)):.2e}")
+
+    print("\n=== tree depth vs chain length ===")
+    for n in (16, 64, 256, 600):
+        nodes, root, _ = build_balanced_tree(n, 3)
+        print(f"  n_modes={n:4d}: tree depth={tree_depth(nodes, root):2d}  vs chain length={n + 1}")
+
+
+if __name__ == "__main__":
+    main()
