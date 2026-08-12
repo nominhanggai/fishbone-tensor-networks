@@ -15,7 +15,7 @@ to the spin; the bath attaches to the spin.  Build it as a two-site
 import numpy as np
 from fishbonett.treebone import TreeFishbone
 from fishbonett.simulate import Bath
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 
 b = np.diag(np.sqrt(np.arange(1, 4)), 1)           # vibration annihilation (dv=4)
 h_spin = 0.25 * sigma_z + sigma_x

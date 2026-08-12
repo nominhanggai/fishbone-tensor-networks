@@ -33,7 +33,7 @@ spin-boson model through all nine and prints the final population:
 ```python
 import numpy as np
 from fishbonett.simulate import Bath, SpinBoson
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)

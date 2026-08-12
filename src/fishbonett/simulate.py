@@ -365,17 +365,17 @@ class SpinBoson:
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.models.backward import SpinBoson as _BackwardBuilder
+        from fishbonett.models.interaction_picture import SpinBoson as _IPBuilder
         from fishbonett.states.mps import SpinBosonMPS
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
         d_sys = self.h.shape[0]
         pd = [b.phys_dim] * n + [d_sys]
-        builder = _BackwardBuilder(pd)         # interaction-picture gate builder
+        builder = _IPBuilder(pd)               # interaction-picture gate builder
         builder.domain = list(b.domain)
         builder.sd = b.spectral_density()
-        builder.he_dy = self.coupling
-        builder.h1e = self.h
+        builder.coupling = self.coupling
+        builder.h_sys = self.h
         builder.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
 
         state = SpinBosonMPS(pd)               # the MPS being evolved

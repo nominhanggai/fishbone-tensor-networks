@@ -17,7 +17,7 @@ bath:
 import numpy as np
 from fishbonett.treebone import TreeFishbone
 from fishbonett.simulate import Bath
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 
 def bath(op):
     return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
