@@ -5,7 +5,6 @@
 ```bash
 pip install -e .                 # from a checkout
 pip install -e ".[gpu]"          # optional CuPy GPU truncation
-pip install -e ".[symbolic]"     # optional sympy-based spectral densities
 pip install -e ".[rates]"        # optional vegas Monte-Carlo integrator
 pip install -e ".[test,docs]"    # development
 ```

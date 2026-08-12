@@ -1,1 +1,1 @@
-"""Hamiltonian / model builders (spin-boson, fishbone, star, interaction-picture, cooling).  Each builds a Hamiltonian or Trotter gates and drives the unified engines in :mod:`fishbonett.states` / :mod:`fishbonett.evolve`."""
+"""Hamiltonian / model builders (spin-boson chain, fishbone, interaction-picture, chain cooling).  Each builds a Hamiltonian or Trotter gates and drives the unified engines in :mod:`fishbonett.states` / :mod:`fishbonett.evolve`."""

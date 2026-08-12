@@ -45,12 +45,8 @@ def test_chain_cooling_gives_normalized_rdm():
     assert np.isclose(np.trace(rho).real, 1.0, atol=1e-6)
 
 
-@pytest.mark.parametrize("module", [
-    "coolingC_SpinBoson", "coolingIC_SpinBoson", "coolingS_SpinBoson",
-    "coolingSpin_SpinBoson", "coolingMonomial_S_SpinBoson",
-    "coolingQuadratic_S_SpinBoson", "coolingDiscreteStarSpinBoson",
-])
-def test_cooling_variants_share_the_canonical_engine(module):
+@pytest.mark.parametrize("module", ["coolingC_SpinBoson"])
+def test_cooling_shares_the_canonical_engine(module):
     mod = importlib.import_module(f"fishbonett.{module}")
     bases = [b.__name__ for b in mod.SpinBoson.__mro__]
     assert "SpinBosonMPS" in bases

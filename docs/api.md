@@ -61,20 +61,3 @@
    fishbonett.diabatization
 ```
 
-## Interaction-picture, star and cooling drivers
-
-The following modules provide the Hamiltonian / propagator builders for the
-individual method families; they all share the {py:class}`fishbonett.mps.SpinBosonMPS`
-engine.
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated
-   :recursive:
-
-   fishbonett.backwardSpinBoson
-   fishbonett.backwardSpinBosonMultiChannel
-   fishbonett.starSpinBoson
-   fishbonett.coolingC_SpinBoson
-   fishbonett.chainSpinBosonDiscrete
-```
