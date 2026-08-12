@@ -25,13 +25,11 @@ def fgr_rate3_correction_order1(c_list, e_list, kbT, _w, s_list, t_max):
     coth = 1 / np.tanh(w / (2 * kbT))
     const_exponent = -coth * (s12 ** 2 + s23 ** 2 + s31 ** 2) / (2 * w_sq * np.pi)
 
-    print("Correct", const_exponent)
 
     prefactor_1 = s12 * s23 / w_sq / np.pi
     prefactor_2 = s12 * s31 / w_sq / np.pi
     prefactor_3 = s23 * s31 / w_sq / np.pi
 
-    print("Correct", prefactor_1, prefactor_2, prefactor_3)
 
     exponent = lambda t1, t2, t3: np.sum(
         prefactor_1 * (-coth * np.cos(w * (t1 - t2)) + 1j * np.sin(w * (t1 - t2))) +
@@ -73,7 +71,6 @@ def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
     coth = 1 / np.tanh(w / (2 * kbT))
     const_exponent = -coth * (s12 ** 2 + s23 ** 2 + s32 ** 2 + s21 ** 2) / (2 * w_sq * np.pi)
 
-    print("Correct", const_exponent)
 
     prefactor_12 = s12 * s23 / w_sq / np.pi
     prefactor_13 = s12 * s32 / w_sq / np.pi
@@ -82,7 +79,6 @@ def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
     prefactor_24 = s23 * s21 / w_sq / np.pi
     prefactor_34 = s32 * s21 / w_sq / np.pi
 
-    print("Correct", prefactor_12, prefactor_13, prefactor_14, prefactor_23, prefactor_24, prefactor_34)
 
     exponent = lambda t1, t2, t3, t4: np.sum(
         prefactor_12 * (-coth * np.cos(w * (t1 - t2)) + 1j * np.sin(w * (t1 - t2))) +
