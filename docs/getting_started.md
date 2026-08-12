@@ -38,9 +38,10 @@ result.max_bond          # peak bond dimension per step
 ```
 
 `method` selects the engine — `"tebd"`, `"mpo-tdvp1" | "mpo-tdvp2" | "mpo-dtdvp"`,
-or `"tree-tdvp" | "tree-tdvp2" | "tree-tebd"`. Every method uses the same
-`dt`/`t_max` and returns the same {py:class}`~fishbonett.simulate.Result`, so
-switching engines is a one-word change.
+`"mpo-ip-tdvp1" | "mpo-ip-tdvp2"`, or `"tree-tdvp" | "tree-tdvp2" | "tree-tebd"`.
+Every method uses the same `dt`/`t_max` and returns the same
+{py:class}`~fishbonett.simulate.Result`, so switching engines is a one-word change.
+See {doc}`methods/index` for the theory and an example behind each one.
 
 ## The fishbone geometry
 
@@ -67,6 +68,10 @@ res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, trunc_eps=1e-7,
 res.expect["sz"]         # (n_steps, n_sites): sigma_z measured on each site
 res.rdm                  # (n_steps, n_sites, d, d): reduced density matrix per site
 ```
+
+{doc}`systems/index` covers the full model vocabulary — arbitrary tree topologies,
+composite (spin + vibration) systems, multichannel baths and multi-site
+observables — and {doc}`bath` covers bath discretization and finite temperature.
 
 ## Low-level engines
 
