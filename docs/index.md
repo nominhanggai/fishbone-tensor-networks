@@ -27,8 +27,8 @@ api
   optional CuPy GPU backend.
 - Self-contained TEDOPA bath discretization / chain mapping (no external Fortran
   dependencies).
-- Interaction-picture, star-geometry and cooling propagation schemes, the fishbone
-  tree tensor network, rate theory, and Boys-localization diabatization.
+- Interaction-picture MPS/MPO/tree propagation schemes and chain cooling, the
+  fishbone tree tensor network, rate theory, and Boys-localization diabatization.
 
 ## Indices
 

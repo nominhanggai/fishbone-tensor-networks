@@ -44,3 +44,6 @@ examples/**/output/
 *.dpth
 *.dep
 *.auxlock
+
+# archived legacy model builders (moved out of the package)
+legacy/
