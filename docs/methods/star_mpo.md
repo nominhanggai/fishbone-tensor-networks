@@ -75,5 +75,6 @@ t, sz = run_ip_tdvp1(bath.spectral_density(), (-25, 36), V=1.0,
 - Because the MPO is rebuilt every step, these methods have a slightly higher
   per-step overhead than the fixed chain MPO, but often reach a given accuracy at
   a **smaller bond dimension** thanks to the interaction picture.
-- Like the chain MPO methods, they assume a two-level, `sigma_z`-coupled system;
-  use `tebd` for a general coupling (see {doc}`tebd`).
+- `h` and the coupling `O` are carried as matrices, so a general Hermitian system
+  and coupling of any dimension work (the illustration uses `sigma_z`); see
+  {doc}`../systems/spin_boson`.

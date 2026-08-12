@@ -155,16 +155,17 @@ def _decompose_h(h):
 class SpinBoson:
     """A system coupled to a :class:`Bath`.
 
-    ``h`` may be any ``(d, d)`` Hamiltonian (not only two-level) and ``method='tebd'``
-    supports an arbitrary system dimension and initial state.  When the system has
-    *distinct* internal degrees of freedom (e.g. a spin **and** a vibration),
+    ``h`` may be any ``(d, d)`` Hermitian Hamiltonian (not only two-level) and the
+    coupling ``O`` any ``(d, d)`` Hermitian operator (not only ``sigma_z``); *every*
+    method (``tebd``, the MPO and the tree engines) supports an arbitrary system
+    dimension, a general coupling and an arbitrary initial state.  When the system
+    has *distinct* internal degrees of freedom (e.g. a spin **and** a vibration),
     prefer to keep each on its own site with
     :class:`~fishbonett.treebone.TreeFishbone` (a spin site and a vibration site
     joined by an edge, with the bath on the spin) -- putting ``spin (x) vibration``
     on a single ``d = 2*d_vib`` site here works but defeats the MPS advantage.
     Passing a multichannel :class:`Bath` (``coupling`` a list) routes through the
-    tree so the spin stays on its own site.  The MPO/tree ``method`` values still
-    assume a two-level ``sigma_z``-coupled system.
+    tree so the spin stays on its own site.
 
     Parameters
     ----------
@@ -215,10 +216,10 @@ class SpinBoson:
                                   initial, engine_kw)
         if m in _MPO_METHODS:
             return self._run_mpo(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                                 krylov, engine_kw)
+                                 initial, krylov, engine_kw)
         if m in _TREE_METHODS:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                                  krylov, engine_kw)
+                                  initial, krylov, engine_kw)
         raise ValueError(f"unknown method {method!r}; choose from tebd, "
                          "mpo-tdvp1/tdvp2/dtdvp, mpo-ip-tdvp1/tdvp2, "
                          "tree-tdvp/tdvp2/tebd")
@@ -229,23 +230,32 @@ class SpinBoson:
         return {name: np.einsum("tij,ji->t", rdms, np.asarray(O)).real
                 for name, O in obs_ops.items()}
 
-    def _require_standard(self):
-        if self.h.shape[0] != 2:
-            raise ValueError("the MPO/tree methods assume a two-level system; use "
-                             "method='tebd' for a general system dimension "
-                             "(e.g. spin (x) vibration)")
-        if not np.allclose(self.coupling, sigma_z, atol=1e-9):
-            raise ValueError("the MPO/tree methods assume a sigma_z system-bath "
-                             "coupling; use method='tebd' for a general coupling")
-        return _decompose_h(self.h)
+    def _check_system(self):
+        """Validate that ``h`` and ``coupling`` are square Hermitian operators of
+        matching dimension.  The MPO/tree engines accept a general system: any
+        Hermitian ``h`` and coupling ``O`` (the interaction-picture gates
+        diagonalize ``O``), not only a two-level ``sigma_z`` spin-boson model."""
+        h, O = self.h, self.coupling
+        if h.ndim != 2 or h.shape[0] != h.shape[1]:
+            raise ValueError("h must be a square matrix")
+        if O.shape != h.shape:
+            raise ValueError(f"coupling shape {O.shape} does not match the system "
+                             f"dimension {h.shape}")
+        if not np.allclose(h, h.conj().T, atol=1e-9):
+            raise ValueError("h must be Hermitian")
+        if not np.allclose(O, O.conj().T, atol=1e-9):
+            raise ValueError("the system-bath coupling must be Hermitian")
 
-    def _run_mpo(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, krylov, kw):
-        eps, V = self._require_standard()
+    def _run_mpo(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial,
+                 krylov, kw):
+        self._check_system()
         b = self.bath
         # The MPO drivers take a half-step and advance 2*dt of physical time per
         # sweep; pass dt/2 so one sweep advances the user's physical dt (matching
         # the tree/tebd drivers, so every method reaches the same t_max).
-        common = dict(eps_bias=eps, V=V, n_chain=b.n_modes, d=b.phys_dim,
+        common = dict(hsys=self.h, cop=self.coupling,
+                      init=self._initial_state(initial),
+                      n_chain=b.n_modes, d=b.phys_dim,
                       dt=dt / 2.0, nsteps=n_steps, krylov=krylov,
                       discretizer=b.discretizer(), observe=_mpo.measure_rdm, **kw)
         sd, dom = b.spectral_density(), b.domain
@@ -266,10 +276,13 @@ class SpinBoson:
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
                       max_bond=maxb, rdm=np.asarray(rdms), method=m)
 
-    def _run_tree(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, krylov, kw):
-        eps, V = self._require_standard()
+    def _run_tree(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial,
+                  krylov, kw):
+        self._check_system()
         b = self.bath
-        common = dict(V=V, eps=eps, n_chain=b.n_modes, phys_dim=b.phys_dim, dt=dt,
+        common = dict(hsys=self.h, cop=self.coupling,
+                      init=self._initial_state(initial),
+                      n_chain=b.n_modes, phys_dim=b.phys_dim, dt=dt,
                       nsteps=n_steps, D=bond_dim, discretizer=b.discretizer(),
                       observe=_tree.measure_rdm_oc, **kw)
         sd, dom = b.spectral_density(), b.domain
