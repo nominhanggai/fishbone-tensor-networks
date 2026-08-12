@@ -8,9 +8,9 @@ Run with:  python benchmarks/tree_engine.py
 """
 import numpy as np
 
-from fishbonett.tree import (_star_transform, run_tree_tdvp, run_tree_tebd,
-                             build_balanced_tree, build_tree_mpo, tree_depth,
-                             hamiltonian_from_mpo, _hamiltonian_direct,
+from fishbonett.tree import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
+                             run_tree_tebd, build_balanced_tree, build_tree_mpo,
+                             tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
                              anih, crea, SZ, SX)
 
 
@@ -61,16 +61,19 @@ def main():
 
     print("\n=== tree dynamics vs exact diagonalization ===")
     n_chain, d, V, dt, nsteps = 3, 6, 1.0, 0.05, 20
-    t, sz_tdvp = run_tree_tdvp(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
-                               dt=dt, nsteps=nsteps, D=40, krylov=25)
-    _, sz_tebd = run_tree_tebd(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
-                               dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-12)
+    t, sz_t1 = run_tree_tdvp(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
+                             dt=dt, nsteps=nsteps, D=40, krylov=25)
+    _, sz_t2 = run_tree_tdvp2(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
+                              dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-13)
+    _, sz_te = run_tree_tebd(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
+                             dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-12)
     sz_ex = exact_sz(n_chain, d, V, t)
-    print(f"{'t':>6} {'exact':>10} {'tree-TDVP':>11} {'tree-TEBD':>11}")
+    print(f"{'t':>6} {'exact':>10} {'TDVP(1s)':>10} {'TDVP(2s)':>10} {'TEBD':>10}")
     for i in range(0, nsteps, 4):
-        print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz_tdvp[i]:>+11.5f} {sz_tebd[i]:>+11.5f}")
-    print(f"max|tree-TDVP - exact| = {np.max(np.abs(sz_tdvp - sz_ex)):.2e}  (2nd-order Trotter)")
-    print(f"max|tree-TEBD - exact| = {np.max(np.abs(sz_tebd - sz_ex)):.2e}")
+        print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz_t1[i]:>+10.5f} {sz_t2[i]:>+10.5f} {sz_te[i]:>+10.5f}")
+    print(f"max|tree-TDVP(1-site) - exact| = {np.max(np.abs(sz_t1 - sz_ex)):.2e}")
+    print(f"max|tree-TDVP(2-site) - exact| = {np.max(np.abs(sz_t2 - sz_ex)):.2e}")
+    print(f"max|tree-TEBD        - exact| = {np.max(np.abs(sz_te - sz_ex)):.2e}")
 
     print("\n=== tree depth vs chain length ===")
     for n in (16, 64, 256, 600):
