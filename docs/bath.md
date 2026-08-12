@@ -105,7 +105,8 @@ $\max_t |C_{\mathrm{disc}}(t) - C(t)| / |C(0)|$ on $[0, t_{max}]$ is:
 
 ```{figure} img/bath_correlation.png
 :alt: Real and imaginary parts of the bath correlation function C(t); the auto-discretized bath lands exactly on the exact curve, with an inset showing its relative error stays ~1e-2 while too-few-modes and too-narrow-domain discretizations rise toward 1.
-:width: 100%
+:width: 80%
+:align: center
 
 The automatic bath (markers) reproduces both the real and imaginary parts of the
 exact correlation function (lines).  **Inset:** the relative error stays around
@@ -129,7 +130,8 @@ narrow a domain fail in the same way:
 
 ```{figure} img/bath_correlation_finiteT.png
 :alt: Finite-temperature bath correlation function; the auto thermofield bath (156 modes on a signed domain) lands on the exact thermal C(t), with an inset showing the relative error stays ~1e-3 while too-few-modes and too-narrow-domain discretizations rise toward 1.
-:width: 100%
+:width: 80%
+:align: center
 
 Finite temperature ($k_B T = 1$).  The automatic thermofield bath (156 modes on
 the signed domain, markers) reproduces the thermal correlation function (lines);
