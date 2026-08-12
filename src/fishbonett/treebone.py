@@ -16,6 +16,7 @@ import numpy as np
 from scipy.linalg import expm
 
 from fishbonett.common import get_bath_nn_paras
+from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.model import _c
 from fishbonett.simulate import Result
 from fishbonett.stuff import sigma_x, sigma_z
@@ -299,11 +300,15 @@ class TreeFishbone:
         node = self.ns
         for i in range(self.ns):
             for bath in self.baths[i]:
+                d = bath.phys_dim
+                a, ad, x, numb = _bath_ops(d)
+                if getattr(bath, "is_multichannel", False):
+                    node = self._add_multichannel_star(bath, i, node, dims, edges,
+                                                       site_H, edge_H, a, ad, x, numb)
+                    continue
                 w, k = get_bath_nn_paras(bath.spectral_density(), bath.n_modes,
                                          list(bath.domain), discretizer=bath.discretizer())
                 w = np.asarray(w, float); k = np.asarray(k, float)
-                d = bath.phys_dim
-                a, ad, x, numb = _bath_ops(d)
                 cop = np.asarray(bath.coupling if bath.coupling is not None else sigma_z,
                                  complex)
                 prev = i
@@ -318,6 +323,36 @@ class TreeFishbone:
                     prev = node
                     node += 1
         return dims, edges, site_H, edge_H
+
+    def _add_multichannel_star(self, bath, site, node, dims, edges, site_H, edge_H,
+                               a, ad, x, numb):
+        """One bath coupled to ``site`` through several operators, as a *shared-mode
+        star*: every channel uses the same Gauss-Legendre nodes ``omega_k`` (so the
+        channels cross-correlate), and mode ``k`` couples via the combined operator
+        ``M_k = sum_c g_{c,k} O_c``, ``g_{c,k} = sqrt(J_c(omega_k) w_k / pi)``."""
+        if bath.discretization != "legendre":
+            raise ValueError("a multichannel bath must use the 'legendre' "
+                             "discretization: its Gauss nodes are shared across "
+                             "channels, whereas measure-adapted orthpol nodes are not")
+        channels = bath.channels()
+        freq = None
+        g = []
+        for Jc, _op in channels:
+            f, v_sq = get_vn_squared(Jc, bath.n_modes, list(bath.domain))
+            f = np.asarray(f, float)
+            g.append(np.sqrt(np.asarray(v_sq, float) / np.pi))
+            if freq is None:
+                freq = f
+            elif not np.allclose(freq, f):        # nodes are shared, so unreachable
+                raise ValueError("multichannel channels do not share the mode grid")
+        for k in range(bath.n_modes):
+            dims.append(bath.phys_dim)
+            site_H.append(freq[k] * numb)
+            M = sum(g[c][k] * channels[c][1] for c in range(len(channels)))
+            edges.append((site, node))
+            edge_H[(site, node)] = np.kron(M, x)    # (site op M) (x) (a + a^dag)
+            node += 1
+        return node
 
     def _build(self, dt):
         """Physical tree plus the single-site and two-site Trotter gates."""
@@ -345,8 +380,10 @@ class TreeFishbone:
     def run(self, *, dt, t_max=None, n_steps=None, bond_dim=100, trunc_eps=1e-10,
             observables=None, initial="up"):
         """Propagate and return a :class:`~fishbonett.simulate.Result` with per-site
-        data (``expect[name]`` shape ``(n_steps, n_sites)``; ``rdm`` shape
-        ``(n_steps, n_sites, d, d)``)."""
+        data.  Each operator in ``observables`` is a *single-site* operator measured
+        on **every** electronic site: ``expect[name]`` has shape
+        ``(n_steps, n_sites)`` with ``expect[name][t, i]`` the expectation on site
+        ``i`` at step ``t``; ``rdm`` has shape ``(n_steps, n_sites, d, d)``."""
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
@@ -365,10 +402,20 @@ class TreeFishbone:
             for i in range(self.ns):
                 rdms[tn, i] = st.rdm(i)
             st.move_oc_to(0)
-        expect = {name: np.array([[np.trace(rdms[tn, i] @ np.asarray(O)).real
-                                   for i in range(self.ns)] for tn in range(n_steps)])
-                  for name, O in observables.items()}
-        rdm = np.array([[rdms[tn, i] for i in range(self.ns)] for tn in range(n_steps)])
+        expect = {}
+        for name, O in observables.items():
+            O = np.asarray(O)
+            arr = np.full((n_steps, self.ns), np.nan)     # NaN where dims mismatch
+            for i in range(self.ns):
+                if O.shape == (self.de[i], self.de[i]):
+                    for tn in range(n_steps):
+                        arr[tn, i] = np.trace(rdms[tn, i] @ O).real
+            expect[name] = arr
+        if len(set(self.de)) == 1:                        # uniform sites -> dense
+            rdm = np.array([[rdms[tn, i] for i in range(self.ns)]
+                            for tn in range(n_steps)])
+        else:                                             # mixed dims -> object array
+            rdm = rdms
         t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=expect, rdm=rdm, method="treebone",
                       meta={"n_sites": self.ns})
