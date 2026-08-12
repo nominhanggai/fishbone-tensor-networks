@@ -1,5 +1,16 @@
 # API reference
 
+## High-level interface
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :recursive:
+
+   fishbonett.simulate
+   fishbonett.fishbone_sim
+```
+
 ## State engines and models
 
 ```{eval-rst}

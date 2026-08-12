@@ -15,6 +15,10 @@ api
 
 ## Highlights
 
+- A declarative high-level interface ({py:mod}`fishbonett.simulate`,
+  {py:mod}`fishbonett.fishbone_sim`): describe a bath and system as `Bath` /
+  `SpinBoson` / `Fishbone` objects and propagate with one
+  `run(dt=..., t_max=..., method=...)` call over any of the engines below.
 - One canonical TEBD engine ({py:class}`fishbonett.mps.SpinBosonMPS`) with leg
   swaps, adaptive bond dimension, optional local basis optimization, and an
   optional CuPy GPU backend.
