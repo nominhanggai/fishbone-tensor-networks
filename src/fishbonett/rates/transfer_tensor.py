@@ -8,29 +8,29 @@ def read_rho(label, t):
     return r[t]
 
 
-def map_basis_op(index, t, dict):
+def map_basis_op(index, t, basis_map):
     # print(index, t)
     if index[0] == index[1]:
-        id_ = dict[index]
+        id_ = basis_map[index]
         return read_rho(id_, t)
     if index[0] < index[1]:
-        id1 = dict[index][0]
-        id2 = dict[index][1]
+        id1 = basis_map[index][0]
+        id2 = basis_map[index][1]
         r1 = read_rho(id1, t)
         r2 = read_rho(id2, t)
-        id3 = dict[(index[0], index[0])]
-        id4 = dict[(index[1], index[1])]
+        id3 = basis_map[(index[0], index[0])]
+        id4 = basis_map[(index[1], index[1])]
         r3 = read_rho(id3, t)
         r4 = read_rho(id4, t)
         return r1 + 1j * r2 - (1 + 1j) * (r3 + r4) / 2
     if index[0] > index[1]:
         index_ = (index[1], index[0])
-        id1 = dict[index_][0]
-        id2 = dict[index_][1]
+        id1 = basis_map[index_][0]
+        id2 = basis_map[index_][1]
         r1 = read_rho(id1, t)
         r2 = read_rho(id2, t)
-        id3 = dict[(index_[0], index_[0])]
-        id4 = dict[(index_[1], index_[1])]
+        id3 = basis_map[(index_[0], index_[0])]
+        id4 = basis_map[(index_[1], index_[1])]
         r3 = read_rho(id3, t)
         r4 = read_rho(id4, t)
         return r1 - 1j * r2 - (1 - 1j) * (r3 + r4) / 2
@@ -55,10 +55,10 @@ def transfer_mat(lt_map):
     return T, T_norm
 
 
-def dynamical_maps(t, d):
+def dynamical_maps(t, d, basis_map):
     r = np.zeros([d * d, d * d], dtype=np.complex128)
-    for n, index in it.product(range(d), repeat=2):
-        r[:, n] = map_basis_op(index, t, dict).reshape(d * d)
+    for col, index in enumerate(it.product(range(d), repeat=2)):
+        r[:, col] = map_basis_op(index, t, basis_map).reshape(d * d)
     return r
 
 
