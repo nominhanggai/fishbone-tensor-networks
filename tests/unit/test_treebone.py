@@ -121,6 +121,101 @@ def test_treefishbone_star_matches_exact():
     assert np.max(np.abs(r.expect["sz"] - _fb_exact(fb, r.t))) < 5e-3
 
 
+def test_composite_spin_vibration_separate_sites():
+    """Spin (dim 2) and vibration (dim dv) on their OWN sites, bath only on the
+    spin.  Validated vs exact; also checks mixed-dimension per-site output."""
+    from fishbonett.model import _c
+    dv = 3
+    bvi = _c(dv); nv = bvi.T @ bvi
+    h_spin = 0.25 * sigma_z + sigma_x
+    h_vib = 1.5 * nv
+    C = 0.4 * np.kron(sigma_z, bvi + bvi.T)              # spin-vibration coupling
+    fb = TreeFishbone(sites=[h_spin, h_vib], edges=[(0, 1, C)],
+                      baths=[_bath(2, 4, sigma_z), None])
+    r = fb.run(dt=0.02, n_steps=10, bond_dim=40, trunc_eps=1e-12,
+               observables={"sz": sigma_z})
+    # per-site RDMs keep their own dimension; sz only defined on the 2-level spin
+    assert r.rdm[0, 0].shape == (2, 2) and r.rdm[0, 1].shape == (dv, dv)
+    assert np.all(np.isfinite(r.expect["sz"][:, 0]))     # spin site: defined
+    assert np.all(np.isnan(r.expect["sz"][:, 1]))        # vib site: sz N/A -> NaN
+
+    dims, edges, site_H, edge_H = fb.hamiltonians()
+    tot = int(np.prod(dims))
+
+    def emb(op, s):
+        m = [np.eye(x) for x in dims]; m[s] = op
+        o = m[0]
+        for x in m[1:]:
+            o = np.kron(o, x)
+        return o
+
+    H = np.zeros((tot, tot), complex)
+    for i, h in enumerate(site_H):
+        if np.any(h):
+            H += emb(h, i)
+    for (a, b), Ce in edge_H.items():
+        H += _embed2(Ce.reshape(dims[a], dims[b], dims[a], dims[b]), a, b, dims)
+    E, U = np.linalg.eigh(H)
+    p0 = np.zeros(tot, complex); p0[0] = 1
+    c = U.conj().T @ p0
+    szs = emb(sigma_z, 0)
+    sz_ex = np.array([(U @ (np.exp(-1j * E * t) * c)).conj()
+                      @ (szs @ (U @ (np.exp(-1j * E * t) * c))) for t in r.t]).real
+    assert np.max(np.abs(r.expect["sz"][:, 0] - sz_ex)) < 1e-3
+
+
+def test_multichannel_single_bath():
+    """One bath coupled to a spin through BOTH sigma_z and sigma_x (shared modes),
+    with different per-channel spectral densities.  Validated vs exact."""
+    def Jz(w):
+        return 0.20 * w * np.exp(-w / 5.0)
+
+    def Jx(w):
+        return 0.10 * w * np.exp(-w / 8.0)
+
+    mc = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x],
+              domain=(0.0, 40.0), n_modes=3, phys_dim=4)
+    assert mc.is_multichannel
+    h = 0.3 * sigma_z + 0.8 * sigma_x
+    fb = TreeFishbone(sites=[h], edges=[], baths=[mc])
+    r = fb.run(dt=0.02, n_steps=12, bond_dim=40, trunc_eps=1e-12,
+               observables={"sz": sigma_z})
+    dims, edges, site_H, edge_H = fb.hamiltonians()
+    assert dims[0] == 2 and len(dims) == 1 + 3       # spin + 3 SHARED modes (star)
+    tot = int(np.prod(dims))
+
+    def emb(op, s):
+        m = [np.eye(x) for x in dims]; m[s] = op
+        o = m[0]
+        for x in m[1:]:
+            o = np.kron(o, x)
+        return o
+
+    H = np.zeros((tot, tot), complex)
+    for i, h_ in enumerate(site_H):
+        if np.any(h_):
+            H += emb(h_, i)
+    for (a, b), Ce in edge_H.items():
+        H += _embed2(Ce.reshape(dims[a], dims[b], dims[a], dims[b]), a, b, dims)
+    E, U = np.linalg.eigh(H)
+    p0 = np.zeros(tot, complex); p0[0] = 1
+    c = U.conj().T @ p0
+    szs = emb(sigma_z, 0)
+    sz_ex = np.array([(U @ (np.exp(-1j * E * t) * c)).conj()
+                      @ (szs @ (U @ (np.exp(-1j * E * t) * c))) for t in r.t]).real
+    assert np.max(np.abs(r.expect["sz"][:, 0] - sz_ex)) < 2e-3
+
+
+def test_multichannel_requires_legendre():
+    def Jz(w):
+        return 0.2 * w * np.exp(-w / 5.0)
+    mc = Bath(J=[Jz, Jz], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+              n_modes=2, phys_dim=3, discretization="orthpol")
+    fb = TreeFishbone(sites=[sigma_z], edges=[], baths=[mc])
+    with pytest.raises(ValueError):
+        fb.run(dt=0.02, n_steps=1, bond_dim=20)
+
+
 def test_non_tree_edges_raise():
     with pytest.raises(ValueError):
         TreeTEBD([2, 2, 2], [(0, 1), (1, 2), (2, 0)])       # a loop

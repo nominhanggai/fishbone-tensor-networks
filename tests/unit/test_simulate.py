@@ -87,6 +87,29 @@ def test_methods_share_time_grid_and_agree():
         assert abs(r.expect["sz"][-1] - ref.expect["sz"][-1]) < 5e-2  # agree
 
 
+def test_spinboson_multichannel_routes_to_star():
+    """SpinBoson with a multichannel bath (sz AND sx) keeps the spin on its own
+    site and matches the tree star engine."""
+    from fishbonett.treebone import TreeFishbone
+
+    def Jz(w):
+        return 0.2 * w * np.exp(-w / 5.0)
+
+    def Jx(w):
+        return 0.1 * w * np.exp(-w / 8.0)
+
+    mc = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+              n_modes=3, phys_dim=4)
+    h = 0.3 * sigma_z + 0.8 * sigma_x
+    r = SpinBoson(h=h, coupling=[sigma_z, sigma_x], bath=mc).run(
+        dt=0.02, n_steps=10, bond_dim=40, observables={"sz": sigma_z})
+    assert r.expect["sz"].shape == (10,)          # single-system, not per-site
+    assert r.rdm.shape == (10, 2, 2)
+    fbr = TreeFishbone(sites=[h], edges=[], baths=[mc]).run(
+        dt=0.02, n_steps=10, bond_dim=40, observables={"sz": sigma_z})
+    assert np.allclose(r.expect["sz"], fbr.expect["sz"][:, 0])
+
+
 def test_composite_spin_vibration_system():
     """System = spin (x) vibration; bath couples only through the spin.  Validated
     vs exact diagonalization of the discretized star."""

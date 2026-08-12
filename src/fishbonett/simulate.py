@@ -76,11 +76,14 @@ class Bath:
         Bath discretization: uniform-measure Gauss-Legendre star, or the
         measure-adapted ORTHPOL star (resolves IR-divergent / sharply peaked baths).
     extra_breaks, m_per : ORTHPOL quadrature options.
-    coupling : (d, d) array, optional
-        System operator this bath couples to.  Only used by the multi-bath
-        :class:`Fishbone` / :class:`~fishbonett.treebone.TreeFishbone` interfaces
-        (a single :class:`SpinBoson` takes its coupling operator directly);
-        defaults to ``sigma_z`` there when unset.
+    coupling : (d, d) array, or list of (d, d) arrays
+        System operator(s) this bath couples to.  A single operator is an ordinary
+        bath.  A **list** of operators makes this a *multichannel single bath*: the
+        one bath couples through every operator on shared modes (distinct from
+        several independent baths -- the channels cross-correlate).  For a
+        multichannel bath ``J`` is either one spectral density (shared) or a list of
+        the same length as ``coupling`` (one per channel), and the discretization
+        must be ``'legendre'`` (shared Gauss nodes).  Defaults to ``sigma_z``.
     """
     J: object
     domain: tuple
@@ -94,11 +97,36 @@ class Bath:
     m_per: int = 60
     coupling: object = None
 
-    def spectral_density(self):
+    def _thermalized(self, Jfunc):
         if self.thermalized or (self.temperature is None and self.beta is None):
-            return self.J
+            return Jfunc
         b = self.beta if self.beta is not None else 1.0 / self.temperature
-        return thermalize(self.J, b)
+        return thermalize(Jfunc, b)
+
+    def spectral_density(self):
+        J0 = self.J[0] if isinstance(self.J, (list, tuple)) else self.J
+        return self._thermalized(J0)
+
+    @property
+    def is_multichannel(self):
+        """True when the bath couples through several operators (``coupling`` is a
+        list) -- a single bath with cross-correlated channels, distinct from
+        several independent baths."""
+        return isinstance(self.coupling, (list, tuple))
+
+    def channels(self):
+        """``[(thermalized_J_c, operator_c), ...]`` for a multichannel bath.
+
+        The channels share the same mode grid (same ``domain``/``n_modes``/
+        ``discretization``); ``J`` may be one spectral density (shared by all
+        channels) or a list of the same length as ``coupling``."""
+        ops = list(self.coupling)
+        Js = self.J if isinstance(self.J, (list, tuple)) else [self.J] * len(ops)
+        if len(Js) != len(ops):
+            raise ValueError("a multichannel Bath needs `J` and `coupling` of the "
+                             "same length (one spectral density per channel)")
+        return [(self._thermalized(Jc), np.asarray(op, complex))
+                for Jc, op in zip(Js, ops)]
 
     def discretizer(self):
         if self.discretization == "orthpol":
@@ -160,8 +188,11 @@ class SpinBoson:
         ``'mpo-tdvp1' | 'mpo-tdvp2' | 'mpo-dtdvp'`` (Schroedinger-picture MPO),
         ``'mpo-ip-tdvp1' | 'mpo-ip-tdvp2'`` (interaction-picture star MPO), or
         ``'tree-tdvp' | 'tree-tdvp2' | 'tree-tebd'`` (interaction-picture tree).
-        ``observables`` maps names to (2, 2) operators; the default measures
-        ``sigma_z`` and ``sigma_x``.
+        ``observables`` maps a name to a ``(d, d)`` operator on the (single) system;
+        ``result.expect[name]`` is then that expectation over time, shape
+        ``(n_steps,)``.  The default measures ``sigma_z``/``sigma_x`` for a
+        two-level system (and nothing for a larger system -- pass ``observables``).
+        ``result.rdm`` is the system reduced density matrix per step.
         """
         if n_steps is None:
             if t_max is None:
@@ -173,6 +204,9 @@ class SpinBoson:
             obs_ops = {"sz": sigma_z, "sx": sigma_x}
         else:
             obs_ops = {}                    # general system: return the RDM only
+        if getattr(self.bath, "is_multichannel", False):
+            return self._run_multichannel(dt, n_steps, bond_dim, trunc_eps,
+                                          obs_ops, initial)
         m = method.lower().replace("_", "-")
         if m == "tebd":
             return self._run_tebd(dt, n_steps, bond_dim, trunc_eps, obs_ops,
@@ -246,6 +280,18 @@ class SpinBoson:
             t, rdms = _tree.run_tree_tebd(sd, dom, trunc_eps=trunc_eps, **common)
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
                       rdm=np.asarray(rdms), method=m)
+
+    def _run_multichannel(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial):
+        """One bath coupled to the system through several operators: a shared-mode
+        star attached to the (single) system site.  Built on the tree engine so the
+        system stays on its own site."""
+        from fishbonett.treebone import TreeFishbone
+        fb = TreeFishbone(sites=[self.h], edges=[], baths=[self.bath])
+        r = fb.run(dt=dt, n_steps=n_steps, bond_dim=bond_dim, trunc_eps=trunc_eps,
+                   observables=obs_ops, initial=[self._initial_state(initial)])
+        expect = {name: r.expect[name][:, 0] for name in r.expect}
+        rdm = np.array([r.rdm[k, 0] for k in range(n_steps)])
+        return Result(t=r.t, expect=expect, rdm=rdm, method="multichannel")
 
     def _initial_state(self, initial):
         """Initial system state as a ``d_sys``-vector.  ``"up"``/``"down"`` are the
@@ -476,9 +522,14 @@ class Fishbone:
 
     def run(self, *, dt, t_max=None, n_steps=None, bond_dim=100, trunc_eps=1e-10,
             observables=None, initial="up", g=1.0, ncap=20000):
-        """Propagate the fishbone and return a :class:`Result` with per-site data
-        (``expect[name]`` shape ``(n_steps, n_sites)``; ``rdm`` shape
-        ``(n_steps, n_sites, d, d)``)."""
+        """Propagate the fishbone and return a :class:`Result` with per-site data.
+
+        Each operator in ``observables`` is a *single-site* electronic operator
+        that is measured on **every** electronic site, so ``expect[name]`` has
+        shape ``(n_steps, n_sites)`` and ``expect[name][t, i]`` is its expectation
+        on site ``i`` at step ``t``.  ``rdm`` has shape ``(n_steps, n_sites, d, d)``
+        (the reduced density matrix of each site).  For a two-level chain the
+        default measures ``sigma_z``/``sigma_x`` on every site."""
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")

@@ -95,8 +95,10 @@ def bath(op):
 fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
               baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site
               backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2)
+# sigma_z is measured on *every* electronic site:
 res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
-res.expect["sz"]     # shape (n_steps, n_sites)
+res.expect["sz"]        # shape (n_steps, n_sites); [t, i] = <sz> on site i at step t
+res.rdm                 # shape (n_steps, n_sites, d, d)
 ```
 
 The topology need not be 1D.  {py:class}`~fishbonett.treebone.TreeFishbone` wires
@@ -112,8 +114,56 @@ fb = TreeFishbone(
     edges=[(0, 1, C), (0, 2, C), (0, 3, C)],       # site 0 at the centre
     baths=[bath(sigma_z) for _ in range(4)])
 res = fb.run(dt=0.02, t_max=1.0, bond_dim=80, observables={"sz": sigma_z})
-res.expect["sz"]     # shape (n_steps, 4)
+res.expect["sz"]     # shape (n_steps, 4): <sz> on each of the 4 sites vs time
 ```
+
+## Composite systems and multichannel baths
+
+The "system" need not be a bare two-level spin, and each of its degrees of
+freedom should stay on **its own site** (fattening them onto one MPS site defeats
+the tensor-network advantage).
+
+**Spin + vibration.**  A vibrational mode is just another *system site* (with no
+bath of its own) coupled to the spin; the bath attaches to the spin.  Use
+{py:class}`~fishbonett.treebone.TreeFishbone`:
+
+```python
+import numpy as np
+from fishbonett.treebone import TreeFishbone
+from fishbonett.simulate import Bath
+from fishbonett.stuff import sigma_x, sigma_z
+
+b = np.diag(np.sqrt(np.arange(1, 4)), 1)          # vibration annihilation (dv=4)
+h_spin = 0.25 * sigma_z + sigma_x
+h_vib = 1.5 * (b.T @ b)
+spin_vib = 0.4 * np.kron(sigma_z, b + b.T)         # coupling on the (spin, vib) edge
+fb = TreeFishbone(sites=[h_spin, h_vib], edges=[(0, 1, spin_vib)],
+                  baths=[Bath(J=lambda w: 0.2*w*np.exp(-w/5), domain=(0, 40),
+                              n_modes=20, phys_dim=8, coupling=sigma_z), None])
+res = fb.run(dt=0.02, t_max=1.0, bond_dim=80)
+res.rdm[0, 0]      # 2x2 reduced density matrix of the spin site
+res.rdm[0, 1]      # dv x dv reduced density matrix of the vibration site
+```
+
+**Multichannel single bath.**  One bath coupled to the system through *several*
+operators (e.g. `sigma_z` and `sigma_x`) — distinct from two independent baths,
+because the channels share the same modes and therefore cross-correlate.  Give
+`Bath` a list of couplings and (optionally) a list of per-channel spectral
+densities:
+
+```python
+from fishbonett.simulate import SpinBoson
+
+mc = Bath(J=[lambda w: 0.2*w*np.exp(-w/5),         # sigma_z channel
+             lambda w: 0.1*w*np.exp(-w/8)],        # sigma_x channel (different J)
+          coupling=[sigma_z, sigma_x], domain=(0, 40), n_modes=30, phys_dim=8)
+res = SpinBoson(h=sigma_x, coupling=[sigma_z, sigma_x], bath=mc).run(
+    dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
+```
+
+The bath becomes a shared-mode star attached to the spin site (`M_k = Σ_c g_{c,k}
+O_c`), keeping the spin on its own site.  Multichannel baths require the
+`'legendre'` discretization (the Gauss nodes are shared across channels).
 
 ## Low-level drivers
 
