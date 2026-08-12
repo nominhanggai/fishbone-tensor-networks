@@ -14,56 +14,65 @@ Core dependencies are `numpy`, `scipy` and `opt_einsum`; Python ≥ 3.10 is requ
 
 ## A first simulation
 
-The following propagates the population $\langle\sigma_z\rangle(t)$ of a two-level
-system coupled to a small discrete multichannel bath, in the interaction picture.
+The high-level interface ({py:mod}`fishbonett.simulate`) propagates the population
+$\langle\sigma_z\rangle(t)$ of a two-level system coupled to a bath with a single
+call. Declare the bath and the system, then `run`:
 
 ```python
 import numpy as np
-from fishbonett.backwardSpinBosonMultiChannel import SpinBoson
-from fishbonett.mps import SpinBosonMPS
+from fishbonett.simulate import Bath, SpinBoson
 from fishbonett.stuff import sigma_x, sigma_z
 
-freq = [10.0, 25.0, 40.0]
-coup_mat = [np.diag(c) for c in [(5, -5), (-3, 3), (2, -2)]]
-n_boson = 2 * len(freq)
-pd = [10] * n_boson + [2]
+bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
+            domain=(-25, 36), temperature=1.0,       # T-TEDOPA thermalization
+            n_modes=40, phys_dim=20,
+            discretization="orthpol")                # or the default "legendre"
+model = SpinBoson(h=sigma_x, coupling=sigma_z, bath=bath)
 
-eth = SpinBoson(pd, coup_mat=coup_mat, freq=freq, temp=100.0)
-eth.h1e = 130.0 * sigma_x + np.diag([0.0, -200.0])
-eth.build(n=0)
+result = model.run(dt=0.05, t_max=4.0, method="tree-tdvp2", bond_dim=200,
+                   observables={"sz": sigma_z})
 
-etn = SpinBosonMPS(pd)
-etn.B[-1][0, 0, 0] = 1.0
-
-dt, chi, eps = 1e-3, 40, 1e-6
-for tn in range(30):
-    u1, u2 = eth.get_u(2 * tn * dt, 2 * dt, factor=2)
-    etn.U = u1
-    for j in range(n_boson - 1, 0, -1):
-        etn.update_bond(j, chi, eps, swap=1)
-    etn.update_bond(0, chi, eps, swap=0)
-    etn.update_bond(0, chi, eps, swap=0)
-    etn.U = u2
-    for j in range(1, n_boson):
-        etn.update_bond(j, chi, eps, swap=1)
-    theta = etn.get_theta1(n_boson)
-    rho = np.einsum('LiR,LjR->ij', theta, theta.conj())
-    print(np.einsum('ij,ji', rho, sigma_z).real)
+result.t                 # time grid
+result.expect["sz"]      # <sigma_z>(t)
+result.max_bond          # peak bond dimension per step
 ```
 
-## Common workflow
+`method` selects the engine — `"tebd"`, `"mpo-tdvp1" | "mpo-tdvp2" | "mpo-dtdvp"`,
+or `"tree-tdvp" | "tree-tdvp2" | "tree-tebd"`. Every method uses the same
+`dt`/`t_max` and returns the same {py:class}`~fishbonett.simulate.Result`, so
+switching engines is a one-word change.
 
-Most simulations follow the same recipe:
+## The fishbone geometry
 
-1. Choose physical dimensions `pd = boson_dims + [system_dim]`.
-2. Build a model / bath object and set its spectral density and coupling
-   operators, then `build(...)` to discretize the bath (Gauss–Legendre
-   discretization followed by a Lanczos chain mapping).
-3. Construct the {py:class}`~fishbonett.mps.SpinBosonMPS` state and set the initial
-   condition.
-4. Obtain the Trotter gates with `get_u(...)` and sweep with `update_bond(...)`.
-5. Read out observables from `get_theta1(...)`.
+{py:class}`fishbonett.fishbone_sim.Fishbone` describes a 1D chain of electronic
+sites, each coupled to one bath (a comb) or two baths — one on each side of the
+site (the fishbone). It is declared the same way and returns per-site data:
+
+```python
+from fishbonett.fishbone_sim import Fishbone
+
+def bath(op):                                        # one bath, coupling operator op
+    return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
+                n_modes=20, phys_dim=10, coupling=op)
+
+fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
+              baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site
+              backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2)  # nearest-neighbour
+res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
+res.expect["sz"]         # shape (n_steps, n_sites)
+res.rdm                  # shape (n_steps, n_sites, d, d)
+```
+
+## Low-level engines
+
+For finer control the underlying engines are available directly: build a model /
+bath object (for example {py:class}`~fishbonett.model.SpinBoson` or
+{py:class}`~fishbonett.model.FishBoneH`), discretize with `build(...)`, construct
+the {py:class}`~fishbonett.mps.SpinBosonMPS` (or {py:class}`~fishbonett.fishbone.FishBoneNet`)
+state, obtain the Trotter gates with `get_u(...)`, sweep with `update_bond(...)`,
+and read out observables from `get_theta1(...)`. The high-level interface above is
+a thin wrapper over exactly this loop.
 
 See the [`examples/`](https://github.com/nominhanggai/fishbone-tensor-networks/tree/main/examples)
-directory for runnable scripts covering the interaction picture, the cooling
-scheme, and rate theory.
+directory for runnable scripts — start with `friendly_interface.py`, which also
+covers the interaction picture, the cooling scheme, and rate theory.
