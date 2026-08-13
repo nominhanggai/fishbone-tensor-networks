@@ -17,6 +17,9 @@ encodes three orthogonal choices:
 |-------------------|--------------|------------------------------------|--------------------|------|
 | ``tebd``          | interaction  | MPS, swap-network TEBD             | SVD truncation     | {doc}`tebd` |
 | ``polaron``       | polaron      | MPS chain, static-gate TEBD        | SVD truncation     | {doc}`polaron` |
+| ``polaron-tdvp1`` | polaron      | polaron MPO, 1-site TDVP          | fixed              | {doc}`polaron` |
+| ``polaron-tdvp2`` | polaron      | polaron MPO, 2-site TDVP          | SVD truncation     | {doc}`polaron` |
+| ``polaron-dtdvp`` | polaron      | polaron MPO, bond-adaptive DTDVP  | precision threshold| {doc}`polaron` |
 | ``mpo-tdvp1``     | Schrödinger  | chain MPO, 1-site TDVP            | fixed              | {doc}`chain_mpo` |
 | ``mpo-tdvp2``     | Schrödinger  | chain MPO, 2-site TDVP            | SVD truncation     | {doc}`chain_mpo` |
 | ``mpo-dtdvp``     | Schrödinger  | chain MPO, bond-adaptive DTDVP   | precision threshold| {doc}`chain_mpo` |

@@ -82,6 +82,35 @@ Two things make this cheap and exact:
 
 This is implemented as `undress_rdm` in {py:mod}`fishbonett.frames.polaron`.
 
+## Propagators: TEBD or TDVP
+
+Unlike the interaction picture, the polaron $\tilde H$ is **time-independent**, so it
+has a plain MPO and can drive the full TDVP family as well as Trotter TEBD:
+
+| `method` | integrator | bond growth |
+|---|---|---|
+| `polaron` | static two-site Trotter gates (TEBD) | SVD truncation (`trunc_eps`) |
+| `polaron-tdvp1` | 1-site TDVP on the polaron MPO | **fixed** — padded to `bond_dim` |
+| `polaron-tdvp2` | 2-site TDVP | SVD truncation |
+| `polaron-dtdvp` | bond-adaptive 1-site TDVP | precision threshold (`prec`) |
+
+`polaron-dtdvp` is usually the best of the four: 1-site TDVP never forms a two-site
+block, so it avoids the $O(d^4)$ boson–boson gates that make the TEBD sweep
+expensive, and the adaptive bond search finds the smallest representation. Measured
+on a moderate-coupling model (all four agree with the interaction-picture chain to
+$\sim10^{-3}$):
+
+| method | time | peak bond |
+|---|---|---|
+| `polaron` (TEBD) | 2.3 s | 6 |
+| `polaron-tdvp1` | 23.1 s | 20 (fixed) |
+| `polaron-tdvp2` | 5.3 s | 6 |
+| **`polaron-dtdvp`** | **1.5 s** | **4** |
+
+Note `polaron-tdvp1` conserves the bond dimension, so it cannot grow out of a
+product state; it is padded to `bond_dim` up front, which is why it is the most
+expensive here. Prefer `polaron-dtdvp` unless you specifically need a fixed bond.
+
 ## General systems
 
 Like the other engines, the polaron builder accepts a general system:
