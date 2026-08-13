@@ -46,25 +46,28 @@ whichever level you need:
     one symmetric time step, or a whole simulation:
     :func:`~fishbonett.evolve.tebd.symmetric_swap_step`,
     :func:`~fishbonett.evolve.sitetree.symmetric_tree_step`,
-    :func:`run_tdvp1`, ...
+    :func:`run_mpo_frame`, ...
 
 Every whole step here is **second order** (Strang): each takes half-step gates and
 applies them in palindromic order.
 
-The ``run_*`` drivers are self-contained convenience entry points: they take a
-*spectral density* and build their own chain, state and operator.  For ordinary
-use go through :meth:`fishbonett.models.system_bath.SystemBath.run`, which handles bath
-resolution, initial states and observables; reach for a ``run_*`` driver when you
+:func:`run_mpo_frame` takes a :class:`~fishbonett.frames.mpo.MPOFrame` -- the
+Hamiltonian, already built -- plus a sweep name, and runs the whole simulation.  It
+replaced seven ``run_*`` functions (``run_tdvp1``, ``run_star_tdvp2``,
+``run_ip_tdvp1``, ...), one per *(MPO builder, sweep)* pair, which each built their
+own Hamiltonian and repeated the same loop.  Building a Hamiltonian is a frame
+question, so nothing here imports :mod:`fishbonett.frames` any more.
+
+For ordinary use go through
+:meth:`fishbonett.models.system_bath.SystemBath.run`, which handles bath
+resolution, initial states and observables; call a driver here directly when you
 want one engine in isolation, e.g. for a benchmark.
 """
 from fishbonett.evolve.tebd import (
     update_bond, sweep, swap_in, swap_out,
     symmetric_swap_step, symmetric_static_step,
 )
-from fishbonett.evolve.tdvp import (
-    run_tdvp1, run_tdvp2, run_dtdvp, run_ip_tdvp1, run_ip_tdvp2,
-    run_star_tdvp1, run_star_tdvp2,
-)
+from fishbonett.evolve.tdvp import run_mpo_frame
 from fishbonett.evolve.modetree import (
     run_tree_tdvp, run_tree_tdvp2, run_tree_tebd,
 )
@@ -76,9 +79,8 @@ __all__ = [
     "symmetric_swap_step", "symmetric_static_step",
     # MPO application (1D chain)
     "apply_mpo", "compress",
-    # TDVP drivers (1D chain)
-    "run_tdvp1", "run_tdvp2", "run_dtdvp", "run_ip_tdvp1", "run_ip_tdvp2",
-    "run_star_tdvp1", "run_star_tdvp2",
+    # TDVP driver (1D chain): one loop, any frame, any sweep
+    "run_mpo_frame",
     # tree drivers
     "run_tree_tdvp", "run_tree_tdvp2", "run_tree_tebd",
 ]

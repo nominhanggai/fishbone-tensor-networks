@@ -98,11 +98,18 @@ r2.max_bond
 
 ## Low-level driver
 
-```python
-from fishbonett.evolve.tdvp import run_ip_tdvp1
+Same driver as the Schrödinger chain — only the frame differs, and it reports
+`static=False` so the driver knows to rebuild the MPO each step and discard the
+environments with it:
 
-t, sz = run_ip_tdvp1(bath.spectral_density(), (-25, 36), V=1.0,
-                     n_chain=40, d=20, dt=0.025, nsteps=80, D=100)
+```python
+from fishbonett.frames.mpo import ip_star_mpo_frame
+from fishbonett.evolve.tdvp import run_mpo_frame
+
+frame = ip_star_mpo_frame(bath.spectral_density(), (-25, 36), V=1.0,
+                          n_chain=40, d=20)
+assert not frame.static                      # H depends on t in this frame
+t, sz, maxd = run_mpo_frame(frame, dt=0.05, nsteps=80, sweep="tdvp1", D=100)
 ```
 
 ## Notes
