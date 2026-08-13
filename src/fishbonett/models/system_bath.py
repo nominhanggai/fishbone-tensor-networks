@@ -220,12 +220,11 @@ class SystemBath:
     _DRIVERS = {
         "chain-mpo-tdvp": "_run_mpo",
         "modetree": "_run_tree",
-        "swap-tebd": "_run_tebd",
+        "swap-tebd": "_run_swap_tebd",
         "displacement-mpo": "_run_trotter_mpo",
         "polaron-tebd": "_run_polaron",
         "polaron-tdvp": "_run_polaron_tdvp",
         "static-tree-tebd": "_run_multichannel",
-        "multichannel-swap-tebd": "_run_multichannel_ip",
     }
 
     # -- dispatchers ---------------------------------------------------------
@@ -330,39 +329,6 @@ class SystemBath:
         return Result(t=r.t, expect=expect, rdm=rdm, max_bond=r.max_bond,
                       method=spec.name)
 
-    def _run_multichannel_ip(self, spec, ctx):
-        """The same shared-mode star in the **interaction picture**: the free-bath
-        evolution is rotated out, so the modes carry no on-site frequency and the
-        matrix-valued coupling becomes time-dependent.
-
-        Cross-checks the static (Schrodinger) path above: same physics, different
-        frame, so the two must agree.  Temperature comes in the same T-TEDOPA way as
-        every other method -- the thermalized density on a signed domain -- rather
-        than through the explicit thermofield doubling of
-        :meth:`~fishbonett.frames.multichannel.SystemBathMultiChannel.__init__`,
-        which uses a different unit convention for ``temp``."""
-        from fishbonett.frames.multichannel import SystemBathMultiChannel
-        from fishbonett.states.mps import SystemBathMPS
-        b = self.bath.resolved(ctx.t_max)
-        # the same shared-mode star the Schroedinger frame builds, from the same
-        # Bath method -- the two paths must discretize identically to cross-check
-        freq, coup_mat = b.shared_mode_star()
-        d_sys = self.h.shape[0]
-        pd = [d_sys] + [b.phys_dim] * b.n_modes
-        builder = SystemBathMultiChannel.from_signed_star(
-            pd, coup_mat, freq, h_sys=self.h).build(n=0)
-
-        state = SystemBathMPS(pd)
-        self._set_system_site(state, ctx.initial)
-        return propagate(
-            spec, ctx,
-            step=lambda k: _tebd.symmetric_swap_step(
-                state, builder, k * ctx.dt, ctx.dt, b.n_modes, ctx.bond_dim,
-                ctx.trunc_eps),
-            rdm=lambda: state.rdm(0),          # inherited from TensorNetwork
-            peak_bond=lambda: mps_peak_bond(state),
-            expect_from_rdm=self._expect_from_rdm)
-
     def _set_system_site(self, state, initial):
         """Put the initial system state on site 0 of a product-state MPS.
 
@@ -383,26 +349,68 @@ class SystemBath:
         """
         return self.system.initial_vector(initial)
 
-    def _run_tebd(self, spec, ctx):
-        from fishbonett.frames.interaction_picture import SystemBathIP as _IPBuilder
+    #: The ``layout="swap"`` frames: which builder supplies ``H(t)`` for a given
+    #: *(frame, model)*.  Everything downstream of the builder is the layout's
+    #: business, not the frame's, which is why there is one driver below and not
+    #: one per frame.
+    _SWAP_FRAMES = {
+        ("interaction", "chain"): "_ip_swap_frame",
+        ("interaction", "multichannel"): "_multichannel_swap_frame",
+    }
+
+    def _ip_swap_frame(self, b, ctx):
+        """One system, one bath, scalar coupling: the plain interaction picture."""
+        from fishbonett.frames.interaction_picture import SystemBathIP
+        pd = [self.h.shape[0]] + [b.phys_dim] * b.n_modes
+        return SystemBathIP(pd, h_sys=self.h, coupling=self.coupling,
+                            sd=b.spectral_density(), domain=b.domain,
+                            ncap=ctx.kw.get("ncap", 20000),
+                            discretizer=b.discretizer()).build(), pd
+
+    def _multichannel_swap_frame(self, b, ctx):
+        """The shared-mode star in the **interaction picture**: the free-bath
+        evolution is rotated out, so the modes carry no on-site frequency and the
+        matrix-valued coupling becomes time-dependent.
+
+        Cross-checks the static (Schrodinger) multichannel path: same physics,
+        different frame, so the two must agree -- which is only meaningful because
+        both take their star from the same
+        :meth:`~fishbonett.bath.spec.Bath.shared_mode_star`.  Temperature comes in
+        the same T-TEDOPA way as every other method (the thermalized density on a
+        signed domain) rather than through the explicit thermofield doubling of
+        :meth:`~fishbonett.frames.multichannel.SystemBathMultiChannel.__init__`,
+        which uses a different unit convention for ``temp``.
+        """
+        from fishbonett.frames.multichannel import SystemBathMultiChannel
+        freq, coup_mat = b.shared_mode_star()
+        pd = [self.h.shape[0]] + [b.phys_dim] * b.n_modes
+        return SystemBathMultiChannel.from_signed_star(
+            pd, coup_mat, freq, h_sys=self.h).build(n=0), pd
+
+    def _run_swap_tebd(self, spec, ctx):
+        """TEBD under the ``swap`` layout -- one driver for every frame that needs it.
+
+        The interaction picture couples *every* mode to the system, so its
+        interaction graph is a **star** while the state is a **path**.  The swap
+        network is what reconciles the two: each step walks the system site out past
+        every mode and back, applying its gate on the way.  That is a property of
+        the *layout*, not of the frame -- so the frame only has to supply ``H(t)``,
+        and the two frames that need this (``tebd`` and ``multichannel-ip``, the two
+        rows marked ``layout="swap"``) share everything after the builder.
+
+        One symmetric (Strang) step per iteration, so each advances the user's
+        physical ``dt`` -- matching the tree and MPO drivers.
+        """
         from fishbonett.states.mps import SystemBathMPS
         b = self.bath.resolved(ctx.t_max)
-        n = b.n_modes
-        d_sys = self.h.shape[0]
-        pd = [d_sys] + [b.phys_dim] * n
-        builder = _IPBuilder(pd, h_sys=self.h, coupling=self.coupling,
-                             sd=b.spectral_density(), domain=b.domain,
-                             ncap=ctx.kw.get("ncap", 20000),
-                             discretizer=b.discretizer()).build()
-
+        make = getattr(self, self._SWAP_FRAMES[(spec.frame, spec.models[0])])
+        builder, pd = make(b, ctx)
         state = SystemBathMPS(pd)               # the MPS being evolved
         self._set_system_site(state, ctx.initial)
-        # One symmetric (Strang) swap-network step per iteration, so each advances
-        # the user's physical dt -- matching the tree/mpo drivers.
         return propagate(
             spec, ctx,
             step=lambda k: _tebd.symmetric_swap_step(
-                state, builder, k * ctx.dt, ctx.dt, n, ctx.bond_dim,
+                state, builder, k * ctx.dt, ctx.dt, b.n_modes, ctx.bond_dim,
                 ctx.trunc_eps),
             rdm=lambda: state.rdm(0),          # inherited from TensorNetwork
             peak_bond=lambda: mps_peak_bond(state),

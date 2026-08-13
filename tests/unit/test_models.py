@@ -224,6 +224,13 @@ def test_layout_matches_what_the_drivers_actually_do():
     # only ever shows up in the interaction picture
     assert all(R.METHODS[n].frame == "interaction" for n in declared)
 
+    # and a layout is realized *once*: the swap methods share one driver, and
+    # differ only in which frame supplies H(t)
+    assert len({R.METHODS[n].integrator for n in declared}) == 1, (
+        "the swap layout should have one driver, not one per frame")
+    assert set(SB._SWAP_FRAMES) == {
+        (R.METHODS[n].frame, R.METHODS[n].models[0]) for n in declared}
+
 
 def test_run_takes_the_three_axes_directly():
     """A method name *is* a (model, frame, integrator) triple, so both spell the
