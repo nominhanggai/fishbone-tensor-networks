@@ -1,34 +1,73 @@
 # fishbonett
 
-**fishbonett** propagates the dynamics of multi-site vibronic ("fishbone"-like)
-open-quantum-system models — electron- and excitation-energy-transfer systems in
-which each electronic or vibrational site is coupled to its own harmonic bath —
-using matrix-product-state (MPS) and tree-tensor-network (TEBD) methods.
+**fishbonett** propagates the quantum dynamics of open systems coupled to harmonic
+baths — from a single two-level system in a bath, to multi-site vibronic
+("fishbone"-like) models for electron and excitation-energy transfer in which every
+electronic or vibrational site carries its own bath — using matrix-product-state
+(MPS) and tree-tensor-network methods.
+
+The physical setting throughout is
+
+$$
+H = H_{\mathrm{sys}} + O \otimes \sum_k g_k (b_k + b_k^{\dagger})
+    + \sum_k \omega_k b_k^{\dagger} b_k ,
+$$
+
+an arbitrary Hermitian system Hamiltonian $H_{\mathrm{sys}}$ coupled through an
+arbitrary Hermitian operator $O$ to a bath specified only by its spectral density
+$J(\omega)$ (and a temperature). Everything else — discretizing the bath, mapping
+it to a chain, choosing a frame, propagating, reading observables — is what this
+package does.
+
+## How to read this
+
+The four sections are meant to be read in this order, though each stands alone:
+
+1. **{doc}`getting_started`** — install, then a complete first simulation in a
+   dozen lines. Start here.
+2. **{doc}`systems/index`** — the model vocabulary: what you can express, from a
+   single spin-boson system to arbitrary loop-free trees of sites and baths, plus
+   how to define observables.
+3. **{doc}`bath`** — how a continuous $J(\omega)$ becomes a finite chain of modes:
+   discretization, the TEDOPA chain mapping, finite temperature (thermofield), and
+   the automatic `domain` / `n_modes` choices, with numerical evidence that they
+   are faithful.
+4. **{doc}`methods/index`** — the propagation methods: the frame (interaction
+   picture, polaron, Schrödinger), the ansatz (MPS, tree), and the integrator
+   (TEBD, exact MPO propagator, TDVP), with the theory behind each.
+
+{doc}`api` is the generated reference for every public module.
 
 ```{toctree}
 :maxdepth: 2
 :caption: Contents
+:hidden:
 
 getting_started
-methods/index
 systems/index
 bath
+methods/index
 api
 ```
 
 ## Highlights
 
-- A declarative high-level interface ({py:mod}`fishbonett.simulate`,
-  {py:mod}`fishbonett.treebone`): describe a bath and system as `Bath` /
-  `BosonicBath` / `Fishbone` / `TreeFishbone` objects and propagate with one
-  `run(dt=..., t_max=..., method=...)` call over any of the engines below.
-- One canonical TEBD engine ({py:class}`fishbonett.states.mps.BosonicBathMPS`) with leg
-  swaps, adaptive bond dimension, optional local basis optimization, and an
-  optional CuPy GPU backend.
-- Self-contained TEDOPA bath discretization / chain mapping (no external Fortran
-  dependencies).
-- Interaction-picture MPS/MPO/tree propagation schemes and chain cooling, the
-  fishbone tree tensor network, rate theory, and Boys-localization diabatization.
+- **A declarative interface.** Describe a bath and a system as `Bath` /
+  `BosonicBath` / `Fishbone` / `TreeFishbone` objects and propagate with a single
+  `run(dt=..., t_max=..., method=...)` call. Every method takes the same arguments
+  and returns the same `Result`, so switching engines — or cross-validating one
+  against another — is a one-word change.
+- **Many frames, one model.** The same Hamiltonian can be propagated in the
+  Schrödinger picture, the interaction picture, or the polaron frame; the frame is
+  what determines how much entanglement the state has to carry.
+- **Sensible automation.** The bath `domain` and mode count can be derived from the
+  spectral density and the propagation time; truncation is driven by an accuracy
+  threshold, with the bond dimension left unbounded unless you cap it.
+- **Self-contained.** TEDOPA discretization and chain mapping are implemented in
+  the package — no external Fortran dependencies — with an optional CuPy GPU
+  backend and an optional `opt_einsum` fast path.
+- Also included: chain cooling, the fishbone tree tensor network, golden-rule /
+  Marcus rate theory, and Boys-localization diabatization.
 
 ## Indices
 
