@@ -24,6 +24,7 @@ from fishbonett.frames.schrodinger import terms as schrodinger_terms
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.states.tree import TreeTensorNetwork
+from fishbonett.models.propagate import tree_peak_bond
 from fishbonett.models.result import Result
 from fishbonett.models.registry import (
     STATIC_TREE_TEBD, methods_of, unknown_method_error,
@@ -213,8 +214,7 @@ class TreeFishbone:
                     expect[name][tn] = st.expectation(O, sites)
             # peak bond over every edge of the tree, so the truncation reporting
             # matches what the single-system models give
-            max_bond[tn] = max((t_.shape[leg] for t_ in st.T
-                                for leg in range(t_.ndim - 1)), default=1)
+            max_bond[tn] = tree_peak_bond(st)
             st.move_oc_to(0)
         if len(set(self.de)) == 1:                        # uniform sites -> dense
             rdm = np.array([[rdms[tn, i] for i in range(self.ns)]
