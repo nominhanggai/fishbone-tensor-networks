@@ -10,11 +10,12 @@ collective mode, so the dressed system term is a single two-site gate on the
 ``(c0, system)`` bond and the rest of the chain is free (nearest-neighbour
 hopping) -- a plain Trotter sweep, no swap network.
 
-Concretely, with ``O = sum_i lam_i |i><i|`` and ``h`` the system Hamiltonian, the
-polaron-frame Hamiltonian on the ``(c0, system)`` bond is
+Concretely, diagonalizing the coupling and writing ``h`` for the system
+Hamiltonian, the polaron-frame Hamiltonian on the ``(c0, system)`` bond is::
 
+    O  = sum_i lam_i |i><i|
     H~ = sum_ij <i|h|j> |i><j| (x) D_c0((lam_i - lam_j) kappa0)
-         + w0 * n_c0 (x) I  -  E_reorg * I (x) O^2 ,
+         + w0 * n_c0 (x) I  -  E_reorg * I (x) O^2
 
 i.e. each off-diagonal (in ``O``'s eigenbasis) block of ``h`` is dressed by a
 displacement of the ``c0`` mode; diagonal blocks are undressed.  The physical
