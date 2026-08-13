@@ -31,12 +31,42 @@ modes); it is rebuilt at each step's **midpoint** $t_{\mathrm{mid}}$ and the sta
 is advanced with a TDVP sweep.  Because there is no free bath evolution left to
 resolve, the accumulated entanglement is small.
 
+```{note}
+That bond-2 structure is the same fact exploited by {doc}`trotter_mpo`: because the
+coupling is a single product $\sigma_z \otimes \sum_j d_j (a_j + a_j^\dagger)$ and
+all its mode terms commute, the operator connecting the system to *every* mode
+needs only a rank-2 string — one channel per eigenvalue of the coupling operator.
+Here it is used to write the **Hamiltonian** as an MPO for TDVP; there it is used
+to write the **propagator** as an MPO for a Trotter step.
+```
+
+### Star or chain?
+
+The star and the chain describe the same bath — the chain is just the Lanczos
+tridiagonalization of the star — but they distribute *entanglement* very
+differently, and that is the whole basis for choosing between them.
+
+- In the **chain**, the system touches only mode $b_0$, and correlations propagate
+  outward at a finite speed (a light cone). This locality is what makes an MPS
+  ordering natural: a cut far down the chain has seen little of the dynamics.
+- In the **star**, every mode couples to the system directly. There is no notion of
+  distance between modes, so an MPS ordering of the star has no locality to exploit
+  — a single cut must carry the correlations between the system and *all* modes on
+  the far side at once.
+
+This is why TEDOPA chain-maps in the first place, and why the star geometry here is
+paired with a small fixed/adaptive bond and an interaction picture that keeps the
+accumulated correlation small: the star pays off when the residual entanglement is
+low enough that the *absence* of the chain's mode–mode terms (and their Trotter
+error) is the dominant saving.
+
 Two variants:
 
-- **`mpo-ip-tdvp1`** — 1-site TDVP at a **fixed** bond dimension `bond_dim`.
+- **`mpo-ip-tdvp1`** — 1-site TDVP at a **fixed** bond dimension `bond_dim`
+  (required — a 1-site sweep cannot grow a bond; see {doc}`chain_mpo`).
 - **`mpo-ip-tdvp2`** — 2-site TDVP, **growing** the bond from the product state
-  by SVD truncation (to `bond_dim` / `trunc_eps`); `result.max_bond` reports the
-  peak bond.
+  by SVD truncation (`trunc_eps`, optionally capped by `bond_dim`);
+  `result.max_bond` reports the peak bond.
 
 The star MPO engine shares {py:mod}`fishbonett.evolve.tdvp` with the
 Schrödinger-picture chain methods (re-exported as {py:mod}`fishbonett.mpo`).
