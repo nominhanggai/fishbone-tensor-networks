@@ -4,7 +4,7 @@ Selected by the bath, not by `method`: pass a *list* of `coupling` operators to
 {py:class}`~fishbonett.bath.spec.Bath` and the multichannel engine is used
 automatically.  Requires `discretization="legendre"` (the channels share Gauss
 nodes).  For independent baths (no cross-correlation) use
-{py:class}`~fishbonett.treebone.TreeFishbone` with one `Bath` per site instead.
+{py:class}`~fishbonett.states.tree.TreeFishbone` with one `Bath` per site instead.
 
 The other representations assume the bath couples to the system through a *single*
 operator $O$. A multichannel bath couples through **several** operators
@@ -58,5 +58,5 @@ r = SystemBath(h=0.3 * sigma_z + 0.8 * sigma_x,
   tree route is used regardless.
 - For the builder see {py:mod}`fishbonett.frames.multichannel`.
 - For several *independent* baths on one site (or on several sites), use
-  {py:class}`~fishbonett.treebone.TreeFishbone` with one `Bath` per bath instead —
+  {py:class}`~fishbonett.states.tree.TreeFishbone` with one `Bath` per bath instead —
   see {doc}`/systems/fishbone`.

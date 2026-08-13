@@ -9,7 +9,7 @@ def test_chain_cooling_gives_normalized_rdm():
     from fishbonett.frames.coolingchain import SystemBathCoolingChain as SystemBath
     from fishbonett.operators import sigma_x, sigma_z
 
-    pd = [6, 6, 6, 2]
+    pd = [2, 6, 6, 6]
     eth = SystemBath(pd, betaOmega=0.2)
     eth.domain = [-50.0, 50.0]
     eth.sd = lambda w: 0.5 * abs(w) * np.exp(-abs(w) / 10.0)

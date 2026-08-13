@@ -215,7 +215,7 @@ class SystemBathPolaron:
     def undress_rdm_tdvp(self, A_sys, A_c0):
         """Lab-frame system RDM from the TDVP-convention ``(system, c0)`` tensors
         ``(bond_l, bond_r, phys)``; wraps :meth:`undress_rdm`."""
-        theta = np.einsum('lms,mrx->lxsr', A_sys, A_c0)     # -> [L, d0, ds, R]
+        theta = np.einsum('lms,mrx->lsxr', A_sys, A_c0)     # -> [L, ds, d0, R]
         return self.undress_rdm(theta)
 
     def undress_rdm(self, theta2):

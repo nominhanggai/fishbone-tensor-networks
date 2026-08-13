@@ -1,9 +1,14 @@
 # API reference
 
-Start from `from fishbonett import Bath, SystemBath, Truncation`.  The package
-is split by subject: `bath` = spectral density → chain parameters, `frames` =
-Hamiltonian in a chosen representation, `states` = tensor network ansatz,
-`evolve` = propagation algorithms, `linalg`/`operators` = shared numerics.
+Start from `from fishbonett import Bath, SystemBath, Truncation`.
+
+A calculation is three independent choices, one subpackage each: **frame** (what
+the Hamiltonian looks like — `frames`), **geometry** (the shape of the tensor
+network — `states`), and **propagator** (how a step is taken — `evolve`).
+`simulate` wires them together, `bath` turns a spectral density into the chain
+parameters they all start from, and `linalg`/`operators` hold the shared
+numerics.  The system sits at **site 0** throughout, with the bath modes
+following, nearest first.
 
 ## High-level interface
 
@@ -13,10 +18,13 @@ Hamiltonian in a chosen representation, `states` = tensor network ansatz,
    :recursive:
 
    fishbonett.simulate
-   fishbonett.treebone
 ```
 
-## State ansätze and propagators
+## Geometry: the state ansätze
+
+The 1D chain, the comb and the general tree are separate implementations rather
+than a class hierarchy — each is optimized for its own geometry, and they share
+the truncation policy instead of a base class.
 
 ```{eval-rst}
 .. autosummary::
@@ -25,6 +33,16 @@ Hamiltonian in a chosen representation, `states` = tensor network ansatz,
 
    fishbonett.states.mps
    fishbonett.states.comb
+   fishbonett.states.tree
+```
+
+## Propagators
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :recursive:
+
    fishbonett.evolve.tebd
    fishbonett.evolve.mpo_apply
    fishbonett.evolve.tdvp
@@ -33,8 +51,8 @@ Hamiltonian in a chosen representation, `states` = tensor network ansatz,
 
 ## Frames
 
-One Hamiltonian, several representations — see {doc}`/methods/index` for the
-frame taxonomy and which propagator suits which frame.
+One Hamiltonian, several representations — see {doc}`/methods/index` for which
+propagator suits which frame.
 
 ```{eval-rst}
 .. autosummary::
@@ -46,6 +64,7 @@ frame taxonomy and which propagator suits which frame.
    fishbonett.frames.polaron
    fishbonett.frames.multichannel
    fishbonett.frames.coolingchain
+   fishbonett.frames.mpo
 ```
 
 ## The bath: specification, discretization, chain mapping

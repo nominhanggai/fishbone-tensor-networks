@@ -8,8 +8,9 @@ Run with:  python benchmarks/mpo_tdvp.py
 """
 import numpy as np
 
-from fishbonett.evolve.tdvp import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp, crea,
-                            anih, numb, SX, SZ)
+from fishbonett.evolve.tdvp import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp,
+                                    SX, SZ)
+from fishbonett.operators import annihilate, create, number
 
 DOMAIN = (-25.0, 36.0)
 

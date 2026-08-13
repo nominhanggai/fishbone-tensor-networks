@@ -16,7 +16,7 @@ geometry                   module                      integrators
 1D chain (MPS)             :mod:`~fishbonett.evolve.tebd`   TEBD (Trotter gates)
 1D chain (MPS + MPO)       :mod:`~fishbonett.evolve.tdvp`   TDVP 1-site / 2-site / DTDVP
 binary tree (TTN)          :mod:`~fishbonett.evolve.treetdvp`  TDVP 1-site / 2-site, TEBD
-arbitrary tree             :class:`fishbonett.treebone.TreeTEBD`  TEBD
+arbitrary tree             :class:`fishbonett.states.tree.TreeTEBD`  TEBD
 comb / fishbone            :mod:`fishbonett.states.comb`    TEBD
 =========================  ==========================  =========================
 

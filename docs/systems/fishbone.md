@@ -2,7 +2,7 @@
 
 A **fishbone** is a set of electronic sites, each carrying its own bath (or two
 baths — one on each side).  The electronic sites need not form a chain: the
-general engine {py:class}`~fishbonett.treebone.TreeFishbone` wires them into
+general engine {py:class}`~fishbonett.states.tree.TreeFishbone` wires them into
 *any* loop-free tree, and the common 1D chain
 {py:class}`~fishbonett.simulate.Fishbone` is a convenience specialization of it.
 
@@ -15,7 +15,7 @@ bath:
 
 ```python
 import numpy as np
-from fishbonett.treebone import TreeFishbone
+from fishbonett.states.tree import TreeFishbone
 from fishbonett import Bath
 from fishbonett.operators import sigma_x, sigma_z
 
