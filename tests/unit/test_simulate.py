@@ -67,7 +67,8 @@ def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
                      @ (ob @ (U @ (np.exp(-1j * E * t) * c))) for t in ts]).real
 
 
-@pytest.mark.parametrize("method,step", [("tebd", 2), ("mpo-tdvp1", 2),
+@pytest.mark.parametrize("method,step", [("tebd", 2), ("trotter-mpo", 2),
+                                         ("mpo-tdvp1", 2),
                                          ("mpo-tdvp2", 2), ("mpo-ip-tdvp1", 2),
                                          ("mpo-ip-tdvp2", 2), ("tree-tdvp", 1),
                                          ("tree-tdvp2", 1), ("tree-tebd", 1)])
@@ -99,8 +100,8 @@ def test_orthpol_discretization_runs():
 def test_methods_share_time_grid_and_agree():
     """dt/t_max mean the same physical time for every method family."""
     model = _model()
-    methods = ["tebd", "mpo-tdvp1", "mpo-tdvp2", "mpo-ip-tdvp1", "mpo-ip-tdvp2",
-               "tree-tdvp", "tree-tdvp2", "tree-tebd"]
+    methods = ["tebd", "trotter-mpo", "mpo-tdvp1", "mpo-tdvp2", "mpo-ip-tdvp1",
+               "mpo-ip-tdvp2", "tree-tdvp", "tree-tdvp2", "tree-tebd"]
     results = {m: model.run(dt=0.05, t_max=0.5, method=m, bond_dim=40,
                             trunc_eps=1e-12, observables={"sz": sigma_z})
                for m in methods}
@@ -227,6 +228,37 @@ def _polaron_bath(nm=14, d=8):
     """T=0, gapped-domain bath so J(w)/w^2 is integrable (polaron precondition)."""
     return Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
                 n_modes=nm, phys_dim=d)
+
+
+def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
+    """The conditional-displacement propagator is a sum of one product operator per
+    eigenvalue of the coupling ``O``, so the MPO bond is exactly that count -- 2 for
+    sigma_z, 3 for a three-eigenvalue coupling -- independent of the chain length."""
+    from fishbonett.frames.interaction_picture import BosonicBathIP
+
+    for O, expected in [(sigma_z, 2), (np.diag([1.0, 0.0, -1.0]).astype(complex), 3)]:
+        ds = O.shape[0]
+        b = BosonicBathIP([6] * 5 + [ds])
+        b.domain = [0.3, 12.0]; b.sd = _J
+        b.coupling = O; b.h_sys = np.eye(ds)
+        b.build(g=1)
+        W = b.displacement_mpo(0.0, 0.05)
+        assert len(W) == 6                       # system + 5 modes
+        assert W[0].shape == (1, expected, ds, ds)
+        assert all(w.shape[0] == expected for w in W[1:])
+        assert W[-1].shape[1] == 1               # closed at the right edge
+
+
+def test_trotter_mpo_matches_tebd_general_coupling():
+    """Same frame as ``tebd``, so it must agree for a general (3-level) coupling."""
+    O = np.diag([1.0, 0.0, -1.0]).astype(complex)
+    h = np.zeros((3, 3), complex)
+    h[0, 1] = h[1, 0] = h[1, 2] = h[2, 1] = 0.5
+    bath = Bath(J=_J, domain=(0.3, 12.0), n_modes=10, phys_dim=8)
+    model = BosonicBath(h=h, coupling=O, bath=bath)
+    kw = dict(dt=0.05, n_steps=20, bond_dim=40, trunc_eps=1e-4, observables={"O": O})
+    assert np.max(np.abs(model.run(method="trotter-mpo", **kw).expect["O"]
+                         - model.run(method="tebd", **kw).expect["O"])) < 5e-3
 
 
 POLARON_METHODS = ["polaron", "polaron-tdvp1", "polaron-tdvp2", "polaron-dtdvp"]
