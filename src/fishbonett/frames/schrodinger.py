@@ -489,8 +489,8 @@ class SystemBathSchrodinger:
     """
 
     def __init__(self, pd):
-        self.pd_sys = pd[-1]
-        self.pd_boson = pd[0:-1]
+        self.pd_sys = pd[0]
+        self.pd_boson = pd[1:]
         self.sd = lambda x: np.heaviside(x, 1) / 1. * exp(-x / 1)
         self.domain = [0, 1]
         self.he_dy = np.eye(self.pd_sys)

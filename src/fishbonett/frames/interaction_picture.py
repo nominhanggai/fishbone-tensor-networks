@@ -42,8 +42,8 @@ class SystemBathIP:
     """
 
     def __init__(self, pd):
-        self.pd_sys = pd[-1]
-        self.pd_boson = pd[0:-1]
+        self.pd_sys = pd[0]
+        self.pd_boson = pd[1:]
         self.len_boson = len(self.pd_boson)
         self.sd = lambda x: np.heaviside(x, 1) / 1. * exp(-x / 1)
         self.domain = [0, 1]
@@ -115,7 +115,7 @@ class SystemBathIP:
         shuffle = self.coef.T
         d_nt = [einsum('k,k,k', j0, shuffle[:, n], phase_factor)
                 for n in range(len(self.freq))]
-        return np.array(d_nt[::-1])               # chain-site order
+        return np.array(d_nt)                        # chain-site order (site 1 = c0)
 
     def displacement_mpo(self, t, delta):
         """Conditional-displacement MPO of the system-bath propagator over
@@ -176,13 +176,13 @@ class SystemBathIP:
             kc = k.conjugate()
             coup = kron(k*c1 + kc* c1.T, coupling)
             h2.append((coup, d1, d2))
-        d1 = self.pd_boson[-1]
+        d1 = self.pd_boson[0]
         d2 = self.pd_sys
         site = delta*kron(np.eye(d1), self.h_sys)
         if inc_sys is True:
-            h2[-1] = (h2[-1][0] + site, d1, d2)
+            h2[0] = (h2[0][0] + site, d1, d2)
         else:
-            h2[-1] = (h2[-1][0], d1, d2)
+            h2[0] = (h2[0][0], d1, d2)
         return h2
 
     def build(self, g, ncap=20000, discretizer=None):
@@ -217,11 +217,11 @@ class SystemBathIP:
         for i, h_d1_d2 in enumerate(self.H):
             h, d1, d2 = h_d1_d2
             u = _expm_gate(h.toarray()/factor, 1)
-            r0 = r1 = d1  # physical dimension for site A
-            s0 = s1 = d2  # physical dimension for site B
-            # print(u)
-            u1 = u.reshape([r0, s0, r1, s1])
-            u2 = np.transpose(u1, [1,0,3,2])
+            # h is in (d1 x d2) basis with d1=boson, d2=system;
+            # reshape to (d2, d1, d2, d1) = (system, boson, system, boson)
+            # so the gate has the system leg first (site 0 convention)
+            u1 = u.reshape([d1, d2, d1, d2]).transpose([1, 0, 3, 2])
+            u2 = np.transpose(u1, [1, 0, 3, 2])
             U1[i] = u1
             U2[i] = u2
         return U1, U2

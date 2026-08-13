@@ -1,21 +1,12 @@
 # Baths: discretization, chain mapping and temperature
 
-```{admonition} At a glance
+```{admonition} Summary
 :class: tip
-- **Provides** — {py:class}`~fishbonett.bath.spec.Bath`, the declarative bath
-  specification, plus the discretization and chain-mapping routines behind it.
-- **Options that set accuracy** — `n_modes` (how many modes; omit for automatic),
-  `phys_dim` (Fock truncation per mode), `domain` (frequency window; omit for
-  automatic), `discretization` (`"legendre"` or `"orthpol"`).
-- **Temperature** — set `temperature` or `beta` and the density is thermalized
-  onto a signed frequency axis (T-TEDOPA); set `thermalized=True` if you pass one
-  that already is.
-- **Use `"orthpol"`** when $J$ is sharply peaked or infrared-divergent; the
-  uniform Gauss–Legendre nodes miss such structure.
-- **API** — {py:func}`~fishbonett.bath.get_bath_nn_paras` (density → chain),
-  {py:func}`~fishbonett.bath.get_vn_squared` (density → star),
-  {py:func}`~fishbonett.bath.lanczos` (star → chain),
-  {py:func}`~fishbonett.bath.thermalize`.
+{py:class}`~fishbonett.bath.spec.Bath` bundles a spectral density with its
+discretization settings (`n_modes`, `phys_dim`, `domain`, `discretization`).
+Both `domain` and `n_modes` can be left unset — they are derived automatically.
+For finite temperature, set `temperature` or `beta` (T-TEDOPA thermalization).
+Use `discretization="orthpol"` when $J$ is sharply peaked or infrared-divergent.
 ```
 
 Every method starts from a continuous bath spectral density $J(\omega)$ and turns

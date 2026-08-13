@@ -1,25 +1,9 @@
 # Interaction picture · star — MPO + TDVP
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — `method="mpo-ip-tdvp1"` (fixed bond) and `"mpo-ip-tdvp2"`
-  (grows by SVD truncation): the bath in its **star** geometry, propagated by TDVP.
-- **Frame** — interaction picture / star. No chain mapping: every mode couples
-  straight to the system, so there are no mode–mode terms — but no locality for
-  the MPS to exploit either.
-- **Key options** — `dt`; `bond_dim` (**required** for `mpo-ip-tdvp1`, which
-  cannot grow a bond); `trunc_eps` (accuracy for `-tdvp2`); `krylov`.
-- **API** — MPO {py:func}`~fishbonett.evolve.tdvp.build_ip_mpo`, sweeps
-  {py:func}`~fishbonett.evolve.tdvp.tdvp1sweep` /
-  {py:func}`~fishbonett.evolve.tdvp.tdvp2sweep`.
-- **See also** — {doc}`/methods/schrodinger/chain` (static frame, where TDVP also
-  conserves energy), {doc}`/methods/index`.
-```
-
-The MPO is **rebuilt at each step's midpoint** rather than once up front, which
-keeps the sweep second order but forfeits the energy conservation TDVP enjoys in a
-static frame ({doc}`/methods/schrodinger/chain`).  The trade is worth it here
-because the interaction picture leaves far less entanglement to represent.
+`mpo-ip-tdvp1` (fixed bond) and `mpo-ip-tdvp2` (adaptive) run TDVP on a star-geometry
+MPO — no chain mapping, every mode coupled directly to the system.  The MPO is
+rebuilt at each step's midpoint (so no energy conservation, unlike the static
+Schrödinger frame).  Less entanglement than a chain, but no locality for the MPS.
 
 These methods evolve the bath in its **star** geometry — every discretized mode
 coupled directly to the spin, with no chain mapping — in the interaction picture,

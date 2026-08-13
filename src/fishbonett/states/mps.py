@@ -49,20 +49,20 @@ except ImportError:  # pragma: no cover - exercised only with a GPU present
 
 
 class SystemBathMPS:
-    """Matrix-product state of a boson chain terminated by a system (spin) site.
+    """Matrix-product state of a system (spin) site followed by a boson chain.
 
     Parameters
     ----------
     pd : sequence of int
-        Physical dimensions ``[d_boson_0, ..., d_boson_{L-1}, d_spin]``; the
-        system site is last.
+        Physical dimensions ``[d_spin, d_boson_0, ..., d_boson_{L-1}]``; the
+        system site is first (site 0).
     svd_expansion_factor : float, optional
         Growth factor for the adaptive trial bond dimension (default 1.5).
     """
 
     def __init__(self, pd, svd_expansion_factor=1.5):
-        self.pd_sys = pd[-1]
-        self.pd_boson = pd[0:-1]
+        self.pd_sys = pd[0]
+        self.pd_boson = pd[1:]
         self.pre_factor = svd_expansion_factor
         self.B = [self._ground(d) for d in pd]
         self.S = [np.ones([1], float) for _ in pd]

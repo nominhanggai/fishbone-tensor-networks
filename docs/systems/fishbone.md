@@ -1,21 +1,5 @@
 # Fishbone geometries
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — {py:class}`~fishbonett.treebone.TreeFishbone` (electronic sites
-  wired into *any* loop-free tree) and {py:class}`~fishbonett.simulate.Fishbone`
-  (the 1D-backbone specialization of it).
-- **Required arguments** — `sites` (one Hamiltonian per electronic site),
-  `baths` (one entry per site: a `Bath`, a `(left, right)` pair, or `None`), and
-  `edges` (`TreeFishbone`) or `backbone` (`Fishbone`).
-- **Run options** — as {doc}`spin_boson`, plus per-site and composite
-  `observables` specs.
-- **Watch** — a site with two baths is a degree-4 tensor whose cost scales with
-  the **square** of its bond dimensions, so an over-tight `trunc_eps` is
-  expensive here; see *Cost and truncation* below.
-- **See also** — {doc}`/methods/interaction/tree`, {doc}`composite_multichannel`.
-```
-
 A **fishbone** is a set of electronic sites, each carrying its own bath (or two
 baths — one on each side).  The electronic sites need not form a chain: the
 general engine {py:class}`~fishbonett.treebone.TreeFishbone` wires them into

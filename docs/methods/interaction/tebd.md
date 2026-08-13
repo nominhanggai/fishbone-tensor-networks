@@ -1,28 +1,9 @@
 # Interaction picture · chain — swap-network TEBD
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — `method="tebd"`: swap-network time-evolving block decimation on
-  a matrix-product state.
-- **Frame** — interaction picture / chain. The free-bath evolution is rotated out,
-  so entanglement is small — but $H$ is time-dependent and the gates are rebuilt
-  every step.
-- **Key options** — `dt`; `trunc_eps` (accuracy, default `1e-4`); `bond_dim`
-  (optional hard cap, `None` = unlimited); `ncap` (chain-mapping quadrature).
-- **API** — builder {py:class}`~fishbonett.frames.interaction_picture.SystemBathIP`,
-  step {py:func}`~fishbonett.evolve.tebd.symmetric_swap_step`, state
-  {py:class}`~fishbonett.states.mps.SystemBathMPS`.
-- **See also** — {doc}`/methods/interaction/trotter_mpo` (same propagator written
-  exactly as one MPO, ~1.6× faster), {doc}`/methods/interaction/star_mpo` and
-  {doc}`/methods/interaction/tree` (TDVP variants), {doc}`/methods/index` (why the
-  frame constrains the integrator).
-```
-
-The `tebd` method is an interaction-picture, swap-network time-evolving block
-decimation on a matrix-product state.  Like every engine in the package it accepts
-a general (non-`sigma_z`) system–bath coupling, a system of arbitrary dimension,
-and an arbitrary initial system state; `tebd` reaches these through leg swaps on a
-single MPS.
+`method="tebd"` runs swap-network TEBD on an MPS in the interaction picture.  The
+free-bath evolution is rotated out so entanglement is small, but the gates are
+time-dependent and must be rebuilt every step.  For the same physics without the
+swap network, see {doc}`/methods/interaction/trotter_mpo` (~1.6× faster).
 
 ## Theory
 
@@ -132,8 +113,11 @@ way — just pass a `(3, 3)` `h` and `coupling` and a length-3 `initial` vector.
 
 ## Notes
 
-- `tebd` is interaction-picture, so it needs no separate bath-frequency gauge and
-  handles a signed `domain` (thermofield / T-TEDOPA) directly; see {doc}`/bath`.
+- TEBD is a general propagation algorithm — it is not specific to the interaction
+  picture.  (The polaron frame also uses TEBD gates.)  In this package `method="tebd"`
+  runs TEBD *in the interaction picture*, where the free-bath evolution is rotated
+  out and the gates are time-dependent.  A signed `domain` for finite temperature
+  comes from T-TEDOPA thermalization of the spectral density; see {doc}`/bath`.
 - Cost per step is $O(N)$ two-site updates in each direction ($2N$ SVDs); the bond
   dimension is set by the physical system–bath entanglement, controlled by
   `trunc_eps` and optionally capped by `bond_dim`.

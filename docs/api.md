@@ -1,18 +1,9 @@
 # API reference
 
-```{admonition} At a glance
-:class: tip
-- **Start at** {py:class}`~fishbonett.bath.spec.Bath` (what the bath is),
-  {py:class}`~fishbonett.simulate.SystemBath` (what to propagate) and
-  {py:class}`~fishbonett.linalg.Truncation` (how accurately) — all three are
-  re-exported at the top level as `fishbonett.*`.
-- **Package layout by subject** — `bath` turns a spectral density into chain
-  parameters; `frames` writes the Hamiltonian in a chosen representation;
-  `states` holds tensors; `evolve` holds propagation algorithms; `linalg` and
-  `operators` hold the shared numerics.
-- **Each module's docstring opens with its own "What's here" table**, so the
-  generated pages below are browsable without reading the source.
-```
+Start from `from fishbonett import Bath, SystemBath, Truncation`.  The package
+is split by subject: `bath` = spectral density → chain parameters, `frames` =
+Hamiltonian in a chosen representation, `states` = tensor network ansatz,
+`evolve` = propagation algorithms, `linalg`/`operators` = shared numerics.
 
 ## High-level interface
 

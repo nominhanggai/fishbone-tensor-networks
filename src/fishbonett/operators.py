@@ -1,24 +1,8 @@
-"""Spin (Pauli) and bosonic operators, plus entropy helpers.
+"""Pauli matrices, bosonic ladder operators, and entropy helpers.
 
-The single home for the small dense matrices every other module needs.  The
-bosonic ladder operators in particular used to be redefined in four places
-(``crea``/``anih``/``numb`` in the propagators, ``c_``/``_c`` in the builders);
-they are defined **once** here and imported everywhere else.
-
-.. rubric:: What's here
-
-=========================================  ==================================
-:data:`sigma_x`, :data:`sigma_y`, ...      Pauli matrices and the 2x2 identity
-:func:`annihilate`, :func:`create`         bosonic ladder operators ``b``, ``b^dag``
-:func:`number`                             ``b^dag b`` on a truncated Fock space
-:func:`temp_factor`                        thermal weight for thermofield doubling
-:func:`entang`, :func:`rlogr`              von Neumann entropy from Schmidt values
-=========================================  ==================================
-
-All the bosonic operators act on a **truncated** ``dim``-level Fock space, so
-``[b, b^dag] != 1`` at the top of the ladder.  Operator-norm identities are
-therefore not exact near the truncation edge; convergence must be checked by
-raising ``phys_dim`` and watching the dynamics, not by testing such identities.
+Bosonic operators (``annihilate``, ``create``, ``number``) act on a truncated
+``dim``-level Fock space, so ``[b, b^dag] != 1`` at the top of the ladder.
+Check convergence by raising ``phys_dim``, not by testing commutator identities.
 """
 import numpy as np
 

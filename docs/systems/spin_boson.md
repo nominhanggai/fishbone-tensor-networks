@@ -1,22 +1,10 @@
 # Spin-boson: one system, one bath
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — {py:class}`~fishbonett.simulate.SystemBath`: one system of any
-  dimension coupled to one {py:class}`~fishbonett.bath.spec.Bath`.
-- **Required arguments** — `h` (Hermitian system Hamiltonian, any size),
-  `coupling` (Hermitian system operator $O$), `bath`.
-- **Run options** — `dt`, `t_max` (or `n_steps`), `method` (see
-  {doc}`/methods/index`), `trunc_eps`/`bond_dim`, `observables`, `initial`.
-- **Returns** — a {py:class}`~fishbonett.simulate.Result`: `t`, `expect`, `rdm`,
-  `max_bond`.
-- **See also** — {doc}`fishbone` (several sites, several baths),
-  {doc}`composite_multichannel` (internal structure / several channels).
-```
-
-{py:class}`~fishbonett.simulate.SystemBath` is the basic model: a single system
-coupled to one {py:class}`~fishbonett.bath.spec.Bath`.  Despite the name the
-"spin" need not be two-level.
+{py:class}`~fishbonett.simulate.SystemBath` couples one system to one
+{py:class}`~fishbonett.bath.spec.Bath`.  The system can have any dimension — the
+name "spin-boson" is just convention.  For several sites or several baths, see
+{doc}`fishbone`; for internal structure or multichannel baths, see
+{doc}`composite_multichannel`.
 
 ```python
 import numpy as np

@@ -1,22 +1,10 @@
 # Propagation methods
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — the `method=` argument of
-  {py:meth}`SystemBath.run <fishbonett.simulate.SystemBath.run>`; 14 names in 5
-  frames. The frame taxonomy table below is the map.
-- **Don't know which?** — the default `tree-tdvp2`, or `tebd`. Both grow their own
-  bonds, so you only pick `dt` and `trunc_eps`.
-- **Truncation** — `trunc_eps` (accuracy, default `1e-4`) and `bond_dim`
-  (optional hard cap, `None` = unlimited); or pass one
-  {py:class}`~fishbonett.linalg.Truncation`. Fixed-bond methods (`mpo-tdvp1`,
-  `mpo-ip-tdvp1`, `tree-tdvp`, `polaron-tdvp1`, `mpo-dtdvp`) **require** a cap.
-- **Same interface everywhere** — every method takes the same `dt`/`t_max` and
-  returns the same {py:class}`~fishbonett.simulate.Result`, so cross-checking one
-  method against another is the easiest way to validate a calculation.
-- **Not chosen by `method`** — a multichannel bath routes automatically; see
-  {doc}`/methods/interaction/multichannel`.
-```
+All methods are selected by the `method` argument of
+{py:meth}`SystemBath.run <fishbonett.simulate.SystemBath.run>` and return the same
+{py:class}`~fishbonett.simulate.Result`, so you can switch methods by changing one
+string.  If you don't know which to pick, start with `tree-tdvp2` or `tebd` —
+both grow their own bonds.
 
 Every method here solves the **same problem**: a system coupled to a harmonic bath
 that has been chain-mapped into a 1D chain of effective modes ({doc}`../bath`).
@@ -34,25 +22,21 @@ A method name encodes three choices:
    time-dependent variational principle (TDVP) in 1-site, 2-site or bond-adaptive
    form.  This sets **the cost per step and the error in `dt`**.
 
-These are **not** independent. The frame decides which integrators are even
-available, because it decides two structural properties of the Hamiltonian:
+These choices are linked.  The frame fixes two structural properties of the
+Hamiltonian, and those in turn constrain which integrators work:
 
-- **Is it time-dependent?** A frame that rotates something out pays for it with
-  explicit time dependence. TDVP wants a *static* MPO — it is built once, energy is
-  conserved, and the projector-splitting error analysis assumes a fixed $H$. In a
-  time-dependent frame the MPO must be rebuilt every step at the step midpoint,
-  which still works to second order but forfeits energy conservation and adds
-  per-step cost.
-- **Which terms commute?** Trotter-type propagators are only cheap when the pieces
-  they split are local *and* their non-commutation is mild. Occasionally a frame
-  makes a whole family of terms commute exactly — and then the propagator can be
-  written in closed form instead of split at all, which is precisely what
-  {doc}`/methods/interaction/trotter_mpo` exploits.
+- *Is $H$ time-dependent?*  A frame that rotates out the free bath makes $H$
+  time-dependent.  TDVP wants a static MPO (built once, energy conserved);
+  in a time-dependent frame the MPO must be rebuilt each step.
+- *Which terms commute?*  The interaction picture makes all system–bath coupling
+  terms commute, because the bath part has been rotated away.  That is what makes
+  the exact conditional-displacement MPO ({doc}`/methods/interaction/trotter_mpo`)
+  possible — the propagator factorizes without Trotter error.
 
 ## The frame taxonomy
 
-A frame is therefore a **pair**: the *picture* (is $H$ time-dependent?) and the
-*bath representation* (how are the modes wired?). Both halves constrain what works.
+A frame is a pair: the *picture* (is $H$ time-dependent?) and the *bath
+representation* (how are the modes wired?).
 
 | picture \\ representation | **chain** (TEDOPA, nearest-neighbour) | **star** (no chain mapping) | **multichannel** (shared modes, several couplings) |
 |---|---|---|---|
@@ -60,26 +44,18 @@ A frame is therefore a **pair**: the *picture* (is $H$ time-dependent?) and the
 | — *polaron chain* (static after Lang–Firsov) | {doc}`schrodinger/polaron_chain` — `polaron`, `polaron-tdvp1/tdvp2/dtdvp` | ✗ entanglement-catastrophic in an MPS | — |
 | **interaction** ($H(t)$) | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/tree` | {doc}`interaction/star_mpo` — `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/multichannel` |
 
-Reading the rows and columns:
-
-- The **picture** (row) decides the *integrator*. Static rows host TDVP with a
-  once-built MPO and exact energy conservation; the time-dependent row must rebuild
-  gates/MPOs each step.
-- The **representation** (column) decides the *ansatz*. A chain is
-  nearest-neighbour, so an MPS has locality to exploit; a star has none, but also no
-  mode–mode terms; multichannel shares modes across couplings, so the channels are
-  cross-correlated and the system must keep its own site.
-- The **polaron chain** is listed under Schrödinger because that is what it *is*
-  after the transform: time-independent. It is the only representation that combines
-  a static Hamiltonian with low entanglement.
+Rows are the picture (static vs. time-dependent $H$), columns the bath wiring
+(chain, star, multichannel).  The polaron chain sits under Schrödinger because
+the transform makes $H$ time-independent — it combines a static Hamiltonian with
+low entanglement.
 
 ## The frames in detail
 
 ### Schrödinger picture / chain — static $H$
 
 The bare chain-mapped Hamiltonian, nothing rotated out. $H$ is time-independent
-and strictly nearest-neighbour, so it has a small exact MPO built **once**. This is
-the natural home for TDVP.
+and nearest-neighbour, so it has a small exact MPO built once — TDVP with exact
+energy conservation.
 
 | ``method``    | integrator                       | bond growth         | page |
 |---------------|----------------------------------|---------------------|------|
@@ -108,11 +84,10 @@ propagator here rebuilds its gates or its MPO each step.
 | ``tree-tdvp2``   | binary-tree TTN, 2-site TDVP                 | SVD truncation | {doc}`/methods/interaction/tree` |
 | ``tree-tebd``    | binary-tree TTN, TEBD                        | SVD truncation | {doc}`/methods/interaction/tree` |
 
-This frame has a property the other two lack: **all the coupling terms
-$A_s\otimes X_n$ commute with one another**, because the bath term that would
-spoil it has been rotated away. That is what makes `trotter-mpo` possible — the
-multimode propagator factorizes exactly into a conditional displacement, with no
-splitting error at all. It is unique to this frame.
+Because the free-bath term has been rotated away, all coupling terms
+$A_s\otimes X_n$ commute.  The multimode propagator therefore factorizes exactly
+into a conditional displacement (`trotter-mpo`) with no Trotter error between
+modes — something the other frames cannot do.
 
 ### Schrödinger picture / polaron chain — static $\tilde H$
 
@@ -130,8 +105,10 @@ entanglement.
 | ``polaron-tdvp2`` | polaron MPO, 2-site TDVP               | SVD truncation      | {doc}`/methods/schrodinger/polaron_chain` |
 | ``polaron-dtdvp`` | polaron MPO, bond-adaptive DTDVP       | precision threshold | {doc}`/methods/schrodinger/polaron_chain` |
 
-The restriction is physical rather than algorithmic: the transform needs $T=0$ and
-a bath with $\int J(\omega)/\omega^2\,d\omega$ finite (gapped or super-ohmic).
+The restriction is on the spectral density, not the temperature: the bath must
+have $\int J(\omega)/\omega^2\,d\omega$ finite (gapped or super-ohmic).  Finite
+temperature works through T-TEDOPA thermalization of the spectral density, the
+same way the interaction-picture chain handles it.
 
 ## Which propagator suits which frame
 
@@ -172,8 +149,9 @@ for method in ["tebd", "trotter-mpo",
     print(f"{method:14s} <sz>(t_end) = {r.expect['sz'][-1]:+.4f}")
 ```
 
-(The polaron methods are omitted from that loop only because they need `T=0` and a
-gapped bath — see {doc}`/methods/schrodinger/polaron_chain`.)
+(The polaron methods need a gapped or super-ohmic bath —
+$\int J(\omega)/\omega^2\,d\omega$ finite — see
+{doc}`/methods/schrodinger/polaron_chain`.)
 
 ## Choosing a method
 
@@ -182,14 +160,13 @@ the propagator within it.
 
 **Step 1: pick the frame.**
 
-- Is the bath at **finite temperature**, or is $\int J(\omega)/\omega^2$ divergent
-  (e.g. strictly ohmic)? → the polaron frame is unavailable; use the
-  **interaction picture** (it handles a thermalized/signed domain natively) or the
-  **Schrödinger picture**.
+- Is $\int J(\omega)/\omega^2$ divergent (e.g. strictly ohmic)? → the polaron
+  frame is unavailable; use the **interaction picture** or the **Schrödinger
+  picture**.
 - Is the coupling **strong**, so that static reorganization dominates? → the
-  **polaron** frame carries markedly less entanglement (measured: peak bond
-  entropy 7.6 vs 16, bond 21 vs 30 at strong coupling), if its $T=0$ requirement
-  is met.
+  **polaron** frame carries less entanglement (peak bond entropy 7.6 vs 16,
+  bond 21 vs 30 at strong coupling).  It handles finite temperature the same
+  way the other frames do, via T-TEDOPA thermalization.
 - Otherwise the **interaction picture** is the general-purpose choice: much less
   entanglement than the Schrödinger picture, no restrictions.
 - Use the **Schrödinger picture** when you want TDVP's exact energy conservation,

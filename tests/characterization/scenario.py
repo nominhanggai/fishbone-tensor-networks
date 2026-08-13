@@ -46,7 +46,7 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
     np.random.seed(seed)
     freq, coup_mat = _discrete_bath()
     n_boson = 2 * len(freq)              # thermofield doubling
-    pd = [phys_dim] * n_boson + [2]
+    pd = [2] + [phys_dim] * n_boson
 
     buf = io.StringIO()
     with redirect_stdout(buf):          # the legacy engine is extremely chatty
@@ -55,8 +55,8 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
         eth.build(n=0)
 
         etn = Mps(pd)
-        etn.B[-1][0, 1, 0] = 0.0
-        etn.B[-1][0, 0, 0] = 1.0        # start in |0>
+        etn.B[0][0, 1, 0] = 0.0
+        etn.B[0][0, 0, 0] = 1.0        # start in |0>
 
         def ub(j, swap):
             if lbo:
@@ -68,19 +68,19 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
         for tn in range(num_steps):
             U1, U2 = eth.get_u(2 * tn * dt, 2 * dt, factor=2)
             etn.U = U1
-            for j in range(n_boson - 1, 0, -1):
+            for j in range(n_boson - 1):
                 ub(j, 1)
-            ub(0, 0)
-            ub(0, 0)
+            ub(n_boson - 1, 0)
+            ub(n_boson - 1, 0)
             etn.U = U2
-            for j in range(1, n_boson):
+            for j in range(n_boson - 2, -1, -1):
                 ub(j, 1)
-            theta = etn.get_theta1(n_boson)
+            theta = etn.get_theta1(0)
             spin_rho.append(np.einsum('LiR,LjR->ij', theta, theta.conj()))
 
         boson_num_final = []
-        for i, d in enumerate(pd[:-1]):
-            theta = etn.get_theta1(i)
+        for i, d in enumerate(pd[1:]):
+            theta = etn.get_theta1(i + 1)
             r = np.einsum('LiR,LjR->ij', theta, theta.conj())
             boson_num_final.append(np.einsum('ij,ji', r, num_op(d)).real)
 

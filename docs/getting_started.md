@@ -1,17 +1,11 @@
 # Getting started
 
-```{admonition} At a glance
+```{admonition} Quick start
 :class: tip
-- **Three names cover the usual case** —
-  `from fishbonett import Bath, SystemBath, Truncation`.
-  {py:class}`~fishbonett.bath.spec.Bath` says *what the bath is*,
-  {py:class}`~fishbonett.simulate.SystemBath` *what to propagate*, and
-  {py:class}`~fishbonett.linalg.Truncation` *how accurately*.
-- **One call** — `model.run(dt=..., t_max=..., method=...)` returns a
-  {py:class}`~fishbonett.simulate.Result` with `t`, `expect`, `rdm`, `max_bond`.
-- **Install** — `pip install -e .`; extras `[gpu]`, `[rates]`, `[test,docs]`.
-- **Next** — {doc}`systems/index` for *what* you can build, {doc}`methods/index`
-  for *how* to propagate it, {doc}`bath` for the bath itself.
+`from fishbonett import Bath, SystemBath, Truncation` — build a bath, attach it
+to a system, call `model.run(...)`.  See {doc}`systems/index` for the model
+classes, {doc}`methods/index` for propagation methods, and {doc}`bath` for the
+bath itself.
 ```
 
 ## Installation
@@ -71,7 +65,7 @@ See {doc}`methods/index` for the theory and an example behind each one.
 
 ### Accuracy: `dt`, `trunc_eps`, `bond_dim`
 
-Three knobs control accuracy, and it is worth knowing which does what:
+Three knobs control accuracy:
 
 - **`dt`** — the time step. Every method here is second order, so halving `dt`
   cuts the time-discretization error roughly 4×.
