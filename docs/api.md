@@ -80,6 +80,7 @@ describes the terms without saying what the graph looks like.
    :recursive:
 
    fishbonett.frames.terms
+   fishbonett.frames.gates
    fishbonett.frames.schrodinger
    fishbonett.frames.interaction_picture
    fishbonett.frames.polaron

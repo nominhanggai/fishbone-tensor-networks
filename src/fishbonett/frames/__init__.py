@@ -13,6 +13,7 @@ propagators (:mod:`fishbonett.evolve`) apply.
 :mod:`~fishbonett.frames.multichannel`         interaction picture, several couplings
 :mod:`~fishbonett.frames.coolingchain`         finite ``T`` by a non-unitary gauge
 :mod:`~fishbonett.frames.terms`                ``LocalTerms``, what a static frame emits
+:mod:`~fishbonett.frames.gates`                two-site gates, what a ``H(t)`` frame emits
 :mod:`~fishbonett.frames.mpo`                  the chain/star MPOs the frames emit
 =============================================  =====================================
 
@@ -34,8 +35,11 @@ models bypassed this package entirely; they now go through it like everything el
 The time-dependent frames do **not** produce ``LocalTerms``, and that is the honest
 shape of the physics rather than an omission: the interaction picture has no on-site
 bath terms at all and a coupling that must be rebuilt every step, and the polaron
-frame folds the coupling into a displacement on a single bond.  Those build their
-gates directly.
+frame folds the coupling into a displacement on a single bond.  They emit a list of
+two-site Hamiltonians instead, which
+:func:`fishbonett.frames.gates.swap_gate_pairs` exponentiates -- so ``SystemBathIP``
+and ``SystemBathMultiChannel`` differ in how ``H(t)`` is *built*, not in how it
+becomes gates.
 
 Not every frame is available for every model: the multi-site models have only the
 Schroedinger picture, and ``coolingchain`` sits outside the taxonomy entirely

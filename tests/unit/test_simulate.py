@@ -322,14 +322,14 @@ def test_swap_network_walks_the_system_out_from_site_0_and_back():
         return dims.index(d_sys)
 
     state = SystemBathMPS(pd)
-    u1, _ = builder.get_u(0.0, 0.01, mode="normal")
+    u1, _ = builder.get_u(0.0, 0.01)
     state.U = u1
     assert sys_site(state) == 0                       # system starts at site 0
     tebd.swap_out(state, n, 40, 1e-10)
     assert sys_site(state) == n - 1                   # ... walked to the far end
     tebd.update_bond(state, n - 1, 40, 1e-10, swap=0)
     assert sys_site(state) == n - 1                   # swap=0 does not move it
-    _, u2 = builder.get_u(0.005, 0.01, mode="normal")
+    _, u2 = builder.get_u(0.005, 0.01)
     state.U = u2                                      # sites are now reversed
     tebd.swap_in(state, n, 40, 1e-10)
     assert sys_site(state) == 0                       # ... and back to site 0

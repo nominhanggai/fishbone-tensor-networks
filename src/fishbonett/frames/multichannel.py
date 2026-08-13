@@ -27,14 +27,13 @@ Selected by the *bath*, not by a ``method`` name: give
 :class:`~fishbonett.bath.spec.Bath` a list of ``coupling`` operators.  See
 :doc:`/methods/interaction/multichannel`.
 """
-from copy import deepcopy as dcopy
-
 import numpy as np
 from numpy import exp
 
 from fishbonett.contract import contract as einsum
 from fishbonett.bath.lanczos import lanczos
-from fishbonett.linalg import kron, expm_gate as calc_U
+from fishbonett.frames.gates import swap_gate_pairs
+from fishbonett.linalg import kron
 from fishbonett.operators import temp_factor, annihilate
 
 
@@ -211,26 +210,17 @@ class SystemBathMultiChannel:
         self.chain_freq = np.diagonal(chain_freq)
         return self
 
-    def get_u(self, t, dt, mode='normal', factor=1, inc_sys=True):
+    def get_u(self, t, dt, factor=1, inc_sys=True):
         """Two-site Trotter gates over ``[t, t+dt]`` as ``(U1, U2)``.
 
-        Exponentiates each two-site Hamiltonian from :meth:`get_h2`.  ``U1`` has
-        legs ``(d1, d2, d1*, d2*)``; ``U2`` is the leg-transposed variant the
-        *swapped* sweeps consume.  ``factor`` divides the Hamiltonian (for
-        sub-stepping).  Because the frame is time-dependent, this must be called
-        afresh each step.
+        Exponentiates each two-site Hamiltonian from :meth:`get_h2` via
+        :func:`fishbonett.frames.gates.swap_gate_pairs`, shared with
+        :class:`~fishbonett.frames.interaction_picture.SystemBathIP`: this frame is
+        the interaction picture with a matrix-valued coupling, so only :meth:`get_h2`
+        differs.  ``factor`` divides the Hamiltonian (for sub-stepping).  Because the
+        frame is time-dependent, this must be called afresh each step.
         """
         self.H = self.get_h2(t, dt, inc_sys)
-        U1 = dcopy(self.H)
-        U2 = dcopy(U1)
-        for i, h_d1_d2 in enumerate(self.H):
-            h, d1, d2 = h_d1_d2
-            u = calc_U(h.toarray() / factor, 1)
-            # h is in (d1 x d2) basis; transpose to (d2, d1, d2, d1) = (sys, boson, ...)
-            u1 = u.reshape([d1, d2, d1, d2]).transpose([1, 0, 3, 2])
-            u2 = np.transpose(u1, [1, 0, 3, 2])
-            U1[i] = u1
-            U2[i] = u2
-        return U1, U2
+        return swap_gate_pairs(self.H, factor)
 
 

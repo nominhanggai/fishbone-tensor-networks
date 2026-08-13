@@ -18,12 +18,15 @@ geometry is *in the data*, not in the code.
    Not every frame fits this container, and that is deliberate rather than an
    oversight.  The interaction picture has **no** on-site bath terms at all and a
    *time-dependent* coupling, so its "terms" are a function of ``t`` rebuilt every
-   step; the polaron frame folds the coupling into a displacement on one bond.  Those
-   frames build their gates directly (see
+   step; the polaron frame folds the coupling into a displacement on one bond.
+   ``LocalTerms`` is the shape of a **static** Hamiltonian, which is why the
+   Schroedinger picture is what it serves.
+
+   The time-dependent frames emit a plain list of two-site Hamiltonians instead and
+   compile it with :func:`fishbonett.frames.gates.swap_gate_pairs` -- the same split
+   of "what the terms are" from "how they become gates", one layer down.  See
    :class:`fishbonett.frames.interaction_picture.SystemBathIP` and
-   :class:`fishbonett.frames.polaron.SystemBathPolaron`).  ``LocalTerms`` is the
-   shape of a **static** Hamiltonian, which is why the Schroedinger picture is what
-   it serves.
+   :class:`fishbonett.frames.polaron.SystemBathPolaron`.
 """
 from dataclasses import dataclass, field
 from typing import Dict, List, Sequence, Tuple
