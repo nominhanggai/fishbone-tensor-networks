@@ -52,9 +52,13 @@ def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
     eps : float
         Relative singular-value threshold.
     swap : {0, 1}
-        1 transposes the two physical legs during the gate (moves a distant bath
-        mode next to the system site -- the swap network of the interaction
-        picture).  0 leaves the sites where they are.
+        1 transposes the two physical legs during the gate, so sites ``i`` and
+        ``i+1`` come back **exchanged** -- this is the swap network of the
+        interaction picture, and applied along ascending bonds it walks the system
+        site rightward along the chain (see :func:`swap_out`).  0 leaves the sites
+        where they are.  Note the gate's legs must be ordered to match the sites as
+        they are *now*, which is why the builders hand out both ``U1`` and its
+        leg-transposed twin ``U2``.
     eps_lbo : float, optional
         Local-basis-optimization threshold; enables LBO and the adaptive search.
     adaptive : bool
@@ -88,14 +92,29 @@ def sweep(state, bonds, chi_max, eps, swap=0, **kw):
 
 
 def swap_out(state, n, chi_max, eps, **kw):
-    """Swap-network sweep *outward*: bonds ``0, ..., n-2``, carrying the system
-    site from site 0 toward the far end so every mode meets it once."""
+    """Swap-network sweep *outward*: bonds ``0, ..., n-2`` with ``swap=1``.
+
+    ``n`` is the number of bath modes, so the chain has ``n + 1`` sites (the system
+    at site 0, modes at ``1..n``) and ``n`` bonds.  Each swapped gate exchanges its
+    two sites, so sweeping up the chain carries the system site from site 0 to site
+    ``n-1``, meeting a different mode at every bond on the way.
+
+    Note this stops one bond short of the end: the modes met here are the ``n-1`` at
+    sites ``1..n-1``, and the outermost mode is reached by the separate ``swap=0``
+    application at bond ``n-1`` (see :func:`symmetric_swap_step`).  It is the whole
+    step, not this sweep, that pairs the system with every mode.
+    """
     sweep(state, range(n - 1), chi_max, eps, swap=1, **kw)
 
 
 def swap_in(state, n, chi_max, eps, **kw):
-    """Swap-network sweep *inward*: bonds ``n-2, ..., 0`` -- the reverse of
-    :func:`swap_out`, returning the system site to site 0."""
+    """Swap-network sweep *inward*: bonds ``n-2, ..., 0`` with ``swap=1``.
+
+    The exact reverse of :func:`swap_out`, walking the system site back from
+    ``n-1`` to site 0 so the state ends a step in the same layout it started in.
+    Because the two sites at each bond are now in the opposite order, this consumes
+    the leg-transposed gates (``U2``) rather than the ``U1`` of :func:`swap_out`.
+    """
     sweep(state, range(n - 2, -1, -1), chi_max, eps, swap=1, **kw)
 
 

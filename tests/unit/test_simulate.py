@@ -299,6 +299,47 @@ def _polaron_bath(nm=14, d=8):
                 n_modes=nm, phys_dim=d)
 
 
+def test_swap_network_walks_the_system_out_from_site_0_and_back():
+    """Pin the swap-network direction to the site-0 convention.
+
+    The swap gate exchanges its two sites, so the physical *dimensions* move with
+    the content: with d_sys != d_boson the system's position is observable.  Nothing
+    else pins this, and the direction is exactly what the site-0 port had to change
+    -- the old layout walked the system inward from the last site.
+    """
+    from fishbonett.evolve import tebd
+    from fishbonett.frames.interaction_picture import SimpleSysBathIP
+    from fishbonett.states.mps import SimpleSysBathMPS
+
+    d_sys, d_bos, n = 2, 5, 4
+    pd = [d_sys] + [d_bos] * n
+    builder = SimpleSysBathIP(pd, h_sys=sigma_x, coupling=sigma_z, sd=_J,
+                              domain=[0.0, 40.0]).build()
+
+    def sys_site(st):
+        dims = [b.shape[1] for b in st.B]
+        assert dims.count(d_sys) == 1, dims
+        return dims.index(d_sys)
+
+    state = SimpleSysBathMPS(pd)
+    u1, _ = builder.get_u(0.0, 0.01, mode="normal")
+    state.U = u1
+    assert sys_site(state) == 0                       # system starts at site 0
+    tebd.swap_out(state, n, 40, 1e-10)
+    assert sys_site(state) == n - 1                   # ... walked to the far end
+    tebd.update_bond(state, n - 1, 40, 1e-10, swap=0)
+    assert sys_site(state) == n - 1                   # swap=0 does not move it
+    _, u2 = builder.get_u(0.005, 0.01, mode="normal")
+    state.U = u2                                      # sites are now reversed
+    tebd.swap_in(state, n, 40, 1e-10)
+    assert sys_site(state) == 0                       # ... and back to site 0
+
+    # the whole step must be layout-preserving, or step k+1 sees the wrong sites
+    state2 = SimpleSysBathMPS(pd)
+    tebd.symmetric_swap_step(state2, builder, 0.0, 0.01, n, 40, 1e-10)
+    assert sys_site(state2) == 0
+
+
 def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
     """The conditional-displacement propagator is a sum of one product operator per
     eigenvalue of the coupling ``O``, so the MPO bond is exactly that count -- 2 for
