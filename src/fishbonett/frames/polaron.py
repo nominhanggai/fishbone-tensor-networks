@@ -135,7 +135,22 @@ class BosonicBathPolaron:
 
     def undress_rdm(self, theta2):
         """Lab-frame system RDM from the ``(c0, system)`` two-site wavefunction
-        ``theta2 [L, d0, ds, R]`` (un-dresses the polaron coherences)."""
+        ``theta2 [L, d0, ds, R]``.
+
+        Since ``U_p`` is diagonal in ``O``'s eigenbasis::
+
+            U_p         = sum_i |i><i| (x) D(lam_i)
+            rho_lab[i,j] = <i| Tr_B[ U_p^dag rho~ U_p ] |j>
+                         = Tr_B[ D(-lam_i) rho~_ij D(lam_j) ]
+                         = Tr_B[ rho~_ij D(lam_j - lam_i) ]
+
+        using cyclicity and ``D(lam_j) D(-lam_i) = D(lam_j - lam_i)`` (exact -- both
+        share the generator ``c0^dag - c0``).  Diagonal elements get ``D(0) = 1`` and
+        are therefore frame-invariant; coherences pick up the Franck-Condon factor.
+        Only the ``(c0, system)`` block is needed because ``U_p`` displaces the
+        ``c0`` mode alone, so tracing out the rest of the chain (the ``L``/``R``
+        bonds) commutes with the un-dressing.
+        """
         d0, ds = self.pd_boson[0], self.pd_sys
         rho2 = np.einsum('LaXR,LbYR->aXbY', theta2, theta2.conj())     # [c0o,so,c0i,si]
         V, lam, a0 = self._evecs, self._evals, _c(d0)
