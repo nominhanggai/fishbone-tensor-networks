@@ -14,11 +14,11 @@ geometry-specific.
 
 .. rubric:: What's here
 
-==================  ============================================================
-:func:`terms`       a model's systems + baths -> static ``LocalTerms``
-:func:`chain_terms` the nodes and edges one bath chain contributes
-:func:`star_terms`  the same for a shared-mode multichannel star
-==================  ============================================================
+===================  ===========================================================
+:func:`terms`        a model's systems + baths -> static ``LocalTerms``
+:func:`chain_terms`  the nodes and edges one bath chain contributes
+:func:`star_terms`   the same for a shared-mode multichannel star
+===================  ===========================================================
 
 The MPO form of this frame for the single-system models lives in
 :mod:`fishbonett.frames.mpo` (``build_chain_mpo``, ``build_static_star_mpo``) and is
@@ -112,8 +112,9 @@ def terms(sites, edges, baths, t_max=None):
     ----------
     sites : list of (d, d) array
         The system-site Hamiltonians.  Nodes ``0..len(sites)-1``.
-    edges : list of (i, j, coupling)
-        System-system couplings, forming a tree over the sites.
+    edges : list of (i, j, C)
+        System-system couplings, forming a tree over the sites; ``C`` is a
+        ``(d_i*d_j, d_i*d_j)`` operator on the pair.
     baths : list
         One entry per site: a list of :class:`~fishbonett.bath.spec.Bath` (possibly
         empty).  Each bath becomes a chain -- or, if multichannel, a star -- of nodes

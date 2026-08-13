@@ -36,11 +36,14 @@ With the orthogonality centre moved inside that subtree, every tensor outside it
 isometric, so the bonds leaving the subtree contract to the identity and never
 enter the calculation — the cost depends only on the subtree, not on the size of
 the bath.  This is exposed on the low-level state as
-{py:meth}`TreeTensorNetwork.joint_rdm <fishbonett.states.tree.TreeTensorNetwork.joint_rdm>` and
-{py:meth}`TreeTensorNetwork.expectation <fishbonett.states.tree.TreeTensorNetwork.expectation>`.
+{py:meth}`TensorNetwork.joint_rdm <fishbonett.states.network.TensorNetwork.joint_rdm>` and
+{py:meth}`TensorNetwork.expectation <fishbonett.states.network.TensorNetwork.expectation>`.
 
 All three forms work identically through the 1D
 {py:class}`~fishbonett.models.fishbone.Fishbone`, since it delegates to the same engine.
+A path is a loop-free graph like any other, so these methods are available on
+{py:class}`~fishbonett.states.mps.SystemBathMPS` too — its spanning "subtree" is
+just the stretch of chain between the outermost requested sites.
 
 ## Per-site reduced density matrices
 

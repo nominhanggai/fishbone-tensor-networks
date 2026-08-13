@@ -132,7 +132,7 @@ builder = SystemBathPolaron(
 state = SystemBathMPS(pd)
 gates = builder.gates(0.02 / 2)            # static frame: gates built once...
 tebd.symmetric_static_step(state, gates, len(pd) - 1, chi_max=60, eps=1e-4)
-rho = np.einsum('LiR,LjR->ij', state.get_theta1(0), state.get_theta1(0).conj())
+rho = state.rdm(0)                         # inherited from TensorNetwork
 ```
 
 `symmetric_static_step` applies each gate twice, so it takes **half**-step gates —
