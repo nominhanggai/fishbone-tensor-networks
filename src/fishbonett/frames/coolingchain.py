@@ -80,12 +80,15 @@ class SystemBathCoolingChain(SystemBathMPS):
         ``exp(2 betaOmega n_i)`` instead, renormalizing at each site to keep the
         result finite, and traces out the bath.
         """
-        theta = self.get_theta1(0)
-        rho = einsum('PiQ,ij,PjL->QL', theta, self.heating_op[0], theta.conj())
-        for i in range(1, self.len_boson):
-            rho = einsum('PQ, PiK, ij, QjL->KL', rho, self.B[i], self.heating_op[i], self.B[i].conj())
-            rho = rho/einsum('KK', rho)
-        rho = einsum('PQ,PiL,QjL->ij', rho, self.B[-1], self.B[-1].conj())
+        # contract outward from the system (site 0) through the boson chain
+        theta = self.get_theta1(0)    # system site
+        rho = einsum('PiQ,PjL->iQjL', theta, theta.conj())
+        # trace through each boson site with its heating operator
+        for i in range(self.len_boson):
+            bi = self.B[i + 1]        # boson site i+1 in the MPS
+            rho = einsum('iQjL,QkR,kl,LlS->iRjS', rho, bi, self.heating_op[i], bi.conj())
+            rho = rho / einsum('iRiR', rho)
+        rho = einsum('iRjR->ij', rho)
         return rho
 
     def get_coupling(self, n, j, domain, g, ncap=20000):
@@ -119,47 +122,39 @@ class SystemBathCoolingChain(SystemBathMPS):
         self.heating_op = [op / np.linalg.norm(op) for op in self.heating_op]
 
     def get_h1(self):
-        """On-site terms in chain order: ``w_i n_i`` per bath mode, then the
-        system Hamiltonian ``h1e`` last."""
-        w_list = self.w_list[::-1]
-        h1 = []
-        for i, w in enumerate(w_list):
+        """On-site terms: system first, then bath modes in chain order."""
+        h1 = [self.h1e]
+        for i in range(self.len_boson):
             c = annihilate(self.pd_boson[i])
-            h1.append(w * c.T @ c)
-        h1.append(self.h1e)
+            h1.append(self.w_list[i] * c.T @ c)
         return h1
-
 
     def get_h2(self):
         """Two-site Hamiltonians ``[(h, d1, d2), ...]`` along the chain.
 
-        Mode-mode bonds carry the hopping plus the left site's on-site term.  The
-        last bond (mode 0 to the system) is where the cooling gauge enters: the
-        coupling is ``k0 (e^{betaOmega} b + e^{-betaOmega} b^dag) (x) he_dy``,
-        asymmetric by construction -- that asymmetry *is* the thermal weight.
+        Bond 0 (system to c0) carries the cooling gauge: the coupling is
+        ``k0 (e^{betaOmega} b + e^{-betaOmega} b^dag) (x) he_dy``.
+        Remaining bonds are free-chain mode-mode hoppings.
         """
         h1 = self.get_h1()
-        k_list = self.k_list[::-1]
-        k0 = k_list[-1]
-        k_list = k_list = k_list[0:-1]
+        k0 = self.k_list[0]
         h2 = []
-        for i, k in enumerate(k_list):
-            d1 = self.pd_boson[i]
-            d2 = self.pd_boson[i + 1]
+        d1 = self.pd_sys
+        d2 = self.pd_boson[0]
+        annih = np.exp(self.betaOmega)
+        creat = np.exp(-1 * self.betaOmega)
+        c0 = annihilate(d2)
+        coup = k0 * kron(self.he_dy, annih*c0 + creat*c0.T)
+        site = kron(h1[0], np.eye(d2)) + kron(np.eye(d1), h1[1])
+        h2.append((coup + site, d1, d2))
+        for i in range(1, self.len_boson):
+            d1 = self.pd_boson[i - 1]
+            d2 = self.pd_boson[i]
             c1 = annihilate(d1)
             c2 = annihilate(d2)
-            coup = k * (kron(c1.T, c2) + kron(c1, c2.T))
+            coup = self.k_list[i] * (kron(c1.T, c2) + kron(c1, c2.T))
             site = kron(h1[i], np.eye(d2))
             h2.append((coup + site, d1, d2))
-        d1 = self.pd_boson[-1]
-        d2 = self.pd_sys
-        annih = np.exp(self.betaOmega)  # *np.sign(self.freq[::-1][i]))
-        creat = np.exp(-1 * self.betaOmega)  # *np.sign(self.freq[::-1][i]))
-        c0 = annihilate(d1)
-        coup = k0 * kron(annih*c0 + creat*c0.T, self.he_dy)
-        site = kron(h1[-2], np.eye(d2)) + kron(np.eye(d1), h1[-1])
-        h20 = coup + site
-        h2.append((h20, d1, d2))
         return h2
 
 

@@ -20,7 +20,7 @@ of any frame.  See :doc:`/methods/schrodinger/chain` and :doc:`/methods/index`.
 electron-bath chain ``eb``, the electronic site ``e``, the vibrational site ``v``
 and the vibration-bath chain ``vb``, plus the electronic couplings ``h2ee``
 between neighbouring chains.  For an arbitrary (non-comb) tree of sites use
-:class:`fishbonett.treebone.TreeFishbone` instead.
+:class:`fishbonett.states.tree.TreeFishbone` instead.
 
 .. note::
    This module was called ``frames.hamiltonian``.  It is named for its *frame*
@@ -86,7 +86,7 @@ class FishBoneH:
     one-element list are both accepted.
 
     For an arbitrary tree of sites (rather than this fixed comb) use
-    :class:`fishbonett.treebone.TreeFishbone`.
+    :class:`fishbonett.states.tree.TreeFishbone`.
     """
 
     @property
@@ -517,44 +517,37 @@ class SystemBathSchrodinger:
         self.w_list, self.k_list = self.get_coupling(n, self.sd, self.domain, g, ncap)
 
     def get_h1(self):
-        """On-site terms in chain order: ``w_i n_i`` per bath mode, then the
-        system Hamiltonian ``h1e`` last."""
-        w_list = self.w_list[::-1]
-        h1 = []
-        for i, w in enumerate(w_list):
+        """On-site terms: system first, then bath modes in chain order."""
+        h1 = [self.h1e]
+        for i in range(len(self.pd_boson)):
             c = annihilate(self.pd_boson[i])
-            h1.append(w * c.T @ c)
-        h1.append(self.h1e)
+            h1.append(self.w_list[i] * c.T @ c)
         return h1
 
     def get_h2(self):
-        """Two-site Hamiltonians ``[(h, d1, d2), ...]``, chain order, system last.
+        """Two-site Hamiltonians ``[(h, d1, d2), ...]``, system first.
 
-        Each mode-mode bond carries the hopping ``k (b_i^dag b_{i+1} + h.c.)``
-        plus the left site's on-site term; the final bond carries the system-bath
-        coupling ``k0 (b + b^dag) (x) he_dy`` plus both remaining on-site terms.
-        Use :meth:`get_h2_only` for the couplings without the on-site parts.
+        Bond 0 (system to c0) carries the system-bath coupling
+        ``k0 (b + b^dag) (x) he_dy`` plus both on-site terms.  Remaining bonds
+        are mode-mode hoppings plus the left site's on-site term.
         """
         h1 = self.get_h1()
-        k_list = self.k_list[::-1]
-        k0 = k_list[-1]
-        k_list = k_list = k_list[0:-1]
+        k0 = self.k_list[0]
         h2 = []
-        for i, k in enumerate(k_list):
-            d1 = self.pd_boson[i]
-            d2 = self.pd_boson[i + 1]
+        d1 = self.pd_sys
+        d2 = self.pd_boson[0]
+        c0 = annihilate(d2)
+        coup = k0 * kron(self.he_dy, c0 + c0.T)
+        site = kron(h1[0], np.eye(d2)) + kron(np.eye(d1), h1[1])
+        h2.append((coup + site, d1, d2))
+        for i in range(1, len(self.pd_boson)):
+            d1 = self.pd_boson[i - 1]
+            d2 = self.pd_boson[i]
             c1 = annihilate(d1)
             c2 = annihilate(d2)
-            coup = k * (kron(c1.T, c2) + kron(c1, c2.T))
+            coup = self.k_list[i] * (kron(c1.T, c2) + kron(c1, c2.T))
             site = kron(h1[i], np.eye(d2))
             h2.append((coup + site, d1, d2))
-        d1 = self.pd_boson[-1]
-        d2 = self.pd_sys
-        c0 = annihilate(d1)
-        coup = k0 * kron(c0 + c0.T, self.he_dy)
-        site = kron(h1[-2], np.eye(d2)) + kron(np.eye(d1), h1[-1])
-        h20 = coup + site
-        h2.append((h20, d1, d2))
         return h2
 
     def get_h2_only(self):
@@ -564,16 +557,18 @@ class SystemBathSchrodinger:
         on-site parts are applied separately (e.g. in a split where the free
         evolution is treated exactly).
         """
-        k_list = self.k_list[::-1]
-        k0 = k_list[-1]
-        k_list = k_list[0:-1]
+        k0 = self.k_list[0]
         h2 = []
-        for i, k in enumerate(k_list):
-            d1 = self.pd_boson[i]
-            d2 = self.pd_boson[i + 1]
+        d1 = self.pd_sys
+        d2 = self.pd_boson[0]
+        c0 = annihilate(d2)
+        h2.append(k0 * kron(self.he_dy, c0 + c0.T))
+        for i in range(1, len(self.pd_boson)):
+            d1 = self.pd_boson[i - 1]
+            d2 = self.pd_boson[i]
             c1 = annihilate(d1)
             c2 = annihilate(d2)
-            coup = k * (kron(c1.T, c2) + kron(c1, c2.T))
+            coup = self.k_list[i] * (kron(c1.T, c2) + kron(c1, c2.T))
             h2.append(coup)
         d1 = self.pd_boson[-1]
         d2 = self.pd_sys

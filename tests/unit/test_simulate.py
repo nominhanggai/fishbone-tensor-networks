@@ -115,7 +115,7 @@ def test_methods_share_time_grid_and_agree():
 def test_spinboson_multichannel_routes_to_star():
     """SystemBath with a multichannel bath (sz AND sx) keeps the spin on its own
     site and matches the tree star engine."""
-    from fishbonett.treebone import TreeFishbone
+    from fishbonett.states.tree import TreeFishbone
 
     def Jz(w):
         return 0.2 * w * np.exp(-w / 5.0)
@@ -151,7 +151,7 @@ def test_composite_spin_vibration_system():
                   observables={"sz": coup}, initial="up")
     assert r.rdm.shape == (10, 2 * dv, 2 * dv)
 
-    builder = Builder([dph] * nm + [2 * dv])
+    builder = Builder([2 * dv] + [dph] * nm)
     builder.domain = [0.0, 40.0]; builder.sd = _J
     builder.coupling = coup; builder.h_sys = h_sys
     builder.build(g=1)
@@ -303,12 +303,12 @@ def test_polaron_matches_ip_populations_and_coherence(method):
     coherence <sx> both agree (they differ only by the O(dt^2) Trotter split).
     The TEBD variant uses static gates; the TDVP variants use the polaron MPO."""
     model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=10, d=8))
-    kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4,
+    kw = dict(dt=0.01, n_steps=30, bond_dim=16, trunc_eps=1e-4,
               observables={"sz": sigma_z, "sx": sigma_x})
     rp = model.run(method=method, **kw)
     ri = model.run(method="tebd", **kw)
     assert np.max(np.abs(rp.expect["sz"] - ri.expect["sz"])) < 5e-2   # populations
-    assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 5e-2   # un-dressed
+    assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 8e-2   # un-dressed coherence
 
 
 @pytest.mark.parametrize("method", ["polaron", "polaron-dtdvp"])

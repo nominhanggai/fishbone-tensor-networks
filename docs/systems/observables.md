@@ -36,8 +36,8 @@ With the orthogonality centre moved inside that subtree, every tensor outside it
 isometric, so the bonds leaving the subtree contract to the identity and never
 enter the calculation — the cost depends only on the subtree, not on the size of
 the bath.  This is exposed on the low-level state as
-{py:meth}`TreeTEBD.joint_rdm <fishbonett.treebone.TreeTEBD.joint_rdm>` and
-{py:meth}`TreeTEBD.expectation <fishbonett.treebone.TreeTEBD.expectation>`.
+{py:meth}`TreeTEBD.joint_rdm <fishbonett.states.tree.TreeTEBD.joint_rdm>` and
+{py:meth}`TreeTEBD.expectation <fishbonett.states.tree.TreeTEBD.expectation>`.
 
 All three forms work identically through the 1D
 {py:class}`~fishbonett.simulate.Fishbone`, since it delegates to the same engine.

@@ -191,7 +191,7 @@ class SystemBath:
     dimension, a general coupling and an arbitrary initial state.  When the system
     has *distinct* internal degrees of freedom (e.g. a spin **and** a vibration),
     prefer to keep each on its own site with
-    :class:`~fishbonett.treebone.TreeFishbone` (a spin site and a vibration site
+    :class:`~fishbonett.states.tree.TreeFishbone` (a spin site and a vibration site
     joined by an edge, with the bath on the spin) -- putting ``spin (x) vibration``
     on a single ``d = 2*d_vib`` site here works but defeats the MPS advantage.
     Passing a multichannel :class:`Bath` (``coupling`` a list) routes through the
@@ -388,7 +388,7 @@ class SystemBath:
         """One bath coupled to the system through several operators: a shared-mode
         star attached to the (single) system site.  Built on the tree engine so the
         system stays on its own site."""
-        from fishbonett.treebone import TreeFishbone
+        from fishbonett.states.tree import TreeFishbone
         fb = TreeFishbone(sites=[self.h], edges=[], baths=[self.bath])
         r = fb.run(dt=dt, n_steps=n_steps, bond_dim=bond_dim, trunc_eps=trunc_eps,
                    observables=obs_ops, initial=[self._initial_state(initial)])
@@ -574,14 +574,14 @@ class SystemBath:
 class Fishbone:
     """A 1D chain of electronic sites, each coupled to one or two baths.
 
-    A convenience specialization of :class:`~fishbonett.treebone.TreeFishbone`
+    A convenience specialization of :class:`~fishbonett.states.tree.TreeFishbone`
     (which handles *any* loop-free electronic topology) to a **linear** backbone:
     site ``i`` is joined to site ``i+1`` by ``backbone[i]``.  Each ``baths`` entry
     is a single :class:`Bath` (one bath -- may be multichannel), a ``(left, right)``
     pair (two baths per site -- the fishbone), or ``None``.  A left bath defaults
     to a ``sigma_z`` coupling and a right bath to ``sigma_x`` when the :class:`Bath`
     itself sets none.  ``run`` and the returned :class:`Result` are exactly those
-    of :meth:`fishbonett.treebone.TreeFishbone.run`.
+    of :meth:`fishbonett.states.tree.TreeFishbone.run`.
     """
 
     def __init__(self, sites, baths, backbone=None):
@@ -616,13 +616,13 @@ class Fishbone:
         return entry
 
     def _tree(self):
-        from fishbonett.treebone import TreeFishbone
+        from fishbonett.states.tree import TreeFishbone
         edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]
         return TreeFishbone(sites=self.sites, edges=edges,
                             baths=[self._site_baths(b) for b in self.baths])
 
     def run(self, **kwargs):
         """Propagate the 1D fishbone (delegates to the general tree engine).  See
-        :meth:`fishbonett.treebone.TreeFishbone.run` for the arguments, the
+        :meth:`fishbonett.states.tree.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout."""
         return self._tree().run(**kwargs)

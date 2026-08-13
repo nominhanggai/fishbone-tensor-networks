@@ -9,11 +9,11 @@ dimension.
 
 A vibrational mode is just another *system site* (with no bath of its own) coupled
 to the spin; the bath attaches to the spin.  Build it as a two-site
-{py:class}`~fishbonett.treebone.TreeFishbone`:
+{py:class}`~fishbonett.states.tree.TreeFishbone`:
 
 ```python
 import numpy as np
-from fishbonett.treebone import TreeFishbone
+from fishbonett.states.tree import TreeFishbone
 from fishbonett import Bath
 from fishbonett.operators import sigma_x, sigma_z
 
@@ -70,7 +70,7 @@ $$
 
 so the channels genuinely cross-correlate rather than acting as independent baths.
 Passing a multichannel `Bath` to `SystemBath` routes it through
-{py:class}`~fishbonett.treebone.TreeFishbone` so the spin stays on its own site.
+{py:class}`~fishbonett.states.tree.TreeFishbone` so the spin stays on its own site.
 
 ```{note}
 A multichannel bath must use the `'legendre'` discretization — the Gauss nodes are
