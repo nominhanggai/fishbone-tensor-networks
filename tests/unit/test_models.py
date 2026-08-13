@@ -173,6 +173,28 @@ def test_each_model_runs_its_own_methods_and_reports_them(model_key):
             f"{model_key}/{method} reported method={r.method!r}")
 
 
+@pytest.mark.parametrize("model_key", sorted(R.MODELS))
+def test_every_method_reports_max_bond(model_key):
+    """No method may leave ``max_bond`` unreported.
+
+    Six of them used to, for no reason beyond which driver they happened to go
+    through: the 1-site TDVP wrappers returned ``(t, obs)`` while the 2-site ones
+    returned ``maxD``, and the mode-tree engine never collected it -- yet
+    ``polaron-tdvp1``, the same sweep with the same fixed bond, did report it.  It
+    is the same quantity for every method, constant or not.
+    """
+    obj, _ = _run_for(model_key)
+    default = R.methods_of(model_key, "schrodinger")[0] if model_key == "multichannel" else None
+    for method in R.methods_of(model_key):
+        kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z})
+        if method in _FIXED_BOND_METHODS:
+            kw["bond_dim"] = 12
+        r = obj.run(**kw) if method == default else obj.run(method=method, **kw)
+        assert r.max_bond is not None, f"{model_key}/{method} reports no max_bond"
+        assert np.shape(r.max_bond) == (2,), f"{model_key}/{method}: one per step"
+        assert np.all(np.asarray(r.max_bond) >= 1), f"{model_key}/{method}"
+
+
 @pytest.mark.parametrize("model_key", ["comb", "site-tree"])
 def test_multi_site_models_reject_a_single_system_method(model_key):
     """Asking a multi-site model for `tebd` must name the model that owns it,

@@ -22,7 +22,8 @@ from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
 from fishbonett.frames import mpo as _frames_mpo
 from fishbonett.evolve import modetree as _tree
-from fishbonett.models.propagate import RunCtx
+from fishbonett.models.propagate import (RunCtx, modetree_peak_bond,
+                                         mps_peak_bond, propagate)
 from fishbonett.models.result import Result
 from fishbonett.models.registry import (
     FIXED_BOND_METHODS, METHOD_FRAMES, METHODS, methods_of,
@@ -260,12 +261,22 @@ class SystemBath:
     def _run_tree(self, spec, ctx):
         self._check_system()
         b = self.bath.resolved(ctx.t_max)
+        # The mode-tree engine still owns its loop (its MPO is per-node with an
+        # environment per edge, so it is not the chain driver of _run_mpo), but it
+        # calls `observe` once per step -- enough to collect the peak bond it never
+        # reported, so these methods stop being the only ones with max_bond=None.
+        max_bond = []
+
+        def observe(nodes, root):
+            max_bond.append(modetree_peak_bond(nodes))
+            return _tree.measure_rdm_oc(nodes, root)
+
         common = dict(hsys=self.h, cop=self.coupling,
                       init=self._initial_state(ctx.initial),
                       n_chain=b.n_modes, phys_dim=b.phys_dim, dt=ctx.dt,
                       nsteps=ctx.n_steps, D=ctx.bond_dim,
                       discretizer=b.discretizer(),
-                      observe=_tree.measure_rdm_oc, **ctx.kw)
+                      observe=observe, **ctx.kw)
         sd, dom = b.spectral_density(), b.domain
         if spec.driver == "run_tree_tdvp":
             t, rdms = _tree.run_tree_tdvp(sd, dom, krylov=ctx.krylov, **common)
@@ -276,7 +287,8 @@ class SystemBath:
             t, rdms = _tree.run_tree_tebd(sd, dom, trunc_eps=ctx.trunc_eps,
                                           **common)
         return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
-                      rdm=np.asarray(rdms), method=spec.name)
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
+                      method=spec.name)
 
     def _run_multichannel(self, spec, ctx):
         """One bath coupled to the system through several operators: a shared-mode
@@ -317,21 +329,27 @@ class SystemBath:
             pd, coup_mat, freq, h_sys=self.h).build(n=0)
 
         state = SystemBathMPS(pd)
-        psi0 = self._initial_state(ctx.initial)
-        state.B[0][:] = 0.0
-        for a in range(d_sys):
-            state.B[0][0, a, 0] = psi0[a]
+        self._set_system_site(state, ctx.initial)
+        return propagate(
+            spec, ctx,
+            step=lambda k: _tebd.symmetric_swap_step(
+                state, builder, k * ctx.dt, ctx.dt, b.n_modes, ctx.bond_dim,
+                ctx.trunc_eps),
+            rdm=lambda: state.rdm(0),          # inherited from TensorNetwork
+            peak_bond=lambda: mps_peak_bond(state),
+            expect_from_rdm=self._expect_from_rdm)
 
-        rdms, max_bond = [], []
-        for step in range(ctx.n_steps):
-            _tebd.symmetric_swap_step(state, builder, step * ctx.dt, ctx.dt,
-                                      b.n_modes, ctx.bond_dim, ctx.trunc_eps)
-            rdms.append(state.rdm(0))     # inherited from TensorNetwork
-            max_bond.append(max((len(s) for s in state.S), default=1))
-        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
-                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method=spec.name)
+    def _set_system_site(self, state, initial):
+        """Put the initial system state on site 0 of a product-state MPS.
+
+        The bath sites are already vacuum, so this only writes the system tensor.
+        Both swap-network drivers used to inline the same three lines.
+        """
+        psi0 = self._initial_state(initial)
+        state.B[0][:] = 0.0
+        for a in range(len(psi0)):
+            state.B[0][0, a, 0] = psi0[a]
+        return state
 
     def _initial_state(self, initial):
         """Initial system state as a ``d_sys``-vector.
@@ -354,23 +372,17 @@ class SystemBath:
                              discretizer=b.discretizer()).build()
 
         state = SystemBathMPS(pd)               # the MPS being evolved
-        psi0 = self._initial_state(ctx.initial)
-        state.B[0][:] = 0.0
-        for a in range(d_sys):
-            state.B[0][0, a, 0] = psi0[a]
-
+        self._set_system_site(state, ctx.initial)
         # One symmetric (Strang) swap-network step per iteration, so each advances
         # the user's physical dt -- matching the tree/mpo drivers.
-        rdms, max_bond = [], []
-        for step in range(ctx.n_steps):
-            _tebd.symmetric_swap_step(state, builder, step * ctx.dt, ctx.dt, n,
-                                      ctx.bond_dim, ctx.trunc_eps)
-            rdms.append(state.rdm(0))     # inherited from TensorNetwork
-            max_bond.append(max((len(s) for s in state.S), default=1))
-        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
-                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method=spec.name)
+        return propagate(
+            spec, ctx,
+            step=lambda k: _tebd.symmetric_swap_step(
+                state, builder, k * ctx.dt, ctx.dt, n, ctx.bond_dim,
+                ctx.trunc_eps),
+            rdm=lambda: state.rdm(0),          # inherited from TensorNetwork
+            peak_bond=lambda: mps_peak_bond(state),
+            expect_from_rdm=self._expect_from_rdm)
 
     def _run_trotter_mpo(self, spec, ctx):
         """Interaction picture propagated by the exact conditional-displacement MPO.
@@ -396,20 +408,23 @@ class SystemBath:
         A = product_state([d_sys] + [b.phys_dim] * n,
                           self._initial_state(ctx.initial))
         u_half = _la.expm(-0.5j * ctx.dt * np.asarray(self.h, complex))
-        rdms, max_bond = [], []
-        for step in range(ctx.n_steps):
-            A[0] = np.einsum('ij,ajb->aib', u_half, A[0])        # half system step
+
+        def step(k):
+            # Strang: half a system step, the exact displacement MPO, half again
+            nonlocal A
+            A[0] = np.einsum('ij,ajb->aib', u_half, A[0])
             A = compress(
-                apply_mpo(A, builder.displacement_mpo(step * ctx.dt, ctx.dt)),
+                apply_mpo(A, builder.displacement_mpo(k * ctx.dt, ctx.dt)),
                 ctx.bond_dim, ctx.trunc_eps)
             A[0] = np.einsum('ij,ajb->aib', u_half, A[0])
+
+        def rdm():
             rho = np.einsum('lsr,ltr->st', A[0], A[0].conj())
-            rdms.append(rho / np.trace(rho).real)
-            max_bond.append(max(bond_dims(A)))
-        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
-                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method=spec.name)
+            return rho / np.trace(rho).real
+
+        return propagate(spec, ctx, step=step, rdm=rdm,
+                         peak_bond=lambda: max(bond_dims(A)),
+                         expect_from_rdm=self._expect_from_rdm)
 
     def _polaron_builder(self, ctx):
         """Shared polaron setup: validate, resolve the bath and build the frame.
@@ -443,8 +458,9 @@ class SystemBath:
             # product state: pad to the requested bond first (as run_tdvp1 does).
             A = right_canonicalize(_pad_bonds(A, ctx.bond_dim))
         env = Afull = FRs = None
-        rdms, max_bond = [], []
-        for _ in range(ctx.n_steps):
+
+        def step(_k):
+            nonlocal A, env, Afull, FRs
             if variant == "tdvp1":
                 A, env = tdvp1sweep(ctx.dt, A, M, env, m=ctx.krylov)
             elif variant == "tdvp2":
@@ -456,12 +472,13 @@ class SystemBath:
                     prec=ctx.kw.get("prec", ctx.trunc_eps),
                     Dlim=ctx.bond_dim, Dplusmax=ctx.kw.get("Dplusmax", 4),
                     m=ctx.krylov)
-            rdms.append(builder.undress_rdm_tdvp(A[0], A[1]))   # lab frame
-            max_bond.append(max(bonddims(A)))
-        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
-                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method=spec.name)
+
+        # the frame dressed the state, so the frame undresses the observable
+        return propagate(
+            spec, ctx, step=step,
+            rdm=lambda: builder.undress_rdm_tdvp(A[0], A[1]),
+            peak_bond=lambda: max(bonddims(A)),
+            expect_from_rdm=self._expect_from_rdm)
 
     def _run_polaron(self, spec, ctx):
         """Polaron-frame chain: the static system-bath coupling is absorbed into a
@@ -478,17 +495,14 @@ class SystemBath:
         state.split_truncate_theta(builder.initial_theta(psi0), 0, ctx.bond_dim,
                                    1e-14)
 
-        # static; symmetric Strang per step
+        # static frame, so the gates are built once; symmetric Strang per step
         gates = builder.gates(ctx.dt / 2.0)
-        rdms, max_bond = [], []
-        for step in range(ctx.n_steps):
-            _tebd.symmetric_static_step(state, gates, n, ctx.bond_dim,
-                                        ctx.trunc_eps)
-            rho = builder.undress_rdm(state.get_theta2(0))   # lab-frame RDM
-            rdms.append(rho)
-            max_bond.append(max((len(s) for s in state.S), default=1))
-        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
-                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method=spec.name)
+        return propagate(
+            spec, ctx,
+            step=lambda _k: _tebd.symmetric_static_step(
+                state, gates, n, ctx.bond_dim, ctx.trunc_eps),
+            # the frame dressed the state, so the frame undresses the observable
+            rdm=lambda: builder.undress_rdm(state.get_theta2(0)),
+            peak_bond=lambda: mps_peak_bond(state),
+            expect_from_rdm=self._expect_from_rdm)
 
