@@ -345,9 +345,7 @@ class SystemBath:
         for step in range(n_steps):
             _tebd.symmetric_swap_step(state, builder, step * dt, dt, b.n_modes,
                                       bond_dim, trunc_eps)
-            theta = state.get_theta1(0)
-            rho = np.einsum("LiR,LjR->ij", theta, theta.conj())
-            rdms.append(rho / np.trace(rho).real)
+            rdms.append(state.rdm(0))     # inherited from TensorNetwork
             max_bond.append(max((len(s) for s in state.S), default=1))
         t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
@@ -386,9 +384,7 @@ class SystemBath:
         for step in range(n_steps):
             _tebd.symmetric_swap_step(state, builder, step * dt, dt, n,
                                       bond_dim, trunc_eps)
-            theta = state.get_theta1(0)
-            rho = np.einsum("LiR,LjR->ij", theta, theta.conj())
-            rdms.append(rho / np.trace(rho).real)
+            rdms.append(state.rdm(0))     # inherited from TensorNetwork
             max_bond.append(max((len(s) for s in state.S), default=1))
         t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
