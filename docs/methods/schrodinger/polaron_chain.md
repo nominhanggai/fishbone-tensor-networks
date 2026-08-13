@@ -1,28 +1,13 @@
 # Schrödinger picture · polaron chain — static gates or MPO + TDVP
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — `method="polaron"` (static Trotter gates), `"polaron-tdvp1"`,
-  `"polaron-tdvp2"`, `"polaron-dtdvp"` (the polaron MPO propagated by TDVP).
-- **Frame** — Schrödinger picture / polaron chain — **the only frame that gets
-  both**. Like the {doc}`Schrödinger picture </methods/schrodinger/chain>` the
-  result is *time-independent*, so gates are built **once** and a static MPO
-  drives the full TDVP family; like the
-  {doc}`interaction picture </methods/interaction/tebd>` it removes most of the
-  system–bath correlation, so the state carries little entanglement.
-- **Requires** — $T = 0$ and $\int J(\omega)/\omega^2\,\mathrm{d}\omega$ finite
-  (gapped or super-ohmic). `run` raises a clear error otherwise.
-- **Key options** — `dt`; `bond_dim` (**required** for `polaron-tdvp1` and
-  `polaron-dtdvp`); `trunc_eps` (accuracy for `polaron` and `polaron-tdvp2`).
-- **Observables** — populations in the coupling eigenbasis are frame-invariant;
-  coherences are **un-dressed** back to the lab frame for you
-  ({py:meth}`~fishbonett.frames.polaron.SystemBathPolaron.undress_rdm`).
-- **API** — {py:class}`~fishbonett.frames.polaron.SystemBathPolaron`, step
-  {py:func}`~fishbonett.evolve.tebd.symmetric_static_step`.
-- **See also** — {doc}`/methods/index`. This frame does *not* admit the exact
-  conditional-displacement propagator of {doc}`/methods/interaction/trotter_mpo`,
-  because the dressed tunneling does not commute with the free-chain hopping.
-```
+`polaron` (static Trotter gates), `polaron-tdvp1/tdvp2/dtdvp` (polaron MPO +
+TDVP).  The Lang–Firsov transform makes $H$ time-independent (like the
+Schrödinger chain) and removes most of the system–bath correlation (like the
+interaction picture) — static gates, low entanglement.  Requires
+$\int J(\omega)/\omega^2\,d\omega$ finite (gapped or super-ohmic); finite
+temperature works through T-TEDOPA.  Populations in $O$'s eigenbasis are
+frame-invariant; coherences are un-dressed automatically
+({py:meth}`~fishbonett.frames.polaron.SystemBathPolaron.undress_rdm`).
 
 The `polaron` method propagates the model in the **polaron (Lang–Firsov) frame**:
 the static system–bath coupling is absorbed into a displacement of the bath, so the
@@ -152,7 +137,7 @@ import numpy as np
 from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
-# T=0, gapped bath so int J/w^2 is finite (the polaron precondition)
+# gapped bath so int J/w^2 is finite (the polaron precondition)
 bath = Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
             n_modes=24, phys_dim=14)
 
@@ -167,10 +152,11 @@ r.max_bond            # peak bond dimension per step (small in the polaron frame
 
 ## Notes
 
-- **Applicability.** Zero temperature only (pass no `temperature`), and
+- **Applicability.** The bath must have
   $\kappa_0^2=\tfrac1\pi\!\int J(\omega)/\omega^2\,d\omega$ must be finite — a gapped
   or super-ohmic bath. Strict ohmic is the log-divergent orthogonality-catastrophe
-  edge; a finite-temperature polaron is a planned extension.
+  edge.  Finite temperature works via T-TEDOPA thermalization (pass `temperature`
+  to the `Bath`).
 - The polaron frame is most advantageous when the **static reorganization** dominates
   (strong coupling): it folds that correlation into the $c_0$ displacement, so the MPS
   bonds carry only the dressed-tunneling entanglement.

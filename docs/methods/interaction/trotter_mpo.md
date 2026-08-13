@@ -1,21 +1,9 @@
 # Interaction picture · chain — conditional-displacement MPO
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — `method="trotter-mpo"`: the system–bath propagator as one
-  **exact** low-bond conditional-displacement MPO — no Trotter splitting error
-  between modes and no swap network.
-- **Frame** — interaction picture / chain, **and only this frame**. The exact
-  factorization relies on all the coupling terms commuting, which holds precisely
-  because the free-bath term has been rotated away.
-- **Key options** — `dt`; `trunc_eps` (accuracy, default `1e-4`); `bond_dim`
-  (optional hard cap, `None` = unlimited).
-- **API** — MPO {py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`,
-  applied by {py:func}`~fishbonett.evolve.mpo_apply.apply_mpo` +
-  {py:func}`~fishbonett.evolve.mpo_apply.compress`.
-- **See also** — {doc}`/methods/interaction/tebd` (identical physics, gate-based),
-  {doc}`/methods/index` (full compatibility table).
-```
+`method="trotter-mpo"` writes the full system–bath propagator as one exact,
+low-bond conditional-displacement MPO — no Trotter splitting between modes, no
+swap network.  This only works in the interaction picture, where all coupling
+terms commute.  Same physics as {doc}`/methods/interaction/tebd`, ~1.6× faster.
 
 `trotter-mpo` propagates the **same interaction-picture model as {doc}`/methods/interaction/tebd`**, but
 instead of Trotterizing the system–bath coupling into two-site gates and shuttling

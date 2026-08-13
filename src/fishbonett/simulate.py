@@ -77,7 +77,8 @@ __all__ = ["SystemBath", "Fishbone", "Result",
 #: * ``("schrodinger", "polaron-chain")`` -- the polaron/Lang-Firsov chain.  The
 #:   transform makes ``H~`` **time-independent**, i.e. Schroedinger-like, so static
 #:   gates *and* a static MPO both work, while the entanglement stays low.  Needs
-#:   ``T=0`` and a bath with ``int J/w^2`` finite.
+#:   ``int J/w^2`` finite (gapped or super-ohmic).  Finite temperature works via
+#:   T-TEDOPA thermalization of the spectral density.
 #:
 #: ``("schrodinger", "star")`` -- the un-chain-mapped bare Hamiltonian -- is a
 #: coherent combination but is not currently provided.
@@ -237,8 +238,9 @@ class SystemBath:
         * **Schroedinger / polaron-chain** -- ``polaron``,
           ``polaron-tdvp1/tdvp2/dtdvp``.  The polaron transform makes ``H~``
           time-independent, i.e. Schroedinger-like, so static gates *and* a static
-          MPO both work while the entanglement stays low; requires ``T=0`` and
-          ``int J/w^2`` finite.
+          MPO both work while the entanglement stays low; requires
+          ``int J/w^2`` finite (gapped or super-ohmic).  Finite temperature
+          works via T-TEDOPA thermalization.
 
         **Truncation.**  Accuracy and memory are one setting, expressed either as
         a :class:`~fishbonett.linalg.Truncation` or as the two loose keywords::
@@ -420,7 +422,7 @@ class SystemBath:
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
         d_sys = self.h.shape[0]
-        pd = [b.phys_dim] * n + [d_sys]
+        pd = [d_sys] + [b.phys_dim] * n
         builder = _IPBuilder(pd)               # interaction-picture gate builder
         builder.domain = list(b.domain)
         builder.sd = b.spectral_density()
@@ -430,9 +432,9 @@ class SystemBath:
 
         state = SystemBathMPS(pd)               # the MPS being evolved
         psi0 = self._initial_state(initial)
-        state.B[-1][:] = 0.0
+        state.B[0][:] = 0.0
         for a in range(d_sys):
-            state.B[-1][0, a, 0] = psi0[a]
+            state.B[0][0, a, 0] = psi0[a]
 
         # One symmetric (Strang) swap-network step per iteration, so each advances
         # the user's physical dt -- matching the tree/mpo drivers.
@@ -440,7 +442,7 @@ class SystemBath:
         for step in range(n_steps):
             _tebd.symmetric_swap_step(state, builder, step * dt, dt, n,
                                       bond_dim, trunc_eps)
-            theta = state.get_theta1(n)
+            theta = state.get_theta1(0)
             rho = np.einsum("LiR,LjR->ij", theta, theta.conj())
             rdms.append(rho / np.trace(rho).real)
             max_bond.append(max((len(s) for s in state.S), default=1))
@@ -464,7 +466,7 @@ class SystemBath:
         self._check_system()
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
-        builder = SystemBathIP([b.phys_dim] * n + [d_sys])
+        builder = SystemBathIP([d_sys] + [b.phys_dim] * n)
         builder.domain = list(b.domain)
         builder.sd = b.spectral_density()
         builder.coupling = self.coupling
@@ -493,17 +495,9 @@ class SystemBath:
         Returns ``(builder, resolved_bath, n_modes, pd)``."""
         from fishbonett.frames.polaron import SystemBathPolaron
         self._check_system()
-        if getattr(self.bath, "temperature", None):
-            raise ValueError(
-                "the polaron frame requires zero temperature (bath.temperature "
-                "must be None): the transform displaces the bath vacuum, and the "
-                "finite-temperature (thermofield) version is not implemented.  For "
-                "a thermal bath use an interaction-picture method instead -- "
-                f"{', '.join(methods_in_picture('interaction'))} -- which handle a "
-                "signed/thermalized domain directly.")
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
-        pd = [b.phys_dim] * n + [d_sys]
+        pd = [d_sys] + [b.phys_dim] * n
         builder = SystemBathPolaron(pd)
         builder.domain = list(b.domain)
         builder.sd = b.spectral_density()
@@ -553,21 +547,21 @@ class SystemBath:
         displacement of the first (reweighted-``J/w^2``) chain mode ``c0``, leaving
         a free chain plus a dressed ``(c0, system)`` gate.  Plain nearest-neighbour
         Trotter (no swap network); the physical bath vacuum is a displaced coherent
-        state on ``c0``; lab-frame observables are recovered by un-dressing.  Zero
-        temperature only.  See :mod:`fishbonett.frames.polaron`."""
+        state on ``c0``; lab-frame observables are recovered by un-dressing.
+        See :mod:`fishbonett.frames.polaron`."""
         from fishbonett.states.mps import SystemBathMPS
         builder, b, n, pd = self._polaron_builder(dt, n_steps)
         state = SystemBathMPS(pd)               # boson sites default to vacuum
         psi0 = self._initial_state(initial)
-        # displaced (c0, system) initial block; the other boson sites stay vacuum
-        state.split_truncate_theta(builder.initial_theta(psi0), n - 1, bond_dim,
+        # displaced (system, c0) initial block at bond 0; other boson sites stay vacuum
+        state.split_truncate_theta(builder.initial_theta(psi0), 0, bond_dim,
                                    1e-14)
 
         gates = builder.gates(dt / 2.0)          # static; symmetric Strang per step
         rdms, max_bond = [], []
         for step in range(n_steps):
             _tebd.symmetric_static_step(state, gates, n, bond_dim, trunc_eps)
-            rho = builder.undress_rdm(state.get_theta2(n - 1))   # lab-frame RDM
+            rho = builder.undress_rdm(state.get_theta2(0))   # lab-frame RDM
             rdms.append(rho)
             max_bond.append(max((len(s) for s in state.S), default=1))
         t = np.arange(1, n_steps + 1) * dt

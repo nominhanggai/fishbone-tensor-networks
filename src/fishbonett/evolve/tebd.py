@@ -1,40 +1,14 @@
-"""TEBD propagation of a matrix-product state: bond update, sweeps, whole steps.
+"""TEBD propagation on a 1D MPS: bond update, sweeps, and whole symmetric steps.
 
-Layered the same way as :mod:`fishbonett.evolve.tdvp`, so the two propagators
-read alike:
+1D chain only (:class:`~fishbonett.states.mps.SystemBathMPS`).  For trees see
+:mod:`fishbonett.evolve.treetdvp`; for the comb see :mod:`fishbonett.states.comb`.
 
-===========  =====================================  ==========================
-layer        TEBD (here)                            TDVP
-===========  =====================================  ==========================
-primitive    :func:`update_bond`                    ``applyH1`` / ``applyH0``
-sweep        :func:`sweep`, :func:`swap_in`,        ``tdvp1sweep``,
-             :func:`swap_out`                       ``tdvp2sweep``
-whole step   :func:`symmetric_swap_step`,           ``tdvp1sweep`` (already
-             :func:`symmetric_static_step`           symmetric)
-===========  =====================================  ==========================
+Two sweep patterns, selected by the frame:
 
-.. rubric:: Geometry -- 1D chains only
-
-Everything here evolves a :class:`~fishbonett.states.mps.SystemBathMPS`, an open
-1D chain.  Branching geometries have their own engines:
-:mod:`fishbonett.evolve.treetdvp` (binary-tree TTN, TEBD and TDVP),
-:class:`fishbonett.treebone.TreeTEBD` (arbitrary loop-free site graph) and
-:mod:`fishbonett.states.comb` (the fishbone comb).
-
-The split of responsibility is deliberate: the *state* holds tensors and their
-canonical form, this module holds the *algorithm*.  That is why the state module
-is ``states.mps`` and this one is ``evolve.tebd``.
-
-.. rubric:: Two sweep patterns, chosen by the frame
-
-*swap network* (:func:`symmetric_swap_step`)
-    The **interaction picture**, where *every* mode couples to the system.  The
-    system site is walked along the chain so each mode meets it in turn;
-    ``swap=1`` transposes the physical legs to carry it along.
-*static nearest-neighbour* (:func:`symmetric_static_step`)
-    The **polaron** frame, where the Hamiltonian is time-independent and strictly
-    nearest-neighbour: gates are built once and applied in place, with no
-    swapping and no per-step rebuild.
+- *swap network* (:func:`symmetric_swap_step`) — interaction picture, where every
+  mode couples to the system.  ``swap=1`` walks the system along the chain.
+- *static* (:func:`symmetric_static_step`) — polaron frame.  Gates built once,
+  nearest-neighbour, no swapping.
 """
 from fishbonett.contract import contract as einsum
 
@@ -103,16 +77,16 @@ def sweep(state, bonds, chi_max, eps, swap=0, **kw):
         update_bond(state, j, chi_max, eps, swap=swap, **kw)
 
 
-def swap_in(state, n, chi_max, eps, **kw):
-    """Swap-network sweep *inward* over bonds ``n-1, ..., 1``, carrying the system
-    site toward bond 0 so that every mode meets it exactly once."""
-    sweep(state, range(n - 1, 0, -1), chi_max, eps, swap=1, **kw)
-
-
 def swap_out(state, n, chi_max, eps, **kw):
-    """Swap-network sweep *outward* over bonds ``1, ..., n-1`` -- the reverse of
-    :func:`swap_in`, returning the system site to where it started."""
-    sweep(state, range(1, n), chi_max, eps, swap=1, **kw)
+    """Swap-network sweep *outward*: bonds ``0, ..., n-2``, carrying the system
+    site from site 0 toward the far end so every mode meets it once."""
+    sweep(state, range(n - 1), chi_max, eps, swap=1, **kw)
+
+
+def swap_in(state, n, chi_max, eps, **kw):
+    """Swap-network sweep *inward*: bonds ``n-2, ..., 0`` -- the reverse of
+    :func:`swap_out`, returning the system site to site 0."""
+    sweep(state, range(n - 2, -1, -1), chi_max, eps, swap=1, **kw)
 
 
 # -- whole symmetric steps ---------------------------------------------------
@@ -149,9 +123,9 @@ def symmetric_swap_step(state, builder, t0, dt, n, chi_max, eps, **kw):
     u_mid, u_out = builder.get_u(t0 + hdt, hdt, mode="normal")
 
     state.U = u_in
-    swap_in(state, n, chi_max, eps, **kw)
-    update_bond(state, 0, chi_max, eps, swap=0, **kw)
-    state.U = u_mid
-    update_bond(state, 0, chi_max, eps, swap=0, **kw)
-    state.U = u_out
     swap_out(state, n, chi_max, eps, **kw)
+    update_bond(state, n - 1, chi_max, eps, swap=0, **kw)
+    state.U = u_mid
+    update_bond(state, n - 1, chi_max, eps, swap=0, **kw)
+    state.U = u_out
+    swap_in(state, n, chi_max, eps, **kw)

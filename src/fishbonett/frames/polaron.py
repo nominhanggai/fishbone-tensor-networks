@@ -23,8 +23,11 @@ displacement of the ``c0`` mode; diagonal blocks are undressed.  The physical
 on ``c0`` (:meth:`initial_theta`); diagonal observables (in ``O``'s eigenbasis)
 are frame-invariant while coherences must be un-dressed (:meth:`undress_rdm`).
 
-Applicability: **zero temperature**, uniform boson ``phys_dim``, and
+Applicability: uniform boson ``phys_dim`` and
 ``kappa0^2 = (1/pi) int J(w)/w^2 dw`` finite (a gapped or super-ohmic bath).
+Finite temperature works via T-TEDOPA: set ``bath.temperature`` and the spectral
+density is thermalized onto a signed frequency axis before chain mapping, exactly
+as in the interaction picture.
 """
 import numpy as np
 import scipy.linalg as la
@@ -48,12 +51,12 @@ class SystemBathPolaron:
     then :meth:`gates` for the static two-site Trotter gates.  :attr:`kappa0` is
     the polaron displacement; :meth:`initial_theta` prepares the displaced
     ``(c0, system)`` initial tensor and :meth:`undress_rdm` recovers the lab-frame
-    system reduced density matrix.  Zero temperature only.
+    system reduced density matrix.
     """
 
     def __init__(self, pd):
-        self.pd_sys = pd[-1]
-        self.pd_boson = list(pd[0:-1])
+        self.pd_sys = pd[0]
+        self.pd_boson = list(pd[1:])
         self.len_boson = len(self.pd_boson)
         self.coupling = np.eye(self.pd_sys, dtype=complex)
         self.h_sys = np.eye(self.pd_sys, dtype=complex)
@@ -78,45 +81,49 @@ class SystemBathPolaron:
         """``E_reorg = (1/pi) int_domain J(w)/w dw`` (the ``O^2`` on-site shift)."""
         lo, hi = self.domain
         w = np.linspace(lo, hi, 4001)
-        return float(np.trapezoid(self.sd(w) / w, w) / np.pi)
+        sd_vec = np.vectorize(self.sd)
+        mask = np.abs(w) > 1e-12
+        jw = np.zeros_like(w)
+        jw[mask] = sd_vec(w[mask]) / w[mask]
+        return float(np.trapezoid(jw, w) / np.pi)
 
-    # -- static two-site gates; chain reversed so c0 is adjacent to the system ----
+    # -- static two-site gates; system at site 0, c0 at site 1, then c1, c2, ... ----
     def gates(self, dt):
-        """Static gate list ``U[0..n-1]``; bond ``n-1`` is the dressed ``(c0, system)``
-        gate, bonds ``0..n-2`` the free-chain hoppings.  Reshaped ``(d1,d2,d1*,d2*)``."""
+        """Static gate list ``U[0..n-1]``; bond 0 is the dressed ``(system, c0)``
+        gate, bonds ``1..n-1`` the free-chain hoppings.  Reshaped ``(d1,d2,d1*,d2*)``."""
         n = self.len_boson
         U = [None] * n
-        # free-chain bonds: bond n-1-m connects (c_m, c_{m-1}); c_m on-site lives here
+        # dressed (system, c0) bond at index 0
+        U[0] = expm_gate(self._h_sysbond(), dt).reshape(
+            [self.pd_sys, self.pd_boson[0], self.pd_sys, self.pd_boson[0]])
+        # free-chain bonds: bond i connects (c_{i-1}, c_i); c_{i-1} on-site lives here
         for m in range(1, n):
-            i = n - 1 - m
-            dm, dmm = self.pd_boson[m], self.pd_boson[m - 1]
-            a1, a2 = annihilate(dm), annihilate(dmm)
+            dm_prev, dm = self.pd_boson[m - 1], self.pd_boson[m]
+            a1, a2 = annihilate(dm_prev), annihilate(dm)
             num1 = a1.conj().T @ a1
             h = (self.k_list[m] * (np.kron(a1.conj().T, a2) + np.kron(a1, a2.conj().T))
-                 + self.w_list[m] * np.kron(num1, np.eye(dmm)))
-            U[i] = expm_gate(h, dt).reshape([dm, dmm, dm, dmm])
-        # dressed (c0, system) bond at index n-1
-        U[n - 1] = expm_gate(self._h_sysbond(), dt).reshape(
-            [self.pd_boson[0], self.pd_sys, self.pd_boson[0], self.pd_sys])
+                 + self.w_list[m] * np.kron(num1, np.eye(dm)))
+            U[m] = expm_gate(h, dt).reshape([dm_prev, dm, dm_prev, dm])
         return U
 
     def _h_sysbond(self):
+        """Two-site Hamiltonian on the (system, c0) bond, order ``(ds, d0)``."""
         d0, ds = self.pd_boson[0], self.pd_sys
         a0 = annihilate(d0); num0 = a0.conj().T @ a0
         lam, V = self._evals, self._evecs
         heig = V.conj().T @ np.asarray(self.h_sys, complex) @ V   # h in O-eigenbasis
         gen = a0.conj().T - a0
-        h_sb = np.zeros((d0 * ds, d0 * ds), complex)
+        h_sb = np.zeros((ds * d0, ds * d0), complex)
         for i in range(ds):
             for j in range(ds):
                 if abs(heig[i, j]) < 1e-14:
                     continue
                 D = la.expm((lam[i] - lam[j]) * self.kappa0 * gen)   # displace c0
                 proj = np.outer(V[:, i], V[:, j].conj())             # |i><j|, comp. basis
-                h_sb += heig[i, j] * np.kron(D, proj)
+                h_sb += heig[i, j] * np.kron(proj, D)
         O = np.asarray(self.coupling, complex)
-        h_sb += self.w_list[0] * np.kron(num0, np.eye(ds))           # c0 on-site
-        h_sb += -self.e_reorg * np.kron(np.eye(d0), O @ O)           # reorganization
+        h_sb += self.w_list[0] * np.kron(np.eye(ds), num0)           # c0 on-site
+        h_sb += -self.e_reorg * np.kron(O @ O, np.eye(d0))           # reorganization
         return h_sb
 
     # -- MPO form (for the TDVP drivers) -----------------------------------------
@@ -178,12 +185,11 @@ class SystemBathPolaron:
         return M
 
     def initial_mps_pair(self, psi_sys):
-        """``(A_sys, A_c0)`` for the MPO site order, in the TDVP tensor convention
-        ``(bond_l, bond_r, phys)``.  ``A_c0`` is right-canonical and carries the
-        polaron displacement; the bond is 1 when ``psi_sys`` is an ``O``-eigenstate
-        and grows only as far as the displaced branches require."""
+        """``(A_sys, A_c0)`` for the MPO site order ``[system, c0, ...]``, in the
+        TDVP tensor convention ``(bond_l, bond_r, phys)``.  ``A_c0`` is
+        right-canonical and carries the polaron displacement."""
         d0, ds = self.pd_boson[0], self.pd_sys
-        theta = self.initial_theta(psi_sys).reshape(d0, ds).T      # (ds, d0)
+        theta = self.initial_theta(psi_sys).reshape(ds, d0)        # (ds, d0)
         U, S, Vh = la.svd(theta, full_matrices=False)
         keep = max(1, int(np.sum(S > 1e-12 * S[0])))
         U, S, Vh = U[:, :keep], S[:keep], Vh[:keep]
@@ -193,18 +199,18 @@ class SystemBathPolaron:
 
     # -- initial state and lab-frame observable recovery --------------------------
     def initial_theta(self, psi_sys):
-        """``(c0, system)`` two-site tensor ``[1, d0, ds, 1]`` for the physical
+        """``(system, c0)`` two-site tensor ``[1, ds, d0, 1]`` for the physical
         state ``psi_sys (x) |vac>`` mapped into the polaron frame:
-        ``sum_i c_i |coherent(lam_i kappa0)>_c0 (x) |i>``."""
+        ``sum_i c_i |i> (x) |coherent(lam_i kappa0)>_c0``."""
         d0, ds = self.pd_boson[0], self.pd_sys
         c = self._evecs.conj().T @ np.asarray(psi_sys, complex)
-        theta = np.zeros((d0, ds), complex)
+        theta = np.zeros((ds, d0), complex)
         for i in range(ds):
             if abs(c[i]) < 1e-14:
                 continue
-            theta += c[i] * np.outer(_coherent(d0, self._evals[i] * self.kappa0),
-                                     self._evecs[:, i])
-        return theta.reshape(1, d0, ds, 1)
+            theta += c[i] * np.outer(self._evecs[:, i],
+                                     _coherent(d0, self._evals[i] * self.kappa0))
+        return theta.reshape(1, ds, d0, 1)
 
     def undress_rdm_tdvp(self, A_sys, A_c0):
         """Lab-frame system RDM from the TDVP-convention ``(system, c0)`` tensors
@@ -213,8 +219,8 @@ class SystemBathPolaron:
         return self.undress_rdm(theta)
 
     def undress_rdm(self, theta2):
-        """Lab-frame system RDM from the ``(c0, system)`` two-site wavefunction
-        ``theta2 [L, d0, ds, R]``.
+        """Lab-frame system RDM from the ``(system, c0)`` two-site wavefunction
+        ``theta2 [L, ds, d0, R]``.
 
         Since ``U_p`` is diagonal in ``O``'s eigenbasis::
 
@@ -223,22 +229,19 @@ class SystemBathPolaron:
                          = Tr_B[ D(-lam_i) rho~_ij D(lam_j) ]
                          = Tr_B[ rho~_ij D(lam_j - lam_i) ]
 
-        using cyclicity and ``D(lam_j) D(-lam_i) = D(lam_j - lam_i)`` (exact -- both
-        share the generator ``c0^dag - c0``).  Diagonal elements get ``D(0) = 1`` and
-        are therefore frame-invariant; coherences pick up the Franck-Condon factor.
-        Only the ``(c0, system)`` block is needed because ``U_p`` displaces the
-        ``c0`` mode alone, so tracing out the rest of the chain (the ``L``/``R``
-        bonds) commutes with the un-dressing.
+        Diagonal elements get ``D(0) = 1`` and are frame-invariant; coherences
+        pick up the Franck-Condon factor.  Only the ``(system, c0)`` block is needed
+        because ``U_p`` displaces ``c0`` alone.
         """
         d0, ds = self.pd_boson[0], self.pd_sys
-        rho2 = np.einsum('LaXR,LbYR->aXbY', theta2, theta2.conj())     # [c0o,so,c0i,si]
+        rho2 = np.einsum('LXaR,LYbR->XaYb', theta2, theta2.conj())     # [so,c0o,si,c0i]
         V, lam, a0 = self._evecs, self._evals, annihilate(d0)
         gen = a0.conj().T - a0
-        rho2e = np.einsum('Xi,aXbY,Yj->aibj', V.conj(), rho2, V)        # system legs -> eig
+        rho2e = np.einsum('Xi,XaYb,Yj->iajb', V.conj(), rho2, V)        # system legs -> eig
         M = np.zeros((ds, ds), complex)
         for i in range(ds):
             for j in range(ds):
                 D = la.expm((lam[j] - lam[i]) * self.kappa0 * gen)
-                M[i, j] = np.einsum('ab,ba->', rho2e[:, i, :, j], D)
+                M[i, j] = np.einsum('ab,ba->', rho2e[i, :, j, :], D)
         rho_lab = V @ M @ V.conj().T
         return rho_lab / np.trace(rho_lab).real

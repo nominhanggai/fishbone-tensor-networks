@@ -1,21 +1,10 @@
 # Interaction picture · multichannel — one bath, several couplings
 
-```{admonition} At a glance
-:class: tip
-- **Provides** — one bath coupling through **several** system operators on
-  *shared* modes, so the channels are cross-correlated.
-- **Selected by the bath, not by `method`** — give {py:class}`~fishbonett.bath.spec.Bath`
-  a *list* of `coupling` operators (and one `J` per channel, or one shared `J`)
-  and the run routes through the multichannel engine automatically. The `method`
-  argument is ignored.
-- **Frame** — interaction picture / multichannel.
-- **Requires** — `discretization="legendre"` (the channels must share Gauss nodes).
-- **API** — {py:class}`~fishbonett.frames.multichannel.SystemBathMultiChannel`;
-  the run is routed through the tree engine so the system keeps its own site.
-- **See also** — {doc}`/systems/composite_multichannel`, {doc}`/methods/index`.
-  For several *independent* baths use
-  {py:class}`~fishbonett.treebone.TreeFishbone` with one `Bath` each.
-```
+Selected by the bath, not by `method`: pass a *list* of `coupling` operators to
+{py:class}`~fishbonett.bath.spec.Bath` and the multichannel engine is used
+automatically.  Requires `discretization="legendre"` (the channels share Gauss
+nodes).  For independent baths (no cross-correlation) use
+{py:class}`~fishbonett.treebone.TreeFishbone` with one `Bath` per site instead.
 
 The other representations assume the bath couples to the system through a *single*
 operator $O$. A multichannel bath couples through **several** operators

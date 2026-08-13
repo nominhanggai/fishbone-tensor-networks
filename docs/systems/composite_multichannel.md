@@ -1,23 +1,9 @@
 # Composite systems and multichannel baths
 
-```{admonition} At a glance
-:class: tip
-- **Composite system** (e.g. spin **+** explicit vibration) — give each degree of
-  freedom **its own site** in a {py:class}`~fishbonett.treebone.TreeFishbone`;
-  fattening them onto one tensor defeats the tensor-network advantage.
-- **Multichannel bath** (one bath, several couplings, shared modes) — pass
-  {py:class}`~fishbonett.bath.spec.Bath` a *list* of `coupling` operators; the channels
-  are then cross-correlated, unlike independent baths.
-- **Choosing between them** — a *composite system* adds a degree of freedom; a
-  *multichannel bath* adds a coupling route to the same modes.
-- **See also** — {doc}`/methods/interaction/multichannel` (the engine and its
-  restrictions), {doc}`fishbone`.
-```
-
-The "system" need not be a bare two-level spin, and a single bath may couple
-through more than one operator.  Both cases are handled by keeping every degree of
-freedom on **its own site** — fattening them onto one tensor defeats the
-tensor-network advantage.
+The system need not be a bare two-level spin, and a single bath may couple
+through more than one operator.  Both cases keep each degree of freedom on its own
+tensor-network site — combining them onto one tensor just inflates the local
+dimension.
 
 ## Composite systems: spin + vibration
 

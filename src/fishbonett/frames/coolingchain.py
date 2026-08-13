@@ -47,16 +47,16 @@ class SystemBathCoolingChain(SystemBathMPS):
             tensor[(0,) * len(dim)] = 1.
             return tensor
 
-        self.pd_sys = pd[-1]
-        self.pd_boson = pd[0:-1]
+        self.pd_sys = pd[0]
+        self.pd_boson = pd[1:]
         self.B = [g_state([1, d, 1]) for d in pd]
         self.S = [np.ones([1]) for _ in pd]
         self.U = [np.zeros(0) for _ in pd[1:]]
         self.H = [np.zeros(0) for _ in pd[1:]]
         self.betaOmega = betaOmega
 
-        self.pd_sys = pd[-1]
-        self.pd_boson = pd[0:-1]
+        self.pd_sys = pd[0]
+        self.pd_boson = pd[1:]
         self.len_boson = len(self.pd_boson)
         self.sd = lambda x: np.heaviside(x, 1) / 1. * np.exp(-x / 1)
         self.domain = [0, 1]

@@ -54,8 +54,8 @@ class SystemBathMultiChannel:
             self.H_add = []
         else:
             self.H_add = H_add
-        self.pd_sys = pd[-1]
-        self.pd_boson = pd[0:-1]
+        self.pd_sys = pd[0]
+        self.pd_boson = pd[1:]
         self.len_boson = len(self.pd_boson)
         self.sd = [lambda x: np.heaviside(x, 1) / 1. * exp(-x / 100)] * self.pd_sys
         self.domain = [0, 1]
@@ -92,13 +92,13 @@ class SystemBathMultiChannel:
         d_nt_mat = [einsum('kst,k,k', mat_list, coef[:, n], phase_factor) for n in range(len(freq))]
         h2 = []
         for i, k in enumerate(d_nt_mat[:self.len_boson]):
-            d1 = self.pd_boson[::-1][i]
+            d1 = self.pd_boson[i]
             d2 = self.pd_sys
             c1 = annihilate(d1)
             kc = k.conjugate()
             coup = kron(c1, k) + kron(c1.T, kc)
             h2.append((coup, d1, d2))
-        d1 = self.pd_boson[-1]
+        d1 = self.pd_boson[0]
         d2 = self.pd_sys
         site = delta * kron(np.eye(d1), self.h1e)
         if inc_sys is True:
@@ -111,7 +111,7 @@ class SystemBathMultiChannel:
             c = annihilate(db)
             coup = kron(hb, hs) + w * kron(c.T@c, np.eye(ds))
             h2.append((coup, db, ds))
-        return h2[::-1]
+        return h2
 
     def build(self, n):
         """Chain-map the shared star, seeded by channel ``n``'s couplings.
@@ -148,9 +148,8 @@ class SystemBathMultiChannel:
         for i, h_d1_d2 in enumerate(self.H):
             h, d1, d2 = h_d1_d2
             u = calc_U(h.toarray() / factor, 1)
-            r0 = r1 = d1  # physical dimension for site A
-            s0 = s1 = d2  # physical dimension for site B
-            u1 = u.reshape([r0, s0, r1, s1])
+            # h is in (d1 x d2) basis; transpose to (d2, d1, d2, d1) = (sys, boson, ...)
+            u1 = u.reshape([d1, d2, d1, d2]).transpose([1, 0, 3, 2])
             u2 = np.transpose(u1, [1, 0, 3, 2])
             U1[i] = u1
             U2[i] = u2

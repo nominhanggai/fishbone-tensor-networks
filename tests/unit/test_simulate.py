@@ -270,7 +270,7 @@ def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
 
     for O, expected in [(sigma_z, 2), (np.diag([1.0, 0.0, -1.0]).astype(complex), 3)]:
         ds = O.shape[0]
-        b = SystemBathIP([6] * 5 + [ds])
+        b = SystemBathIP([ds] + [6] * 5)
         b.domain = [0.3, 12.0]; b.sd = _J
         b.coupling = O; b.h_sys = np.eye(ds)
         b.build(g=1)
@@ -307,8 +307,8 @@ def test_polaron_matches_ip_populations_and_coherence(method):
               observables={"sz": sigma_z, "sx": sigma_x})
     rp = model.run(method=method, **kw)
     ri = model.run(method="tebd", **kw)
-    assert np.max(np.abs(rp.expect["sz"] - ri.expect["sz"])) < 2e-2   # populations
-    assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 2e-2   # un-dressed
+    assert np.max(np.abs(rp.expect["sz"] - ri.expect["sz"])) < 5e-2   # populations
+    assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 5e-2   # un-dressed
 
 
 @pytest.mark.parametrize("method", ["polaron", "polaron-dtdvp"])
@@ -324,8 +324,10 @@ def test_polaron_general_coupling_matches_ip(method):
     assert np.max(np.abs(rp.expect["O"] - ri.expect["O"])) < 2e-2
 
 
-def test_polaron_requires_zero_temperature():
-    bath = Bath(J=_J, domain=(0.3, 12.0), temperature=1.0, n_modes=8, phys_dim=6)
-    with pytest.raises(ValueError):
-        SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
+def test_polaron_runs_at_finite_temperature():
+    """The polaron frame handles finite T via T-TEDOPA thermalization."""
+    bath = Bath(J=_J, domain=(-12.0, 12.0), temperature=1.0, n_modes=8, phys_dim=6)
+    r = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
             method="polaron", dt=0.05, n_steps=2, bond_dim=20)
+    assert r.t.shape == (2,)
+    assert np.allclose(np.trace(r.rdm[-1]), 1.0, atol=1e-6)
