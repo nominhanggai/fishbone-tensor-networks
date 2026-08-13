@@ -259,7 +259,7 @@ METHODS = {s.name: s for s in [
     _m(STATIC_TREE_TEBD, "schrodinger", ("multichannel", "comb", "site-tree"),
        "static-tree-tebd", algo="tebd"),
     _m(MULTICHANNEL_IP, "interaction", ("multichannel",),
-       "multichannel-swap-tebd", algo="tebd", layout="swap"),
+       "swap-tebd", algo="tebd", layout="swap"),
 ]}
 
 #: Derived from :data:`METHODS` -- was a hand-maintained set in
