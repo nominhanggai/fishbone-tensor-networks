@@ -33,6 +33,7 @@ import numpy as np
 import scipy.linalg as la
 
 from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.system import check_operator
 from fishbonett.linalg import expm_gate
 from fishbonett.operators import annihilate
 
@@ -77,12 +78,8 @@ class SystemBathPolaron:
         if self.len_boson == 0:
             raise ValueError("pd must contain at least one boson mode after the "
                              "system dimension")
-        self.h_sys = np.asarray(h_sys, complex)
-        self.coupling = np.asarray(coupling, complex)
-        for name, op in (("h_sys", self.h_sys), ("coupling", self.coupling)):
-            if op.shape != (self.pd_sys, self.pd_sys):
-                raise ValueError(f"{name} has shape {op.shape}, expected "
-                                 f"{(self.pd_sys, self.pd_sys)} to match pd[0]")
+        self.h_sys = check_operator(h_sys, "h_sys", self.pd_sys)
+        self.coupling = check_operator(coupling, "coupling", self.pd_sys)
         self.sd = sd
         self.domain = list(domain)
         self.discretizer = discretizer

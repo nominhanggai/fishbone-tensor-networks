@@ -24,7 +24,8 @@ import numpy as np
 import scipy
 
 from fishbonett.contract import contract as einsum
-import fishbonett.bath.recurrence as rc
+from fishbonett.bath.chain import get_coupling
+from fishbonett.system import check_operator
 from fishbonett.linalg import kron, expm_gate_sparse as calc_U
 from fishbonett.operators import temp_factor, annihilate
 
@@ -60,26 +61,28 @@ class SystemBathCoolingChain(SystemBathMPS):
         Frequency-axis rescaling passed to the recurrence coefficients.
     ncap : int, optional
         Cap on the recurrence-coefficient recursion depth.
+    discretizer : callable, optional
+        Quadrature for the star discretization; ``None`` is Gauss-Legendre.  This
+        frame could not accept one until the chain mapping was shared with
+        :func:`fishbonett.bath.chain.get_coupling` -- its private copy had dropped
+        the argument.
     """
 
     def __init__(self, pd, *, h_sys, coupling, sd, domain, betaOmega=2.,
-                 g=1.0, ncap=20000):
+                 g=1.0, ncap=20000, discretizer=None):
         super().__init__(pd)
         self.len_boson = len(self.pd_boson)
         if self.len_boson == 0:
             raise ValueError("pd must contain at least one boson mode after the "
                              "system dimension")
-        self.h_sys = np.asarray(h_sys, complex)
-        self.coupling = np.asarray(coupling, complex)
-        for name, op in (("h_sys", self.h_sys), ("coupling", self.coupling)):
-            if op.shape != (self.pd_sys, self.pd_sys):
-                raise ValueError(f"{name} has shape {op.shape}, expected "
-                                 f"{(self.pd_sys, self.pd_sys)} to match pd[0]")
+        self.h_sys = check_operator(h_sys, "h_sys", self.pd_sys)
+        self.coupling = check_operator(coupling, "coupling", self.pd_sys)
         self.sd = sd
         self.domain = list(domain)
         self.betaOmega = betaOmega
         self.g = g
         self.ncap = ncap
+        self.discretizer = discretizer
         self.k_list = []
         self.w_list = []
         self.H = []
@@ -104,23 +107,18 @@ class SystemBathCoolingChain(SystemBathMPS):
         rho = einsum('iRjR->ij', rho)
         return rho
 
-    def get_coupling(self, n, j, domain, g, ncap=20000):
-        """Chain parameters ``(w_list, k_list)`` for ``n`` modes of density ``j``,
-        from orthogonal-polynomial recurrence coefficients.  ``k_list[0]`` is the
-        system-bath coupling and the rest are mode-mode hoppings."""
-        alphaL, betaL = rc.recurrenceCoefficients(
-            n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
-        )
-        w_list = g * np.array(alphaL)
-        k_list = g * np.sqrt(np.array(betaL))
-        k_list[0] = k_list[0] / g
-        return w_list, k_list
-
     def build_coupling(self):
-        """Chain-map ``self.sd`` over ``self.domain`` and store ``w_list``/``k_list``."""
+        """Chain-map ``self.sd`` over ``self.domain`` and store ``w_list``/``k_list``.
+
+        Uses :func:`fishbonett.bath.chain.get_coupling`.  This class used to carry
+        its own copy, which had silently lost the ``discretizer`` argument, so a
+        measure-adapted (TEDOPA) star was unreachable from this frame even though
+        every other frame supported one.
+        """
         n = len(self.pd_boson)
-        self.w_list, self.k_list = self.get_coupling(n, self.sd, self.domain,
-                                                    self.g, self.ncap)
+        self.w_list, self.k_list = get_coupling(
+            self.sd, n, self.domain, self.g, self.ncap,
+            discretizer=self.discretizer)
 
     def build(self):
         """Chain-map the bath, assemble the two-site Hamiltonians, and build the
