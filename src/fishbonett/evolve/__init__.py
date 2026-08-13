@@ -37,7 +37,7 @@ whichever level you need:
 
 The ``run_*`` drivers are self-contained convenience entry points: they take a
 *spectral density* and build their own chain, state and operator.  For ordinary
-use go through :meth:`fishbonett.models.system_bath.SystemBath.run`, which handles bath
+use go through :meth:`fishbonett.models.system_bath.SimpleSysBath.run`, which handles bath
 resolution, initial states and observables; reach for a ``run_*`` driver when you
 want one engine in isolation, e.g. for a benchmark.
 """
@@ -47,6 +47,7 @@ from fishbonett.evolve.tebd import (
 )
 from fishbonett.evolve.tdvp import (
     run_tdvp1, run_tdvp2, run_dtdvp, run_ip_tdvp1, run_ip_tdvp2,
+    run_star_tdvp1, run_star_tdvp2,
 )
 from fishbonett.evolve.treetdvp import (
     run_tree_tdvp, run_tree_tdvp2, run_tree_tebd,
@@ -61,6 +62,7 @@ __all__ = [
     "apply_mpo", "compress",
     # TDVP drivers (1D chain)
     "run_tdvp1", "run_tdvp2", "run_dtdvp", "run_ip_tdvp1", "run_ip_tdvp2",
+    "run_star_tdvp1", "run_star_tdvp2",
     # tree drivers
     "run_tree_tdvp", "run_tree_tdvp2", "run_tree_tebd",
 ]

@@ -1,10 +1,20 @@
 """TEDOPA chain mapping: spectral density -> nearest-neighbour chain parameters.
 
-The last step of the bath pipeline.  A spectral density is first *discretized*
-into a star of independent modes (:mod:`fishbonett.bath.legendre` or
-:mod:`fishbonett.bath.orthpol`), then *Lanczos-mapped* into a chain
-(:mod:`fishbonett.bath.lanczos`) in which only neighbouring modes couple -- which
-is what gives a matrix-product state something local to exploit.
+TEDOPA maps a continuum bath **directly** onto a chain in which only neighbouring
+modes couple -- which is what gives a matrix-product state something local to
+exploit.  There is no discretization step in between: the spectral density is used
+as the *weight function* of a family of orthogonal polynomials, and that family's
+three-term recurrence coefficients ``(alpha_j, beta_j)`` *are* the chain's on-site
+energies and hoppings.  That is :func:`get_coupling`.
+
+The same chain can also be reached by way of a star, and
+:func:`get_bath_nn_paras` takes that route: build an ``n``-point quadrature of the
+density (:mod:`fishbonett.bath.legendre` or :mod:`fishbonett.bath.tedopa`), then
+tridiagonalize it with Lanczos (:mod:`fishbonett.bath.lanczos`).  The two agree
+because the operations are inverse: diagonalizing ("starizing") an ``n``-site chain
+recovers the ``n``-point quadrature of the same measure.  Which route to use is a
+numerical choice, not a physical one -- going via a star lets you pick the measure
+the modes are placed against, which is what ``discretization=`` selects.
 
 The split from :mod:`fishbonett.linalg` is by subject: this subpackage turns
 physics (a spectral density) into chain parameters, and ``linalg`` manipulates
@@ -13,8 +23,8 @@ the tensors those parameters end up in.
 .. rubric:: What's here
 
 ===============================  ================================================
-:func:`get_bath_nn_paras`        ``(w_list, k_list)`` via star -> Lanczos -> chain
-:func:`get_coupling`             the same, via orthogonal-polynomial recurrences
+:func:`get_coupling`             ``(w_list, k_list)`` straight from the recurrence
+:func:`get_bath_nn_paras`        the same, via a star + Lanczos tridiagonalization
 ===============================  ================================================
 
 Both return ``(w_list, k_list)``: the chain on-site energies ``w_j`` and the
@@ -31,17 +41,19 @@ __all__ = ["get_bath_nn_paras", "get_coupling"]
 
 
 def get_bath_nn_paras(sd, n, domain, discretizer=None):
-    """Nearest-neighbour (chain) bath parameters for a spectral density.
+    """Nearest-neighbour (chain) bath parameters, via a star.
 
-    Discretises ``sd`` into ``n`` star modes and Lanczos-maps them to a chain,
-    returning ``(w_list, k_list)``: the chain on-site energies and the couplings
-    ``[k0, hopping_1, ...]`` where ``k0`` is the system-bath coupling.
+    Builds an ``n``-point quadrature of ``sd`` and Lanczos-tridiagonalizes it into a
+    chain, returning ``(w_list, k_list)``: the chain on-site energies and the
+    couplings ``[k0, hopping_1, ...]`` where ``k0`` is the system-bath coupling.
+    Equivalent to :func:`get_coupling` (see the module docstring); the reason to
+    come this way is that it lets ``discretizer`` choose the measure.
 
     ``discretizer`` is a ``get_vn_squared``-compatible callable ``(sd, n, domain)
     -> (freq, V_squared)``; it defaults to the Gauss-Legendre star
     (:func:`fishbonett.bath.legendre.get_vn_squared`).  Pass a
-    measure-adapted ORTHPOL discretizer (see
-    :func:`fishbonett.bath.orthpol.make_orthpol_discretizer`) to resolve
+    measure-adapted TEDOPA discretizer (see
+    :func:`fishbonett.bath.tedopa.make_tedopa_discretizer`) to resolve
     infrared-divergent / sharply peaked spectral densities.
     """
     disc = discretizer if discretizer is not None else get_vn_squared

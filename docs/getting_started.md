@@ -2,7 +2,7 @@
 
 ```{admonition} Quick start
 :class: tip
-`from fishbonett import Bath, SystemBath, Truncation` — build a bath, attach it
+`from fishbonett import Bath, SimpleSysBath, Truncation` — build a bath, attach it
 to a system, call `model.run(...)`.  See {doc}`models/index` for the model
 classes, {doc}`methods/index` for propagation methods, and {doc}`bath` for the
 bath itself.
@@ -39,14 +39,14 @@ call. Declare the bath and the system, then `run`:
 
 ```python
 import numpy as np
-from fishbonett import Bath, SystemBath
+from fishbonett import Bath, SimpleSysBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             domain=(-25, 36), temperature=1.0,       # T-TEDOPA thermalization
             n_modes=40, phys_dim=20,
-            discretization="orthpol")                # or the default "legendre"
-model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
+            discretization="tedopa")                # or the default "legendre"
+model = SimpleSysBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 result = model.run(dt=0.05, t_max=4.0, method="tree-tdvp2", bond_dim=200,
                    observables={"sz": sigma_z})
@@ -113,13 +113,37 @@ observables — and {doc}`bath` covers bath discretization and finite temperatur
 
 ## Low-level engines
 
-For finer control the underlying engines are available directly: build a model /
-bath object (for example {py:class}`~fishbonett.frames.schrodinger.SystemBathSchrodinger` or
-{py:class}`~fishbonett.frames.schrodinger.FishBoneH`), discretize with `build(...)`, construct
-the {py:class}`~fishbonett.states.mps.SystemBathMPS` (or {py:class}`~fishbonett.states.comb.FishBoneNet`)
-state, obtain the Trotter gates with `get_u(...)`, sweep with `update_bond(...)`,
-and read out observables from `get_theta1(...)`. The high-level interface above is
-a thin wrapper over exactly this loop.
+For finer control the underlying engines are available directly.  Every frame
+builder takes its system, coupling, spectral density and domain **at
+construction**, then `build()` does the chain mapping:
+
+```python
+import numpy as np
+from fishbonett.frames.schrodinger import SimpleSysBathSchrodinger
+from fishbonett.states.mps import SimpleSysBathMPS
+from fishbonett.evolve import tebd
+from fishbonett.operators import sigma_x, sigma_z
+
+pd = [2] + [10] * 8                        # system on site 0, then the bath chain
+builder = SimpleSysBathSchrodinger(
+    pd, h_sys=sigma_x, coupling=sigma_z,
+    sd=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0.0, 40.0)).build()
+
+state = SimpleSysBathMPS(pd)
+state.U = builder.get_u(0.02)              # static frame: gates built once
+for bond in range(len(pd) - 1):
+    tebd.update_bond(state, bond, chi_max=60, eps=1e-4)
+rho = np.einsum('LiR,LjR->ij', state.get_theta1(0), state.get_theta1(0).conj())
+```
+
+The same shape applies to
+{py:class}`~fishbonett.frames.interaction_picture.SimpleSysBathIP`,
+{py:class}`~fishbonett.frames.polaron.SimpleSysBathPolaron` and
+{py:class}`~fishbonett.frames.schrodinger.FishBoneH` (with
+{py:class}`~fishbonett.states.comb.FishBoneNet` as its state).  The high-level
+interface above is a thin wrapper over exactly this loop, and additionally resolves
+the automatic `domain` / `n_modes`, prepares the initial state, and — in
+time-dependent frames — rebuilds the gates each step.
 
 See the [`examples/`](https://github.com/nominhanggai/fishbone-tensor-networks/tree/main/examples)
 directory for runnable scripts — start with `friendly_interface.py`, which also

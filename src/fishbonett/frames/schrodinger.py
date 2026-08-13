@@ -2,11 +2,11 @@
 
 The bare chain-mapped Hamiltonian, in two geometries:
 
-===============================  ================================================
-:class:`SystemBathSchrodinger`   one system + one bath, a 1D chain
-:class:`FishBoneH`               the **comb**: several electronic sites, each with
-                                 an electronic and a vibrational bath chain
-===============================  ================================================
+=================================  ==============================================
+:class:`SimpleSysBathSchrodinger`  one system + one bath, a 1D chain
+:class:`FishBoneH`                 the **comb**: several electronic sites, each
+                                   with an electronic and a vibrational bath chain
+=================================  ==============================================
 
 Because nothing is transformed away, ``H`` is **time-independent** and strictly
 nearest-neighbour.  Two things follow, and they are the reason this frame exists:
@@ -69,9 +69,8 @@ class FishBoneH:
     and neighbouring chains are coupled electronically through :attr:`h2ee`.  The
     state that carries it is :class:`fishbonett.states.comb.FishBoneNet`.
 
-    Set the terms as attributes (each is a list, one entry per chain), call
-    :meth:`build` to chain-map the baths, then :meth:`get_u` for the two-site
-    gates:
+    Pass the terms at construction (each is a list, one entry per chain), then call
+    :meth:`build` to chain-map the baths and :meth:`get_u` for the two-site gates:
 
     ==============  ===========================================================
     :attr:`h1e`     on-site electronic Hamiltonian
@@ -80,13 +79,20 @@ class FishBoneH:
     :attr:`h2ev`    electron-vibration coupling within a chain
     :attr:`he_dy`   electronic operator the electron bath couples to
     :attr:`hv_dy`   vibrational operator the vibration bath couples to
+    :attr:`sd`      spectral densities, ``sd[n, 0]`` electron / ``sd[n, 1]`` vib
     ==============  ===========================================================
+
+    Each defaults to the trivial term (identity on-site, no coupling, zero spectral
+    density) so a partially specified comb is still valid; they also remain settable
+    afterwards, since building one chain at a time is often more readable than
+    assembling seven parallel lists in one call.
 
     ``h1e``/``h1v`` are normalized through :func:`_to_list`, so a bare array and a
     one-element list are both accepted.
 
     For an arbitrary tree of sites (rather than this fixed comb) use
-    :class:`fishbonett.models.fishbone.TreeFishbone`.
+    :class:`fishbonett.models.fishbone.TreeFishbone`, which is also the only route
+    reachable from the high-level ``run(method=...)`` interface.
     """
 
     @property
@@ -152,14 +158,41 @@ class FishBoneH:
     def hv_dy(self, m):
         self._hv_dy = m
 
-    def __init__(self, pd: np.ndarray, ):
+    def __init__(self, pd: np.ndarray, *, h1e=None, h1v=None, h2ee=None,
+                 h2ev=None, he_dy=None, hv_dy=None, sd=None, domain=None,
+                 g=1.0, ncap=20000, discretizer=None):
         """
-        TODO
-        :type pd: nd.ndarray
-        :param pd: is a list.
-         pD[0] contains physical dimensions of eb, ev, vb on the first chain,
-         pD[1] contains physical dimensions of eb, ev, vb on the second chain,
-         etc.
+        Parameters
+        ----------
+        pd : (nc, 4) object ndarray
+            Physical dimensions per chain: row ``n`` is
+            ``[eb_dims, e_dims, v_dims, vb_dims]`` -- the electron-bath modes, the
+            electronic site, the vibrational site and the vibration-bath modes.
+            Each entry is itself a list, so ``len(pd[n, 0])`` is chain ``n``'s
+            number of electron-bath modes (use ``[]`` for an absent bath).
+        h1e, h1v : list, optional
+            On-site electronic / vibrational Hamiltonians, one per chain.
+            Default: identity.
+        h2ee : list, optional
+            Electronic coupling between neighbouring chains (``nc - 1`` entries).
+            Default: identity (i.e. no coupling beyond a constant).
+        h2ev : list, optional
+            Electron-vibration coupling within each chain.  Default: identity.
+        he_dy, hv_dy : list, optional
+            The electronic / vibrational operators the respective baths couple to,
+            one per chain.  Default: identity.
+        sd : (nc, 2) object ndarray, optional
+            Spectral densities; ``sd[n, 0]`` for chain ``n``'s electron bath and
+            ``sd[n, 1]`` for its vibration bath, ``None`` where that bath is
+            absent.  Default: zero (a decoupled bath).
+        domain : (float, float), optional
+            Frequency window to chain-map over.
+        g : float, optional
+            Frequency-axis rescaling passed to the recurrence coefficients.
+        ncap : int, optional
+            Cap on the recurrence-coefficient recursion depth.
+        discretizer : callable, optional
+            Quadrature for the star discretization; ``None`` is Gauss-Legendre.
         """
         self._pd = pd
         self._nc = len(pd)  # an int
@@ -185,44 +218,49 @@ class FishBoneH:
         # | eb1 ev1 vb1 |
         # | eb2 ev2 vb2 | is the same as the structure depicted in SimpleTTS class.
 
-        self.sd = np.empty([self._nc, 2], dtype=object)
-        self.domain = []
-        # TODO two lists. w is frequency, k is coupling.
-        #  Get them from the function `get_coupling`
-
+        self.domain = [] if domain is None else list(domain)
+        self.g = g
+        self.ncap = ncap
+        self.discretizer = discretizer
+        # w is frequency, k is coupling; filled in by `build_coupling`.
         self.w_list = [[[None] * self._ebL[n], [None] * self._vbL[n]] for n in range(self._nc)]
         self.k_list = [[[None] * self._ebL[n], [None] * self._vbL[n]] for n in range(self._nc)]
 
-        # initialize spectral densities.
-        for n in range(self._nc):
-            if self._ebL[n] > 0:
-                self.sd[n, 0] = lambda x: 0  # np.heaviside(x, 1) / 1. * exp(-x / 1)
-            elif self._ebL[n] == 0:
-                self.sd[n, 0] = None
-            if self._vbL[n] > 0:
-                self.sd[n, 1] = lambda x: 0  #np.heaviside(x, 1) / 1. * exp(-x / 1)
-            elif self._vbL[n] == 0:
-                self.sd[n, 1] = None
-            else:
-                raise SystemError  # TODO tell users what happens.
-        # TODO Must have p-leg dims for e and v. Use [] if v not existent.
+        # Spectral densities: a decoupled bath where one exists, None where it does
+        # not, so `build_coupling` can tell "no bath" from "bath with zero coupling".
+        if sd is not None:
+            self.sd = sd
+        else:
+            self.sd = np.empty([self._nc, 2], dtype=object)
+            for n in range(self._nc):
+                self.sd[n, 0] = (lambda x: 0) if self._ebL[n] > 0 else None
+                self.sd[n, 1] = (lambda x: 0) if self._vbL[n] > 0 else None
 
-        # Assign the matrices below according to self.pd
-        self._H = []  # list -> all bond Hamiltonians.
+        self._H = []  # list -> all bond Hamiltonians, assembled by `build`.
         # _H = [ [Heb00, Heb01, ..., Hev0, Hvb00, Hvb01, ..., Hvb0N, Hee0],
         #        [Heb10, Heb11, ..., Hev1, Hvb00, Hvb01, ..., Hvb0N, Hee1],
         #        [Heb00, Heb01, ..., Hev1, Hvb00, Hvb01, ..., Hvb0N, None]
         #      ] in the case of 3 chains.
-        self._h1e = [eye(d) for d in self._eD]
-        # list -> single Hamiltonian on e site. None as a placeholder if the p-leg is [].
-        self._h1v = [eye(d) for d in self._vD]
-        # list -> single Hamiltonian on v site. None as a placeholder if the p-leg is [].
-        self._h2ee = [kron(eye(m), eye(n)) for (m, n) in zip(self._eD[:-1], self._eD[1:])]
-        # list -> coupling Hamiltonian on e and e
-        self._h2ev = [kron(eye(m), eye(n)) for (m, n) in
-                      zip(self._eD, self._vD)]  # list -> coupling Hamiltonian on e and v
-        self._he_dy = [eye(d) for d in self._eD]  # list -> e dynamic variables coupled to eb
-        self._hv_dy = [eye(d) for d in self._vD]  # list -> v dynamic variables coupled to vb
+        # Each term defaults to the trivial one; a `[]` p-leg gives an empty operator.
+        self._h1e = [eye(d) for d in self._eD] if h1e is None else h1e
+        self._h1v = [eye(d) for d in self._vD] if h1v is None else h1v
+        self._h2ee = ([kron(eye(m), eye(n))
+                       for (m, n) in zip(self._eD[:-1], self._eD[1:])]
+                      if h2ee is None else h2ee)
+        self._h2ev = ([kron(eye(m), eye(n))
+                       for (m, n) in zip(self._eD, self._vD)]
+                      if h2ev is None else h2ev)
+        self._he_dy = [eye(d) for d in self._eD] if he_dy is None else he_dy
+        self._hv_dy = [eye(d) for d in self._vD] if hv_dy is None else hv_dy
+        for name, terms, want in (("h1e", self._h1e, self._nc),
+                                  ("h1v", self._h1v, self._nc),
+                                  ("h2ee", self._h2ee, max(self._nc - 1, 0)),
+                                  ("h2ev", self._h2ev, self._nc),
+                                  ("he_dy", self._he_dy, self._nc),
+                                  ("hv_dy", self._hv_dy, self._nc)):
+            if len(terms) != want:
+                raise ValueError(f"{name} has {len(terms)} entries, expected {want} "
+                                 f"for {self._nc} chain(s)")
 
     @classmethod
     def get_coupling(self, n, j, domain, g, ncap=20000, discretizer=None):
@@ -238,28 +276,20 @@ class FishBoneH:
         k_list[0] = k_list[0] / g
         return w_list, k_list
 
-    def build_coupling(self, g, ncap=20000, discretizer=None):
+    def build_coupling(self):
         """Chain-map every bath of every chain into ``w_list``/``k_list``.
 
         Index ``[n][0]`` is chain ``n``'s electron bath and ``[n][1]`` its
         vibration bath; an absent bath (length 0) gets empty lists.
         """
-        number_of_chains = self._nc
-        for n in range(number_of_chains):
-            len_of_eb = self._ebL[n]
-            len_of_vb = self._vbL[n]
-            if len_of_eb != 0:
-                self.w_list[n][0], self.k_list[n][0] = \
-                    self.get_coupling(len_of_eb, self.sd[n, 0], self.domain, g,
-                                      ncap, discretizer=discretizer)
-            else:
-                self.w_list[n][0], self.k_list[n][0] = [], []
-            if len_of_vb != 0:
-                self.w_list[n][1], self.k_list[n][1] = \
-                    self.get_coupling(len_of_vb, self.sd[n, 1], self.domain, g,
-                                      ncap, discretizer=discretizer)
-            else:
-                self.w_list[n][1], self.k_list[n][1] = [], []
+        for n in range(self._nc):
+            for side, length in ((0, self._ebL[n]), (1, self._vbL[n])):
+                if length != 0:
+                    self.w_list[n][side], self.k_list[n][side] = self.get_coupling(
+                        length, self.sd[n, side], self.domain, self.g, self.ncap,
+                        discretizer=self.discretizer)
+                else:
+                    self.w_list[n][side], self.k_list[n][side] = [], []
 
     def get_h1(self, n, c=None) -> tuple:
         """On-site terms of chain ``n`` as ``(h1eb, h1ev_list, h1vb)``.
@@ -442,15 +472,14 @@ class FishBoneH:
         else:
             raise ValueError
 
-    def build(self, g, ncap=20000, discretizer=None):
+    def build(self):
         """Chain-map every bath and assemble :attr:`H`.
 
-        Call after setting the ``h1e``/``h1v``/``h2ee``/``h2ev``/``he_dy``/
-        ``hv_dy`` terms and the spectral densities, and before :meth:`get_u`.
-        With more than one chain the inter-chain electronic bonds
-        (``get_h_total(-1)``) are appended to each chain's bond list.
+        The one expensive step; call before :meth:`get_u`.  With more than one chain
+        the inter-chain electronic bonds (``get_h_total(-1)``) are appended to each
+        chain's bond list.
         """
-        self.build_coupling(g, ncap, discretizer=discretizer)
+        self.build_coupling()
         H = []
         for n in range(self._nc):
             h = self.get_h_total(n)
@@ -460,6 +489,7 @@ class FishBoneH:
             for n in range(self._nc - 1):
                 H[n].append(h2_ee[n])
         self._H = H
+        return self
 
     def get_u(self, dt):
         """Two-site gates ``exp(-i dt h)`` for every bond, shaped like :attr:`H`.
@@ -479,46 +509,83 @@ class FishBoneH:
         return U
 
 
-class SystemBathSchrodinger:
+class SimpleSysBathSchrodinger:
     """Schroedinger-picture chain Hamiltonian builder: arbitrary system + harmonic bath.
 
     Builds the explicit (time-independent) chain Hamiltonian and its two-site
     Trotter gates directly, without moving to the interaction picture (any
     Hermitian system, not just a spin -- the "spin-boson" name is historical).
-    Exported publicly as :class:`fishbonett.SystemBathSchrodinger`.
+    Everything the frame needs is given at construction; :meth:`build` then does
+    the chain mapping.  Exported publicly as
+    :class:`fishbonett.SimpleSysBathSchrodinger`.
+
+    Parameters
+    ----------
+    pd : sequence of int
+        Physical dimensions ``[d_sys, d_boson, ...]`` -- the system on site 0, one
+        entry per chain mode after it.
+    h_sys : (d, d) array
+        System Hamiltonian.
+    coupling : (d, d) array
+        The Hermitian system-bath coupling.
+    sd : callable
+        Spectral density ``J(w)``, already thermalized if the bath is at finite
+        temperature (see :func:`fishbonett.bath.spec.thermalize`).
+    domain : (float, float)
+        Frequency window to chain-map over.
+    g : float, optional
+        Frequency-axis rescaling passed to the recurrence coefficients.
+    ncap : int, optional
+        Cap on the recurrence-coefficient recursion depth.
+    discretizer : callable, optional
+        Quadrature for the star discretization; ``None`` is Gauss-Legendre.
     """
 
-    def __init__(self, pd):
+    def __init__(self, pd, *, h_sys, coupling, sd, domain, g=1.0, ncap=20000,
+                 discretizer=None):
         self.pd_sys = pd[0]
         self.pd_boson = pd[1:]
-        self.sd = lambda x: np.heaviside(x, 1) / 1. * exp(-x / 1)
-        self.domain = [0, 1]
-        self.he_dy = np.eye(self.pd_sys)
-        self.h1e = np.eye(self.pd_sys)
+        if len(self.pd_boson) == 0:
+            raise ValueError("pd must contain at least one boson mode after the "
+                             "system dimension")
+        self.h_sys = np.asarray(h_sys, complex)
+        self.coupling = np.asarray(coupling, complex)
+        for name, op in (("h_sys", self.h_sys), ("coupling", self.coupling)):
+            if op.shape != (self.pd_sys, self.pd_sys):
+                raise ValueError(f"{name} has shape {op.shape}, expected "
+                                 f"{(self.pd_sys, self.pd_sys)} to match pd[0]")
+        self.sd = sd
+        self.domain = list(domain)
+        self.g = g
+        self.ncap = ncap
+        self.discretizer = discretizer
         self.k_list = []
-        self.w_lsit = []
+        self.w_list = []
         self.H = []
 
-    def get_coupling(self, n, j, domain, g, ncap=20000):
+    def get_coupling(self, n, j, domain, g, ncap=20000, discretizer=None):
         """Chain parameters ``(w_list, k_list)`` for ``n`` modes of density ``j``,
         from orthogonal-polynomial recurrence coefficients.  ``k_list[0]`` is the
         system-bath coupling, the rest are mode-mode hoppings."""
         alphaL, betaL = rc.recurrenceCoefficients(
-            n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
+            n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap,
+            discretizer=discretizer,
         )
         w_list = g * np.array(alphaL)
         k_list = g * np.sqrt(np.array(betaL))
         k_list[0] = k_list[0] / g
         return w_list, k_list
 
-    def build_coupling(self, g, ncap):
+    def build_coupling(self):
         """Chain-map ``self.sd`` over ``self.domain`` into ``w_list``/``k_list``."""
         n = len(self.pd_boson)
-        self.w_list, self.k_list = self.get_coupling(n, self.sd, self.domain, g, ncap)
+        self.w_list, self.k_list = self.get_coupling(
+            n, self.sd, self.domain, self.g, self.ncap,
+            discretizer=self.discretizer)
 
     def get_h1(self):
         """On-site terms: system first, then bath modes in chain order."""
-        h1 = [self.h1e]
+        h1 = [self.h_sys]
         for i in range(len(self.pd_boson)):
             c = annihilate(self.pd_boson[i])
             h1.append(self.w_list[i] * c.T @ c)
@@ -528,10 +595,10 @@ class SystemBathSchrodinger:
         """Two-site Hamiltonians ``[(h, d1, d2), ...]``, system first.
 
         Bond 0 (system to c0) carries the system-bath coupling
-        ``k0 (b + b^dag) (x) he_dy`` plus the system's and ``c0``'s on-site terms.
-        Bond ``i`` then carries the ``c_{i-1}``-``c_i`` hopping plus ``c_i``'s
-        on-site term -- the **right** leg, since the chain runs outward from the
-        system, so each mode's frequency is placed exactly once.
+        ``k0 (b + b^dag) (x) coupling`` plus the system's and ``c0``'s on-site
+        terms.  Bond ``i`` then carries the ``c_{i-1}``-``c_i`` hopping plus
+        ``c_i``'s on-site term -- the **right** leg, since the chain runs outward
+        from the system, so each mode's frequency is placed exactly once.
         """
         h1 = self.get_h1()          # [h_sys, w_0 n_0, w_1 n_1, ...]
         k0 = self.k_list[0]
@@ -539,7 +606,7 @@ class SystemBathSchrodinger:
         d1 = self.pd_sys
         d2 = self.pd_boson[0]
         c0 = annihilate(d2)
-        coup = k0 * kron(self.he_dy, c0 + c0.T)
+        coup = k0 * kron(self.coupling, c0 + c0.T)
         site = kron(h1[0], np.eye(d2)) + kron(np.eye(d1), h1[1])
         h2.append((coup + site, d1, d2))
         for i in range(1, len(self.pd_boson)):
@@ -564,7 +631,7 @@ class SystemBathSchrodinger:
         d1 = self.pd_sys
         d2 = self.pd_boson[0]
         c0 = annihilate(d2)
-        h2.append(k0 * kron(self.he_dy, c0 + c0.T))
+        h2.append(k0 * kron(self.coupling, c0 + c0.T))
         for i in range(1, len(self.pd_boson)):
             d1 = self.pd_boson[i - 1]
             d2 = self.pd_boson[i]
@@ -575,32 +642,34 @@ class SystemBathSchrodinger:
         d1 = self.pd_boson[-1]
         d2 = self.pd_sys
         c0 = annihilate(d1)
-        coup = k0 * kron(c0 + c0.T, self.he_dy)
+        coup = k0 * kron(c0 + c0.T, self.coupling)
         h20 = coup
         h2.append(h20)
         return h2
 
-    def build(self, g, ncap=20000):
-        """Chain-map the bath.  Call before :meth:`get_u`."""
-        self.build_coupling(g, ncap)
+    def build(self):
+        """Chain-map the bath.  The one expensive step; call before
+        :meth:`get_u`."""
+        self.build_coupling()
+        return self
 
 
     def get_u(self, dt):
-        """Two-site gates ``exp(-i dt h)`` for every bond (sparse matrices).
+        """Two-site gates ``exp(-i dt h)`` for every bond, legs ``(d1, d2, d1*, d2*)``.
 
         ``H`` is time-independent in this frame, so these are built **once** and
         reused for every step -- the practical advantage of the Schroedinger
-        picture over the interaction picture.
+        picture over the interaction picture.  The legs are laid out the way
+        :func:`fishbonett.evolve.tebd.update_bond` consumes them, so the returned
+        list can be assigned straight to a state's ``U``.
         """
         self.H = self.get_h2()
-        U = [0]*len(self.H)
+        U = [None] * len(self.H)
         for i, h_d1_d2 in enumerate(self.H):
             h, d1, d2 = h_d1_d2
             u = calc_U(h, dt)
-            r0 = r1 = d1  # physical dimension for site A
-            s0 = s1 = d2  # physical dimension for site B
-            # u = u.reshape([r0, s0, r1, s1])
-            U[i] = u
+            U[i] = np.asarray(u.todense() if hasattr(u, "todense") else u
+                              ).reshape(d1, d2, d1, d2)
         return U
 
 def exponential(h_d1_d2, dt):
@@ -613,12 +682,3 @@ def exponential(h_d1_d2, dt):
     h, d1, d2 = h_d1_d2
     u = calc_U(h, dt)
     return u
-
-
-
-if __name__ == "__main__":
-    a = [3, 3, 3]
-    b = [2]
-    pd = np.array([[a, b, b, a], [a, b, b, a]], dtype=object)
-    tri = FishBoneH(pd)
-    # tri.H

@@ -103,11 +103,35 @@ class Model:
         return tuple(m for fr in self.frames.values() for m in fr)
 
 
+#: Why the mode-tree has only the interaction picture.  Not an oversight: the
+#: tree is worth having *because* the interaction picture leaves no mode-mode
+#: terms, so every mode hangs off the system independently and the only question
+#: is how deep the bonds are.  The static and polaron frames both keep the free
+#: chain, whose hoppings couple mode ``i`` to ``i+1`` -- and on a balanced tree
+#: with leaves in chain order only half of those pairs are tree-adjacent, the
+#: rest spanning up to ``2 log2(N)`` edges (measured: 10 edges at N=32).  Putting
+#: them back means carrying ladder operators across those paths, so the MPO bond
+#: grows and the tree costs more than the chain it was meant to beat.  Reordering
+#: the leaves to make the chain local just turns the tree back into a chain.
+_NO_MODE_MODE = (
+    "the tree pays off only when there are no mode-mode terms, which is what the "
+    "interaction picture buys.  This frame keeps the free chain, whose "
+    "nearest-neighbour hoppings are long-range on a balanced tree (only half of "
+    "the chain-adjacent pairs are tree-adjacent; the rest span up to 2*log2(N) "
+    "edges), so the MPO bond grows and the tree loses to the plain chain.  Use "
+    "the 'chain' model instead.")
+
 #: The one propagator the multi-site models have: Schroedinger-picture tree TEBD.
 #: Named to distinguish it from the interaction-picture ``tree-tebd`` of the
 #: ``mode-tree`` model, which is a different engine on a different geometry.
 STATIC_TREE_TEBD = "tree-tebd-static"
 _TREE_STATIC = STATIC_TREE_TEBD       # shorthand used in the table below
+
+#: The multichannel model's interaction-picture propagator: a swap-network TEBD
+#: sweep against the matrix-valued time-dependent coupling.  Named rather than
+#: shared with ``tebd`` because the builder is a different class (the coupling is
+#: a matrix per mode, not a scalar times one operator).
+MULTICHANNEL_IP = "multichannel-ip"
 
 MODELS = {
     "chain": Model(
@@ -115,7 +139,7 @@ MODELS = {
         blurb="One system site coupled to one bath, the bath chain-mapped into a "
               "1D chain of effective modes.  The most developed model: all three "
               "frames and the whole propagator family.",
-        cls="SystemBath", geometry="MPS (system at site 0, modes 1..N)",
+        cls="SimpleSysBath", geometry="MPS (system at site 0, modes 1..N)",
         frames={
             "schrodinger": ("mpo-tdvp1", "mpo-tdvp2", "mpo-dtdvp"),
             "interaction": ("tebd", "trotter-mpo"),
@@ -127,14 +151,18 @@ MODELS = {
         blurb="One system site, one bath, *no* chain mapping: every discretized "
               "mode couples straight to the system.  No mode-mode terms, but no "
               "locality for the MPS to exploit either.",
-        cls="SystemBath", geometry="MPS over a linearized star",
-        frames={"interaction": ("mpo-ip-tdvp1", "mpo-ip-tdvp2")},
+        cls="SimpleSysBath", geometry="MPS over a linearized star",
+        frames={
+            "schrodinger": ("mpo-star-tdvp1", "mpo-star-tdvp2"),
+            "interaction": ("mpo-ip-tdvp1", "mpo-ip-tdvp2"),
+        },
         gaps={
-            "schrodinger": "coherent, but not provided -- without the "
-                           "interaction picture the star's absent locality is "
-                           "not compensated by anything.",
-            "polaron": "rejected: entanglement-catastrophic in an MPS, since "
-                       "the displacement touches every mode at once.",
+            "polaron": "rejected, not merely unimplemented: the polaron "
+                       "displacement acts on the collective mode, which in a "
+                       "star is spread over *every* mode at once.  On a chain "
+                       "the J/w^2 mapping localizes it on c_0; a star has no "
+                       "such site, so the dressing entangles the system with "
+                       "all modes simultaneously.  Use the 'chain' model.",
         }),
     "mode-tree": Model(
         key="mode-tree", label="tree system-bath",
@@ -143,12 +171,11 @@ MODELS = {
               "the root.  Keeps the high-bond region O(log N) edges deep instead "
               "of O(N).  Distinct from ``site-tree``, where it is the *system "
               "sites* that form a tree.",
-        cls="SystemBath", geometry="balanced binary TTN, system at the root",
+        cls="SimpleSysBath", geometry="balanced binary TTN, system at the root",
         frames={"interaction": ("tree-tdvp", "tree-tdvp2", "tree-tebd")},
         gaps={
-            "schrodinger": "not implemented.",
-            "polaron": "not implemented -- the dressed bond would have to sit on "
-                       "the root edge; no obstacle known.",
+            "schrodinger": _NO_MODE_MODE,
+            "polaron": _NO_MODE_MODE,
         }),
     "multichannel": Model(
         key="multichannel", label="multichannel system-bath",
@@ -156,13 +183,17 @@ MODELS = {
               "that share the same modes -- so the channels are cross-correlated, "
               "unlike independent baths.  Selected by giving the Bath a list of "
               "couplings, not by a method name.",
-        cls="SystemBath", geometry="shared-mode star on a one-site tree",
-        frames={"schrodinger": (_TREE_STATIC,)},
+        cls="SimpleSysBath", geometry="shared-mode star on a one-site tree",
+        frames={
+            "schrodinger": (_TREE_STATIC,),
+            "interaction": (MULTICHANNEL_IP,),
+        },
         gaps={
-            "interaction": "an interaction-picture builder exists "
-                           "(frames.multichannel.SystemBathMultiChannel) but is "
-                           "not wired into run(); only the static path ships.",
-            "polaron": "not implemented.",
+            "polaron": "rejected for the same reason as the 'star' model: the "
+                       "channels share one set of star modes, and the polaron "
+                       "displacement acts on a collective mode that is spread over "
+                       "all of them.  There is no single site to localize it on, so "
+                       "the dressing entangles the system with every mode at once.",
         },
         selected_by="bath"),
     "comb": Model(

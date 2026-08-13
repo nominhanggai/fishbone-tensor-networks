@@ -43,39 +43,65 @@ def _coherent(d, alpha):
     return la.expm(alpha * (a.conj().T - a)) @ np.eye(d)[:, 0]
 
 
-class SystemBathPolaron:
+class SimpleSysBathPolaron:
     """Polaron-frame gate builder for a general system ``O``-coupled to a harmonic bath.
 
-    Set :attr:`coupling` (the Hermitian coupling operator ``O``), :attr:`h_sys`,
-    :attr:`sd` (spectral density ``J``) and :attr:`domain`; call :meth:`build`,
-    then :meth:`gates` for the static two-site Trotter gates.  :attr:`kappa0` is
-    the polaron displacement; :meth:`initial_theta` prepares the displaced
-    ``(c0, system)`` initial tensor and :meth:`undress_rdm` recovers the lab-frame
-    system reduced density matrix.
+    Everything the frame needs is given at construction; :meth:`build` then does the
+    chain mapping (the one expensive step) and :meth:`gates` returns the static
+    two-site Trotter gates.  :attr:`kappa0` is the polaron displacement;
+    :meth:`initial_theta` prepares the displaced ``(c0, system)`` initial tensor and
+    :meth:`undress_rdm` recovers the lab-frame system reduced density matrix.
+
+    Parameters
+    ----------
+    pd : sequence of int
+        Physical dimensions ``[d_sys, d_boson, ...]`` -- the system on site 0, one
+        entry per chain mode after it.
+    h_sys : (d, d) array
+        System Hamiltonian.
+    coupling : (d, d) array
+        The Hermitian system-bath coupling ``O``.
+    sd : callable
+        Spectral density ``J(w)``, already thermalized if the bath is at finite
+        temperature (see :func:`fishbonett.bath.spec.thermalize`).
+    domain : (float, float)
+        Frequency window to chain-map over.
+    discretizer : callable, optional
+        Quadrature for the star discretization; ``None`` is Gauss-Legendre.
     """
 
-    def __init__(self, pd):
+    def __init__(self, pd, *, h_sys, coupling, sd, domain, discretizer=None):
         self.pd_sys = pd[0]
         self.pd_boson = list(pd[1:])
         self.len_boson = len(self.pd_boson)
-        self.coupling = np.eye(self.pd_sys, dtype=complex)
-        self.h_sys = np.eye(self.pd_sys, dtype=complex)
-        self.sd = lambda w: np.heaviside(w, 1.0) * np.exp(-w)
-        self.domain = [0.3, 1.0]
+        if self.len_boson == 0:
+            raise ValueError("pd must contain at least one boson mode after the "
+                             "system dimension")
+        self.h_sys = np.asarray(h_sys, complex)
+        self.coupling = np.asarray(coupling, complex)
+        for name, op in (("h_sys", self.h_sys), ("coupling", self.coupling)):
+            if op.shape != (self.pd_sys, self.pd_sys):
+                raise ValueError(f"{name} has shape {op.shape}, expected "
+                                 f"{(self.pd_sys, self.pd_sys)} to match pd[0]")
+        self.sd = sd
+        self.domain = list(domain)
+        self.discretizer = discretizer
         self.w_list = []
         self.k_list = []
         self.kappa0 = 0.0
         self.e_reorg = 0.0
 
-    def build(self, discretizer=None):
+    def build(self):
         """Chain-map the polaron-adapted density ``J(w)/w^2`` and cache ``O``'s
-        eigendecomposition and the reorganization energy."""
+        eigendecomposition and the reorganization energy.  Call before
+        :meth:`gates`."""
         sd_pol = lambda w: self.sd(w) / w ** 2
         self.w_list, self.k_list = get_bath_nn_paras(
-            sd_pol, self.len_boson, self.domain, discretizer=discretizer)
+            sd_pol, self.len_boson, self.domain, discretizer=self.discretizer)
         self.kappa0 = float(self.k_list[0])
         self.e_reorg = self._reorg_energy()
-        self._evals, self._evecs = la.eigh(np.asarray(self.coupling, complex))
+        self._evals, self._evecs = la.eigh(self.coupling)
+        return self
 
     def _reorg_energy(self):
         """``E_reorg = (1/pi) int_domain J(w)/w dw`` (the ``O^2`` on-site shift)."""

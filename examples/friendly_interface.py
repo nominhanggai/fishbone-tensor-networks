@@ -1,7 +1,7 @@
 """The high-level interface: spin-boson and fishbone dynamics in a few lines.
 
 The low-level engines require the user to hand-write a TEBD/TDVP sweep loop (see
-the other examples).  The :class:`~fishbonett.models.SystemBath` and
+the other examples).  The :class:`~fishbonett.models.SimpleSysBath` and
 :class:`~fishbonett.models.Fishbone` classes wrap that away: declare the
 bath(s) and system, then call ``run`` once.
 
@@ -9,7 +9,7 @@ Run with:  python examples/friendly_interface.py
 """
 import numpy as np
 
-from fishbonett import Bath, SystemBath, Fishbone
+from fishbonett import Bath, SimpleSysBath, Fishbone
 from fishbonett.operators import sigma_x, sigma_z
 
 
@@ -17,8 +17,8 @@ def spin_boson():
     """A single two-level system coupled to one bath, several engines."""
     bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5.0),
                 domain=(-25.0, 36.0), temperature=1.0,
-                n_modes=6, phys_dim=6, discretization="orthpol")
-    model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
+                n_modes=6, phys_dim=6, discretization="tedopa")
+    model = SimpleSysBath(h=sigma_x, coupling=sigma_z, bath=bath)
     for method in ("tebd", "mpo-tdvp1", "mpo-tdvp2", "tree-tebd"):
         res = model.run(dt=0.05, t_max=0.5, method=method, bond_dim=30,
                         observables={"sz": sigma_z})

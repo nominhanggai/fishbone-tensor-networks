@@ -7,13 +7,13 @@ constrained to be harmonic/bosonic.
 
 Works in the interaction picture with respect to the **free bath** Hamiltonian:
 the chain-mapped bath is diagonalized into its star modes, whose free evolution is
-absorbed into time-dependent couplings ``d_n(t)`` (:meth:`SystemBathIP.mode_couplings`).
+absorbed into time-dependent couplings ``d_n(t)`` (:meth:`SimpleSysBathIP.mode_couplings`).
 What remains is ``H_sb(t) = A_s (x) sum_n [d_n b_n + h.c.]`` plus the system term,
 so the gates are rebuilt each step.  Two propagators use this frame:
 
-* ``SystemBath.run(method="tebd")`` -- two-site Trotter gates (:meth:`get_u`)
+* ``SimpleSysBath.run(method="tebd")`` -- two-site Trotter gates (:meth:`get_u`)
   applied by the swap network;
-* ``SystemBath.run(method="trotter-mpo")`` -- the same propagator written exactly
+* ``SimpleSysBath.run(method="trotter-mpo")`` -- the same propagator written exactly
   as one low-bond conditional-displacement MPO (:meth:`displacement_mpo`).
 """
 import numpy as np
@@ -27,28 +27,59 @@ from fishbonett.linalg import kron, expm_gate as _expm_gate
 from fishbonett.operators import annihilate
 
 
-class SystemBathIP:
+class SimpleSysBathIP:
     """Interaction-picture builder: arbitrary system + harmonic bath.
 
     Diagonalizes the chain-mapped bath into its star modes and absorbs their free
     evolution into time-dependent couplings ``d_n(t)``
     (:meth:`mode_couplings`) -- the interaction picture with respect to the **free
-    bath** Hamiltonian.  Set :attr:`coupling` (the system operator ``A_s``) and
-    :attr:`h_sys`, call :meth:`build`, then take either
+    bath** Hamiltonian.  Everything the frame needs is given at construction; call
+    :meth:`build` to chain-map, then take either
 
     * :meth:`get_u` -- two-site Trotter gates for the swap-network TEBD sweep, or
     * :meth:`displacement_mpo` -- the same propagator as one exact low-bond MPO.
 
+    Parameters
+    ----------
+    pd : sequence of int
+        Physical dimensions ``[d_sys, d_boson, ...]`` -- the system on site 0, one
+        entry per chain mode after it.
+    h_sys : (d, d) array
+        System Hamiltonian.
+    coupling : (d, d) array
+        The Hermitian system-bath coupling ``A_s``.
+    sd : callable
+        Spectral density ``J(w)``, already thermalized if the bath is at finite
+        temperature (see :func:`fishbonett.bath.spec.thermalize`).
+    domain : (float, float)
+        Frequency window to chain-map over -- signed for a thermalized density.
+    g : float, optional
+        Frequency-axis rescaling passed to the recurrence coefficients.
+    ncap : int, optional
+        Cap on the recurrence-coefficient recursion depth.
+    discretizer : callable, optional
+        Quadrature for the star discretization; ``None`` is Gauss-Legendre.
     """
 
-    def __init__(self, pd):
+    def __init__(self, pd, *, h_sys, coupling, sd, domain, g=1.0, ncap=20000,
+                 discretizer=None):
         self.pd_sys = pd[0]
         self.pd_boson = pd[1:]
         self.len_boson = len(self.pd_boson)
-        self.sd = lambda x: np.heaviside(x, 1) / 1. * exp(-x / 1)
-        self.domain = [0, 1]
-        self.coupling = np.eye(self.pd_sys)
-        self.h_sys = np.eye(self.pd_sys)
+        if self.len_boson == 0:
+            raise ValueError("pd must contain at least one boson mode after the "
+                             "system dimension")
+        self.h_sys = np.asarray(h_sys, complex)
+        self.coupling = np.asarray(coupling, complex)
+        for name, op in (("h_sys", self.h_sys), ("coupling", self.coupling)):
+            if op.shape != (self.pd_sys, self.pd_sys):
+                raise ValueError(f"{name} has shape {op.shape}, expected "
+                                 f"{(self.pd_sys, self.pd_sys)} to match pd[0]")
+        self.sd = sd
+        self.domain = list(domain)
+        self.g = g
+        self.ncap = ncap
+        self.discretizer = discretizer
         self.k_list = []
         self.w_list = []
         self.H = []
@@ -56,16 +87,15 @@ class SystemBathIP:
         self.freq = []
         self.phase = lambda lam, t, delta: (np.exp(-1j*lam*(t+delta)) - np.exp(-1j*lam*t))/(-1j*lam)
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
-        # self.phase = lambda lam, t, delta: np.exp(-1j * lam * (t+delta/2)) * delta
 
     def get_coupling(self, n, j, domain, g, ncap=20000, discretizer=None):
         """Chain parameters ``(w_list, k_list)`` for ``n`` modes of density ``j``.
 
         Uses orthogonal-polynomial recurrence coefficients: ``w_list`` are the
         chain on-site energies and ``k_list = [k0, hop_1, ...]`` the couplings,
-        ``k0`` being the system-bath one.  Also records ``self.domain`` and the
-        ``h_squared`` weights.  ``g`` rescales the frequency axis; ``discretizer``
-        selects the quadrature (``None`` = Gauss-Legendre).
+        ``k0`` being the system-bath one.  Also caches the ``h_squared`` weights.
+        ``g`` rescales the frequency axis; ``discretizer`` selects the quadrature
+        (``None`` = Gauss-Legendre).
         """
         alphaL, betaL = rc.recurrenceCoefficients(
             n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap,
@@ -75,15 +105,15 @@ class SystemBathIP:
         k_list = g * np.sqrt(np.array(betaL))
         k_list[0] = k_list[0] / g
         _, _, self.h_squared = rc._j_to_hsquared(func=j, lb=domain[0], rb=domain[1], g=g)
-        self.domain = domain
         return w_list, k_list
 
-    def build_coupling(self, g, ncap, discretizer=None):
+    def build_coupling(self):
         """Chain-map ``self.sd`` over ``self.domain`` into ``w_list``/``k_list``
         (one chain site per entry of ``pd_boson``)."""
         n = len(self.pd_boson)
-        self.w_list, self.k_list = self.get_coupling(n, self.sd, self.domain, g,
-                                                     ncap, discretizer=discretizer)
+        self.w_list, self.k_list = self.get_coupling(
+            n, self.sd, self.domain, self.g, self.ncap,
+            discretizer=self.discretizer)
 
     def diag(self):
         """Diagonalize the chain back into its star: ``(freq, coef)``.
@@ -185,19 +215,15 @@ class SystemBathIP:
             h2[0] = (h2[0][0], d1, d2)
         return h2
 
-    def build(self, g, ncap=20000, discretizer=None):
+    def build(self):
         """Chain-map the bath and diagonalize it into star modes.
 
-        Must be called after setting :attr:`sd`, :attr:`domain`,
-        :attr:`coupling` and :attr:`h_sys`, and before :meth:`get_u` or
+        The one expensive step; call before :meth:`get_u` or
         :meth:`displacement_mpo`.
         """
-        self.build_coupling(g, ncap, discretizer=discretizer)
+        self.build_coupling()
         self.freq, self.coef = self.diag()
-        # self.pn_list = self.poly()
-        # hee = self.get_h2(t)
-        # print("Hamiltonian Over")
-        # self.H = hee
+        return self
 
     def get_u(self, t, dt, mode='normal', factor=1, inc_sys=True):
         """Two-site Trotter gates over ``[t, t+dt]`` as ``(U1, U2)``.

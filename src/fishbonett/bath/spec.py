@@ -3,7 +3,7 @@
 A :class:`Bath` is a declarative description: a spectral density, a frequency
 window, how finely to discretize it, how big each mode's Fock space is, and which
 system operator(s) it couples to.  It does no tensor work itself; it is the input
-that :class:`fishbonett.models.system_bath.SystemBath` turns into chain parameters.
+that :class:`fishbonett.models.system_bath.SimpleSysBath` turns into chain parameters.
 
 It lives here rather than in :mod:`fishbonett.models` because it is bath
 physics, not simulation machinery: everything it knows about (thermalization,
@@ -26,7 +26,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from fishbonett.bath.orthpol import make_orthpol_discretizer
+from fishbonett.bath.tedopa import make_tedopa_discretizer
 
 __all__ = ["Bath", "thermalize"]
 
@@ -77,10 +77,10 @@ class Bath:
         Temperature (or inverse temperature) for thermalization.
     thermalized : bool
         Set True if ``J`` is already the thermalized density.
-    discretization : {'legendre', 'orthpol'}
+    discretization : {'legendre', 'tedopa'}
         Bath discretization: uniform-measure Gauss-Legendre star, or the
-        measure-adapted ORTHPOL star (resolves IR-divergent / sharply peaked baths).
-    extra_breaks, m_per : ORTHPOL quadrature options.
+        measure-adapted TEDOPA star (resolves IR-divergent / sharply peaked baths).
+    extra_breaks, m_per : TEDOPA quadrature options.
     coupling : (d, d) array, or list of (d, d) arrays
         System operator(s) this bath couples to.  A single operator is an ordinary
         bath.  A **list** of operators makes this a *multichannel single bath*: the
@@ -138,8 +138,8 @@ class Bath:
     def discretizer(self):
         """The star-discretization callable this bath's ``discretization`` selects
         (``None`` means the default Gauss-Legendre star)."""
-        if self.discretization == "orthpol":
-            return make_orthpol_discretizer(m_per=self.m_per,
+        if self.discretization == "tedopa":
+            return make_tedopa_discretizer(m_per=self.m_per,
                                             extra_breaks=self.extra_breaks)
         if self.discretization == "legendre":
             return None

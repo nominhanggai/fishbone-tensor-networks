@@ -4,10 +4,11 @@ Four models share this one class, distinguished by how the bath is represented
 and selected through ``run(method=...)``:
 
 * ``chain`` -- modes chain-mapped into 1D (all three frames);
-* ``star`` -- no chain mapping (interaction picture);
+* ``star`` -- no chain mapping (Schrodinger and interaction pictures);
 * ``mode-tree`` -- modes on a balanced binary tree (interaction picture);
 * ``multichannel`` -- several couplings on shared modes, selected automatically
-  by giving the :class:`~fishbonett.bath.spec.Bath` a *list* of couplings.
+  by giving the :class:`~fishbonett.bath.spec.Bath` a *list* of couplings
+  (Schrodinger and interaction pictures).
 
 :mod:`fishbonett.models.registry` is the authority on which method belongs to
 which model and frame.
@@ -17,15 +18,16 @@ import scipy.linalg as _la
 
 from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.linalg import Truncation
+from fishbonett.bath.chain import get_vn_squared
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
 from fishbonett.evolve import treetdvp as _tree
 from fishbonett.models.result import Result
 from fishbonett.models.registry import (
-    METHOD_FRAMES, methods_of, unknown_method_error,
+    METHOD_FRAMES, MULTICHANNEL_IP, methods_of, unknown_method_error,
 )
 
-__all__ = ["SystemBath"]
+__all__ = ["SimpleSysBath"]
 
 #: ``run``'s default.  Used to tell "the user asked for a method" apart from
 #: "the user left it alone", which matters for the multichannel model where
@@ -48,12 +50,14 @@ _MPO_METHODS = {"mpo-tdvp1": "run_tdvp1",
                 "mpo-tdvp2": "run_tdvp2",
                 "mpo-dtdvp": "run_dtdvp",
                 "mpo-ip-tdvp1": "run_ip_tdvp1",
-                "mpo-ip-tdvp2": "run_ip_tdvp2"}
+                "mpo-ip-tdvp2": "run_ip_tdvp2",
+                "mpo-star-tdvp1": "run_star_tdvp1",
+                "mpo-star-tdvp2": "run_star_tdvp2"}
 #: Methods whose bond dimension is fixed up front (1-site TDVP variants cannot grow
 #: a bond, and the adaptive DTDVP needs a finite ceiling), so ``bond_dim=None``
 #: ("unlimited") is not meaningful for them.
 _FIXED_BOND_METHODS = frozenset({
-    "mpo-tdvp1", "mpo-ip-tdvp1", "polaron-tdvp1",
+    "mpo-tdvp1", "mpo-ip-tdvp1", "mpo-star-tdvp1", "polaron-tdvp1",
     "mpo-dtdvp", "polaron-dtdvp", "tree-tdvp",
 })
 
@@ -66,20 +70,29 @@ _TREE_METHODS = {"tree-tdvp": "run_tree_tdvp",
                  "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
 
 
-class SystemBath:
-    """A system coupled to a :class:`Bath`.
+class SimpleSysBath:
+    """**One** system site coupled to **one** bath.
 
-    ``h`` may be any ``(d, d)`` Hermitian Hamiltonian (not only two-level) and the
-    coupling ``O`` any ``(d, d)`` Hermitian operator (not only ``sigma_z``); *every*
-    method (``tebd``, the MPO and the tree engines) supports an arbitrary system
-    dimension, a general coupling and an arbitrary initial state.  When the system
-    has *distinct* internal degrees of freedom (e.g. a spin **and** a vibration),
-    prefer to keep each on its own site with
-    :class:`~fishbonett.models.fishbone.TreeFishbone` (a spin site and a vibration site
-    joined by an edge, with the bath on the spin) -- putting ``spin (x) vibration``
-    on a single ``d = 2*d_vib`` site here works but defeats the MPS advantage.
-    Passing a multichannel :class:`Bath` (``coupling`` a list) routes through the
-    tree so the spin stays on its own site.
+    "Simple" is about the topology, not the physics: a single system site and a
+    single bath.  The system itself can be as complicated as you like -- ``h`` is
+    any ``(d, d)`` Hermitian matrix and the coupling ``O`` any ``(d, d)`` Hermitian
+    operator, and every method supports an arbitrary system dimension, a general
+    coupling and an arbitrary initial state.  What makes it simple is that there is
+    nothing to wire up: no site topology, no per-site baths.  For those see
+    :class:`~fishbonett.models.fishbone.Fishbone` (sites on a 1D backbone) or
+    :class:`~fishbonett.models.fishbone.TreeFishbone` (sites in any loop-free
+    tree).
+
+    This one class covers four models -- ``chain``, ``star``, ``mode-tree`` and
+    ``multichannel`` -- because they differ only in how the *bath* is represented,
+    which ``run(method=...)`` selects.
+
+    When the system has *distinct* internal degrees of freedom (e.g. a spin **and**
+    a vibration), prefer to keep each on its own site with ``TreeFishbone`` (a spin
+    site and a vibration site joined by an edge, with the bath on the spin) --
+    putting ``spin (x) vibration`` on a single ``d = 2*d_vib`` site here works but
+    defeats the MPS advantage.  Passing a multichannel :class:`Bath` (``coupling``
+    a list) routes through the tree so the spin stays on its own site.
 
     Parameters
     ----------
@@ -174,15 +187,19 @@ class SystemBath:
             obs_ops = {}                    # general system: return the RDM only
         m = method.lower().replace("_", "-")
         if getattr(self.bath, "is_multichannel", False):
-            # The multichannel model is selected by the bath's shape, so there is
-            # nothing for `method` to choose.  Say so rather than ignoring it.
-            if m not in methods_of("multichannel") and method != _DEFAULT_METHOD:
+            # The multichannel model is selected by the bath's shape, so `method`
+            # can only pick among *its* propagators -- say so rather than ignoring it.
+            own = methods_of("multichannel")
+            if m not in own and method != _DEFAULT_METHOD:
                 raise ValueError(
                     f"this Bath is multichannel (a list of couplings), which "
-                    f"selects the 'multichannel' model -- it has one propagator "
-                    f"and does not take method={method!r}.  Drop the method "
-                    f"argument, or pass a single coupling operator to use the "
-                    f"single-channel models.")
+                    f"selects the 'multichannel' model; it does not have "
+                    f"method={method!r}.  Its propagators are {', '.join(own)} "
+                    f"(or drop the method argument for the default).  To use the "
+                    f"single-channel models, pass a single coupling operator.")
+            if m == MULTICHANNEL_IP:
+                return self._run_multichannel_ip(dt, n_steps, bond_dim, trunc_eps,
+                                                 obs_ops, initial, engine_kw)
             return self._run_multichannel(dt, n_steps, bond_dim, trunc_eps,
                                           obs_ops, initial)
         if m == "tebd":
@@ -242,16 +259,11 @@ class SystemBath:
         sd, dom = b.spectral_density(), b.domain
         driver = _MPO_METHODS[m]
         maxb = None
-        if driver == "run_tdvp1":
-            t, rdms = _mpo.run_tdvp1(sd, dom, D=bond_dim, **common)
-        elif driver == "run_ip_tdvp1":
-            t, rdms = _mpo.run_ip_tdvp1(sd, dom, D=bond_dim, **common)
-        elif driver == "run_tdvp2":
-            t, rdms, maxb = _mpo.run_tdvp2(sd, dom, chi_max=bond_dim,
-                                           eps=trunc_eps, **common)
-        elif driver == "run_ip_tdvp2":
-            t, rdms, maxb = _mpo.run_ip_tdvp2(sd, dom, chi_max=bond_dim,
-                                              eps=trunc_eps, **common)
+        if driver in ("run_tdvp1", "run_ip_tdvp1", "run_star_tdvp1"):
+            t, rdms = getattr(_mpo, driver)(sd, dom, D=bond_dim, **common)
+        elif driver in ("run_tdvp2", "run_ip_tdvp2", "run_star_tdvp2"):
+            t, rdms, maxb = getattr(_mpo, driver)(sd, dom, chi_max=bond_dim,
+                                                 eps=trunc_eps, **common)
         else:
             t, rdms, maxb = _mpo.run_dtdvp(sd, dom, Dlim=bond_dim, **common)
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
@@ -290,7 +302,59 @@ class SystemBath:
         expect = {name: r.expect[name][:, 0] for name in r.expect}
         rdm = np.array([r.rdm[k, 0] for k in range(n_steps)])
         return Result(t=r.t, expect=expect, rdm=rdm, max_bond=r.max_bond,
-                      method=methods_of("multichannel")[0])
+                      method=methods_of("multichannel", "schrodinger")[0])
+
+    def _run_multichannel_ip(self, dt, n_steps, bond_dim, trunc_eps, obs_ops,
+                             initial, kw):
+        """The same shared-mode star in the **interaction picture**: the free-bath
+        evolution is rotated out, so the modes carry no on-site frequency and the
+        matrix-valued coupling becomes time-dependent.
+
+        Cross-checks the static (Schrodinger) path above: same physics, different
+        frame, so the two must agree.  Temperature comes in the same T-TEDOPA way as
+        every other method -- the thermalized density on a signed domain -- rather
+        than through the explicit thermofield doubling of
+        :meth:`~fishbonett.frames.multichannel.SimpleSysBathMultiChannel.__init__`,
+        which uses a different unit convention for ``temp``."""
+        from fishbonett.frames.multichannel import SimpleSysBathMultiChannel
+        from fishbonett.states.mps import SimpleSysBathMPS
+        b = self.bath.resolved(n_steps * dt)
+        if b.discretization != "legendre":
+            raise ValueError("a multichannel bath must use the 'legendre' "
+                             "discretization: its Gauss nodes are shared across "
+                             "channels, whereas measure-adapted nodes are not")
+        channels = b.channels()          # already thermalized on a signed domain
+        freq, g = None, []
+        for Jc, _op in channels:
+            f, v_sq = get_vn_squared(Jc, b.n_modes, list(b.domain))
+            g.append(np.sqrt(np.asarray(v_sq, float) / np.pi))
+            freq = np.asarray(f, float) if freq is None else freq
+        # mode k couples through the combined operator sum_c g[c][k] O_c
+        coup_mat = [sum(g[c][k] * channels[c][1] for c in range(len(channels)))
+                    for k in range(b.n_modes)]
+        d_sys = self.h.shape[0]
+        pd = [d_sys] + [b.phys_dim] * b.n_modes
+        builder = SimpleSysBathMultiChannel.from_signed_star(
+            pd, coup_mat, freq, h_sys=self.h).build(n=0)
+
+        state = SimpleSysBathMPS(pd)
+        psi0 = self._initial_state(initial)
+        state.B[0][:] = 0.0
+        for a in range(d_sys):
+            state.B[0][0, a, 0] = psi0[a]
+
+        rdms, max_bond = [], []
+        for step in range(n_steps):
+            _tebd.symmetric_swap_step(state, builder, step * dt, dt, b.n_modes,
+                                      bond_dim, trunc_eps)
+            theta = state.get_theta1(0)
+            rho = np.einsum("LiR,LjR->ij", theta, theta.conj())
+            rdms.append(rho / np.trace(rho).real)
+            max_bond.append(max((len(s) for s in state.S), default=1))
+        t = np.arange(1, n_steps + 1) * dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
+                      method=MULTICHANNEL_IP)
 
     def _initial_state(self, initial):
         """Initial system state as a ``d_sys``-vector.  ``"up"``/``"down"`` are the
@@ -313,20 +377,18 @@ class SystemBath:
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.frames.interaction_picture import SystemBathIP as _IPBuilder
-        from fishbonett.states.mps import SystemBathMPS
+        from fishbonett.frames.interaction_picture import SimpleSysBathIP as _IPBuilder
+        from fishbonett.states.mps import SimpleSysBathMPS
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
         d_sys = self.h.shape[0]
         pd = [d_sys] + [b.phys_dim] * n
-        builder = _IPBuilder(pd)               # interaction-picture gate builder
-        builder.domain = list(b.domain)
-        builder.sd = b.spectral_density()
-        builder.coupling = self.coupling
-        builder.h_sys = self.h
-        builder.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
+        builder = _IPBuilder(pd, h_sys=self.h, coupling=self.coupling,
+                             sd=b.spectral_density(), domain=b.domain,
+                             ncap=kw.get("ncap", 20000),
+                             discretizer=b.discretizer()).build()
 
-        state = SystemBathMPS(pd)               # the MPS being evolved
+        state = SimpleSysBathMPS(pd)               # the MPS being evolved
         psi0 = self._initial_state(initial)
         state.B[0][:] = 0.0
         for a in range(d_sys):
@@ -354,20 +416,18 @@ class SystemBath:
         propagator is applied as one low-bond MPO instead of being Trotterized into
         two-site gates and shuttled with a swap network: no swaps, no ``d x d``
         bosonic gates, and the multimode factorization is *exact* (see
-        :meth:`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`).
+        :meth:`~fishbonett.frames.interaction_picture.SimpleSysBathIP.displacement_mpo`).
         The system term is Strang-split around it, so the step is second order."""
-        from fishbonett.frames.interaction_picture import SystemBathIP
+        from fishbonett.frames.interaction_picture import SimpleSysBathIP
         from fishbonett.evolve.mpo_apply import (apply_mpo, compress, bond_dims,
                                                  product_state)
         self._check_system()
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
-        builder = SystemBathIP([d_sys] + [b.phys_dim] * n)
-        builder.domain = list(b.domain)
-        builder.sd = b.spectral_density()
-        builder.coupling = self.coupling
-        builder.h_sys = self.h
-        builder.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
+        builder = SimpleSysBathIP([d_sys] + [b.phys_dim] * n, h_sys=self.h,
+                               coupling=self.coupling, sd=b.spectral_density(),
+                               domain=b.domain, ncap=kw.get("ncap", 20000),
+                               discretizer=b.discretizer()).build()
 
         # sites are [system, mode_0, ..., mode_{n-1}] for the MPO
         A = product_state([d_sys] + [b.phys_dim] * n, self._initial_state(initial))
@@ -389,23 +449,20 @@ class SystemBath:
     def _polaron_builder(self, dt, n_steps):
         """Shared polaron setup: validate, resolve the bath and build the frame.
         Returns ``(builder, resolved_bath, n_modes, pd)``."""
-        from fishbonett.frames.polaron import SystemBathPolaron
+        from fishbonett.frames.polaron import SimpleSysBathPolaron
         self._check_system()
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
         pd = [d_sys] + [b.phys_dim] * n
-        builder = SystemBathPolaron(pd)
-        builder.domain = list(b.domain)
-        builder.sd = b.spectral_density()
-        builder.coupling = self.coupling
-        builder.h_sys = self.h
-        builder.build(discretizer=b.discretizer())
+        builder = SimpleSysBathPolaron(pd, h_sys=self.h, coupling=self.coupling,
+                                    sd=b.spectral_density(), domain=b.domain,
+                                    discretizer=b.discretizer()).build()
         return builder, b, n, pd
 
     def _run_polaron_tdvp(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                           initial, krylov, kw):
         """Polaron frame propagated with TDVP.  Because ``H~`` is time-independent
-        it has a plain MPO (:meth:`~fishbonett.frames.polaron.SystemBathPolaron.mpo`),
+        it has a plain MPO (:meth:`~fishbonett.frames.polaron.SimpleSysBathPolaron.mpo`),
         so the 1-site / 2-site / bond-adaptive sweeps all apply.  1-site TDVP never
         forms a two-site block, which avoids the ``O(d^4)`` boson-boson gates of the
         polaron TEBD sweep."""
@@ -445,9 +502,9 @@ class SystemBath:
         Trotter (no swap network); the physical bath vacuum is a displaced coherent
         state on ``c0``; lab-frame observables are recovered by un-dressing.
         See :mod:`fishbonett.frames.polaron`."""
-        from fishbonett.states.mps import SystemBathMPS
+        from fishbonett.states.mps import SimpleSysBathMPS
         builder, b, n, pd = self._polaron_builder(dt, n_steps)
-        state = SystemBathMPS(pd)               # boson sites default to vacuum
+        state = SimpleSysBathMPS(pd)               # boson sites default to vacuum
         psi0 = self._initial_state(initial)
         # displaced (system, c0) initial block at bond 0; other boson sites stay vacuum
         state.split_truncate_theta(builder.initial_theta(psi0), 0, bond_dim,
