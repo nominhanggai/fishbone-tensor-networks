@@ -21,7 +21,7 @@ exactly as in :mod:`fishbonett.states.mps`.
    Neither comb state is reachable from ``run(method=...)`` today -- the comb and
    site-tree models both propagate through
    :class:`fishbonett.states.tree.TreeTEBD` instead (see
-   :mod:`fishbonett.evolve.tebd_tree`).  ``FishBoneNet`` is the specialized comb
+   :mod:`fishbonett.evolve.sitetree`).  ``FishBoneNet`` is the specialized comb
    engine recorded as a gap in :mod:`fishbonett.models.registry`.
 """
 import numpy as np

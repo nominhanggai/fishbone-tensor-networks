@@ -3,7 +3,7 @@
 The *state* only: node tensors, their canonical form, and reduced density
 matrices.  It knows nothing about baths or frames -- the models that drive it live
 in :mod:`fishbonett.models.fishbone`, and the gate application and Trotter step in
-:mod:`fishbonett.evolve.tebd_tree` (the methods here are thin wrappers around it,
+:mod:`fishbonett.evolve.sitetree` (the methods here are thin wrappers around it,
 as in :mod:`fishbonett.states.mps`).
 
 Node ``i``'s tensor carries legs ``[bond to each neighbour (in ``order[i]``)
@@ -136,26 +136,26 @@ class TreeTEBD:
         for nxt in self.path(self.oc, target)[1:]:
             self.move_oc(self.oc, nxt)
 
-    # -- gate application (algorithm lives in fishbonett.evolve.tebd_tree) ----
+    # -- gate application (algorithm lives in fishbonett.evolve.sitetree) ----
     def apply_edge(self, i, j, U, chi, eps):
         """Apply gate ``U`` (di_out, dj_out, di_in, dj_in) on edge (i, j); the OC
         moves from ``i`` to ``j``.  Grows the shared bond by SVD truncation.
 
         Thin convenience wrapper: the algorithm lives in
-        :func:`fishbonett.evolve.tebd_tree.apply_edge` (this state object only holds
+        :func:`fishbonett.evolve.sitetree.apply_edge` (this state object only holds
         the tensors and their canonical form).
         """
-        from fishbonett.evolve.tebd_tree import apply_edge as _apply_edge
+        from fishbonett.evolve.sitetree import apply_edge as _apply_edge
         _apply_edge(self, i, j, U, chi, eps)
 
     def apply_site(self, i, U):
         """Apply a single-site gate ``U`` (``(d, d)``) to node ``i``.
 
-        Thin wrapper around :func:`fishbonett.evolve.tebd_tree.apply_site`.  
+        Thin wrapper around :func:`fishbonett.evolve.sitetree.apply_site`.  
         Single-site gates touch no bond, so they neither grow the state nor disturb
         the canonical form -- no truncation is needed.
         """
-        from fishbonett.evolve.tebd_tree import apply_site as _apply_site
+        from fishbonett.evolve.sitetree import apply_site as _apply_site
         _apply_site(self, i, U)
 
     def step(self, site_gates, edge_gates, chi, eps):
@@ -163,10 +163,10 @@ class TreeTEBD:
         the **half-step** gates.
 
         Thin wrapper around
-        :func:`fishbonett.evolve.tebd_tree.symmetric_tree_step`, which explains why
+        :func:`fishbonett.evolve.sitetree.symmetric_tree_step`, which explains why
         a palindromic sweep is needed rather than a plain Euler tour.
         """
-        from fishbonett.evolve.tebd_tree import symmetric_tree_step
+        from fishbonett.evolve.sitetree import symmetric_tree_step
         symmetric_tree_step(self, site_gates, edge_gates, chi, eps)
 
     # -- observables ---------------------------------------------------------
