@@ -118,6 +118,78 @@ class BosonicBathPolaron:
         h_sb += -self.e_reorg * np.kron(np.eye(d0), O @ O)           # reorganization
         return h_sb
 
+    # -- MPO form (for the TDVP drivers) -----------------------------------------
+    def mpo(self):
+        """Finite-state-machine MPO of the polaron Hamiltonian, sites ordered
+        ``[system, c0, c1, ...]`` (so ``c0`` is adjacent to the system).
+
+        Unlike the interaction picture, the polaron ``H~`` is **time-independent**,
+        so it has a plain MPO and can be propagated with TDVP.  The system->c0 bond
+        basis is ``{done, (i,j) dressed pairs..., start}``: each pair carries
+        ``h_eig[i,j] |i><j|`` on the system and the displacement
+        ``D((lam_i - lam_j) kappa0)`` on ``c0``; the remaining chain is the standard
+        free nearest-neighbour MPO.  Tensors are ``(bond_l, bond_r, d, d)``.
+        """
+        d = self.pd_boson[0]
+        if any(x != d for x in self.pd_boson):
+            raise ValueError("the polaron MPO requires a uniform boson phys_dim")
+        a = _c(d); ad = a.conj().T; num = ad @ a; Id = np.eye(d)
+        gen = ad - a
+        lam, V = self._evals, self._evecs
+        heig = V.conj().T @ np.asarray(self.h_sys, complex) @ V
+        ds = self.pd_sys
+        pairs = [(i, j) for i in range(ds) for j in range(ds)
+                 if abs(heig[i, j]) > 1e-14]
+        P, Nb = len(pairs), self.len_boson
+        O = np.asarray(self.coupling, complex)
+        eps_chain, t_chain = self.w_list, self.k_list[1:]
+
+        M = []
+        Ms = np.zeros((1, P + 2, ds, ds), complex)              # system site
+        Ms[0, 0] = -self.e_reorg * (O @ O)                      # reorganization shift
+        for p, (i, j) in enumerate(pairs):
+            Ms[0, 1 + p] = heig[i, j] * np.outer(V[:, i], V[:, j].conj())
+        Ms[0, P + 1] = np.eye(ds)
+        M.append(Ms)
+
+        M0 = np.zeros((P + 2, 4, d, d), complex)                # c0 (polaron mode)
+        M0[0, 0] = Id
+        for p, (i, j) in enumerate(pairs):                      # dressing
+            M0[1 + p, 0] = la.expm((lam[i] - lam[j]) * self.kappa0 * gen)
+        M0[P + 1, 0] = eps_chain[0] * num
+        if Nb > 1:
+            M0[P + 1, 1] = t_chain[0] * a
+            M0[P + 1, 2] = t_chain[0] * ad
+        M0[P + 1, 3] = Id
+        M.append(M0)
+
+        for i in range(1, Nb - 1):                              # free bulk chain
+            Mi = np.zeros((4, 4, d, d), complex)
+            Mi[0, 0] = Id; Mi[1, 0] = ad; Mi[2, 0] = a
+            Mi[3, 0] = eps_chain[i] * num
+            Mi[3, 1] = t_chain[i] * a; Mi[3, 2] = t_chain[i] * ad; Mi[3, 3] = Id
+            M.append(Mi)
+        if Nb > 1:
+            Mn = np.zeros((4, 1, d, d), complex)
+            Mn[0, 0] = Id; Mn[1, 0] = ad; Mn[2, 0] = a
+            Mn[3, 0] = eps_chain[Nb - 1] * num
+            M.append(Mn)
+        return M
+
+    def initial_mps_pair(self, psi_sys):
+        """``(A_sys, A_c0)`` for the MPO site order, in the TDVP tensor convention
+        ``(bond_l, bond_r, phys)``.  ``A_c0`` is right-canonical and carries the
+        polaron displacement; the bond is 1 when ``psi_sys`` is an ``O``-eigenstate
+        and grows only as far as the displaced branches require."""
+        d0, ds = self.pd_boson[0], self.pd_sys
+        theta = self.initial_theta(psi_sys).reshape(d0, ds).T      # (ds, d0)
+        U, S, Vh = la.svd(theta, full_matrices=False)
+        keep = max(1, int(np.sum(S > 1e-12 * S[0])))
+        U, S, Vh = U[:, :keep], S[:keep], Vh[:keep]
+        A_sys = np.ascontiguousarray((U * S).reshape(1, ds, keep).transpose(0, 2, 1))
+        A_c0 = np.ascontiguousarray(Vh.reshape(keep, 1, d0))
+        return A_sys, A_c0
+
     # -- initial state and lab-frame observable recovery --------------------------
     def initial_theta(self, psi_sys):
         """``(c0, system)`` two-site tensor ``[1, d0, ds, 1]`` for the physical
@@ -132,6 +204,12 @@ class BosonicBathPolaron:
             theta += c[i] * np.outer(_coherent(d0, self._evals[i] * self.kappa0),
                                      self._evecs[:, i])
         return theta.reshape(1, d0, ds, 1)
+
+    def undress_rdm_tdvp(self, A_sys, A_c0):
+        """Lab-frame system RDM from the TDVP-convention ``(system, c0)`` tensors
+        ``(bond_l, bond_r, phys)``; wraps :meth:`undress_rdm`."""
+        theta = np.einsum('lms,mrx->lxsr', A_sys, A_c0)     # -> [L, d0, ds, R]
+        return self.undress_rdm(theta)
 
     def undress_rdm(self, theta2):
         """Lab-frame system RDM from the ``(c0, system)`` two-site wavefunction

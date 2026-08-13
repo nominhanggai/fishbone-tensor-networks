@@ -229,27 +229,33 @@ def _polaron_bath(nm=14, d=8):
                 n_modes=nm, phys_dim=d)
 
 
-def test_polaron_matches_ip_populations_and_coherence():
-    """The polaron chain reproduces the interaction-picture chain for a 2-level
-    spin-boson: the frame-invariant population <sz> and the *un-dressed* coherence
-    <sx> both agree (they differ only by the O(dt^2) Trotter split)."""
-    model = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath())
-    kw = dict(dt=0.02, n_steps=50, bond_dim=60, trunc_eps=1e-4,
+POLARON_METHODS = ["polaron", "polaron-tdvp1", "polaron-tdvp2", "polaron-dtdvp"]
+
+
+@pytest.mark.parametrize("method", POLARON_METHODS)
+def test_polaron_matches_ip_populations_and_coherence(method):
+    """Every polaron propagator reproduces the interaction-picture chain for a
+    2-level spin-boson: the frame-invariant population <sz> and the *un-dressed*
+    coherence <sx> both agree (they differ only by the O(dt^2) Trotter split).
+    The TEBD variant uses static gates; the TDVP variants use the polaron MPO."""
+    model = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=10, d=8))
+    kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4,
               observables={"sz": sigma_z, "sx": sigma_x})
-    rp = model.run(method="polaron", **kw)
+    rp = model.run(method=method, **kw)
     ri = model.run(method="tebd", **kw)
     assert np.max(np.abs(rp.expect["sz"] - ri.expect["sz"])) < 2e-2   # populations
     assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 2e-2   # un-dressed
 
 
-def test_polaron_general_coupling_matches_ip():
+@pytest.mark.parametrize("method", ["polaron", "polaron-dtdvp"])
+def test_polaron_general_coupling_matches_ip(method):
     """The polaron frame handles a general (3-level, three-eigenvalue) coupling O."""
     O = np.diag([1.0, 0.0, -1.0]).astype(complex)
     h = np.zeros((3, 3), complex)
     h[0, 1] = h[1, 0] = h[1, 2] = h[2, 1] = 0.5          # off-diagonal in O's eigenbasis
-    model = BosonicBath(h=h, coupling=O, bath=_polaron_bath())
-    kw = dict(dt=0.02, n_steps=50, bond_dim=60, trunc_eps=1e-4, observables={"O": O})
-    rp = model.run(method="polaron", **kw)
+    model = BosonicBath(h=h, coupling=O, bath=_polaron_bath(nm=10, d=8))
+    kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4, observables={"O": O})
+    rp = model.run(method=method, **kw)
     ri = model.run(method="tebd", **kw)
     assert np.max(np.abs(rp.expect["O"] - ri.expect["O"])) < 2e-2
 

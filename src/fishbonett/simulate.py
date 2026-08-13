@@ -35,6 +35,11 @@ _MPO_METHODS = {"tdvp1": "run_tdvp1", "mpo-tdvp1": "run_tdvp1",
                 "dtdvp": "run_dtdvp", "mpo-dtdvp": "run_dtdvp",
                 "mpo-ip-tdvp1": "run_ip_tdvp1", "ip-tdvp1": "run_ip_tdvp1",
                 "mpo-ip-tdvp2": "run_ip_tdvp2", "ip-tdvp2": "run_ip_tdvp2"}
+#: Polaron-frame TDVP variants.  The polaron ``H~`` is time-independent, so it has
+#: a plain MPO and can drive the standard 1-site / 2-site / bond-adaptive sweeps.
+_POLARON_TDVP_METHODS = {"polaron-tdvp1": "tdvp1", "polaron-tdvp": "tdvp1",
+                         "polaron-tdvp2": "tdvp2",
+                         "polaron-dtdvp": "dtdvp", "polaron-dtdvp1": "dtdvp"}
 _TREE_METHODS = {"tree-tdvp": "run_tree_tdvp", "tree-tdvp1": "run_tree_tdvp",
                  "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
 
@@ -253,6 +258,9 @@ class BosonicBath:
         if m == "polaron":
             return self._run_polaron(dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                      initial, engine_kw)
+        if m in _POLARON_TDVP_METHODS:
+            return self._run_polaron_tdvp(m, dt, n_steps, bond_dim, trunc_eps,
+                                          obs_ops, initial, krylov, engine_kw)
         if m in _MPO_METHODS:
             return self._run_mpo(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                  initial, krylov, engine_kw)
@@ -260,6 +268,7 @@ class BosonicBath:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, krylov, engine_kw)
         raise ValueError(f"unknown method {method!r}; choose from tebd, polaron, "
+                         "polaron-tdvp1/tdvp2/dtdvp, "
                          "mpo-tdvp1/tdvp2/dtdvp, mpo-ip-tdvp1/tdvp2, "
                          "tree-tdvp/tdvp2/tebd")
 
@@ -411,22 +420,16 @@ class BosonicBath:
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms), method="tebd")
 
-    def _run_polaron(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        """Polaron-frame chain: the static system-bath coupling is absorbed into a
-        displacement of the first (reweighted-``J/w^2``) chain mode ``c0``, leaving
-        a free chain plus a dressed ``(c0, system)`` gate.  Plain nearest-neighbour
-        Trotter (no swap network); the physical bath vacuum is a displaced coherent
-        state on ``c0``; lab-frame observables are recovered by un-dressing.  Zero
-        temperature only.  See :mod:`fishbonett.frames.polaron`."""
+    def _polaron_builder(self, dt, n_steps):
+        """Shared polaron setup: validate, resolve the bath and build the frame.
+        Returns ``(builder, resolved_bath, n_modes, pd)``."""
         from fishbonett.frames.polaron import BosonicBathPolaron
-        from fishbonett.states.mps import BosonicBathMPS
         self._check_system()
         if getattr(self.bath, "temperature", None):
-            raise ValueError("the polaron method requires zero temperature "
+            raise ValueError("the polaron methods require zero temperature "
                              "(bath.temperature must be None)")
         b = self.bath.resolved(n_steps * dt)
-        n = b.n_modes
-        d_sys = self.h.shape[0]
+        n, d_sys = b.n_modes, self.h.shape[0]
         pd = [b.phys_dim] * n + [d_sys]
         builder = BosonicBathPolaron(pd)
         builder.domain = list(b.domain)
@@ -434,7 +437,53 @@ class BosonicBath:
         builder.coupling = self.coupling
         builder.h_sys = self.h
         builder.build(discretizer=b.discretizer())
+        return builder, b, n, pd
 
+    def _run_polaron_tdvp(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
+                          initial, krylov, kw):
+        """Polaron frame propagated with TDVP.  Because ``H~`` is time-independent
+        it has a plain MPO (:meth:`~fishbonett.frames.polaron.BosonicBathPolaron.mpo`),
+        so the 1-site / 2-site / bond-adaptive sweeps all apply.  1-site TDVP never
+        forms a two-site block, which avoids the ``O(d^4)`` boson-boson gates of the
+        polaron TEBD sweep."""
+        from fishbonett.evolve.tdvp import (init_mps, tdvp1sweep, tdvp2sweep,
+                                            tdvp1sweep_dynamic, bonddims,
+                                            _pad_bonds, right_canonicalize)
+        builder, b, n, pd = self._polaron_builder(dt, n_steps)
+        variant = _POLARON_TDVP_METHODS[m]
+        M = builder.mpo()
+        A = init_mps(len(M), b.phys_dim, np.zeros(self.h.shape[0], complex))
+        A[0], A[1] = builder.initial_mps_pair(self._initial_state(initial))
+        if variant == "tdvp1":
+            # 1-site TDVP conserves the bond dimension, so it cannot grow out of a
+            # product state: pad to the requested bond first (as run_tdvp1 does).
+            A = right_canonicalize(_pad_bonds(A, bond_dim))
+        env = Afull = FRs = None
+        rdms, max_bond = [], []
+        for _ in range(n_steps):
+            if variant == "tdvp1":
+                A, env = tdvp1sweep(dt, A, M, env, m=krylov)
+            elif variant == "tdvp2":
+                A, env = tdvp2sweep(dt, A, M, bond_dim, trunc_eps, env, m=krylov)
+            else:
+                A, Afull, FRs, _ = tdvp1sweep_dynamic(
+                    dt, A, M, Afull, FRs, prec=kw.get("prec", trunc_eps),
+                    Dlim=bond_dim, Dplusmax=kw.get("Dplusmax", 4), m=krylov)
+            rdms.append(builder.undress_rdm_tdvp(A[0], A[1]))   # lab frame
+            max_bond.append(max(bonddims(A)))
+        t = np.arange(1, n_steps + 1) * dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms), method=m)
+
+    def _run_polaron(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
+        """Polaron-frame chain: the static system-bath coupling is absorbed into a
+        displacement of the first (reweighted-``J/w^2``) chain mode ``c0``, leaving
+        a free chain plus a dressed ``(c0, system)`` gate.  Plain nearest-neighbour
+        Trotter (no swap network); the physical bath vacuum is a displaced coherent
+        state on ``c0``; lab-frame observables are recovered by un-dressing.  Zero
+        temperature only.  See :mod:`fishbonett.frames.polaron`."""
+        from fishbonett.states.mps import BosonicBathMPS
+        builder, b, n, pd = self._polaron_builder(dt, n_steps)
         state = BosonicBathMPS(pd)               # boson sites default to vacuum
         psi0 = self._initial_state(initial)
         # displaced (c0, system) initial block; the other boson sites stay vacuum
