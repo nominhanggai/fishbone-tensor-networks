@@ -111,6 +111,22 @@ res.rdm                  # (n_steps, n_sites, d, d): reduced density matrix per 
 composite (spin + vibration) systems, multichannel baths and multi-site
 observables — and {doc}`bath` covers bath discretization and finite temperature.
 
+## Picking a method by its three axes
+
+`method=` names a combination; you can also give the combination itself, which is
+usually clearer and is what the taxonomy is actually made of:
+
+```python
+res = sb.run(dt=0.02, t_max=2.0, model="chain", frame="polaron",
+             integrator="tebd")          # == method="polaron"
+```
+
+**model** is what is coupled to what, **frame** is how `H` is written down
+(`schrodinger` / `interaction` / `polaron`), **integrator** is how a step is taken
+(`tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo`).  Ask for a combination that does
+not exist and the error says whether it is a recorded gap or just under-specified —
+`fishbonett.models.registry.describe_taxonomy()` prints the full table.
+
 ## Low-level engines
 
 For finer control the underlying engines are available directly.  Every frame

@@ -26,6 +26,12 @@ table, several dispatch dicts, and prose in half a dozen doc pages:
 * for a method, **how to run it** -- which driver realizes it, which entry point
   in :mod:`fishbonett.evolve` it uses, and whether its bond is fixed.
 
+Because each :class:`Method` carries its three axes, ``run`` accepts them directly
+(:func:`resolve`)::
+
+    sb.run(..., model="star", frame="interaction", integrator="tdvp2")
+    sb.run(..., method="mpo-ip-tdvp2")        # the same combination, named
+
 That last one used to live in four module-level dicts in
 :mod:`fishbonett.models.system_bath`, which restated the method names this table
 already had; ``run`` was then a chain of ``if``s over those names.  Both are gone:
@@ -48,7 +54,8 @@ from typing import Mapping, Tuple
 
 __all__ = ["Model", "Frame", "Method", "MODELS", "FRAMES", "METHODS",
            "FIXED_BOND_METHODS", "models_of", "frames_of",
-           "methods_of", "all_methods", "model", "method_spec", "METHOD_FRAMES",
+           "methods_of", "all_methods", "model", "method_spec", "resolve",
+           "combinations", "METHOD_FRAMES",
            "methods_by_frame", "frame_label", "describe_taxonomy",
            "unknown_method_error", "STATIC_TREE_TEBD"]
 
@@ -146,6 +153,11 @@ class Method:
     #: 1-site TDVP cannot grow a bond and adaptive DTDVP needs a ceiling, so
     #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
     fixed_bond: bool = False
+    #: The user-facing integrator name -- ``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
+    #: ``"dtdvp"``, ``"trotter-mpo"``.  Unique within a ``(model, frame)``, which
+    #: is what lets ``run`` be called by the three axes instead of by a name that
+    #: mashes them together.
+    algo: str = ""
 
 
 #: Why the mode-tree has only the interaction picture.  Not an oversight: the
@@ -179,8 +191,9 @@ _TREE_STATIC = STATIC_TREE_TEBD       # shorthand used in the table below
 MULTICHANNEL_IP = "multichannel-ip"
 
 
-def _m(name, frame, models, integrator, driver="", fixed_bond=False):
-    return Method(name, frame, models, integrator, driver, fixed_bond)
+def _m(name, frame, models, integrator, driver="", fixed_bond=False, algo=""):
+    return Method(name, frame, models, integrator, driver, fixed_bond,
+                  algo or driver)
 
 
 #: Every method, declared once.  Order matters: :attr:`Model.frames` reads method
@@ -193,9 +206,10 @@ METHODS = {s.name: s for s in [
     _m("mpo-tdvp2", "schrodinger", ("chain",), "chain-mpo-tdvp", "tdvp2"),
     _m("mpo-dtdvp", "schrodinger", ("chain",), "chain-mpo-tdvp",
        "dtdvp", fixed_bond=True),
-    _m("tebd", "interaction", ("chain",), "swap-tebd"),
-    _m("trotter-mpo", "interaction", ("chain",), "displacement-mpo"),
-    _m("polaron", "polaron", ("chain",), "polaron-tebd"),
+    _m("tebd", "interaction", ("chain",), "swap-tebd", algo="tebd"),
+    _m("trotter-mpo", "interaction", ("chain",), "displacement-mpo",
+       algo="trotter-mpo"),
+    _m("polaron", "polaron", ("chain",), "polaron-tebd", algo="tebd"),
     _m("polaron-tdvp1", "polaron", ("chain",), "polaron-tdvp",
        "tdvp1", fixed_bond=True),
     _m("polaron-tdvp2", "polaron", ("chain",), "polaron-tdvp", "tdvp2"),
@@ -212,15 +226,16 @@ METHODS = {s.name: s for s in [
        "tdvp2"),
     # -- mode-tree ---------------------------------------------------------
     _m("tree-tdvp", "interaction", ("mode-tree",), "modetree",
-       "run_tree_tdvp", fixed_bond=True),
+       "run_tree_tdvp", fixed_bond=True, algo="tdvp1"),
     _m("tree-tdvp2", "interaction", ("mode-tree",), "modetree",
-       "run_tree_tdvp2"),
+       "run_tree_tdvp2", algo="tdvp2"),
     _m("tree-tebd", "interaction", ("mode-tree",), "modetree",
-       "run_tree_tebd"),
+       "run_tree_tebd", algo="tebd"),
     # -- the static tree engine: one propagator, three topologies ----------
     _m(STATIC_TREE_TEBD, "schrodinger", ("multichannel", "comb", "site-tree"),
-       "static-tree-tebd"),
-    _m(MULTICHANNEL_IP, "interaction", ("multichannel",), "multichannel-swap-tebd"),
+       "static-tree-tebd", algo="tebd"),
+    _m(MULTICHANNEL_IP, "interaction", ("multichannel",),
+       "multichannel-swap-tebd", algo="tebd"),
 ]}
 
 #: Derived from :data:`METHODS` -- was a hand-maintained set in
@@ -234,6 +249,53 @@ def method_spec(name, model_key=None):
     if spec is None or (model_key is not None and model_key not in spec.models):
         raise unknown_method_error(name, model_key)
     return spec
+
+
+def combinations(model_keys):
+    """``[(model, frame, algo, method_name)]`` available to these models."""
+    keys = set(model_keys)
+    return [(mk, s.frame, s.algo, s.name)
+            for s in METHODS.values() for mk in s.models if mk in keys]
+
+
+def resolve(model_keys, *, method=None, model=None, frame=None, integrator=None):
+    """The :class:`Method` selected by either spelling.
+
+    ``method=`` names a combination; ``model`` / ``frame`` / ``integrator`` give the
+    three axes directly.  The axes are the real structure -- ``"mpo-ip-tdvp2"`` *is*
+    ``(star, interaction, tdvp2)`` -- so this is one lookup either way, and mixing
+    the two spellings is rejected rather than silently resolved.
+    """
+    avail = combinations(model_keys)
+    if method is not None:
+        if model is frame is integrator is None:
+            return method_spec(method)
+        raise ValueError(
+            "give either method= or the axes (model / frame / integrator), not "
+            "both -- a method name already fixes all three.")
+    hit = [c for c in avail
+           if (model is None or c[0] == model)
+           and (frame is None or c[1] == frame)
+           and (integrator is None or c[2] == integrator)]
+    asked = ", ".join(f"{k}={v!r}" for k, v in
+                      (("model", model), ("frame", frame),
+                       ("integrator", integrator)) if v is not None)
+    if not hit:
+        raise ValueError(
+            f"no method for {asked}.  Available here:\n" + _combo_table(avail))
+    if len({c[3] for c in hit}) > 1:
+        raise ValueError(
+            f"{asked} is ambiguous -- it matches "
+            f"{', '.join(sorted({c[3] for c in hit}))}.  Add the missing axis:\n"
+            + _combo_table(hit))
+    return METHODS[hit[0][3]]
+
+
+def _combo_table(combos):
+    width = max((len(c[0]) for c in combos), default=1)
+    return "\n".join(
+        f"    model={c[0]:<{width}}  frame={c[1]:<12}  integrator={c[2]:<12}"
+        f"  (method={c[3]!r})" for c in sorted(set(combos)))
 
 
 MODELS = {
