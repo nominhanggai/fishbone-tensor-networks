@@ -21,9 +21,11 @@ from fishbonett.system import System
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
 from fishbonett.evolve import modetree as _tree
+from fishbonett.models.propagate import RunCtx
 from fishbonett.models.result import Result
 from fishbonett.models.registry import (
-    METHOD_FRAMES, MULTICHANNEL_IP, methods_of, unknown_method_error,
+    FIXED_BOND_METHODS, METHOD_FRAMES, METHODS, methods_of,
+    unknown_method_error,
 )
 
 __all__ = ["SystemBath"]
@@ -43,30 +45,7 @@ def _bond_growing_siblings(method):
         return []
     frame, model_key = key
     return [n for n in methods_of(model_key, frame)
-            if n not in _FIXED_BOND_METHODS]
-
-_MPO_METHODS = {"mpo-tdvp1": "run_tdvp1",
-                "mpo-tdvp2": "run_tdvp2",
-                "mpo-dtdvp": "run_dtdvp",
-                "mpo-ip-tdvp1": "run_ip_tdvp1",
-                "mpo-ip-tdvp2": "run_ip_tdvp2",
-                "mpo-star-tdvp1": "run_star_tdvp1",
-                "mpo-star-tdvp2": "run_star_tdvp2"}
-#: Methods whose bond dimension is fixed up front (1-site TDVP variants cannot grow
-#: a bond, and the adaptive DTDVP needs a finite ceiling), so ``bond_dim=None``
-#: ("unlimited") is not meaningful for them.
-_FIXED_BOND_METHODS = frozenset({
-    "mpo-tdvp1", "mpo-ip-tdvp1", "mpo-star-tdvp1", "polaron-tdvp1",
-    "mpo-dtdvp", "polaron-dtdvp", "tree-tdvp",
-})
-
-#: Polaron-frame TDVP variants.  The polaron ``H~`` is time-independent, so it has
-#: a plain MPO and can drive the standard 1-site / 2-site / bond-adaptive sweeps.
-_POLARON_TDVP_METHODS = {"polaron-tdvp1": "tdvp1",
-                         "polaron-tdvp2": "tdvp2",
-                         "polaron-dtdvp": "dtdvp"}
-_TREE_METHODS = {"tree-tdvp": "run_tree_tdvp",
-                 "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
+            if n not in FIXED_BOND_METHODS]
 
 
 class SystemBath:
@@ -173,7 +152,7 @@ class SystemBath:
             n_steps = int(round(t_max / dt))
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
         bond_dim, trunc_eps = trunc.max_bond, trunc.eps
-        if bond_dim is None and method.lower().replace("_", "-") in _FIXED_BOND_METHODS:
+        if bond_dim is None and method.lower().replace("_", "-") in FIXED_BOND_METHODS:
             alternatives = _bond_growing_siblings(method) or ["tebd"]
             raise ValueError(
                 f"method {method!r} has a fixed bond dimension and cannot grow it "
@@ -196,30 +175,32 @@ class SystemBath:
                     f"method={method!r}.  Its propagators are {', '.join(own)} "
                     f"(or drop the method argument for the default).  To use the "
                     f"single-channel models, pass a single coupling operator.")
-            if m == MULTICHANNEL_IP:
-                return self._run_multichannel_ip(dt, n_steps, bond_dim, trunc_eps,
-                                                 obs_ops, initial, engine_kw)
-            return self._run_multichannel(dt, n_steps, bond_dim, trunc_eps,
-                                          obs_ops, initial)
-        if m == "tebd":
-            return self._run_tebd(dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                                  initial, engine_kw)
-        if m == "trotter-mpo":
-            return self._run_trotter_mpo(dt, n_steps, bond_dim, trunc_eps,
-                                         obs_ops, initial, engine_kw)
-        if m == "polaron":
-            return self._run_polaron(dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                                     initial, engine_kw)
-        if m in _POLARON_TDVP_METHODS:
-            return self._run_polaron_tdvp(m, dt, n_steps, bond_dim, trunc_eps,
-                                          obs_ops, initial, krylov, engine_kw)
-        if m in _MPO_METHODS:
-            return self._run_mpo(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                                 initial, krylov, engine_kw)
-        if m in _TREE_METHODS:
-            return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                                  initial, krylov, engine_kw)
-        raise unknown_method_error(m)
+            m = m if m in own else own[0]        # no method given -> its default
+            mine = {"multichannel"}
+        else:
+            mine = {"chain", "star", "mode-tree"}
+        # one lookup instead of a chain of `if`s: the registry says which driver
+        # realizes this (model, frame, integrator), and the driver table says
+        # where that driver lives on this class.
+        spec = METHODS.get(m)
+        if spec is None or not set(spec.models) & mine:
+            raise unknown_method_error(m)
+        ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
+                     trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
+                     krylov=krylov, kw=engine_kw)
+        return getattr(self, self._DRIVERS[spec.integrator])(spec, ctx)
+
+    #: ``registry.Method.integrator`` -> the driver on this class that realizes it.
+    _DRIVERS = {
+        "chain-mpo-tdvp": "_run_mpo",
+        "modetree": "_run_tree",
+        "swap-tebd": "_run_tebd",
+        "displacement-mpo": "_run_trotter_mpo",
+        "polaron-tebd": "_run_polaron",
+        "polaron-tdvp": "_run_polaron_tdvp",
+        "static-tree-tebd": "_run_multichannel",
+        "multichannel-swap-tebd": "_run_multichannel_ip",
+    }
 
     # -- dispatchers ---------------------------------------------------------
     def _expect_from_rdm(self, rdms, obs_ops):
@@ -241,68 +222,69 @@ class SystemBath:
                 "Bath's shape and has its own propagators; see "
                 "fishbonett.models.registry.")
 
-    def _run_mpo(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial,
-                 krylov, kw):
+    def _run_mpo(self, spec, ctx):
         self._check_system()
-        b = self.bath.resolved(n_steps * dt)
+        b = self.bath.resolved(ctx.t_max)
         # The MPO drivers take a half-step and advance 2*dt of physical time per
         # sweep; pass dt/2 so one sweep advances the user's physical dt (matching
         # the tree/tebd drivers, so every method reaches the same t_max).
         common = dict(hsys=self.h, cop=self.coupling,
-                      init=self._initial_state(initial),
+                      init=self._initial_state(ctx.initial),
                       n_chain=b.n_modes, d=b.phys_dim,
-                      dt=dt / 2.0, nsteps=n_steps, krylov=krylov,
-                      discretizer=b.discretizer(), observe=_mpo.measure_rdm, **kw)
+                      dt=ctx.dt / 2.0, nsteps=ctx.n_steps, krylov=ctx.krylov,
+                      discretizer=b.discretizer(), observe=_mpo.measure_rdm,
+                      **ctx.kw)
         sd, dom = b.spectral_density(), b.domain
-        driver = _MPO_METHODS[m]
+        driver = spec.driver
         maxb = None
         if driver in ("run_tdvp1", "run_ip_tdvp1", "run_star_tdvp1"):
-            t, rdms = getattr(_mpo, driver)(sd, dom, D=bond_dim, **common)
+            t, rdms = getattr(_mpo, driver)(sd, dom, D=ctx.bond_dim, **common)
         elif driver in ("run_tdvp2", "run_ip_tdvp2", "run_star_tdvp2"):
-            t, rdms, maxb = getattr(_mpo, driver)(sd, dom, chi_max=bond_dim,
-                                                 eps=trunc_eps, **common)
+            t, rdms, maxb = getattr(_mpo, driver)(sd, dom, chi_max=ctx.bond_dim,
+                                                  eps=ctx.trunc_eps, **common)
         else:
-            t, rdms, maxb = _mpo.run_dtdvp(sd, dom, Dlim=bond_dim, **common)
-        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
-                      max_bond=maxb, rdm=np.asarray(rdms), method=m)
+            t, rdms, maxb = _mpo.run_dtdvp(sd, dom, Dlim=ctx.bond_dim, **common)
+        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
+                      max_bond=maxb, rdm=np.asarray(rdms), method=spec.name)
 
-    def _run_tree(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial,
-                  krylov, kw):
+    def _run_tree(self, spec, ctx):
         self._check_system()
-        b = self.bath.resolved(n_steps * dt)
+        b = self.bath.resolved(ctx.t_max)
         common = dict(hsys=self.h, cop=self.coupling,
-                      init=self._initial_state(initial),
-                      n_chain=b.n_modes, phys_dim=b.phys_dim, dt=dt,
-                      nsteps=n_steps, D=bond_dim, discretizer=b.discretizer(),
-                      observe=_tree.measure_rdm_oc, **kw)
+                      init=self._initial_state(ctx.initial),
+                      n_chain=b.n_modes, phys_dim=b.phys_dim, dt=ctx.dt,
+                      nsteps=ctx.n_steps, D=ctx.bond_dim,
+                      discretizer=b.discretizer(),
+                      observe=_tree.measure_rdm_oc, **ctx.kw)
         sd, dom = b.spectral_density(), b.domain
-        if _TREE_METHODS[m] == "run_tree_tdvp":
-            t, rdms = _tree.run_tree_tdvp(sd, dom, krylov=krylov, **common)
-        elif _TREE_METHODS[m] == "run_tree_tdvp2":
-            t, rdms = _tree.run_tree_tdvp2(sd, dom, trunc_eps=trunc_eps,
-                                           krylov=krylov, **common)
+        if spec.driver == "run_tree_tdvp":
+            t, rdms = _tree.run_tree_tdvp(sd, dom, krylov=ctx.krylov, **common)
+        elif spec.driver == "run_tree_tdvp2":
+            t, rdms = _tree.run_tree_tdvp2(sd, dom, trunc_eps=ctx.trunc_eps,
+                                           krylov=ctx.krylov, **common)
         else:
-            t, rdms = _tree.run_tree_tebd(sd, dom, trunc_eps=trunc_eps, **common)
-        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
-                      rdm=np.asarray(rdms), method=m)
+            t, rdms = _tree.run_tree_tebd(sd, dom, trunc_eps=ctx.trunc_eps,
+                                          **common)
+        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
+                      rdm=np.asarray(rdms), method=spec.name)
 
-    def _run_multichannel(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial):
+    def _run_multichannel(self, spec, ctx):
         """One bath coupled to the system through several operators: a shared-mode
         star attached to the (single) system site.  Built on the tree engine so the
         system stays on its own site."""
         from fishbonett.models.fishbone import TreeFishbone
         fb = TreeFishbone(sites=[self.h], edges=[], baths=[self.bath])
-        r = fb.run(dt=dt, n_steps=n_steps, bond_dim=bond_dim, trunc_eps=trunc_eps,
-                   observables=obs_ops, initial=[self._initial_state(initial)])
+        r = fb.run(dt=ctx.dt, n_steps=ctx.n_steps, bond_dim=ctx.bond_dim,
+                   trunc_eps=ctx.trunc_eps, observables=ctx.obs_ops,
+                   initial=[self._initial_state(ctx.initial)])
         # collapse the single-site axis: this is a single-system model, so the
         # Result should have the single-system shape (see models/result.py)
         expect = {name: r.expect[name][:, 0] for name in r.expect}
-        rdm = np.array([r.rdm[k, 0] for k in range(n_steps)])
+        rdm = np.array([r.rdm[k, 0] for k in range(ctx.n_steps)])
         return Result(t=r.t, expect=expect, rdm=rdm, max_bond=r.max_bond,
-                      method=methods_of("multichannel", "schrodinger")[0])
+                      method=spec.name)
 
-    def _run_multichannel_ip(self, dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                             initial, kw):
+    def _run_multichannel_ip(self, spec, ctx):
         """The same shared-mode star in the **interaction picture**: the free-bath
         evolution is rotated out, so the modes carry no on-site frequency and the
         matrix-valued coupling becomes time-dependent.
@@ -315,7 +297,7 @@ class SystemBath:
         which uses a different unit convention for ``temp``."""
         from fishbonett.frames.multichannel import SystemBathMultiChannel
         from fishbonett.states.mps import SystemBathMPS
-        b = self.bath.resolved(n_steps * dt)
+        b = self.bath.resolved(ctx.t_max)
         # the same shared-mode star the Schroedinger frame builds, from the same
         # Bath method -- the two paths must discretize identically to cross-check
         freq, coup_mat = b.shared_mode_star()
@@ -325,21 +307,21 @@ class SystemBath:
             pd, coup_mat, freq, h_sys=self.h).build(n=0)
 
         state = SystemBathMPS(pd)
-        psi0 = self._initial_state(initial)
+        psi0 = self._initial_state(ctx.initial)
         state.B[0][:] = 0.0
         for a in range(d_sys):
             state.B[0][0, a, 0] = psi0[a]
 
         rdms, max_bond = [], []
-        for step in range(n_steps):
-            _tebd.symmetric_swap_step(state, builder, step * dt, dt, b.n_modes,
-                                      bond_dim, trunc_eps)
+        for step in range(ctx.n_steps):
+            _tebd.symmetric_swap_step(state, builder, step * ctx.dt, ctx.dt,
+                                      b.n_modes, ctx.bond_dim, ctx.trunc_eps)
             rdms.append(state.rdm(0))     # inherited from TensorNetwork
             max_bond.append(max((len(s) for s in state.S), default=1))
-        t = np.arange(1, n_steps + 1) * dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
+        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method=MULTICHANNEL_IP)
+                      method=spec.name)
 
     def _initial_state(self, initial):
         """Initial system state as a ``d_sys``-vector.
@@ -349,20 +331,20 @@ class SystemBath:
         """
         return self.system.initial_vector(initial)
 
-    def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
+    def _run_tebd(self, spec, ctx):
         from fishbonett.frames.interaction_picture import SystemBathIP as _IPBuilder
         from fishbonett.states.mps import SystemBathMPS
-        b = self.bath.resolved(n_steps * dt)
+        b = self.bath.resolved(ctx.t_max)
         n = b.n_modes
         d_sys = self.h.shape[0]
         pd = [d_sys] + [b.phys_dim] * n
         builder = _IPBuilder(pd, h_sys=self.h, coupling=self.coupling,
                              sd=b.spectral_density(), domain=b.domain,
-                             ncap=kw.get("ncap", 20000),
+                             ncap=ctx.kw.get("ncap", 20000),
                              discretizer=b.discretizer()).build()
 
         state = SystemBathMPS(pd)               # the MPS being evolved
-        psi0 = self._initial_state(initial)
+        psi0 = self._initial_state(ctx.initial)
         state.B[0][:] = 0.0
         for a in range(d_sys):
             state.B[0][0, a, 0] = psi0[a]
@@ -370,17 +352,17 @@ class SystemBath:
         # One symmetric (Strang) swap-network step per iteration, so each advances
         # the user's physical dt -- matching the tree/mpo drivers.
         rdms, max_bond = [], []
-        for step in range(n_steps):
-            _tebd.symmetric_swap_step(state, builder, step * dt, dt, n,
-                                      bond_dim, trunc_eps)
+        for step in range(ctx.n_steps):
+            _tebd.symmetric_swap_step(state, builder, step * ctx.dt, ctx.dt, n,
+                                      ctx.bond_dim, ctx.trunc_eps)
             rdms.append(state.rdm(0))     # inherited from TensorNetwork
             max_bond.append(max((len(s) for s in state.S), default=1))
-        t = np.arange(1, n_steps + 1) * dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
-                      max_bond=np.array(max_bond), rdm=np.asarray(rdms), method="tebd")
+        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
+                      method=spec.name)
 
-    def _run_trotter_mpo(self, dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                         initial, kw):
+    def _run_trotter_mpo(self, spec, ctx):
         """Interaction picture propagated by the exact conditional-displacement MPO.
 
         Same frame and same physics as ``method="tebd"``, but the whole system-bath
@@ -393,36 +375,38 @@ class SystemBath:
         from fishbonett.evolve.mpo_apply import (apply_mpo, compress, bond_dims,
                                                  product_state)
         self._check_system()
-        b = self.bath.resolved(n_steps * dt)
+        b = self.bath.resolved(ctx.t_max)
         n, d_sys = b.n_modes, self.h.shape[0]
         builder = SystemBathIP([d_sys] + [b.phys_dim] * n, h_sys=self.h,
                                coupling=self.coupling, sd=b.spectral_density(),
-                               domain=b.domain, ncap=kw.get("ncap", 20000),
+                               domain=b.domain, ncap=ctx.kw.get("ncap", 20000),
                                discretizer=b.discretizer()).build()
 
         # sites are [system, mode_0, ..., mode_{n-1}] for the MPO
-        A = product_state([d_sys] + [b.phys_dim] * n, self._initial_state(initial))
-        u_half = _la.expm(-0.5j * dt * np.asarray(self.h, complex))
+        A = product_state([d_sys] + [b.phys_dim] * n,
+                          self._initial_state(ctx.initial))
+        u_half = _la.expm(-0.5j * ctx.dt * np.asarray(self.h, complex))
         rdms, max_bond = [], []
-        for step in range(n_steps):
+        for step in range(ctx.n_steps):
             A[0] = np.einsum('ij,ajb->aib', u_half, A[0])        # half system step
-            A = compress(apply_mpo(A, builder.displacement_mpo(step * dt, dt)),
-                         bond_dim, trunc_eps)
+            A = compress(
+                apply_mpo(A, builder.displacement_mpo(step * ctx.dt, ctx.dt)),
+                ctx.bond_dim, ctx.trunc_eps)
             A[0] = np.einsum('ij,ajb->aib', u_half, A[0])
             rho = np.einsum('lsr,ltr->st', A[0], A[0].conj())
             rdms.append(rho / np.trace(rho).real)
             max_bond.append(max(bond_dims(A)))
-        t = np.arange(1, n_steps + 1) * dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
+        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method="trotter-mpo")
+                      method=spec.name)
 
-    def _polaron_builder(self, dt, n_steps):
+    def _polaron_builder(self, ctx):
         """Shared polaron setup: validate, resolve the bath and build the frame.
         Returns ``(builder, resolved_bath, n_modes, pd)``."""
         from fishbonett.frames.polaron import SystemBathPolaron
         self._check_system()
-        b = self.bath.resolved(n_steps * dt)
+        b = self.bath.resolved(ctx.t_max)
         n, d_sys = b.n_modes, self.h.shape[0]
         pd = [d_sys] + [b.phys_dim] * n
         builder = SystemBathPolaron(pd, h_sys=self.h, coupling=self.coupling,
@@ -430,8 +414,7 @@ class SystemBath:
                                     discretizer=b.discretizer()).build()
         return builder, b, n, pd
 
-    def _run_polaron_tdvp(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
-                          initial, krylov, kw):
+    def _run_polaron_tdvp(self, spec, ctx):
         """Polaron frame propagated with TDVP.  Because ``H~`` is time-independent
         it has a plain MPO (:meth:`~fishbonett.frames.polaron.SystemBathPolaron.mpo`),
         so the 1-site / 2-site / bond-adaptive sweeps all apply.  1-site TDVP never
@@ -440,33 +423,37 @@ class SystemBath:
         from fishbonett.evolve.tdvp import (init_mps, tdvp1sweep, tdvp2sweep,
                                             tdvp1sweep_dynamic, bonddims,
                                             _pad_bonds, right_canonicalize)
-        builder, b, n, pd = self._polaron_builder(dt, n_steps)
-        variant = _POLARON_TDVP_METHODS[m]
+        builder, b, n, pd = self._polaron_builder(ctx)
+        variant = spec.driver
         M = builder.mpo()
         A = init_mps(len(M), b.phys_dim, np.zeros(self.h.shape[0], complex))
-        A[0], A[1] = builder.initial_mps_pair(self._initial_state(initial))
+        A[0], A[1] = builder.initial_mps_pair(self._initial_state(ctx.initial))
         if variant == "tdvp1":
             # 1-site TDVP conserves the bond dimension, so it cannot grow out of a
             # product state: pad to the requested bond first (as run_tdvp1 does).
-            A = right_canonicalize(_pad_bonds(A, bond_dim))
+            A = right_canonicalize(_pad_bonds(A, ctx.bond_dim))
         env = Afull = FRs = None
         rdms, max_bond = [], []
-        for _ in range(n_steps):
+        for _ in range(ctx.n_steps):
             if variant == "tdvp1":
-                A, env = tdvp1sweep(dt, A, M, env, m=krylov)
+                A, env = tdvp1sweep(ctx.dt, A, M, env, m=ctx.krylov)
             elif variant == "tdvp2":
-                A, env = tdvp2sweep(dt, A, M, bond_dim, trunc_eps, env, m=krylov)
+                A, env = tdvp2sweep(ctx.dt, A, M, ctx.bond_dim, ctx.trunc_eps,
+                                    env, m=ctx.krylov)
             else:
                 A, Afull, FRs, _ = tdvp1sweep_dynamic(
-                    dt, A, M, Afull, FRs, prec=kw.get("prec", trunc_eps),
-                    Dlim=bond_dim, Dplusmax=kw.get("Dplusmax", 4), m=krylov)
+                    ctx.dt, A, M, Afull, FRs,
+                    prec=ctx.kw.get("prec", ctx.trunc_eps),
+                    Dlim=ctx.bond_dim, Dplusmax=ctx.kw.get("Dplusmax", 4),
+                    m=ctx.krylov)
             rdms.append(builder.undress_rdm_tdvp(A[0], A[1]))   # lab frame
             max_bond.append(max(bonddims(A)))
-        t = np.arange(1, n_steps + 1) * dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
-                      max_bond=np.array(max_bond), rdm=np.asarray(rdms), method=m)
+        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
+                      method=spec.name)
 
-    def _run_polaron(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
+    def _run_polaron(self, spec, ctx):
         """Polaron-frame chain: the static system-bath coupling is absorbed into a
         displacement of the first (reweighted-``J/w^2``) chain mode ``c0``, leaving
         a free chain plus a dressed ``(c0, system)`` gate.  Plain nearest-neighbour
@@ -474,22 +461,24 @@ class SystemBath:
         state on ``c0``; lab-frame observables are recovered by un-dressing.
         See :mod:`fishbonett.frames.polaron`."""
         from fishbonett.states.mps import SystemBathMPS
-        builder, b, n, pd = self._polaron_builder(dt, n_steps)
+        builder, b, n, pd = self._polaron_builder(ctx)
         state = SystemBathMPS(pd)               # boson sites default to vacuum
-        psi0 = self._initial_state(initial)
+        psi0 = self._initial_state(ctx.initial)
         # displaced (system, c0) initial block at bond 0; other boson sites stay vacuum
-        state.split_truncate_theta(builder.initial_theta(psi0), 0, bond_dim,
+        state.split_truncate_theta(builder.initial_theta(psi0), 0, ctx.bond_dim,
                                    1e-14)
 
-        gates = builder.gates(dt / 2.0)          # static; symmetric Strang per step
+        # static; symmetric Strang per step
+        gates = builder.gates(ctx.dt / 2.0)
         rdms, max_bond = [], []
-        for step in range(n_steps):
-            _tebd.symmetric_static_step(state, gates, n, bond_dim, trunc_eps)
+        for step in range(ctx.n_steps):
+            _tebd.symmetric_static_step(state, gates, n, ctx.bond_dim,
+                                        ctx.trunc_eps)
             rho = builder.undress_rdm(state.get_theta2(0))   # lab-frame RDM
             rdms.append(rho)
             max_bond.append(max((len(s) for s in state.S), default=1))
-        t = np.arange(1, n_steps + 1) * dt
-        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
+        t = np.arange(1, ctx.n_steps + 1) * ctx.dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms),
-                      method="polaron")
+                      method=spec.name)
 
