@@ -12,9 +12,11 @@ around it.  This single state replaces the ~20 near-identical ``SimpleSysBath1D`
 copies that used to live inside the individual driver modules; every truncation
 scheme they implemented is selected per :meth:`update_bond` call:
 
-* **swap** -- ``swap=1`` transposes the two physical legs during the gate, so a
-  distant bath mode can be evolved next to the system site (the interaction /
-  "backward" picture);
+* **swap** -- ``swap=1`` transposes the two physical legs during the gate, so the
+  two sites come back exchanged.  Sweeping outward from site 0 therefore walks the
+  system site along the chain, giving it a turn adjacent to every mode: the swap
+  network the interaction picture needs, since there every mode couples to the
+  system and the interaction is not nearest-neighbour;
 * **single truncated SVD** at ``chi_max`` (the default), or an **adaptive**
   bond-dimension search (``adaptive=True``) that grows the trial rank until the
   truncation error is resolved;

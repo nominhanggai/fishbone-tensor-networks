@@ -45,7 +45,9 @@ In this frame **every** mode couples directly to the system, so the interaction 
 not nearest-neighbour on the chain. TEBD needs adjacency, so the system site is
 walked along the chain: a nearest-neighbour gate is applied with `swap=1`, which
 both applies the two-site gate and transposes the physical legs, moving the system
-one site over. Sweeping in and back out visits every mode once in each direction.
+one site over. The system starts at site 0, so it is walked **outward** to the far
+end and then back **in** to site 0, visiting every mode once in each direction and
+leaving the state in the layout the next step expects.
 
 The sweep is arranged **palindromically in time** — the first half-interval's
 gates on the way in, the second half-interval's on the way out, with the two
