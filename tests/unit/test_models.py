@@ -14,7 +14,7 @@ import pytest
 from fishbonett import Bath, SystemBath, Fishbone
 from fishbonett.models import TreeFishbone
 from fishbonett.models import registry as R
-from fishbonett.models.system_bath import _FIXED_BOND_METHODS
+from fishbonett.models.registry import FIXED_BOND_METHODS as _FIXED_BOND_METHODS
 from fishbonett.operators import sigma_x, sigma_z
 
 
@@ -31,21 +31,42 @@ def _bath(**kw):
 
 
 # -- the taxonomy is self-consistent -----------------------------------------
-def test_registry_matches_the_dispatch_tables():
-    """Every registry method must be dispatchable and vice versa.
+def test_registry_is_the_only_dispatch_table():
+    """There is one table, so there is no seam to drift.
 
-    The dispatch dicts say *how* to call a method; the registry says *what
-    exists*.  They are separate on purpose, so this is the seam that needs a
-    test.
+    This used to compare ``registry`` against three dispatch dicts in
+    ``models/system_bath.py`` that listed the same method names again -- a test
+    whose only job was to check two tables agreed.  ``METHODS`` is now the single
+    source: ``Model.frames`` is derived from it, and ``run`` dispatches on
+    ``Method.integrator``.  What is left to check is that every declared method is
+    actually reachable.
     """
-    from fishbonett.models.system_bath import (
-        _MPO_METHODS, _POLARON_TDVP_METHODS, _TREE_METHODS)
+    from fishbonett.models.system_bath import SystemBath as SB
 
-    single_system = (set(_MPO_METHODS) | set(_POLARON_TDVP_METHODS)
-                     | set(_TREE_METHODS) | {"tebd", "trotter-mpo", "polaron"})
-    multi_site = {R.STATIC_TREE_TEBD}
-    bath_selected = {R.MULTICHANNEL_IP}
-    assert set(R.all_methods()) == single_system | multi_site | bath_selected
+    assert set(R.all_methods()) == set(R.METHODS)
+    for name, spec in R.METHODS.items():
+        assert spec.frame in R.FRAMES, f"{name} names unknown frame {spec.frame!r}"
+        assert spec.models, f"{name} belongs to no model"
+        for mk in spec.models:
+            assert mk in R.MODELS, f"{name} names unknown model {mk!r}"
+            assert name in R.MODELS[mk].methods()
+        # every integrator must resolve to a driver that exists
+        owners = set(spec.models)
+        if owners & {"chain", "star", "mode-tree", "multichannel"}:
+            attr = SB._DRIVERS[spec.integrator]
+            assert callable(getattr(SB, attr, None)), (
+                f"{name}: integrator {spec.integrator!r} -> missing {attr}")
+
+
+def test_fixed_bond_methods_are_registry_data():
+    """It was a private set in ``models/system_bath.py`` that tests had to import
+    through the underscore.  Which methods cannot grow a bond is taxonomy."""
+    assert R.FIXED_BOND_METHODS == frozenset(
+        n for n, s in R.METHODS.items() if s.fixed_bond)
+    # the 1-site TDVP variants and the adaptive ones, as before
+    assert "mpo-tdvp1" in R.FIXED_BOND_METHODS
+    assert "mpo-dtdvp" in R.FIXED_BOND_METHODS
+    assert "tebd" not in R.FIXED_BOND_METHODS
 
 
 def test_every_model_frame_pair_has_at_least_one_method():

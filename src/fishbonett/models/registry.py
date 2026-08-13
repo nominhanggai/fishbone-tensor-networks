@@ -14,14 +14,23 @@ admits TDVP on an MPO built once, a time-dependent one must rebuild every step,
 and only the interaction picture makes all the coupling terms commute (which is
 what lets ``trotter-mpo`` write the propagator in closed form).
 
-This module is the single source of truth for that taxonomy.  It answers three
-questions that were previously spread across a flat table, several dispatch
-dicts, and prose in half a dozen doc pages:
+This module is the single source of truth for that taxonomy, and -- since
+:data:`METHODS` carries each combination's ``integrator`` -- for the **dispatch**
+as well.  It answers four questions that were previously spread across a flat
+table, several dispatch dicts, and prose in half a dozen doc pages:
 
 * what models exist, and what does each one *mean* physically;
 * for a model, which frames are available and which methods realize them;
 * for a model/frame that is **absent**, why -- impossible, unwise, or merely
-  unimplemented (:attr:`Model.gaps`).
+  unimplemented (:attr:`Model.gaps`);
+* for a method, **how to run it** -- which driver realizes it, which entry point
+  in :mod:`fishbonett.evolve` it uses, and whether its bond is fixed.
+
+That last one used to live in four module-level dicts in
+:mod:`fishbonett.models.system_bath`, which restated the method names this table
+already had; ``run`` was then a chain of ``if``s over those names.  Both are gone:
+:attr:`Model.frames` is *derived* from :data:`METHODS`, and ``run`` is a lookup.
+Adding a ``(model, frame, integrator)`` combination is a row here, not a branch.
 
 .. note::
    The name ``fishbonett.models`` was used once before, for what is now
@@ -37,8 +46,9 @@ free-bath term.
 from dataclasses import dataclass, field
 from typing import Mapping, Tuple
 
-__all__ = ["Model", "Frame", "MODELS", "FRAMES", "models_of", "frames_of",
-           "methods_of", "all_methods", "model", "METHOD_FRAMES",
+__all__ = ["Model", "Frame", "Method", "MODELS", "FRAMES", "METHODS",
+           "FIXED_BOND_METHODS", "models_of", "frames_of",
+           "methods_of", "all_methods", "model", "method_spec", "METHOD_FRAMES",
            "methods_by_frame", "frame_label", "describe_taxonomy",
            "unknown_method_error", "STATIC_TREE_TEBD"]
 
@@ -83,24 +93,59 @@ FRAMES = {
 class Model:
     """A physical setup, and the frames/propagators it admits.
 
-    ``frames`` maps a frame key to the method names realizing it.  ``gaps`` maps
-    an *absent* frame key to the reason it is absent -- so "why is there no
-    polaron tree?" has one authoritative answer instead of none.
+    ``gaps`` maps an *absent* frame key to the reason it is absent -- so "why is
+    there no polaron tree?" has one authoritative answer instead of none.
+
+    ``frames`` is **derived** from :data:`METHODS` rather than stored.  It used to
+    be a field, which meant the set of methods was written down twice (here, and in
+    the dispatch dicts that said how to call them) and a test existed purely to
+    check the two agreed.  One table now, so they cannot disagree.
     """
     key: str
     label: str
     blurb: str
     cls: str                              # the class a user instantiates
     geometry: str                         # the state ansatz this implies
-    frames: Mapping[str, Tuple[str, ...]]
     gaps: Mapping[str, str] = field(default_factory=dict)
     #: ``"method"`` -- chosen by ``run(method=...)``; ``"bath"`` -- chosen
     #: automatically from the bath's shape (the multichannel case).
     selected_by: str = "method"
 
+    @property
+    def frames(self):
+        """``{frame key: method names}``, in taxonomy order."""
+        out = {}
+        for frame_key in FRAMES:
+            names = tuple(name for name, spec in METHODS.items()
+                          if spec.frame == frame_key and self.key in spec.models)
+            if names:
+                out[frame_key] = names
+        return out
+
     def methods(self):
         """Every method name this model offers, across all its frames."""
         return tuple(m for fr in self.frames.values() for m in fr)
+
+
+# -- methods: the one dispatch table -----------------------------------------
+@dataclass(frozen=True)
+class Method:
+    """One realizable *(model, frame, integrator)* combination.
+
+    This is the single source of truth: what exists **and** how it is dispatched.
+    ``models`` is a tuple because one propagator can serve several topologies --
+    the static tree TEBD runs the comb, the site-tree and the multichannel star.
+    """
+    name: str
+    frame: str
+    models: Tuple[str, ...]
+    #: which driver in the model layer realizes it
+    integrator: str
+    #: the entry point in :mod:`fishbonett.evolve`, where there is a single one
+    driver: str = ""
+    #: 1-site TDVP cannot grow a bond and adaptive DTDVP needs a ceiling, so
+    #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
+    fixed_bond: bool = False
 
 
 #: Why the mode-tree has only the interaction picture.  Not an oversight: the
@@ -133,29 +178,77 @@ _TREE_STATIC = STATIC_TREE_TEBD       # shorthand used in the table below
 #: a matrix per mode, not a scalar times one operator).
 MULTICHANNEL_IP = "multichannel-ip"
 
+
+def _m(name, frame, models, integrator, driver="", fixed_bond=False):
+    return Method(name, frame, models, integrator, driver, fixed_bond)
+
+
+#: Every method, declared once.  Order matters: :attr:`Model.frames` reads method
+#: order off this table, and ``methods_of(model, frame)[0]`` is the default a
+#: bath-selected model falls back to.
+METHODS = {s.name: s for s in [
+    # -- chain -------------------------------------------------------------
+    _m("mpo-tdvp1", "schrodinger", ("chain",), "chain-mpo-tdvp",
+       "run_tdvp1", fixed_bond=True),
+    _m("mpo-tdvp2", "schrodinger", ("chain",), "chain-mpo-tdvp", "run_tdvp2"),
+    _m("mpo-dtdvp", "schrodinger", ("chain",), "chain-mpo-tdvp",
+       "run_dtdvp", fixed_bond=True),
+    _m("tebd", "interaction", ("chain",), "swap-tebd"),
+    _m("trotter-mpo", "interaction", ("chain",), "displacement-mpo"),
+    _m("polaron", "polaron", ("chain",), "polaron-tebd"),
+    _m("polaron-tdvp1", "polaron", ("chain",), "polaron-tdvp",
+       "tdvp1", fixed_bond=True),
+    _m("polaron-tdvp2", "polaron", ("chain",), "polaron-tdvp", "tdvp2"),
+    _m("polaron-dtdvp", "polaron", ("chain",), "polaron-tdvp",
+       "dtdvp", fixed_bond=True),
+    # -- star --------------------------------------------------------------
+    _m("mpo-star-tdvp1", "schrodinger", ("star",), "chain-mpo-tdvp",
+       "run_star_tdvp1", fixed_bond=True),
+    _m("mpo-star-tdvp2", "schrodinger", ("star",), "chain-mpo-tdvp",
+       "run_star_tdvp2"),
+    _m("mpo-ip-tdvp1", "interaction", ("star",), "chain-mpo-tdvp",
+       "run_ip_tdvp1", fixed_bond=True),
+    _m("mpo-ip-tdvp2", "interaction", ("star",), "chain-mpo-tdvp",
+       "run_ip_tdvp2"),
+    # -- mode-tree ---------------------------------------------------------
+    _m("tree-tdvp", "interaction", ("mode-tree",), "modetree",
+       "run_tree_tdvp", fixed_bond=True),
+    _m("tree-tdvp2", "interaction", ("mode-tree",), "modetree",
+       "run_tree_tdvp2"),
+    _m("tree-tebd", "interaction", ("mode-tree",), "modetree",
+       "run_tree_tebd"),
+    # -- the static tree engine: one propagator, three topologies ----------
+    _m(STATIC_TREE_TEBD, "schrodinger", ("multichannel", "comb", "site-tree"),
+       "static-tree-tebd"),
+    _m(MULTICHANNEL_IP, "interaction", ("multichannel",), "multichannel-swap-tebd"),
+]}
+
+#: Derived from :data:`METHODS` -- was a hand-maintained set in
+#: ``models/system_bath.py`` that the tests had to import privately.
+FIXED_BOND_METHODS = frozenset(n for n, s in METHODS.items() if s.fixed_bond)
+
+
+def method_spec(name, model_key=None):
+    """The :class:`Method` for ``name``, or a :class:`ValueError` naming what is."""
+    spec = METHODS.get(name)
+    if spec is None or (model_key is not None and model_key not in spec.models):
+        raise unknown_method_error(name, model_key)
+    return spec
+
+
 MODELS = {
     "chain": Model(
         key="chain", label="1D system-bath",
         blurb="One system site coupled to one bath, the bath chain-mapped into a "
               "1D chain of effective modes.  The most developed model: all three "
               "frames and the whole propagator family.",
-        cls="SystemBath", geometry="MPS (system at site 0, modes 1..N)",
-        frames={
-            "schrodinger": ("mpo-tdvp1", "mpo-tdvp2", "mpo-dtdvp"),
-            "interaction": ("tebd", "trotter-mpo"),
-            "polaron": ("polaron", "polaron-tdvp1", "polaron-tdvp2",
-                        "polaron-dtdvp"),
-        }),
+        cls="SystemBath", geometry="MPS (system at site 0, modes 1..N)"),
     "star": Model(
         key="star", label="star system-bath",
         blurb="One system site, one bath, *no* chain mapping: every discretized "
               "mode couples straight to the system.  No mode-mode terms, but no "
               "locality for the MPS to exploit either.",
         cls="SystemBath", geometry="MPS over a linearized star",
-        frames={
-            "schrodinger": ("mpo-star-tdvp1", "mpo-star-tdvp2"),
-            "interaction": ("mpo-ip-tdvp1", "mpo-ip-tdvp2"),
-        },
         gaps={
             "polaron": "rejected, not merely unimplemented: the polaron "
                        "displacement acts on the collective mode, which in a "
@@ -172,7 +265,6 @@ MODELS = {
               "of O(N).  Distinct from ``site-tree``, where it is the *system "
               "sites* that form a tree.",
         cls="SystemBath", geometry="balanced binary TTN, system at the root",
-        frames={"interaction": ("tree-tdvp", "tree-tdvp2", "tree-tebd")},
         gaps={
             "schrodinger": _NO_MODE_MODE,
             "polaron": _NO_MODE_MODE,
@@ -184,10 +276,6 @@ MODELS = {
               "unlike independent baths.  Selected by giving the Bath a list of "
               "couplings, not by a method name.",
         cls="SystemBath", geometry="shared-mode star on a one-site tree",
-        frames={
-            "schrodinger": (_TREE_STATIC,),
-            "interaction": (MULTICHANNEL_IP,),
-        },
         gaps={
             "polaron": "rejected for the same reason as the 'star' model: the "
                        "channels share one set of star modes, and the polaron "
@@ -202,7 +290,6 @@ MODELS = {
               "baths -- the fishbone.  A specialization of ``site-tree`` to a "
               "linear backbone.",
         cls="Fishbone", geometry="comb / tree TTN",
-        frames={"schrodinger": (_TREE_STATIC,)},
         gaps={
             "interaction": "not implemented for multi-site models.",
             "polaron": "not implemented for multi-site models.",
@@ -213,7 +300,6 @@ MODELS = {
               "zero or more baths.  The most general geometry.  Distinct from "
               "``mode-tree``, where a single system's *bath modes* form the tree.",
         cls="TreeFishbone", geometry="arbitrary loop-free TTN",
-        frames={"schrodinger": (_TREE_STATIC,)},
         gaps={
             "interaction": "not implemented for multi-site models.",
             "polaron": "not implemented for multi-site models.",
