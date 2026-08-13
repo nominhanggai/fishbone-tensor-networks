@@ -22,6 +22,8 @@ from numpy import exp
 from copy import deepcopy as dcopy
 
 import fishbonett.bath.recurrence as rc
+from fishbonett.bath.chain import get_coupling
+from fishbonett.system import check_operator
 from fishbonett.contract import contract as einsum
 from fishbonett.linalg import kron, expm_gate as _expm_gate
 from fishbonett.operators import annihilate
@@ -69,12 +71,8 @@ class SystemBathIP:
         if self.len_boson == 0:
             raise ValueError("pd must contain at least one boson mode after the "
                              "system dimension")
-        self.h_sys = np.asarray(h_sys, complex)
-        self.coupling = np.asarray(coupling, complex)
-        for name, op in (("h_sys", self.h_sys), ("coupling", self.coupling)):
-            if op.shape != (self.pd_sys, self.pd_sys):
-                raise ValueError(f"{name} has shape {op.shape}, expected "
-                                 f"{(self.pd_sys, self.pd_sys)} to match pd[0]")
+        self.h_sys = check_operator(h_sys, "h_sys", self.pd_sys)
+        self.coupling = check_operator(coupling, "coupling", self.pd_sys)
         self.sd = sd
         self.domain = list(domain)
         self.g = g
@@ -88,32 +86,21 @@ class SystemBathIP:
         self.phase = lambda lam, t, delta: (np.exp(-1j*lam*(t+delta)) - np.exp(-1j*lam*t))/(-1j*lam)
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
 
-    def get_coupling(self, n, j, domain, g, ncap=20000, discretizer=None):
-        """Chain parameters ``(w_list, k_list)`` for ``n`` modes of density ``j``.
-
-        Uses orthogonal-polynomial recurrence coefficients: ``w_list`` are the
-        chain on-site energies and ``k_list = [k0, hop_1, ...]`` the couplings,
-        ``k0`` being the system-bath one.  Also caches the ``h_squared`` weights.
-        ``g`` rescales the frequency axis; ``discretizer`` selects the quadrature
-        (``None`` = Gauss-Legendre).
-        """
-        alphaL, betaL = rc.recurrenceCoefficients(
-            n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap,
-            discretizer=discretizer,
-        )
-        w_list = g * np.array(alphaL)
-        k_list = g * np.sqrt(np.array(betaL))
-        k_list[0] = k_list[0] / g
-        _, _, self.h_squared = rc._j_to_hsquared(func=j, lb=domain[0], rb=domain[1], g=g)
-        return w_list, k_list
-
     def build_coupling(self):
         """Chain-map ``self.sd`` over ``self.domain`` into ``w_list``/``k_list``
-        (one chain site per entry of ``pd_boson``)."""
+        (one chain site per entry of ``pd_boson``).
+
+        The mapping itself is :func:`fishbonett.bath.chain.get_coupling` -- this
+        class used to carry its own byte-identical copy.  ``h_squared`` (the
+        discretization weights) is cached here because
+        :meth:`displacement_mpo` reports it; it is not part of the mapping.
+        """
         n = len(self.pd_boson)
-        self.w_list, self.k_list = self.get_coupling(
-            n, self.sd, self.domain, self.g, self.ncap,
+        self.w_list, self.k_list = get_coupling(
+            self.sd, n, self.domain, self.g, self.ncap,
             discretizer=self.discretizer)
+        _, _, self.h_squared = rc._j_to_hsquared(
+            func=self.sd, lb=self.domain[0], rb=self.domain[1], g=self.g)
 
     def diag(self):
         """Diagonalize the chain back into its star: ``(freq, coef)``.

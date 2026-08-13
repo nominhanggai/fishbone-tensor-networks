@@ -16,8 +16,8 @@ which model and frame.
 import numpy as np
 import scipy.linalg as _la
 
-from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.linalg import Truncation
+from fishbonett.system import System
 from fishbonett.bath.chain import get_vn_squared
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
@@ -102,8 +102,14 @@ class SystemBath:
     """
 
     def __init__(self, h, coupling, bath):
-        self.h = np.asarray(h, complex)
-        self.coupling = np.asarray(coupling, complex)
+        # `System` validates h and the coupling(s) once -- square, matching
+        # dimension, Hermitian -- and keeps a multichannel coupling as a *list*
+        # rather than collapsing it into a 3-D array.
+        self.system = System(h, coupling)
+        # mirrored as plain attributes: the validated forms, which the frame
+        # builders take as `h_sys=` / `coupling=`
+        self.h = self.system.h
+        self.coupling = self.system.coupling
         self.bath = bath
 
     # -- public API ----------------------------------------------------------
@@ -177,12 +183,8 @@ class SystemBath:
                 "the truncation-driven methods).  To let trunc_eps choose the bond "
                 "instead, use a bond-growing method of the same frame: "
                 f"{', '.join(alternatives)}")
-        if observables is not None:
-            obs_ops = observables
-        elif self.h.shape[0] == 2:
-            obs_ops = {"sz": sigma_z, "sx": sigma_x}
-        else:
-            obs_ops = {}                    # general system: return the RDM only
+        # a general system has no canonical observables, so it gets the RDM only
+        obs_ops = observables if observables is not None else self.system.observables()
         m = method.lower().replace("_", "-")
         if getattr(self.bath, "is_multichannel", False):
             # The multichannel model is selected by the bath's shape, so `method`
@@ -227,20 +229,18 @@ class SystemBath:
                 for name, O in obs_ops.items()}
 
     def _check_system(self):
-        """Validate that ``h`` and ``coupling`` are square Hermitian operators of
-        matching dimension.  The MPO/tree engines accept a general system: any
-        Hermitian ``h`` and coupling ``O`` (the interaction-picture gates
-        diagonalize ``O``), not only a two-level ``sigma_z`` spin-boson model."""
-        h, O = self.h, self.coupling
-        if h.ndim != 2 or h.shape[0] != h.shape[1]:
-            raise ValueError("h must be a square matrix")
-        if O.shape != h.shape:
-            raise ValueError(f"coupling shape {O.shape} does not match the system "
-                             f"dimension {h.shape}")
-        if not np.allclose(h, h.conj().T, atol=1e-9):
-            raise ValueError("h must be Hermitian")
-        if not np.allclose(O, O.conj().T, atol=1e-9):
-            raise ValueError("the system-bath coupling must be Hermitian")
+        """Reject a multichannel coupling on a single-channel engine.
+
+        Shape and Hermiticity are already guaranteed by
+        :class:`fishbonett.system.System` at construction; what remains is that the
+        single-channel engines take one operator, not a list.
+        """
+        if self.system.is_multichannel:
+            raise ValueError(
+                "this method takes a single coupling operator, but the system was "
+                "given a list of them.  A multichannel bath is selected by the "
+                "Bath's shape and has its own propagators; see "
+                "fishbonett.models.registry.")
 
     def _run_mpo(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial,
                  krylov, kw):
@@ -355,24 +355,12 @@ class SystemBath:
                       method=MULTICHANNEL_IP)
 
     def _initial_state(self, initial):
-        """Initial system state as a ``d_sys``-vector.  ``"up"``/``"down"`` are the
-        first two basis states, ``"ground"`` the ground state of ``h``; a vector
-        (e.g. an explicit spin (x) vibration state) is accepted and normalized."""
-        d = self.h.shape[0]
-        if isinstance(initial, str):
-            if initial == "up":
-                v = np.zeros(d, complex); v[0] = 1.0; return v
-            if initial == "down":
-                v = np.zeros(d, complex); v[min(1, d - 1)] = 1.0; return v
-            if initial == "ground":
-                w, U = np.linalg.eigh(self.h)
-                return U[:, int(np.argmin(w))].astype(complex)
-            raise ValueError(f"unknown initial state {initial!r}")
-        v = np.asarray(initial, complex).reshape(-1)
-        if v.shape[0] != d:
-            raise ValueError(f"initial state has length {v.shape[0]}, expected "
-                             f"the system dimension {d}")
-        return v / np.linalg.norm(v)
+        """Initial system state as a ``d_sys``-vector.
+
+        Thin wrapper over :meth:`fishbonett.system.System.initial_vector`, which is
+        where ``"up"``/``"down"``/``"ground"`` and explicit vectors are interpreted.
+        """
+        return self.system.initial_vector(initial)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
         from fishbonett.frames.interaction_picture import SystemBathIP as _IPBuilder
