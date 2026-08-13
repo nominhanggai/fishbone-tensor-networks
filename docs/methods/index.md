@@ -16,6 +16,7 @@ encodes three orthogonal choices:
 | ``method``        | picture      | state / integrator                 | bond growth        | page |
 |-------------------|--------------|------------------------------------|--------------------|------|
 | ``tebd``          | interaction  | MPS, swap-network TEBD             | SVD truncation     | {doc}`tebd` |
+| ``polaron``       | polaron      | MPS chain, static-gate TEBD        | SVD truncation     | {doc}`polaron` |
 | ``mpo-tdvp1``     | Schrödinger  | chain MPO, 1-site TDVP            | fixed              | {doc}`chain_mpo` |
 | ``mpo-tdvp2``     | Schrödinger  | chain MPO, 2-site TDVP            | SVD truncation     | {doc}`chain_mpo` |
 | ``mpo-dtdvp``     | Schrödinger  | chain MPO, bond-adaptive DTDVP   | precision threshold| {doc}`chain_mpo` |
@@ -62,6 +63,11 @@ for method in ["tebd",
 - **Long chains where entanglement piles up in the middle?** The `tree-*`
   methods keep the high-bond region `O(log n)` edges deep instead of `O(n)`
   (see {doc}`tree`).
+- **Strong system–bath coupling at zero temperature?** The `polaron` method works
+  in the polaron frame — it folds the static reorganization into a bath
+  displacement, so the MPS carries less entanglement (smaller `bond_dim`) than the
+  interaction-picture chain. It needs `T=0` and a gapped/super-ohmic bath
+  (see {doc}`polaron`).
 
 ## Shared conventions
 
@@ -92,6 +98,7 @@ r.max_bond           # peak bond dimension per step (adaptive methods)
 :hidden:
 
 tebd
+polaron
 chain_mpo
 star_mpo
 tree

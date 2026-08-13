@@ -23,7 +23,8 @@
    fishbonett.tree
    fishbonett.fishbone
    fishbonett.model
-   fishbonett.models.interaction_picture
+   fishbonett.frames.interaction_picture
+   fishbonett.frames.polaron
 ```
 
 ## Bath discretization and chain mapping
