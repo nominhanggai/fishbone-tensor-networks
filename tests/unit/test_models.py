@@ -195,6 +195,36 @@ def test_every_method_reports_max_bond(model_key):
         assert np.all(np.asarray(r.max_bond) >= 1), f"{model_key}/{method}"
 
 
+def test_layout_matches_what_the_drivers_actually_do():
+    """``Method.layout`` records how H's *interaction* graph meets the state's.
+
+    The package had no name for this, which is why three methods each re-derived a
+    swap network and nothing said they did.  Pinned against the source so it stays a
+    fact rather than a label: exactly the methods marked ``"swap"`` must be the ones
+    whose driver calls ``symmetric_swap_step``.
+    """
+    import inspect
+    from fishbonett.models.system_bath import SystemBath as SB
+
+    assert {s.layout for s in R.METHODS.values()} <= set(R.LAYOUTS)
+
+    declared = {n for n, s in R.METHODS.items() if s.layout == "swap"}
+    actual = set()
+    for name, spec in R.METHODS.items():
+        attr = SB._DRIVERS.get(spec.integrator)
+        if attr is None:
+            continue
+        if "symmetric_swap_step" in inspect.getsource(getattr(SB, attr)):
+            actual.add(name)
+    assert declared == actual, (
+        f"layout='swap' says {sorted(declared)} but the drivers that swap are "
+        f"{sorted(actual)}")
+
+    # a swap network is what a *star* interaction costs on a *path* state, so it
+    # only ever shows up in the interaction picture
+    assert all(R.METHODS[n].frame == "interaction" for n in declared)
+
+
 def test_run_takes_the_three_axes_directly():
     """A method name *is* a (model, frame, integrator) triple, so both spell the
     same run.  The axes are the structure; the name is the shorthand."""

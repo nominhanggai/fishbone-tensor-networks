@@ -55,7 +55,7 @@ from typing import Mapping, Tuple
 __all__ = ["Model", "Frame", "Method", "MODELS", "FRAMES", "METHODS",
            "FIXED_BOND_METHODS", "models_of", "frames_of",
            "methods_of", "all_methods", "model", "method_spec", "resolve",
-           "combinations", "METHOD_FRAMES",
+           "combinations", "LAYOUTS", "METHOD_FRAMES",
            "methods_by_frame", "frame_label", "describe_taxonomy",
            "unknown_method_error", "STATIC_TREE_TEBD"]
 
@@ -158,6 +158,11 @@ class Method:
     #: is what lets ``run`` be called by the three axes instead of by a name that
     #: mashes them together.
     algo: str = ""
+    #: How the Hamiltonian's **interaction graph** is realized on the state's
+    #: graph -- see :data:`LAYOUTS`.  A frame can make ``H`` non-local relative to
+    #: the state (the interaction picture couples *every* mode to the system, a
+    #: star, while the state is a path), and this records what pays for that.
+    layout: str = "local"
 
 
 #: Why the mode-tree has only the interaction picture.  Not an oversight: the
@@ -191,9 +196,26 @@ _TREE_STATIC = STATIC_TREE_TEBD       # shorthand used in the table below
 MULTICHANNEL_IP = "multichannel-ip"
 
 
-def _m(name, frame, models, integrator, driver="", fixed_bond=False, algo=""):
+#: How a method reconciles the Hamiltonian's interaction graph with the state's.
+#:
+#: This is the axis the package had no name for, which is why three methods each
+#: re-derived a swap network and nothing recorded that they did.  It is not the same
+#: question as the frame: the *frame* decides which terms exist, the layout decides
+#: what it costs to apply them to a state whose graph is shaped differently.
+LAYOUTS = {
+    "local": "interaction edges are state edges -- gates apply in place",
+    "swap": "a star realized on a path: the system site is walked past every mode "
+            "and back each step, so a step costs O(N) swaps on top of the gates",
+    "operator": "no gate layout -- a single low-bond operator (an MPO on a chain, "
+                "a bond-K tree operator on a tree) carries the long-range terms "
+                "natively, so the interaction graph never has to match the state's",
+}
+
+
+def _m(name, frame, models, integrator, driver="", fixed_bond=False, algo="",
+       layout="local"):
     return Method(name, frame, models, integrator, driver, fixed_bond,
-                  algo or driver)
+                  algo or driver, layout)
 
 
 #: Every method, declared once.  Order matters: :attr:`Model.frames` reads method
@@ -202,40 +224,42 @@ def _m(name, frame, models, integrator, driver="", fixed_bond=False, algo=""):
 METHODS = {s.name: s for s in [
     # -- chain -------------------------------------------------------------
     _m("mpo-tdvp1", "schrodinger", ("chain",), "chain-mpo-tdvp",
-       "tdvp1", fixed_bond=True),
-    _m("mpo-tdvp2", "schrodinger", ("chain",), "chain-mpo-tdvp", "tdvp2"),
+       "tdvp1", fixed_bond=True, layout="operator"),
+    _m("mpo-tdvp2", "schrodinger", ("chain",), "chain-mpo-tdvp", "tdvp2", layout="operator"),
     _m("mpo-dtdvp", "schrodinger", ("chain",), "chain-mpo-tdvp",
-       "dtdvp", fixed_bond=True),
-    _m("tebd", "interaction", ("chain",), "swap-tebd", algo="tebd"),
+       "dtdvp", fixed_bond=True, layout="operator"),
+    _m("tebd", "interaction", ("chain",), "swap-tebd", algo="tebd",
+       layout="swap"),
     _m("trotter-mpo", "interaction", ("chain",), "displacement-mpo",
-       algo="trotter-mpo"),
+       algo="trotter-mpo", layout="operator"),
     _m("polaron", "polaron", ("chain",), "polaron-tebd", algo="tebd"),
     _m("polaron-tdvp1", "polaron", ("chain",), "polaron-tdvp",
-       "tdvp1", fixed_bond=True),
-    _m("polaron-tdvp2", "polaron", ("chain",), "polaron-tdvp", "tdvp2"),
+       "tdvp1", fixed_bond=True, layout="operator"),
+    _m("polaron-tdvp2", "polaron", ("chain",), "polaron-tdvp", "tdvp2",
+       layout="operator"),
     _m("polaron-dtdvp", "polaron", ("chain",), "polaron-tdvp",
-       "dtdvp", fixed_bond=True),
+       "dtdvp", fixed_bond=True, layout="operator"),
     # -- star --------------------------------------------------------------
     _m("mpo-star-tdvp1", "schrodinger", ("star",), "chain-mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", fixed_bond=True, layout="operator"),
     _m("mpo-star-tdvp2", "schrodinger", ("star",), "chain-mpo-tdvp",
-       "tdvp2"),
+       "tdvp2", layout="operator"),
     _m("mpo-ip-tdvp1", "interaction", ("star",), "chain-mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", fixed_bond=True, layout="operator"),
     _m("mpo-ip-tdvp2", "interaction", ("star",), "chain-mpo-tdvp",
-       "tdvp2"),
+       "tdvp2", layout="operator"),
     # -- mode-tree ---------------------------------------------------------
     _m("tree-tdvp", "interaction", ("mode-tree",), "modetree",
-       "run_tree_tdvp", fixed_bond=True, algo="tdvp1"),
+       "run_tree_tdvp", fixed_bond=True, algo="tdvp1", layout="operator"),
     _m("tree-tdvp2", "interaction", ("mode-tree",), "modetree",
-       "run_tree_tdvp2", algo="tdvp2"),
+       "run_tree_tdvp2", algo="tdvp2", layout="operator"),
     _m("tree-tebd", "interaction", ("mode-tree",), "modetree",
-       "run_tree_tebd", algo="tebd"),
+       "run_tree_tebd", algo="tebd", layout="operator"),
     # -- the static tree engine: one propagator, three topologies ----------
     _m(STATIC_TREE_TEBD, "schrodinger", ("multichannel", "comb", "site-tree"),
        "static-tree-tebd", algo="tebd"),
     _m(MULTICHANNEL_IP, "interaction", ("multichannel",),
-       "multichannel-swap-tebd", algo="tebd"),
+       "multichannel-swap-tebd", algo="tebd", layout="swap"),
 ]}
 
 #: Derived from :data:`METHODS` -- was a hand-maintained set in
