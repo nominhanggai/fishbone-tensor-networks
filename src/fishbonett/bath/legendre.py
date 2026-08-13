@@ -54,7 +54,7 @@ def get_approx_func(J, n, domain, epsilon):
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from fishbonett.stuff import lorentzian
+    from fishbonett.spectral_densities import lorentzian
     drude = lambda x, gam, lam: 2 * lam * gam * x / (x ** 2 + gam ** 2)
     lorentzian1 = lambda w: lorentzian(10, w, 10, 1000) + lorentzian(10, w, 10, 2000)\
     + lorentzian(10, w, 10, 3000) + lorentzian(10, w, 10, 4000)

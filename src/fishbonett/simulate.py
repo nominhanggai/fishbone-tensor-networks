@@ -6,13 +6,13 @@ by hand-writing a TEBD sweep loop::
 
     import numpy as np
     from fishbonett.simulate import Bath, BosonicBath
-    from fishbonett.stuff import sigma_x, sigma_z
+    from fishbonett.operators import sigma_x, sigma_z
 
     bath = Bath(J=lambda w: 0.5 * w * np.exp(-w / 5),
                 domain=(-25, 36), temperature=1.0,
                 n_modes=40, phys_dim=20, discretization='orthpol')
     model = BosonicBath(h=0.5 * eps * sigma_z + V * sigma_x, coupling=sigma_z, bath=bath)
-    result = model.run(dt=0.01, t_max=4.0, method='tree-tdvp2', bond_dim=200,
+    result = model.run(dt=0.01, t_max=4.0, method='tree-tdvp2', trunc_eps=1e-4,
                        observables={'sz': sigma_z, 'sx': sigma_x})
 
     result.t                 # time grid
