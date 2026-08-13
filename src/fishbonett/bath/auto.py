@@ -13,7 +13,7 @@ density itself:
   :math:`d_j(t)`.  These form a light-cone along the chain, so a run of length
   ``t_max`` only excites the first ``j_max`` sites.
 
-Both are used as the defaults of :class:`fishbonett.simulate.Bath` when ``domain``
+Both are used as the defaults of :class:`fishbonett.bath.spec.Bath` when ``domain``
 / ``n_modes`` are left unspecified.
 """
 import numpy as np

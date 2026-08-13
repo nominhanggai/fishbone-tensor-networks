@@ -1,5 +1,21 @@
 # Fishbone geometries
 
+```{admonition} At a glance
+:class: tip
+- **Provides** — {py:class}`~fishbonett.treebone.TreeFishbone` (electronic sites
+  wired into *any* loop-free tree) and {py:class}`~fishbonett.simulate.Fishbone`
+  (the 1D-backbone specialization of it).
+- **Required arguments** — `sites` (one Hamiltonian per electronic site),
+  `baths` (one entry per site: a `Bath`, a `(left, right)` pair, or `None`), and
+  `edges` (`TreeFishbone`) or `backbone` (`Fishbone`).
+- **Run options** — as {doc}`spin_boson`, plus per-site and composite
+  `observables` specs.
+- **Watch** — a site with two baths is a degree-4 tensor whose cost scales with
+  the **square** of its bond dimensions, so an over-tight `trunc_eps` is
+  expensive here; see *Cost and truncation* below.
+- **See also** — {doc}`/methods/interaction/tree`, {doc}`composite_multichannel`.
+```
+
 A **fishbone** is a set of electronic sites, each carrying its own bath (or two
 baths — one on each side).  The electronic sites need not form a chain: the
 general engine {py:class}`~fishbonett.treebone.TreeFishbone` wires them into
@@ -16,7 +32,7 @@ bath:
 ```python
 import numpy as np
 from fishbonett.treebone import TreeFishbone
-from fishbonett.simulate import Bath
+from fishbonett import Bath
 from fishbonett.operators import sigma_x, sigma_z
 
 def bath(op):
@@ -52,7 +68,7 @@ fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic site
               baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site
               backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2)  # site i <-> i+1
 # sigma_z is measured on *every* electronic site:
-res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, trunc_eps=1e-7,
+res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, trunc_eps=1e-4,
              observables={"sz": sigma_z})
 res.expect["sz"]        # (n_steps, n_sites); [t, i] = <sz> on site i at step t
 res.rdm                 # (n_steps, n_sites, d, d)
@@ -71,13 +87,13 @@ interior backbone site with two baths is a high-degree (degree-4) tree tensor, s
 its cost scales with the **square** of its bond dimensions.  Retaining singular
 values far below the physical entanglement — an over-tight `trunc_eps` — then
 inflates those bonds for no accuracy gain (e.g. a backbone bond of true rank 3 held
-at `1e-10` can carry 15 values and run ~30× slower).  For heavily-entangled
-multi-bath chains, set `trunc_eps` to the accuracy you actually need (`1e-7` is
-usually ample) rather than leaning on the `1e-10` default.
+at `1e-10` can carry 15 values and run ~30× slower).  This is the geometry where
+the default `trunc_eps=1e-4` matters most: set it to the accuracy you actually
+need and let `result.max_bond` tell you what that costs.
 ```
 
 If you need the highly-optimized comb tensor network directly, the low-level
-builders {py:class}`~fishbonett.frames.hamiltonian.FishBoneH` and
+builders {py:class}`~fishbonett.frames.schrodinger.FishBoneH` and
 {py:class}`~fishbonett.states.comb.FishBoneNet` remain available.
 
 See {doc}`observables` for measuring per-site, single-site and multi-site

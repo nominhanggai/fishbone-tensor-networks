@@ -4,7 +4,7 @@ import pytest
 import scipy.linalg
 from fishbonett.contract import contract as einsum
 
-from fishbonett.states.mps import BosonicBathMPS
+from fishbonett.states.mps import SystemBathMPS
 
 
 def _random_gate(d1, d2, rng, dt=0.05):
@@ -22,7 +22,7 @@ def test_engine_preserves_normalization(mode, kw):
     np.random.seed(0)
     rng = np.random.RandomState(1)
     pd = [4, 4, 2]
-    etn = BosonicBathMPS(pd)
+    etn = SystemBathMPS(pd)
     etn.B[-1][0, 0, 0] = 1.0
     etn.U = [_random_gate(4, 4, rng), _random_gate(4, 2, rng)]
 
@@ -46,7 +46,7 @@ def test_swap_moves_physical_leg():
     np.random.seed(0)
     rng = np.random.RandomState(2)
     pd = [5, 2]  # boson(5) + spin(2)
-    etn = BosonicBathMPS(pd)
+    etn = SystemBathMPS(pd)
     etn.B[-1][0, 0, 0] = 1.0
     etn.U = [_random_gate(5, 2, rng)]
     etn.update_bond(0, 16, 1e-12, swap=1)

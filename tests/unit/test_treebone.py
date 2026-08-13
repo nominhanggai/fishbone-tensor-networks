@@ -4,7 +4,7 @@ import pytest
 from scipy.linalg import expm
 
 from fishbonett.treebone import TreeTEBD, TreeFishbone
-from fishbonett.simulate import Bath, Result
+from fishbonett import Bath, Result
 from fishbonett.operators import sigma_x, sigma_z
 
 DOM = (0.0, 40.0)
@@ -124,9 +124,9 @@ def test_treefishbone_star_matches_exact():
 def test_composite_spin_vibration_separate_sites():
     """Spin (dim 2) and vibration (dim dv) on their OWN sites, bath only on the
     spin.  Validated vs exact; also checks mixed-dimension per-site output."""
-    from fishbonett.operators import _c
+    from fishbonett.operators import annihilate
     dv = 3
-    bvi = _c(dv); nv = bvi.T @ bvi
+    bvi = annihilate(dv); nv = bvi.T @ bvi
     h_spin = 0.25 * sigma_z + sigma_x
     h_vib = 1.5 * nv
     C = 0.4 * np.kron(sigma_z, bvi + bvi.T)              # spin-vibration coupling
@@ -247,9 +247,9 @@ def test_general_observables_single_and_two_site():
 def test_multichannel_star_on_spin_of_spin_vibration_tree():
     """A multichannel bath attached to the spin site of a spin+vibration tree
     (the two features combined)."""
-    from fishbonett.operators import _c
+    from fishbonett.operators import annihilate
     dv = 3
-    bvi = _c(dv); nv = bvi.T @ bvi
+    bvi = annihilate(dv); nv = bvi.T @ bvi
     mc = Bath(J=[lambda w: 0.2 * w * np.exp(-w / 5.0),
                  lambda w: 0.1 * w * np.exp(-w / 8.0)],
               coupling=[sigma_z, sigma_x], domain=(0.0, 40.0), n_modes=2, phys_dim=4)

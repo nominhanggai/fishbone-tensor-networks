@@ -17,10 +17,10 @@ from scipy.linalg import expm
 
 from fishbonett.contract import contract
 
-from fishbonett.common import get_bath_nn_paras
-from fishbonett.linalg import cap_rank
+from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.linalg import Truncation, cap_rank
 from fishbonett.bath.legendre import get_vn_squared
-from fishbonett.operators import _c, sigma_x, sigma_z
+from fishbonett.operators import annihilate, sigma_x, sigma_z
 from fishbonett.simulate import Result
 
 __all__ = ["TreeTEBD", "TreeFishbone"]
@@ -107,6 +107,8 @@ class TreeTEBD:
 
     # -- initial state -------------------------------------------------------
     def set_physical(self, i, vec):
+        """Set node ``i``'s physical leg to ``vec``, leaving every bond at
+        dimension 1 (a product state)."""
         vec = np.asarray(vec, complex)
         t = np.zeros_like(self.T[i])
         idx = [0] * len(self.order[i])
@@ -143,6 +145,8 @@ class TreeTEBD:
         self.oc = j
 
     def move_oc_to(self, target):
+        """Move the orthogonality centre to node ``target``, one QR gauge
+        transformation per edge along the tree path."""
         for nxt in self.path(self.oc, target)[1:]:
             self.move_oc(self.oc, nxt)
 
@@ -203,6 +207,11 @@ class TreeTEBD:
 
     # -- single-site gate (bond-preserving, canonical-form preserving) -------
     def apply_site(self, i, U):
+        """Apply a single-site gate ``U`` (``(d, d)``) to node ``i``.
+
+        Single-site gates touch no bond, so this neither grows the state nor
+        disturbs the canonical form -- no truncation is needed.
+        """
         phys = self.T[i].ndim - 1
         X = np.tensordot(U, self.T[i], axes=([1], [phys]))   # [out, other legs...]
         self.T[i] = np.moveaxis(X, 0, phys)
@@ -303,7 +312,7 @@ class TreeTEBD:
 
 
 def _bath_ops(d):
-    a = _c(d)                       # annihilation
+    a = annihilate(d)                       # annihilation
     ad = a.T                        # creation
     return a, ad, a + ad, ad @ a    # a, a^dag, x = a+a^dag, number
 
@@ -338,7 +347,7 @@ class TreeFishbone:
         Electronic-electronic couplings; the pairs must form a tree over the
         sites.  ``coupling`` is a ``(d_i*d_j, d_i*d_j)`` operator (default: none).
     baths : list
-        One entry per site: a single :class:`~fishbonett.simulate.Bath`, a list of
+        One entry per site: a single :class:`~fishbonett.bath.spec.Bath`, a list of
         baths, or ``None``.  Each bath carries its own ``coupling`` operator
         (default ``sigma_z``).  Baths may have different domains/discretizations.
     """
@@ -374,7 +383,7 @@ class TreeFishbone:
         ``site_H[node]`` is the on-site Hamiltonian and ``edge_H[(a, b)]`` the
         two-site coupling.  Electronic sites are nodes ``0..n_sites-1``; each bath
         is a chain of nodes hanging off its site.  ``t_max`` sizes any bath whose
-        ``n_modes`` is automatic (see :meth:`fishbonett.simulate.Bath.resolved`)."""
+        ``n_modes`` is automatic (see :meth:`fishbonett.bath.spec.Bath.resolved`)."""
         dims = list(self.de)
         edges = [(i, j) for (i, j, _) in self.edges]
         site_H = [self.sites[i].copy() for i in range(self.ns)]
@@ -460,13 +469,16 @@ class TreeFishbone:
         v = np.asarray(item, complex)
         return v / np.linalg.norm(v)
 
-    def run(self, *, dt, t_max=None, n_steps=None, bond_dim=None, trunc_eps=1e-4,
-            observables=None, initial="up"):
+    def run(self, *, dt, t_max=None, n_steps=None, trunc=None, bond_dim=None,
+            trunc_eps=None, observables=None, initial="up"):
         """Propagate and return a :class:`~fishbonett.simulate.Result`.
 
-        ``trunc_eps`` is the accuracy knob (singular values below it are dropped);
-        ``bond_dim`` is an optional hard cap, ``None`` meaning **unlimited** -- the
-        bond then grows to whatever ``trunc_eps`` requires.
+        Truncation is one setting, given either as a
+        :class:`~fishbonett.linalg.Truncation` (``trunc=``) or as the loose
+        ``trunc_eps`` / ``bond_dim`` keywords.  ``trunc_eps`` (default ``1e-4``)
+        is the accuracy knob -- singular values below it are dropped -- and
+        ``bond_dim`` is an optional hard cap, ``None`` meaning **unlimited**, so
+        the bond grows to whatever ``trunc_eps`` requires.
 
         Each entry of ``observables`` is one of:
 
@@ -484,6 +496,8 @@ class TreeFishbone:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
             n_steps = int(round(t_max / dt))
+        trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+        bond_dim, trunc_eps = trunc.max_bond, trunc.eps
         if observables is None:
             observables = {"sz": sigma_z, "sx": sigma_x} if all(
                 d == 2 for d in self.de) else {}

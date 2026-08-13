@@ -37,8 +37,8 @@ def exact_sz(n_chain, d, V, ts):
     dims = [2] + [d] * n_chain
     H = embed(V * SX, 0, dims)
     for k in range(n_chain):
-        H = H + freq[k] * embed(crea(d) @ anih(d), 1 + k, dims)
-        H = H + Vn[k] * (embed(SZ, 0, dims) @ embed(anih(d) + crea(d), 1 + k, dims))
+        H = H + freq[k] * embed(create(d) @ annihilate(d), 1 + k, dims)
+        H = H + Vn[k] * (embed(SZ, 0, dims) @ embed(annihilate(d) + create(d), 1 + k, dims))
     E, Uv = np.linalg.eigh(H)
     psi0 = np.zeros(int(np.prod(dims)), dtype=complex)
     psi0[0] = 1.0

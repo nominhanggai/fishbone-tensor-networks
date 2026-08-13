@@ -35,7 +35,7 @@ def embed(op, site, dims):
 def exact_sz(n_chain, d, V, ts):
     eps_c, t_c, c0 = chain_coeffs(Jb, n_chain, DOMAIN)
     dims = [2] + [d] * n_chain
-    b, bd, nb = anih(d), crea(d), numb(d)
+    b, bd, nb = annihilate(d), create(d), number(d)
     H = embed(V * SX, 0, dims) + c0 * (embed(SZ, 0, dims) @ embed(b + bd, 1, dims))
     for i in range(n_chain):
         H = H + eps_c[i] * embed(nb, 1 + i, dims)

@@ -1,5 +1,19 @@
 # Getting started
 
+```{admonition} At a glance
+:class: tip
+- **Three names cover the usual case** —
+  `from fishbonett import Bath, SystemBath, Truncation`.
+  {py:class}`~fishbonett.bath.spec.Bath` says *what the bath is*,
+  {py:class}`~fishbonett.simulate.SystemBath` *what to propagate*, and
+  {py:class}`~fishbonett.linalg.Truncation` *how accurately*.
+- **One call** — `model.run(dt=..., t_max=..., method=...)` returns a
+  {py:class}`~fishbonett.simulate.Result` with `t`, `expect`, `rdm`, `max_bond`.
+- **Install** — `pip install -e .`; extras `[gpu]`, `[rates]`, `[test,docs]`.
+- **Next** — {doc}`systems/index` for *what* you can build, {doc}`methods/index`
+  for *how* to propagate it, {doc}`bath` for the bath itself.
+```
+
 ## Installation
 
 ```bash
@@ -31,14 +45,14 @@ call. Declare the bath and the system, then `run`:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, BosonicBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             domain=(-25, 36), temperature=1.0,       # T-TEDOPA thermalization
             n_modes=40, phys_dim=20,
             discretization="orthpol")                # or the default "legendre"
-model = BosonicBath(h=sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 result = model.run(dt=0.05, t_max=4.0, method="tree-tdvp2", bond_dim=200,
                    observables={"sz": sigma_z})
@@ -93,7 +107,7 @@ def bath(op):                                        # one bath, coupling operat
 fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
               baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site
               backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2)  # nearest-neighbour
-res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, trunc_eps=1e-7,
+res = fb.run(dt=0.02, t_max=2.0, bond_dim=100, trunc_eps=1e-4,
              observables={"sz": sigma_z})
 res.expect["sz"]         # (n_steps, n_sites): sigma_z measured on each site
 res.rdm                  # (n_steps, n_sites, d, d): reduced density matrix per site
@@ -106,9 +120,9 @@ observables — and {doc}`bath` covers bath discretization and finite temperatur
 ## Low-level engines
 
 For finer control the underlying engines are available directly: build a model /
-bath object (for example {py:class}`~fishbonett.frames.hamiltonian.BosonicBathSchrodinger` or
-{py:class}`~fishbonett.frames.hamiltonian.FishBoneH`), discretize with `build(...)`, construct
-the {py:class}`~fishbonett.states.mps.BosonicBathMPS` (or {py:class}`~fishbonett.states.comb.FishBoneNet`)
+bath object (for example {py:class}`~fishbonett.frames.schrodinger.SystemBathSchrodinger` or
+{py:class}`~fishbonett.frames.schrodinger.FishBoneH`), discretize with `build(...)`, construct
+the {py:class}`~fishbonett.states.mps.SystemBathMPS` (or {py:class}`~fishbonett.states.comb.FishBoneNet`)
 state, obtain the Trotter gates with `get_u(...)`, sweep with `update_bond(...)`,
 and read out observables from `get_theta1(...)`. The high-level interface above is
 a thin wrapper over exactly this loop.

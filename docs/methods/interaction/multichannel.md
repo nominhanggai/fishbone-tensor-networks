@@ -1,10 +1,20 @@
 # Interaction picture · multichannel — one bath, several couplings
 
-```{admonition} Frame: interaction picture / multichannel
+```{admonition} At a glance
 :class: tip
-Selected by the **bath**, not by a `method` name: give {py:class}`~fishbonett.simulate.Bath`
-a *list* of coupling operators and the run routes through the multichannel engine
-automatically.  See {doc}`/methods/index` for the frame taxonomy.
+- **Provides** — one bath coupling through **several** system operators on
+  *shared* modes, so the channels are cross-correlated.
+- **Selected by the bath, not by `method`** — give {py:class}`~fishbonett.bath.spec.Bath`
+  a *list* of `coupling` operators (and one `J` per channel, or one shared `J`)
+  and the run routes through the multichannel engine automatically. The `method`
+  argument is ignored.
+- **Frame** — interaction picture / multichannel.
+- **Requires** — `discretization="legendre"` (the channels must share Gauss nodes).
+- **API** — {py:class}`~fishbonett.frames.multichannel.SystemBathMultiChannel`;
+  the run is routed through the tree engine so the system keeps its own site.
+- **See also** — {doc}`/systems/composite_multichannel`, {doc}`/methods/index`.
+  For several *independent* baths use
+  {py:class}`~fishbonett.treebone.TreeFishbone` with one `Bath` each.
 ```
 
 The other representations assume the bath couples to the system through a *single*
@@ -37,7 +47,7 @@ attached to it — see {doc}`/systems/composite_multichannel`.
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, BosonicBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 Jz = lambda w: 0.2 * w * np.exp(-w / 5)
@@ -47,7 +57,7 @@ Jx = lambda w: 0.1 * w * np.exp(-w / 8)
 bath = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x],
             domain=(0.0, 40.0), n_modes=20, phys_dim=8)
 
-r = BosonicBath(h=0.3 * sigma_z + 0.8 * sigma_x,
+r = SystemBath(h=0.3 * sigma_z + 0.8 * sigma_x,
                 coupling=[sigma_z, sigma_x], bath=bath).run(
         dt=0.02, t_max=2.0, observables={"sz": sigma_z})
 ```

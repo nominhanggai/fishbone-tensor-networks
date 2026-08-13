@@ -1,3 +1,29 @@
+"""Multichannel interaction-picture builder: one bath, several coupling operators.
+
+The other frames assume the bath couples to the system through a *single*
+operator.  Here several operators ``A_c`` share the **same** modes::
+
+    H_sb = sum_k (sum_c A_c g_k^(c)) (b_k + b_k^dagger)
+
+which is genuinely different from several independent baths: one set of modes
+drives every channel, so the noises they impose are **cross-correlated**.
+Physically that is the difference between a molecule whose electronic gap and
+inter-site coupling are modulated by the *same* vibrations and by unrelated ones.
+
+Two consequences shape the code below:
+
+* the coupling is **matrix-valued** -- each mode carries a matrix ``A(d_n(t))``
+  rather than a scalar times one operator -- so the star-to-chain map is a
+  :func:`~fishbonett.bath.lanczos.block_lanczos` seeded with all channels at
+  once (:meth:`SystemBathMultiChannel.build`);
+* finite temperature is folded in through
+  :func:`~fishbonett.operators.temp_factor` on a signed frequency axis, which is
+  why the frequency array is mirrored in the constructor.
+
+Selected by the *bath*, not by a ``method`` name: give
+:class:`~fishbonett.bath.spec.Bath` a list of ``coupling`` operators.  See
+:doc:`/methods/interaction/multichannel`.
+"""
 from copy import deepcopy as dcopy
 
 import numpy as np
@@ -6,7 +32,7 @@ from numpy import exp
 from fishbonett.contract import contract as einsum
 from fishbonett.bath.lanczos import lanczos
 from fishbonett.linalg import kron, expm_gate as calc_U
-from fishbonett.operators import temp_factor, _c
+from fishbonett.operators import temp_factor, annihilate
 
 
 
@@ -14,10 +40,10 @@ from fishbonett.operators import temp_factor, _c
 
 
 
-class BosonicBathMultiChannel:
+class SystemBathMultiChannel:
     """Multichannel interaction-picture builder: system + harmonic bath, >=2 channels.
 
-    Generalizes :class:`~fishbonett.frames.interaction_picture.BosonicBathIP` to a
+    Generalizes :class:`~fishbonett.frames.interaction_picture.SystemBathIP` to a
     matrix-valued coupling -- several coupling channels ``A_k`` share one bath (any
     Hermitian system, not just a spin), with the finite-temperature thermofield
     doubling folded in via ``temp_factor``.
@@ -49,6 +75,15 @@ class BosonicBathMultiChannel:
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
 
     def get_h2(self, t, delta, inc_sys=True):
+        """Two-site coupling Hamiltonians over ``[t, t+delta]``, in chain order.
+
+        Returns ``[(h, d_boson, d_sys), ...]``: for each chain mode, the
+        matrix-valued interaction-picture coupling summed over channels,
+        ``kron(b, D_n) + kron(b^dag, D_n*)`` with ``D_n`` the channel-weighted
+        coupling matrix.  With ``inc_sys`` the system term ``delta * h1e`` is
+        added to the site nearest the system.  Any extra explicit modes in
+        ``H_add`` are appended.
+        """
         freq = self.freq
         coef = self.coef
         e = self.phase
@@ -59,7 +94,7 @@ class BosonicBathMultiChannel:
         for i, k in enumerate(d_nt_mat[:self.len_boson]):
             d1 = self.pd_boson[::-1][i]
             d2 = self.pd_sys
-            c1 = _c(d1)
+            c1 = annihilate(d1)
             kc = k.conjugate()
             coup = kron(c1, k) + kron(c1.T, kc)
             h2.append((coup, d1, d2))
@@ -73,12 +108,18 @@ class BosonicBathMultiChannel:
         for hi in self.H_add:
             hs, hb, w = hi
             ds, db = hs.shape[0], hb.shape[0]
-            c = _c(db)
+            c = annihilate(db)
             coup = kron(hb, hs) + w * kron(c.T@c, np.eye(ds))
             h2.append((coup, db, ds))
         return h2[::-1]
 
     def build(self, n):
+        """Chain-map the shared star, seeded by channel ``n``'s couplings.
+
+        Lanczos-tridiagonalizes the star Hamiltonian ``diag(freq)`` and stores the
+        star -> chain transform in ``self.coef`` and the chain frequencies in
+        ``self.chain_freq``.  Call before :meth:`get_u`.
+        """
         def tri_diag(self, n):
             v0 = [mat[n, n] for mat in self.coup_mat_np]
             h = np.diag(self.freq)
@@ -93,6 +134,14 @@ class BosonicBathMultiChannel:
         self.chain_freq = np.diagonal(chain_freq)
 
     def get_u(self, t, dt, mode='normal', factor=1, inc_sys=True):
+        """Two-site Trotter gates over ``[t, t+dt]`` as ``(U1, U2)``.
+
+        Exponentiates each two-site Hamiltonian from :meth:`get_h2`.  ``U1`` has
+        legs ``(d1, d2, d1*, d2*)``; ``U2`` is the leg-transposed variant the
+        *swapped* sweeps consume.  ``factor`` divides the Hamiltonian (for
+        sub-stepping).  Because the frame is time-dependent, this must be called
+        afresh each step.
+        """
         self.H = self.get_h2(t, dt, inc_sys)
         U1 = dcopy(self.H)
         U2 = dcopy(U1)

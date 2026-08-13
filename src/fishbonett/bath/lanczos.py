@@ -1,15 +1,48 @@
-"""
-    Tridiagonalization function by the Lanczos iterations.
-    The following code is excerpted from
-    https://github.com/matenure/FastGCN/blob/master/lanczos.py
-    The algorithm is closely following the algorithm 10.3 and 10.4 in
-    http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter10.pdf
+"""Lanczos tridiagonalization -- the star-to-chain half of the TEDOPA mapping.
+
+Given the diagonal star Hamiltonian ``diag(freq)`` and the star couplings ``v``,
+the Lanczos iteration seeded with ``v`` produces an orthogonal basis in which the
+Hamiltonian is **tridiagonal**: on-site energies on the diagonal, mode-mode
+hoppings on the off-diagonal.  That tridiagonal form *is* the chain, and it is
+what gives a matrix-product state something local to exploit.
+
+Both routines use full reorthogonalization, which matters here: the Krylov
+vectors lose orthogonality quickly for the strongly graded weights typical of a
+discretized spectral density, and the chain coefficients are sensitive to it.
+
+.. rubric:: What's here
+
+======================  =========================================================
+:func:`lanczos`         single-vector iteration -- one coupling channel
+:func:`block_lanczos`   block iteration -- several channels sharing one bath
+======================  =========================================================
+
+The algorithm follows algorithms 10.3 and 10.4 of
+http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter10.pdf; the single-vector
+implementation started from https://github.com/matenure/FastGCN/blob/master/lanczos.py.
 """
 import numpy as np
-from math import fsum
 
 
 def lanczos(A, p):
+    """Tridiagonalize ``A`` in the Krylov basis seeded by ``p``.
+
+    Parameters
+    ----------
+    A : (n, n) array
+        The star Hamiltonian, normally ``np.diag(star_freq)``.
+    p : (n,) array
+        The seed vector -- the star couplings.  The chain is built outward from
+        it, so chain site 0 is the mode the system actually couples to.
+
+    Returns
+    -------
+    Sigma : (n, n) array
+        ``Q^T A Q``, tridiagonal: ``diagonal`` is the chain on-site energies and
+        the first sub/super-diagonal the mode-mode hoppings.
+    Q : (n, n) array
+        The orthogonal star -> chain transform.
+    """
     A = np.array(A)
     q = np.array(p).copy()
     n = A.shape[0]
@@ -37,6 +70,19 @@ def lanczos(A, p):
 
 
 def block_lanczos(A, p, ortho_threshold=1e-14):
+    """Block Lanczos: tridiagonalize ``A`` in blocks seeded by the columns of ``p``.
+
+    The multichannel counterpart of :func:`lanczos`.  Where a single channel gives
+    a scalar chain, ``b`` channels sharing one bath give a **block**-tridiagonal
+    chain -- each chain site carries a ``b x b`` on-site block and a ``b x b``
+    hopping to its neighbour, which is what keeps the channels cross-correlated
+    rather than independent.
+
+    ``p`` is ``(n, b)`` (or ``(b, n)``; it is transposed if needed) and its columns
+    must be mutually orthogonal to within ``ortho_threshold`` -- this is asserted,
+    because a non-orthogonal seed silently produces the wrong chain.  Returns
+    ``(Sigma, Q)`` as in :func:`lanczos`.
+    """
     A = np.array(A)
     q = np.array(p)
     n = A.shape[0]

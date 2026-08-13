@@ -1,13 +1,25 @@
 # Interaction picture · star — MPO + TDVP
 
-```{admonition} Frame: interaction picture (time-dependent $H$)
+```{admonition} At a glance
 :class: tip
-TDVP in a time-dependent frame: the MPO is **rebuilt at each step's midpoint**
-rather than once up front, which keeps the sweep second order but forfeits the
-energy conservation that TDVP enjoys in a static frame ({doc}`/methods/schrodinger/chain`).  The
-trade is worth it here because the interaction picture leaves far less
-entanglement to represent.  See {doc}`/methods/index` for the compatibility table.
+- **Provides** — `method="mpo-ip-tdvp1"` (fixed bond) and `"mpo-ip-tdvp2"`
+  (grows by SVD truncation): the bath in its **star** geometry, propagated by TDVP.
+- **Frame** — interaction picture / star. No chain mapping: every mode couples
+  straight to the system, so there are no mode–mode terms — but no locality for
+  the MPS to exploit either.
+- **Key options** — `dt`; `bond_dim` (**required** for `mpo-ip-tdvp1`, which
+  cannot grow a bond); `trunc_eps` (accuracy for `-tdvp2`); `krylov`.
+- **API** — MPO {py:func}`~fishbonett.evolve.tdvp.build_ip_mpo`, sweeps
+  {py:func}`~fishbonett.evolve.tdvp.tdvp1sweep` /
+  {py:func}`~fishbonett.evolve.tdvp.tdvp2sweep`.
+- **See also** — {doc}`/methods/schrodinger/chain` (static frame, where TDVP also
+  conserves energy), {doc}`/methods/index`.
 ```
+
+The MPO is **rebuilt at each step's midpoint** rather than once up front, which
+keeps the sweep second order but forfeits the energy conservation TDVP enjoys in a
+static frame ({doc}`/methods/schrodinger/chain`).  The trade is worth it here
+because the interaction picture leaves far less entanglement to represent.
 
 These methods evolve the bath in its **star** geometry — every discretized mode
 coupled directly to the spin, with no chain mapping — in the interaction picture,
@@ -84,19 +96,19 @@ Schrödinger-picture chain methods (re-exported as {py:mod}`fishbonett.evolve.td
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, BosonicBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
-model = BosonicBath(h=sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 r = model.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp1", bond_dim=80,
               observables={"sz": sigma_z})
 r.expect["sz"]
 
 r2 = model.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp2", bond_dim=120,
-               trunc_eps=1e-9, observables={"sz": sigma_z})
+               trunc_eps=1e-4, observables={"sz": sigma_z})
 r2.max_bond
 ```
 

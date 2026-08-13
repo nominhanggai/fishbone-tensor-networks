@@ -1,10 +1,10 @@
-"""Tests for the high-level BosonicBath / Bath / Result interface."""
+"""Tests for the high-level SystemBath / Bath / Result interface."""
 import numpy as np
 import pytest
 
-from fishbonett.simulate import Bath, BosonicBath, Result
+from fishbonett import Bath, SystemBath, Result
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.evolve.treetdvp import _star_transform, anih, crea, SZ, SX
+from fishbonett.evolve.treetdvp import _star_transform, annihilate, create, SZ, SX
 
 N, D, V = 3, 5, 1.0
 
@@ -16,7 +16,7 @@ def _J(w):
 def _model(discretization="legendre"):
     bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=N, phys_dim=D,
                 discretization=discretization)
-    return BosonicBath(h=V * sigma_x, coupling=sigma_z, bath=bath)
+    return SystemBath(h=V * sigma_x, coupling=sigma_z, bath=bath)
 
 
 def _embed(op, s, dims):
@@ -33,8 +33,8 @@ def _exact_sz(bath, ts):
     dims = [2] + [D] * N
     H = _embed(V * SX, 0, dims)
     for k in range(N):
-        H = H + freq[k] * _embed(crea(D) @ anih(D), 1 + k, dims)
-        H = H + Vn[k] * (_embed(SZ, 0, dims) @ _embed(anih(D) + crea(D), 1 + k, dims))
+        H = H + freq[k] * _embed(create(D) @ annihilate(D), 1 + k, dims)
+        H = H + Vn[k] * (_embed(SZ, 0, dims) @ _embed(annihilate(D) + create(D), 1 + k, dims))
     E, U = np.linalg.eigh(H)
     p0 = np.zeros(int(np.prod(dims)), complex); p0[0] = 1
     c = U.conj().T @ p0
@@ -49,12 +49,12 @@ def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
     freq, Vn, _ = _star_transform(sd, nm, domain)
     ds = h.shape[0]
     dims = [ds] + [dph] * nm
-    a = anih(dph)
+    a = annihilate(dph)
     H = _embed(np.asarray(h, complex), 0, dims)
     for k in range(nm):
-        H = H + freq[k] * _embed(crea(dph) @ a, 1 + k, dims)
+        H = H + freq[k] * _embed(create(dph) @ a, 1 + k, dims)
         H = H + Vn[k] * (_embed(np.asarray(O, complex), 0, dims)
-                         @ _embed(a + crea(dph), 1 + k, dims))
+                         @ _embed(a + create(dph), 1 + k, dims))
     E, U = np.linalg.eigh(H)
     p0 = np.zeros(int(np.prod(dims)), complex)
     v = np.asarray(init, complex); v = v / np.linalg.norm(v)
@@ -113,7 +113,7 @@ def test_methods_share_time_grid_and_agree():
 
 
 def test_spinboson_multichannel_routes_to_star():
-    """BosonicBath with a multichannel bath (sz AND sx) keeps the spin on its own
+    """SystemBath with a multichannel bath (sz AND sx) keeps the spin on its own
     site and matches the tree star engine."""
     from fishbonett.treebone import TreeFishbone
 
@@ -126,7 +126,7 @@ def test_spinboson_multichannel_routes_to_star():
     mc = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
     h = 0.3 * sigma_z + 0.8 * sigma_x
-    r = BosonicBath(h=h, coupling=[sigma_z, sigma_x], bath=mc).run(
+    r = SystemBath(h=h, coupling=[sigma_z, sigma_x], bath=mc).run(
         dt=0.02, n_steps=10, bond_dim=40, observables={"sz": sigma_z})
     assert r.expect["sz"].shape == (10,)          # single-system, not per-site
     assert r.rdm.shape == (10, 2, 2)
@@ -138,15 +138,15 @@ def test_spinboson_multichannel_routes_to_star():
 def test_composite_spin_vibration_system():
     """System = spin (x) vibration; bath couples only through the spin.  Validated
     vs exact diagonalization of the discretized star."""
-    from fishbonett.frames.interaction_picture import BosonicBathIP as Builder, _c
+    from fishbonett.frames.interaction_picture import SystemBathIP as Builder, annihilate
     dv, nm, dph = 2, 2, 4
     I2, Iv = np.eye(2), np.eye(dv)
-    bv = _c(dv); nv = bv.T @ bv
+    bv = annihilate(dv); nv = bv.T @ bv
     h_sys = (0.25 * np.kron(sigma_z, Iv) + np.kron(sigma_x, Iv)
              + 1.5 * np.kron(I2, nv) + 0.3 * np.kron(sigma_z, bv + bv.T))
     coup = np.kron(sigma_z, Iv)
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=nm, phys_dim=dph)
-    model = BosonicBath(h=h_sys, coupling=coup, bath=bath)
+    model = SystemBath(h=h_sys, coupling=coup, bath=bath)
     r = model.run(dt=0.02, n_steps=10, method="tebd", bond_dim=40, trunc_eps=1e-12,
                   observables={"sz": coup}, initial="up")
     assert r.rdm.shape == (10, 2 * dv, 2 * dv)
@@ -166,7 +166,7 @@ def test_composite_spin_vibration_system():
             o = np.kron(o, x)
         return o
 
-    b = _c(dph)
+    b = annihilate(dph)
     H = emb(h_sys, 0)
     for k in range(nm):
         H = H + freq[k] * emb(b.T @ b, 1 + k)
@@ -188,7 +188,7 @@ def test_general_coupling_matches_exact(method):
     sd = lambda w: 0.2 * w * np.exp(-w / 5.0)
     bath = Bath(J=sd, domain=(0.0, 40.0), n_modes=3, phys_dim=5)
     h, O = 0.5 * sigma_z + sigma_x, sigma_x
-    r = BosonicBath(h=h, coupling=O, bath=bath).run(
+    r = SystemBath(h=h, coupling=O, bath=bath).run(
         dt=0.02, n_steps=10, method=method, bond_dim=60, trunc_eps=1e-12,
         observables={"sz": sigma_z})
     ex = _exact_general(h, O, sigma_z, r.t, 3, 5, (0.0, 40.0), sd, [1, 0])
@@ -201,11 +201,11 @@ def test_multilevel_system_matches_exact(method):
     """The MPO/tree engines handle a three-level system, validated vs exact."""
     sd = lambda w: 0.15 * w * np.exp(-w / 6.0)
     bath = Bath(J=sd, domain=(0.0, 30.0), n_modes=3, phys_dim=5)
-    a3 = anih(3)
+    a3 = annihilate(3)
     h = np.diag([0.0, 0.8, 1.7]) + 0.3 * (a3 + a3.T)
     O = a3 + a3.T
     n3 = np.diag([0.0, 1.0, 2.0])
-    r = BosonicBath(h=h, coupling=O, bath=bath).run(
+    r = SystemBath(h=h, coupling=O, bath=bath).run(
         dt=0.02, n_steps=10, method=method, bond_dim=60, trunc_eps=1e-12,
         observables={"n": n3}, initial=[1, 0, 0])
     ex = _exact_general(h, O, n3, r.t, 3, 5, (0.0, 30.0), sd, [1, 0, 0])
@@ -216,10 +216,10 @@ def test_mpo_rejects_non_hermitian_operators():
     """The MPO/tree engines still require Hermitian h / coupling of matching dim."""
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=N, phys_dim=D)
     with pytest.raises(ValueError):                      # non-Hermitian coupling
-        BosonicBath(h=sigma_z, coupling=np.array([[0, 1], [0, 0]], complex),
+        SystemBath(h=sigma_z, coupling=np.array([[0, 1], [0, 0]], complex),
                   bath=bath).run(dt=0.05, n_steps=2, method="mpo-tdvp1")
     with pytest.raises(ValueError):                      # coupling / h dim mismatch
-        BosonicBath(h=np.eye(3), coupling=sigma_z, bath=bath).run(
+        SystemBath(h=np.eye(3), coupling=sigma_z, bath=bath).run(
             dt=0.05, n_steps=2, method="tree-tdvp")
 
 
@@ -257,7 +257,7 @@ def test_every_method_is_classified_by_frame():
 
 
 def test_unknown_method_error_lists_methods_by_frame():
-    model = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=4, d=4))
+    model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=4, d=4))
     with pytest.raises(ValueError, match="by frame"):
         model.run(dt=0.05, n_steps=1, method="not-a-method")
 
@@ -266,11 +266,11 @@ def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
     """The conditional-displacement propagator is a sum of one product operator per
     eigenvalue of the coupling ``O``, so the MPO bond is exactly that count -- 2 for
     sigma_z, 3 for a three-eigenvalue coupling -- independent of the chain length."""
-    from fishbonett.frames.interaction_picture import BosonicBathIP
+    from fishbonett.frames.interaction_picture import SystemBathIP
 
     for O, expected in [(sigma_z, 2), (np.diag([1.0, 0.0, -1.0]).astype(complex), 3)]:
         ds = O.shape[0]
-        b = BosonicBathIP([6] * 5 + [ds])
+        b = SystemBathIP([6] * 5 + [ds])
         b.domain = [0.3, 12.0]; b.sd = _J
         b.coupling = O; b.h_sys = np.eye(ds)
         b.build(g=1)
@@ -287,7 +287,7 @@ def test_trotter_mpo_matches_tebd_general_coupling():
     h = np.zeros((3, 3), complex)
     h[0, 1] = h[1, 0] = h[1, 2] = h[2, 1] = 0.5
     bath = Bath(J=_J, domain=(0.3, 12.0), n_modes=10, phys_dim=8)
-    model = BosonicBath(h=h, coupling=O, bath=bath)
+    model = SystemBath(h=h, coupling=O, bath=bath)
     kw = dict(dt=0.05, n_steps=20, bond_dim=40, trunc_eps=1e-4, observables={"O": O})
     assert np.max(np.abs(model.run(method="trotter-mpo", **kw).expect["O"]
                          - model.run(method="tebd", **kw).expect["O"])) < 5e-3
@@ -302,7 +302,7 @@ def test_polaron_matches_ip_populations_and_coherence(method):
     2-level spin-boson: the frame-invariant population <sz> and the *un-dressed*
     coherence <sx> both agree (they differ only by the O(dt^2) Trotter split).
     The TEBD variant uses static gates; the TDVP variants use the polaron MPO."""
-    model = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=10, d=8))
+    model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=10, d=8))
     kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4,
               observables={"sz": sigma_z, "sx": sigma_x})
     rp = model.run(method=method, **kw)
@@ -317,7 +317,7 @@ def test_polaron_general_coupling_matches_ip(method):
     O = np.diag([1.0, 0.0, -1.0]).astype(complex)
     h = np.zeros((3, 3), complex)
     h[0, 1] = h[1, 0] = h[1, 2] = h[2, 1] = 0.5          # off-diagonal in O's eigenbasis
-    model = BosonicBath(h=h, coupling=O, bath=_polaron_bath(nm=10, d=8))
+    model = SystemBath(h=h, coupling=O, bath=_polaron_bath(nm=10, d=8))
     kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4, observables={"O": O})
     rp = model.run(method=method, **kw)
     ri = model.run(method="tebd", **kw)
@@ -327,5 +327,5 @@ def test_polaron_general_coupling_matches_ip(method):
 def test_polaron_requires_zero_temperature():
     bath = Bath(J=_J, domain=(0.3, 12.0), temperature=1.0, n_modes=8, phys_dim=6)
     with pytest.raises(ValueError):
-        BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
+        SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
             method="polaron", dt=0.05, n_steps=2, bond_dim=20)

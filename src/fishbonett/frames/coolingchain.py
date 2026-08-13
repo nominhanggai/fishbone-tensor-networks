@@ -1,21 +1,40 @@
+"""Cooling-chain frame: a finite-temperature bath as a *gauged* zero-temperature one.
+
+An alternative to thermofield doubling for finite temperature.  Instead of
+mirroring the spectral density onto a signed frequency axis (what
+:func:`fishbonett.bath.thermalize` does), each chain mode is reweighted by a
+``betaOmega`` gauge: the annihilation and creation halves of the system-bath
+coupling are scaled by ``e^{+betaOmega}`` and ``e^{-betaOmega}``, so the chain is
+progressively "cooled" along its length while thermal weight is carried by the
+non-unitary gauge instead of by extra modes.
+
+The gauge makes the propagation **non-unitary**, so the state's norm is not the
+physical one: observables must be read through the matching heating operators
+``exp(2 betaOmega n_i)``, which is what :meth:`SystemBathCoolingChain.get_rdm`
+does (renormalizing as it contracts).  Reading the RDM the ordinary way would give
+the wrong answer.
+
+Unlike the other frames this class *is* the state -- it subclasses
+:class:`~fishbonett.states.mps.SystemBathMPS` rather than building gates for a
+separate state object.  It is exploratory rather than part of the ``method=``
+dispatch; see :class:`~fishbonett.frames.interaction_picture.SystemBathIP` for
+the maintained finite-temperature route.
+"""
 import numpy as np
 import scipy
 
-from copy import deepcopy as dcopy
 from fishbonett.contract import contract as einsum
 import fishbonett.bath.recurrence as rc
-# kron/svd and the sparse two-site gate exponential (calc_U) are shared;
-# _c is the bosonic annihilation operator from fishbonett.operators.
-from fishbonett.linalg import kron, svd, expm_gate_sparse as calc_U
-from fishbonett.operators import temp_factor, _c
+from fishbonett.linalg import kron, expm_gate_sparse as calc_U
+from fishbonett.operators import temp_factor, annihilate
 
-from fishbonett.states.mps import BosonicBathMPS
+from fishbonett.states.mps import SystemBathMPS
 
 
-class BosonicBathCoolingChain(BosonicBathMPS):
+class SystemBathCoolingChain(SystemBathMPS):
     """Cooling-chain builder: system + harmonic bath, dissipative cooling ansatz.
 
-    Extends the 1D :class:`~fishbonett.states.mps.BosonicBathMPS` engine with a
+    Extends the 1D :class:`~fishbonett.states.mps.SystemBathMPS` engine with a
     ``betaOmega`` cooling gauge: each bath mode carries a heating operator so the
     chain is progressively cooled, and :meth:`get_rdm` reads the system reduced
     density matrix through those operators.
@@ -54,6 +73,13 @@ class BosonicBathCoolingChain(BosonicBathMPS):
 
 
     def get_rdm(self):
+        """System reduced density matrix, read through the heating operators.
+
+        The cooling gauge is non-unitary, so the plain contraction of the MPS
+        would not give the physical RDM.  This contracts the bath sites against
+        ``exp(2 betaOmega n_i)`` instead, renormalizing at each site to keep the
+        result finite, and traces out the bath.
+        """
         theta = self.get_theta1(0)
         rho = einsum('PiQ,ij,PjL->QL', theta, self.heating_op[0], theta.conj())
         for i in range(1, self.len_boson):
@@ -63,6 +89,9 @@ class BosonicBathCoolingChain(BosonicBathMPS):
         return rho
 
     def get_coupling(self, n, j, domain, g, ncap=20000):
+        """Chain parameters ``(w_list, k_list)`` for ``n`` modes of density ``j``,
+        from orthogonal-polynomial recurrence coefficients.  ``k_list[0]`` is the
+        system-bath coupling and the rest are mode-mode hoppings."""
         alphaL, betaL = rc.recurrenceCoefficients(
             n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
         )
@@ -73,29 +102,42 @@ class BosonicBathCoolingChain(BosonicBathMPS):
         return w_list, k_list
 
     def build_coupling(self, g, ncap):
+        """Chain-map ``self.sd`` over ``self.domain`` and store ``w_list``/``k_list``."""
         n = len(self.pd_boson)
         self.w_list, self.k_list = self.get_coupling(n, self.sd, self.domain, g, ncap)
 
     def build(self, g, ncap=20000):
+        """Chain-map the bath, assemble the two-site Hamiltonians, and build the
+        normalized heating operators ``exp(2 betaOmega n_i)`` used by
+        :meth:`get_rdm`.  Call before :meth:`get_u`."""
         self.build_coupling(g, ncap)
         hee = self.get_h2()
         self.H = hee
         self.heating_op = [scipy.linalg.expm(2 * self.betaOmega # * np.sign(freq[i])
-                                             * _c(d).T @ _c(d)) for i, d in
+                                             * annihilate(d).T @ annihilate(d)) for i, d in
                            enumerate(self.pd_boson)]
         self.heating_op = [op / np.linalg.norm(op) for op in self.heating_op]
 
     def get_h1(self):
+        """On-site terms in chain order: ``w_i n_i`` per bath mode, then the
+        system Hamiltonian ``h1e`` last."""
         w_list = self.w_list[::-1]
         h1 = []
         for i, w in enumerate(w_list):
-            c = _c(self.pd_boson[i])
+            c = annihilate(self.pd_boson[i])
             h1.append(w * c.T @ c)
         h1.append(self.h1e)
         return h1
 
 
     def get_h2(self):
+        """Two-site Hamiltonians ``[(h, d1, d2), ...]`` along the chain.
+
+        Mode-mode bonds carry the hopping plus the left site's on-site term.  The
+        last bond (mode 0 to the system) is where the cooling gauge enters: the
+        coupling is ``k0 (e^{betaOmega} b + e^{-betaOmega} b^dag) (x) he_dy``,
+        asymmetric by construction -- that asymmetry *is* the thermal weight.
+        """
         h1 = self.get_h1()
         k_list = self.k_list[::-1]
         k0 = k_list[-1]
@@ -104,8 +146,8 @@ class BosonicBathCoolingChain(BosonicBathMPS):
         for i, k in enumerate(k_list):
             d1 = self.pd_boson[i]
             d2 = self.pd_boson[i + 1]
-            c1 = _c(d1)
-            c2 = _c(d2)
+            c1 = annihilate(d1)
+            c2 = annihilate(d2)
             coup = k * (kron(c1.T, c2) + kron(c1, c2.T))
             site = kron(h1[i], np.eye(d2))
             h2.append((coup + site, d1, d2))
@@ -113,7 +155,7 @@ class BosonicBathCoolingChain(BosonicBathMPS):
         d2 = self.pd_sys
         annih = np.exp(self.betaOmega)  # *np.sign(self.freq[::-1][i]))
         creat = np.exp(-1 * self.betaOmega)  # *np.sign(self.freq[::-1][i]))
-        c0 = _c(d1)
+        c0 = annihilate(d1)
         coup = k0 * kron(annih*c0 + creat*c0.T, self.he_dy)
         site = kron(h1[-2], np.eye(d2)) + kron(np.eye(d1), h1[-1])
         h20 = coup + site
@@ -122,6 +164,12 @@ class BosonicBathCoolingChain(BosonicBathMPS):
 
 
     def get_u(self, dt):
+        """Two-site gates ``exp(-i dt h)`` with legs ``(d1, d2, d1*, d2*)``.
+
+        The Hamiltonian is time-independent in this frame, so unlike the
+        interaction-picture builders these gates are built **once**.  They are not
+        unitary -- see the module docstring.
+        """
         U = [0]*len(self.H)
         for i, h_d1_d2 in enumerate(self.H):
             h, d1, d2 = h_d1_d2
@@ -150,7 +198,7 @@ if __name__ == '__main__':
 
     pd = [phys_dim] * bath_length + [2]
     bo = 0.2
-    etn = BosonicBath(pd=pd, betaOmega=bo)
+    etn = SystemBath(pd=pd, betaOmega=bo)
     g = 500 + bath_freq * 500
     etn.domain = [-g, g]
     temp = 226.00253972894595 * 0.5 * tmp

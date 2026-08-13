@@ -3,7 +3,8 @@ of a small spin-boson chain."""
 import numpy as np
 
 from fishbonett.evolve.tdvp import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp,
-                            run_ip_tdvp1, run_ip_tdvp2, crea, anih, numb, SX, SZ)
+                                    run_ip_tdvp1, run_ip_tdvp2, SX, SZ)
+from fishbonett.operators import annihilate, create, number
 
 DOMAIN = (-25.0, 36.0)
 
@@ -29,7 +30,7 @@ def _embed(op, site, dims):
 def _exact_sz(n_chain, d, V, ts):
     eps_c, t_c, c0 = chain_coeffs(_Jb, n_chain, DOMAIN)
     dims = [2] + [d] * n_chain
-    b, bd, nb = anih(d), crea(d), numb(d)
+    b, bd, nb = annihilate(d), create(d), number(d)
     H = _embed(V * SX, 0, dims) + c0 * (_embed(SZ, 0, dims) @ _embed(b + bd, 1, dims))
     for i in range(n_chain):
         H = H + eps_c[i] * _embed(nb, 1 + i, dims)

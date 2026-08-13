@@ -1,16 +1,68 @@
+"""Three-state golden rule: higher-order corrections for a donor and two acceptors.
+
+:mod:`fishbonett.rates.golden_rule` is second order in the electronic coupling,
+which is enough for a single donor-acceptor pair.  With a **second acceptor**
+the system can hop D -> A1 -> A2 -> A1 -> ..., and those repeated excursions
+enter at fourth order and beyond.  This module computes those corrections.
+
+Each correction of order ``k`` is a ``k``-dimensional *time-ordered* integral
+``t_max > t_1 > ... > t_k > 0`` of the bath influence functional.  The three
+states enter through their reorganization shifts ``s_list = (s_D, s_A1, s_A2)``
+-- only the *differences* matter, and each pair contributes a
+``cos``/``sin``-weighted term in the exponent.
+
+.. rubric:: What's here -- three integrators for the same object
+
+===========================================  ==================================
+:func:`fgr_rate3_correction_order1`          order 1, ``nquad`` (3D)
+:func:`fgr_rate3_correction_order2`          order 2, ``nquad`` (4D)
+:func:`fgr_rate3_correction_order2_vegas`    order 2, VEGAS Monte Carlo
+:func:`fgr_rate3_correction_order_quad`      any order, ``nquad``
+:func:`fgr_rate3_correction_order_vegas`     any order, VEGAS Monte Carlo
+===========================================  ==================================
+
+**Which to use.** Deterministic ``nquad`` is accurate but its cost grows steeply
+with dimension, so it is practical to about order 2-3; the VEGAS variants scale
+to higher orders but return a stochastic estimate whose error must be checked by
+varying ``nitn``/``neval``.  VEGAS requires the optional ``vegas`` package
+(``pip install -e ".[rates]"``), imported lazily so the rest of the module works
+without it.
+
+.. note::
+   The general-order routines build their integrand and nested integration
+   limits as source strings and ``eval`` them, because the dimension is not known
+   until call time.  The evaluated text is constructed entirely from the
+   arguments (no external input), but it does mean an error there surfaces as a
+   confusing traceback inside generated code.
+"""
 import numpy as np
 from scipy import integrate
-from fishbonett.bath.legendre import get_vn_squared, get_approx_func
-from fishbonett.rates.golden_rule import fgr_rate, fgr_rate_by_order
+from fishbonett.bath.legendre import get_vn_squared
+from fishbonett.rates.golden_rule import fgr_rate
 import itertools as it
-from fishbonett.rates.mcmc import mcmc_time_ordered
-
-"""
-Calculate fermi's golden rule rate for 2-state (2 acceptors) electron transfer reactions, given spectral densities.
-"""
 
 
 def fgr_rate3_correction_order1(c_list, e_list, kbT, _w, s_list, t_max):
+    """First correction beyond the golden rule for a donor + two acceptors.
+
+    A 3D time-ordered integral evaluated with ``scipy.integrate.nquad``.
+
+    Parameters
+    ----------
+    c_list : (c12, c31, c23)
+        Electronic couplings between the three states.
+    e_list : (e1, e2, e3)
+        State energies.
+    kbT : float
+        Temperature in energy units.
+    _w : array
+        Star-mode frequencies (see :func:`fishbonett.bath.legendre.get_vn_squared`).
+    s_list : (s1, s2, s3)
+        Per-state reorganization shifts; only their differences enter.
+    t_max : float
+        Upper time limit -- take it past the decay of the lineshape (check with
+        :func:`fishbonett.rates.golden_rule.fgr_decay_profile`).
+    """
     c12, c31, c23 = c_list
     e1, e2, e3 = e_list
     s1, s2, s3 = np.array(s_list)
@@ -55,6 +107,12 @@ def fgr_rate3_correction_order1(c_list, e_list, kbT, _w, s_list, t_max):
 
 
 def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
+    """Second correction (one more D->A1->A2 excursion): a 4D ``nquad`` integral.
+
+    Arguments as :func:`fgr_rate3_correction_order1`.  This is about the practical
+    limit for deterministic quadrature; for higher orders use
+    :func:`fgr_rate3_correction_order2_vegas` or the general-order routines.
+    """
     c12, c31, c23 = c_list
     e1, e2, e3 = e_list
     s1, s2, s3 = np.array(s_list)
@@ -109,7 +167,19 @@ def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
     return -2 * c12 ** 2 * c23 ** 2 * integral
 
 
-def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max, nitn=10, neval=1000):
+def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max,
+                                      nitn=10, neval=1000):
+    """:func:`fgr_rate3_correction_order2` by VEGAS Monte Carlo instead of ``nquad``.
+
+    The time-ordered simplex is mapped to the unit cube by the nested
+    substitution ``t_{k+1} = y_{k+1} t_k / t_max``, whose Jacobian appears as the
+    extra polynomial factor in the integrand; VEGAS then adapts to the
+    oscillatory structure over ``nitn`` iterations of ``neval`` samples each.
+
+    Returns the mean estimate only, so **increase ``nitn``/``neval`` and check
+    the result has stabilized** -- the discarded VEGAS error estimate is the usual
+    way to judge that.  Requires the optional ``vegas`` package.
+    """
     c12, c31, c23 = c_list
     e1, e2, e3 = e_list
     s1, s2, s3 = np.array(s_list)
@@ -165,6 +235,17 @@ def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max, ni
 
 
 def fgr_rate3_correction_order_quad(c_list, e_list, kbT, _w, s_list, t1, order):
+    """The correction at **arbitrary** ``order``, by nested ``nquad``.
+
+    Generalizes :func:`fgr_rate3_correction_order1` / ``_order2``: the state
+    sequence alternates A1 <-> A2 for ``order`` excursions before returning to the
+    donor, and the integrand plus its ``order+1`` nested integration limits are
+    generated and ``eval``-ed at call time (see the module note).
+
+    Cost grows steeply with ``order`` -- past 2 or 3 prefer
+    :func:`fgr_rate3_correction_order_vegas`.  ``t1`` is the outermost time limit
+    (``t_max`` in the fixed-order routines).
+    """
     c = c_list
     s = {1: s_list[0], 2: s_list[1], 3: s_list[2]}
     E = {1: e_list[0], 2: e_list[1], 3: e_list[2]}
@@ -244,7 +325,18 @@ def fgr_rate3_correction_order_quad(c_list, e_list, kbT, _w, s_list, t1, order):
     return -2 * integral
 
 
-def fgr_rate3_correction_order_vegas(c_list, e_list, kbT, w, s_list, t_max, order, nitn=10, neval=1000):
+def fgr_rate3_correction_order_vegas(c_list, e_list, kbT, w, s_list, t_max, order,
+                                     nitn=10, neval=1000):
+    """The correction at **arbitrary** ``order``, by VEGAS Monte Carlo.
+
+    The scalable route: the Monte Carlo cost is set by ``neval``, not by the
+    dimension, so this is the one to use past order 2-3.  States are labelled
+    ``D``/``A1``/``A2`` and alternate as in
+    :func:`fgr_rate3_correction_order_quad`.
+
+    Returns a stochastic estimate -- vary ``nitn``/``neval`` to confirm it has
+    converged.  Requires the optional ``vegas`` package.
+    """
     c = np.array(c_list)
     e_list = np.array(e_list)
     s_list = np.array(s_list)

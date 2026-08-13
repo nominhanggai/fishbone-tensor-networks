@@ -29,18 +29,18 @@ Applicability: **zero temperature**, uniform boson ``phys_dim``, and
 import numpy as np
 import scipy.linalg as la
 
-from fishbonett.common import get_bath_nn_paras
+from fishbonett.bath.chain import get_bath_nn_paras
 from fishbonett.linalg import expm_gate
-from fishbonett.operators import _c
+from fishbonett.operators import annihilate
 
 
 def _coherent(d, alpha):
     """``D(alpha)|0> = exp(alpha (a^dag - a))|0>`` -- a real-displacement coherent state."""
-    a = _c(d)
+    a = annihilate(d)
     return la.expm(alpha * (a.conj().T - a)) @ np.eye(d)[:, 0]
 
 
-class BosonicBathPolaron:
+class SystemBathPolaron:
     """Polaron-frame gate builder for a general system ``O``-coupled to a harmonic bath.
 
     Set :attr:`coupling` (the Hermitian coupling operator ``O``), :attr:`h_sys`,
@@ -90,7 +90,7 @@ class BosonicBathPolaron:
         for m in range(1, n):
             i = n - 1 - m
             dm, dmm = self.pd_boson[m], self.pd_boson[m - 1]
-            a1, a2 = _c(dm), _c(dmm)
+            a1, a2 = annihilate(dm), annihilate(dmm)
             num1 = a1.conj().T @ a1
             h = (self.k_list[m] * (np.kron(a1.conj().T, a2) + np.kron(a1, a2.conj().T))
                  + self.w_list[m] * np.kron(num1, np.eye(dmm)))
@@ -102,7 +102,7 @@ class BosonicBathPolaron:
 
     def _h_sysbond(self):
         d0, ds = self.pd_boson[0], self.pd_sys
-        a0 = _c(d0); num0 = a0.conj().T @ a0
+        a0 = annihilate(d0); num0 = a0.conj().T @ a0
         lam, V = self._evals, self._evecs
         heig = V.conj().T @ np.asarray(self.h_sys, complex) @ V   # h in O-eigenbasis
         gen = a0.conj().T - a0
@@ -134,7 +134,7 @@ class BosonicBathPolaron:
         d = self.pd_boson[0]
         if any(x != d for x in self.pd_boson):
             raise ValueError("the polaron MPO requires a uniform boson phys_dim")
-        a = _c(d); ad = a.conj().T; num = ad @ a; Id = np.eye(d)
+        a = annihilate(d); ad = a.conj().T; num = ad @ a; Id = np.eye(d)
         gen = ad - a
         lam, V = self._evals, self._evecs
         heig = V.conj().T @ np.asarray(self.h_sys, complex) @ V
@@ -232,7 +232,7 @@ class BosonicBathPolaron:
         """
         d0, ds = self.pd_boson[0], self.pd_sys
         rho2 = np.einsum('LaXR,LbYR->aXbY', theta2, theta2.conj())     # [c0o,so,c0i,si]
-        V, lam, a0 = self._evecs, self._evals, _c(d0)
+        V, lam, a0 = self._evecs, self._evals, annihilate(d0)
         gen = a0.conj().T - a0
         rho2e = np.einsum('Xi,aXbY,Yj->aibj', V.conj(), rho2, V)        # system legs -> eig
         M = np.zeros((ds, ds), complex)

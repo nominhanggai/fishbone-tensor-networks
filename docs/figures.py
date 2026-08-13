@@ -82,7 +82,7 @@ def _error_inset(ax, ts, exact, curves, loc=(0.44, 0.44, 0.52, 0.36)):
 
 def bath_correlation(path=None):
     """T = 0 Ohmic bath: the automatic discretization vs two degraded ones."""
-    from fishbonett.simulate import Bath
+    from fishbonett import Bath
     plt = _mpl()
     eta, wc = 0.2, 5.0
     J = lambda w: eta * w * np.exp(-w / wc)
@@ -108,7 +108,7 @@ def bath_correlation(path=None):
 
 def bath_correlation_finite_t(path=None):
     """Finite temperature: the asymmetric signed (thermofield) domain."""
-    from fishbonett.simulate import Bath, thermalize
+    from fishbonett import Bath, thermalize
     from scipy.integrate import quad
     plt = _mpl()
     eta, wc, kT = 0.2, 5.0, 1.0
@@ -144,7 +144,7 @@ def bath_correlation_finite_t(path=None):
 
 def bath_structured(path=None):
     """A structured density (Ohmic background + two vibrational peaks)."""
-    from fishbonett.simulate import Bath
+    from fishbonett import Bath
     from fishbonett.bath.legendre import get_vn_squared
     from scipy.integrate import quad
     plt = _mpl()

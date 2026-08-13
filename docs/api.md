@@ -1,5 +1,19 @@
 # API reference
 
+```{admonition} At a glance
+:class: tip
+- **Start at** {py:class}`~fishbonett.bath.spec.Bath` (what the bath is),
+  {py:class}`~fishbonett.simulate.SystemBath` (what to propagate) and
+  {py:class}`~fishbonett.linalg.Truncation` (how accurately) — all three are
+  re-exported at the top level as `fishbonett.*`.
+- **Package layout by subject** — `bath` turns a spectral density into chain
+  parameters; `frames` writes the Hamiltonian in a chosen representation;
+  `states` holds tensors; `evolve` holds propagation algorithms; `linalg` and
+  `operators` hold the shared numerics.
+- **Each module's docstring opens with its own "What's here" table**, so the
+  generated pages below are browsable without reading the source.
+```
+
 ## High-level interface
 
 ```{eval-rst}
@@ -36,21 +50,25 @@ frame taxonomy and which propagator suits which frame.
    :toctree: generated
    :recursive:
 
-   fishbonett.frames.hamiltonian
+   fishbonett.frames.schrodinger
    fishbonett.frames.interaction_picture
    fishbonett.frames.polaron
    fishbonett.frames.multichannel
    fishbonett.frames.coolingchain
 ```
 
-## Bath discretization and chain mapping
+## The bath: specification, discretization, chain mapping
+
+`Bath` (the specification) lives in {py:mod}`fishbonett.bath.spec`; the rest of
+the subpackage turns it into chain parameters, in that order.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
    :recursive:
 
-   fishbonett.common
+   fishbonett.bath.spec
+   fishbonett.bath.chain
    fishbonett.bath.legendre
    fishbonett.bath.orthpol
    fishbonett.bath.lanczos

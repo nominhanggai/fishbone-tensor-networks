@@ -1,9 +1,43 @@
+"""Metropolis-Hastings integrators for the high-order golden-rule corrections.
+
+The order-``k`` correction in :mod:`fishbonett.rates.golden_rule_multi` is a
+``k``-dimensional *time-ordered* integral ``t > t_1 > ... > t_k > 0``.  Beyond
+about four dimensions deterministic quadrature is impractical, so these routines
+sample it instead.
+
+.. rubric:: What's here
+
+==============================  ===============================================
+:func:`mcmc_time_ordered`       the one that matters: time-ordered ``dim``-D
+:func:`mcmc1d`, :func:`mcmc2d`  1D and 2D versions, for testing the machinery
+==============================  ===============================================
+
+.. rubric:: The oscillatory-integrand problem
+
+The integrands here are complex and oscillatory, so they cannot be used directly
+as a sampling density.  :func:`mcmc_time_ordered` samples ``|f|`` and carries the
+phase separately, recombining as ``<e^{i arg f}> / <1/|f|>``.  This is a
+reweighting estimator: when the phase oscillates rapidly the numerator nearly
+cancels and the variance grows -- the usual sign problem.  Check convergence by
+watching the running mean rather than trusting a single ``N``, and note that the
+estimator is *biased* at finite ``N`` (it is a ratio of means), which is why
+``burn_in`` samples are discarded.
+
+Sampling uses ``numpy.random`` without a seed argument, so results are not
+reproducible unless you seed the global RNG yourself.
+"""
 import math
 
 import numpy as np
 
 
 def mcmc2d(func, interval, N):
+    """Metropolis sample of ``func(x, y)`` over the ordered wedge ``x < y``.
+
+    Two-dimensional test case for the machinery in :func:`mcmc_time_ordered`;
+    returns the array of ``N+1`` accepted samples (not yet normalized by the
+    domain volume).
+    """
     y = np.random.uniform(interval[0], interval[1])
     x = np.random.uniform(interval[0], y)
     samples = [func(x, y)]
@@ -34,6 +68,12 @@ def mcmc2d(func, interval, N):
 
 
 def mcmc1d(func, interval, N):
+    """Metropolis sample of ``func(x)`` over ``interval`` with a uniform proposal.
+
+    The one-dimensional reference case: with a uniform proposal the
+    Metropolis ratio reduces to ``f(new)/f(old)``.  Returns the ``N+1`` accepted
+    samples.
+    """
     x = np.random.uniform(interval[0], interval[1])
     d = interval[1] - interval[0]
     samples = [func(x)]
@@ -61,6 +101,37 @@ def mcmc1d(func, interval, N):
 
 
 def mcmc_time_ordered(func, dim, interval, N, burn_in=1000):
+    """Time-ordered ``dim``-dimensional integral of a complex oscillatory ``func``.
+
+    Samples the simplex ``t_max > t_1 > t_2 > ... > t_dim > t_min`` by drawing
+    each ``t_i`` uniformly below its predecessor, with the Metropolis ratio
+    correcting for the resulting non-uniform proposal density.
+
+    Because ``func`` is complex, ``|func|`` is used as the sampling weight and the
+    phase is accumulated separately; the estimate is then
+    ``<e^{i arg f}> / <1/|f|>``, normalized by the simplex volume
+    ``(t_max - t_min)^dim / dim!``.
+
+    Parameters
+    ----------
+    func : callable
+        Takes ``dim`` time arguments, returns a complex value.
+    dim : int
+        Integral dimension (the perturbative order).
+    interval : (float, float)
+        ``(t_min, t_max)``.
+    N : int
+        Number of Metropolis proposals.
+    burn_in : int
+        Samples discarded from the denominator average.
+
+    Returns
+    -------
+    (estimate, phases, samples)
+        The complex estimate, plus the raw phase and magnitude arrays so
+        convergence can be inspected -- see the module docstring on why a single
+        ``N`` should not be trusted.
+    """
     t_max = interval[1]
     t_min = interval[0]
 
