@@ -354,12 +354,17 @@ class SystemBath:
     #: business, not the frame's, which is why there is one driver below and not
     #: one per frame.
     _SWAP_FRAMES = {
-        ("interaction", "chain"): "_ip_swap_frame",
+        ("interaction", "chain"): "_ip_frame",
         ("interaction", "multichannel"): "_multichannel_swap_frame",
     }
 
-    def _ip_swap_frame(self, b, ctx):
-        """One system, one bath, scalar coupling: the plain interaction picture."""
+    def _ip_frame(self, b, ctx):
+        """One system, one bath, scalar coupling: the plain interaction picture.
+
+        Built here once and used by **both** of its integrators -- the swap-network
+        TEBD and the conditional-displacement MPO.  That is the frame/integrator
+        split working: same ``H(t)``, two ways of applying it.
+        """
         from fishbonett.frames.interaction_picture import SystemBathIP
         pd = [self.h.shape[0]] + [b.phys_dim] * b.n_modes
         return SystemBathIP(pd, h_sys=self.h, coupling=self.coupling,
@@ -424,21 +429,18 @@ class SystemBath:
         two-site gates and shuttled with a swap network: no swaps, no ``d x d``
         bosonic gates, and the multimode factorization is *exact* (see
         :meth:`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`).
-        The system term is Strang-split around it, so the step is second order."""
-        from fishbonett.frames.interaction_picture import SystemBathIP
+        The system term is Strang-split around it, so the step is second order.
+
+        It shares :meth:`_ip_frame` with ``tebd``: identical ``H(t)``, a different
+        way of applying it.  Nothing about the frame knows which."""
         from fishbonett.evolve.mpo_apply import (apply_mpo, compress, bond_dims,
                                                  product_state)
         self._check_system()
         b = self.bath.resolved(ctx.t_max)
-        n, d_sys = b.n_modes, self.h.shape[0]
-        builder = SystemBathIP([d_sys] + [b.phys_dim] * n, h_sys=self.h,
-                               coupling=self.coupling, sd=b.spectral_density(),
-                               domain=b.domain, ncap=ctx.kw.get("ncap", 20000),
-                               discretizer=b.discretizer()).build()
+        builder, pd = self._ip_frame(b, ctx)
 
         # sites are [system, mode_0, ..., mode_{n-1}] for the MPO
-        A = product_state([d_sys] + [b.phys_dim] * n,
-                          self._initial_state(ctx.initial))
+        A = product_state(pd, self._initial_state(ctx.initial))
         u_half = _la.expm(-0.5j * ctx.dt * np.asarray(self.h, complex))
 
         def step(k):
