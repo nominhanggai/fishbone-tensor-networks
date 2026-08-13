@@ -4,7 +4,7 @@ import pytest
 
 from fishbonett.models import Fishbone
 from fishbonett import Bath, Result
-from fishbonett.frames.schrodinger import FishBoneH
+from fishbonett.bath.chain import get_coupling
 from fishbonett.operators import annihilate
 from fishbonett.operators import sigma_x, sigma_z
 
@@ -65,7 +65,7 @@ def _build_exact(sites, specs, backbone, d):
     c = annihilate(d)
     for i in range(nc):
         for (nm, op, side) in specs[i]:
-            w, k = FishBoneH.get_coupling(nm, _J, list(DOM), 1.0)
+            w, k = get_coupling(_J, nm, list(DOM), 1.0)
             base, _ = slots[i][side]
             for m in range(nm):
                 H += w[m] * _embed(c.T @ c, base + m, dims)

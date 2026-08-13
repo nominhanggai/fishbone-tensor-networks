@@ -83,10 +83,6 @@ the default `trunc_eps=1e-4` matters most: set it to the accuracy you actually
 need and let `result.max_bond` tell you what that costs.
 ```
 
-If you need the highly-optimized comb tensor network directly, the low-level
-builders {py:class}`~fishbonett.frames.schrodinger.FishBoneH` and
-{py:class}`~fishbonett.states.comb.FishBoneNet` remain available.
-
 See {doc}`observables` for measuring per-site, single-site and multi-site
 (correlation) observables on a fishbone, and {doc}`composite_multichannel` for
 giving a site internal structure or a cross-correlated multichannel bath.

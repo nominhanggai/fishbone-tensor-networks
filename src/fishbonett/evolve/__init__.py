@@ -10,19 +10,20 @@ In particular :func:`run_tdvp1` and its siblings are **1D-chain only** -- they
 build a chain MPO over a linear MPS.  For a branching geometry use the tree
 module instead; the algorithm is the same idea, the contractions are not.
 
-====================  ===================================  ====================
-geometry              module                               integrators
-====================  ===================================  ====================
-1D chain (MPS)        :mod:`~fishbonett.evolve.tebd`       TEBD (Trotter gates)
-1D chain (MPS + MPO)  :mod:`~fishbonett.evolve.tdvp`       TDVP 1/2-site, DTDVP
-binary tree of modes  :mod:`~fishbonett.evolve.modetree`   TDVP 1/2-site, TEBD
-arbitrary tree        :mod:`~fishbonett.evolve.sitetree`  TEBD
-comb / fishbone       :mod:`~fishbonett.evolve.tebd_comb`  TEBD
-====================  ===================================  ====================
+====================  ==================================  =====================
+geometry              module                              integrators
+====================  ==================================  =====================
+1D chain (MPS)        :mod:`~fishbonett.evolve.tebd`      TEBD (Trotter gates)
+1D chain (MPS + MPO)  :mod:`~fishbonett.evolve.tdvp`      TDVP 1/2-site, DTDVP
+binary tree of modes  :mod:`~fishbonett.evolve.modetree`  TDVP 1/2-site, TEBD
+any tree (incl comb)  :mod:`~fishbonett.evolve.sitetree`  TEBD
+====================  ==================================  =====================
 
-The last two rows used to point into :mod:`fishbonett.states`, which is where those
-algorithms lived; they are here now, so *every* gate application is in this package
-and ``states`` holds only tensors and canonical form.
+The last row used to point into :mod:`fishbonett.states`, which is where that
+algorithm lived; it is here now, so *every* gate application is in this package and
+``states`` holds only tensors and canonical form.  The comb is not a separate row:
+it is a tree, and :class:`fishbonett.models.fishbone.Fishbone` propagates it through
+``sitetree`` like any other.
 
 Note the two tree rows are different **models**, not two integrators for one
 geometry: ``modetree`` is a balanced binary tree of *bath modes* around one system

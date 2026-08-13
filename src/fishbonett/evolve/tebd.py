@@ -8,10 +8,8 @@ others carry their own bookkeeping for their own geometry:
 
 - :func:`fishbonett.evolve.modetree.run_tree_tebd` -- a balanced binary tree of
   *modes* (``tree-tebd``).
-- :class:`fishbonett.states.tree.TreeTEBD` -- any loop-free tree of *sites*
-  (``tree-tebd-static``, which is what the comb and multichannel models use).
-- :class:`fishbonett.states.comb.FishBoneNet` -- a comb-specific engine, not
-  reachable from ``run``.
+- :mod:`fishbonett.evolve.sitetree` -- any loop-free tree of *sites*, which the
+  comb, site-tree and multichannel models all use (``tree-tebd-static``).
 
 Two sweep patterns here, selected by the frame:
 
