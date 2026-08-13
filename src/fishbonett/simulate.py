@@ -402,14 +402,22 @@ class BosonicBath:
         rdms, max_bond = [], []
         for step in range(n_steps):
             t0 = 2 * step * hdt
-            u_fwd, _ = builder.get_u(t0, hdt, mode="normal")
-            state.U = u_fwd
+            # Palindromic (Strang) ordering: the first half-interval's gates run
+            # inward, the second half-interval's gates run back out, and the two
+            # innermost (bond-0) applications straddle the midpoint -- one from each
+            # half.  Using the *same* half-step gates for both would break the time
+            # symmetry and drop the sweep to first order in dt.  ``get_u`` returns
+            # ``(U1, U2)``; ``U2`` is the leg-transposed variant used by the swapped
+            # sweeps, so the un-swapped bond-0 updates must both use a ``U1``.
+            u_in, _ = builder.get_u(t0, hdt, mode="normal")
+            u_mid, u_out = builder.get_u(t0 + hdt, hdt, mode="normal")
+            state.U = u_in
             for j in range(n - 1, 0, -1):
                 state.update_bond(j, bond_dim, trunc_eps, swap=1)
             state.update_bond(0, bond_dim, trunc_eps, swap=0)
+            state.U = u_mid
             state.update_bond(0, bond_dim, trunc_eps, swap=0)
-            _, u_bwd = builder.get_u(t0 + hdt, hdt, mode="reverse")
-            state.U = u_bwd
+            state.U = u_out
             for j in range(1, n):
                 state.update_bond(j, bond_dim, trunc_eps, swap=1)
             theta = state.get_theta1(n)
