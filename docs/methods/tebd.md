@@ -84,5 +84,5 @@ way — just pass a `(3, 3)` `h` and `coupling` and a length-3 `initial` vector.
   handles a signed `domain` (thermofield / T-TEDOPA) directly; see {doc}`../bath`.
 - Cost per step is `O(n_modes)` two-site updates; the bond dimension is set by the
   physical system–bath entanglement and capped at `bond_dim`.
-- For the underlying builder see {py:mod}`fishbonett.models.interaction_picture`, and for the
+- For the underlying builder see {py:mod}`fishbonett.frames.interaction_picture`, and for the
   canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.BosonicBathMPS`.

@@ -137,7 +137,7 @@ def test_spinboson_multichannel_routes_to_star():
 def test_composite_spin_vibration_system():
     """System = spin (x) vibration; bath couples only through the spin.  Validated
     vs exact diagonalization of the discretized star."""
-    from fishbonett.models.interaction_picture import BosonicBathIP as Builder, _c
+    from fishbonett.frames.interaction_picture import BosonicBathIP as Builder, _c
     dv, nm, dph = 2, 2, 4
     I2, Iv = np.eye(2), np.eye(dv)
     bv = _c(dv); nv = bv.T @ bv
@@ -220,3 +220,42 @@ def test_mpo_rejects_non_hermitian_operators():
     with pytest.raises(ValueError):                      # coupling / h dim mismatch
         BosonicBath(h=np.eye(3), coupling=sigma_z, bath=bath).run(
             dt=0.05, n_steps=2, method="tree-tdvp")
+
+
+# -- polaron frame -----------------------------------------------------------
+def _polaron_bath(nm=14, d=8):
+    """T=0, gapped-domain bath so J(w)/w^2 is integrable (polaron precondition)."""
+    return Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
+                n_modes=nm, phys_dim=d)
+
+
+def test_polaron_matches_ip_populations_and_coherence():
+    """The polaron chain reproduces the interaction-picture chain for a 2-level
+    spin-boson: the frame-invariant population <sz> and the *un-dressed* coherence
+    <sx> both agree (they differ only by the O(dt^2) Trotter split)."""
+    model = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath())
+    kw = dict(dt=0.02, n_steps=50, bond_dim=60, trunc_eps=1e-4,
+              observables={"sz": sigma_z, "sx": sigma_x})
+    rp = model.run(method="polaron", **kw)
+    ri = model.run(method="tebd", **kw)
+    assert np.max(np.abs(rp.expect["sz"] - ri.expect["sz"])) < 2e-2   # populations
+    assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 2e-2   # un-dressed
+
+
+def test_polaron_general_coupling_matches_ip():
+    """The polaron frame handles a general (3-level, three-eigenvalue) coupling O."""
+    O = np.diag([1.0, 0.0, -1.0]).astype(complex)
+    h = np.zeros((3, 3), complex)
+    h[0, 1] = h[1, 0] = h[1, 2] = h[2, 1] = 0.5          # off-diagonal in O's eigenbasis
+    model = BosonicBath(h=h, coupling=O, bath=_polaron_bath())
+    kw = dict(dt=0.02, n_steps=50, bond_dim=60, trunc_eps=1e-4, observables={"O": O})
+    rp = model.run(method="polaron", **kw)
+    ri = model.run(method="tebd", **kw)
+    assert np.max(np.abs(rp.expect["O"] - ri.expect["O"])) < 2e-2
+
+
+def test_polaron_requires_zero_temperature():
+    bath = Bath(J=_J, domain=(0.3, 12.0), temperature=1.0, n_modes=8, phys_dim=6)
+    with pytest.raises(ValueError):
+        BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
+            method="polaron", dt=0.05, n_steps=2, bond_dim=20)

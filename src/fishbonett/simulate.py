@@ -250,13 +250,16 @@ class BosonicBath:
         if m == "tebd":
             return self._run_tebd(dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, engine_kw)
+        if m == "polaron":
+            return self._run_polaron(dt, n_steps, bond_dim, trunc_eps, obs_ops,
+                                     initial, engine_kw)
         if m in _MPO_METHODS:
             return self._run_mpo(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                  initial, krylov, engine_kw)
         if m in _TREE_METHODS:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, krylov, engine_kw)
-        raise ValueError(f"unknown method {method!r}; choose from tebd, "
+        raise ValueError(f"unknown method {method!r}; choose from tebd, polaron, "
                          "mpo-tdvp1/tdvp2/dtdvp, mpo-ip-tdvp1/tdvp2, "
                          "tree-tdvp/tdvp2/tebd")
 
@@ -365,7 +368,7 @@ class BosonicBath:
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.models.interaction_picture import BosonicBathIP as _IPBuilder
+        from fishbonett.frames.interaction_picture import BosonicBathIP as _IPBuilder
         from fishbonett.states.mps import BosonicBathMPS
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
@@ -407,6 +410,52 @@ class BosonicBath:
         t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms), method="tebd")
+
+    def _run_polaron(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
+        """Polaron-frame chain: the static system-bath coupling is absorbed into a
+        displacement of the first (reweighted-``J/w^2``) chain mode ``c0``, leaving
+        a free chain plus a dressed ``(c0, system)`` gate.  Plain nearest-neighbour
+        Trotter (no swap network); the physical bath vacuum is a displaced coherent
+        state on ``c0``; lab-frame observables are recovered by un-dressing.  Zero
+        temperature only.  See :mod:`fishbonett.frames.polaron`."""
+        from fishbonett.frames.polaron import BosonicBathPolaron
+        from fishbonett.states.mps import BosonicBathMPS
+        self._check_system()
+        if getattr(self.bath, "temperature", None):
+            raise ValueError("the polaron method requires zero temperature "
+                             "(bath.temperature must be None)")
+        b = self.bath.resolved(n_steps * dt)
+        n = b.n_modes
+        d_sys = self.h.shape[0]
+        pd = [b.phys_dim] * n + [d_sys]
+        builder = BosonicBathPolaron(pd)
+        builder.domain = list(b.domain)
+        builder.sd = b.spectral_density()
+        builder.coupling = self.coupling
+        builder.h_sys = self.h
+        builder.build(discretizer=b.discretizer())
+
+        state = BosonicBathMPS(pd)               # boson sites default to vacuum
+        psi0 = self._initial_state(initial)
+        # displaced (c0, system) initial block; the other boson sites stay vacuum
+        state.split_truncate_theta(builder.initial_theta(psi0), n - 1, bond_dim,
+                                   1e-14)
+
+        gates = builder.gates(dt / 2.0)          # static; symmetric Strang per step
+        rdms, max_bond = [], []
+        for step in range(n_steps):
+            state.U = gates
+            for j in range(n):
+                state.update_bond(j, bond_dim, trunc_eps, swap=0)
+            for j in range(n - 1, -1, -1):
+                state.update_bond(j, bond_dim, trunc_eps, swap=0)
+            rho = builder.undress_rdm(state.get_theta2(n - 1))   # lab-frame RDM
+            rdms.append(rho)
+            max_bond.append(max((len(s) for s in state.S), default=1))
+        t = np.arange(1, n_steps + 1) * dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
+                      method="polaron")
 
 
 # -- 1D fishbone: a specialization of TreeFishbone to a linear backbone -------

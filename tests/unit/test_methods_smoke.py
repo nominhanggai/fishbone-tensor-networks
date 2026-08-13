@@ -31,6 +31,18 @@ def test_cooling_shares_the_canonical_engine(module):
     assert "BosonicBathMPS" in bases
 
 
+def test_polaron_builds_and_gives_normalized_rdm():
+    from fishbonett.simulate import Bath, BosonicBath
+    from fishbonett.stuff import sigma_x, sigma_z
+
+    bath = Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
+                n_modes=6, phys_dim=6)
+    r = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
+        method="polaron", dt=0.05, n_steps=3, bond_dim=30)
+    assert np.all(np.isfinite(r.rdm))
+    assert np.allclose([np.trace(rho).real for rho in r.rdm], 1.0, atol=1e-6)
+
+
 def test_public_api_surface():
     import fishbonett as fb
     for name in ("BosonicBathMPS", "FishBoneNet", "FishBoneH",

@@ -77,7 +77,7 @@ usually ample) rather than leaning on the `1e-10` default.
 ```
 
 If you need the highly-optimized comb tensor network directly, the low-level
-builders {py:class}`~fishbonett.models.hamiltonian.FishBoneH` and
+builders {py:class}`~fishbonett.frames.hamiltonian.FishBoneH` and
 {py:class}`~fishbonett.states.comb.FishBoneNet` remain available.
 
 See {doc}`observables` for measuring per-site, single-site and multi-site
