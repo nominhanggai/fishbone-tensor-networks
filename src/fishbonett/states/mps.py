@@ -34,6 +34,7 @@ import scipy.linalg
 from fishbonett.contract import contract as einsum
 
 from fishbonett.linalg import svd, cap_rank
+from fishbonett.states.network import TensorNetwork
 
 try:  # optional GPU backend
     import cupy as cp
@@ -50,8 +51,24 @@ except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 
 
-class SystemBathMPS:
+class SystemBathMPS(TensorNetwork):
     """Matrix-product state of a system (spin) site followed by a boson chain.
+
+    A chain is a tree, so this is a
+    :class:`~fishbonett.states.network.TensorNetwork` whose graph is a **path**, and
+    it inherits the topology and the observables (``rdm``, ``joint_rdm``,
+    ``expectation``) from there.  Two things make it its own class rather than a
+    bare ``TreeTensorNetwork``:
+
+    * **leg order.**  Storage is ``(vL, p, vR)`` -- physical in the middle -- which
+      the whole 1D TEBD/TDVP stack and every frame's gate layout assume.  The base
+      wants ``(bonds..., phys)``, so :meth:`tensor` and :meth:`set_tensor` permute
+      between the two.  That permutation is the entire difference; see
+      :mod:`fishbonett.states`.
+    * **gauge.**  This is Vidal (``Gamma-Lambda``) form: singular values live on the
+      bonds in ``S`` and *every* site is already canonical, so
+      :meth:`_prepare_for` is a no-op rather than an orthogonality-centre walk.
+      ``R`` additionally carries the local-basis-optimization projectors.
 
     Parameters
     ----------
@@ -71,12 +88,54 @@ class SystemBathMPS:
         self.U = [np.zeros(0) for _ in pd[1:]]
         # Optimal-basis projectors for LBO; identity means "no optimization".
         self.R = [np.eye(d) for d in pd]
+        # the graph: a path 0 -- 1 -- ... -- n-1, rooted at the system site
+        self.n = len(pd)
+        self.dims = list(pd)
+        self.root = 0
+        self.oc = 0
+        self._build_topology([(i, i + 1) for i in range(self.n - 1)])
 
     @staticmethod
     def _ground(d):
         tensor = np.zeros([1, d, 1], dtype=np.complex128)
         tensor[0, 0, 0] = 1.0
         return tensor
+
+    # -- TensorNetwork storage hooks -------------------------------------------
+    def neighbours(self, i):
+        """``i``'s bond legs in leg order: left neighbour then right neighbour.
+
+        Matches the ``(vL, p, vR)`` storage, so leg ``k`` of :meth:`tensor` is the
+        bond to ``neighbours(i)[k]`` -- which is what the base relies on.
+        """
+        return ([i - 1] if i > 0 else []) + ([i + 1] if i < self.n - 1 else [])
+
+    def tensor(self, i):
+        """Node ``i`` as ``(bonds..., phys)``, with ``S`` and ``R`` contracted in.
+
+        The base's observables want the *physical* state around the site, which in
+        Vidal form is :meth:`get_theta1`, not the bare right-canonical ``B[i]``.
+        End sites keep their dummy dimension-1 bond, so the leg count still matches
+        :meth:`neighbours`.
+        """
+        theta = self.get_theta1(i)                     # (vL, p, vR)
+        t = np.moveaxis(theta, 1, -1)                  # (vL, vR, p)
+        if i == 0:
+            t = t[0]                                   # drop the dummy left bond
+        if i == self.n - 1:
+            t = t[..., 0, :]                           # drop the dummy right bond
+        return t
+
+    def set_tensor(self, i, value):
+        raise NotImplementedError(
+            "SystemBathMPS is in Vidal form: writing a single tensor back would "
+            "leave S inconsistent.  Use update_bond / split_truncate_theta, which "
+            "maintain the gauge.")
+
+    def _prepare_for(self, i):
+        """No-op: in Vidal form every site is already canonical, so unlike the
+        mixed-canonical tree there is no orthogonality centre to move."""
+        return
 
     # -- wavefunction accessors ------------------------------------------------
     def get_theta1(self, i, gpu=False):

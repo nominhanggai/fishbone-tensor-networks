@@ -72,6 +72,59 @@ def test_removed_comb_engine_is_gone():
         assert not hasattr(sch, gone), f"{gone} should not have come back"
 
 
+def test_mps_and_tree_are_one_tensor_network():
+    """Both state containers are the same loop-free tensor network.
+
+    They used to share no code: the MPS stores legs ``(vL, p, vR)`` and the tree
+    ``(bonds..., p)``, and every method hard-coded axis positions.  That is a
+    storage convention, not a difference in the mathematics -- so the topology, the
+    canonical-form machinery and the observables now live once in ``TensorNetwork``
+    and each container supplies ``tensor`` / ``set_tensor`` / ``neighbours``.
+    """
+    import numpy as np
+    from fishbonett.states.mps import SystemBathMPS
+    from fishbonett.states.tree import TreeTensorNetwork
+    from fishbonett.states.network import TensorNetwork
+    from fishbonett.evolve import tebd
+    from fishbonett.frames.polaron import SystemBathPolaron
+    from fishbonett.operators import sigma_x, sigma_z
+
+    assert issubclass(SystemBathMPS, TensorNetwork)
+    assert issubclass(TreeTensorNetwork, TensorNetwork)
+
+    pd = [2] + [8] * 5
+    builder = SystemBathPolaron(pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+                                sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
+                                domain=(0.3, 12.0)).build()
+    st = SystemBathMPS(pd)
+    for _ in range(3):
+        tebd.symmetric_static_step(st, builder.gates(0.01), len(pd) - 1, 40, 1e-9)
+
+    # the chain's topology is inferred, not special-cased
+    assert st.neighbours(0) == [1]
+    assert st.neighbours(3) == [2, 4]
+    assert st.neighbours(len(pd) - 1) == [len(pd) - 2]
+    assert st.path(0, 4) == [0, 1, 2, 3, 4]
+
+    # tensor() presents (bonds..., phys) whatever the storage order is
+    assert st.tensor(3).shape == (st.B[3].shape[0], st.B[3].shape[2], st.B[3].shape[1])
+
+    # and the inherited RDM reproduces the contraction the models used to inline
+    for i in (0, 2, len(pd) - 1):
+        theta = st.get_theta1(i)
+        inline = np.einsum("LiR,LjR->ij", theta, theta.conj())
+        inline /= np.trace(inline).real
+        assert np.allclose(st.rdm(i), inline, atol=1e-12)
+        assert abs(np.trace(st.rdm(i)).real - 1.0) < 1e-12
+
+    # expectation() works on an MPS now; it only existed on the tree before
+    assert np.isclose(st.expectation(sigma_z, 0),
+                      np.einsum('ij,ji->', st.rdm(0), sigma_z).real)
+
+    # Vidal form means every site is already canonical, so no OC walk happens
+    assert st._prepare_for(0) is None and st.oc == 0
+
+
 def test_schrodinger_frame_serves_every_topology():
     """The point of Stage 3: one frame implementation, any geometry.
 
