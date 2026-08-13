@@ -115,7 +115,7 @@ def test_methods_share_time_grid_and_agree():
 def test_spinboson_multichannel_routes_to_star():
     """SystemBath with a multichannel bath (sz AND sx) keeps the spin on its own
     site and matches the tree star engine."""
-    from fishbonett.states.tree import TreeFishbone
+    from fishbonett.models.fishbone import TreeFishbone
 
     def Jz(w):
         return 0.2 * w * np.exp(-w / 5.0)
@@ -228,38 +228,6 @@ def _polaron_bath(nm=14, d=8):
     """T=0, gapped-domain bath so J(w)/w^2 is integrable (polaron precondition)."""
     return Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
                 n_modes=nm, phys_dim=d)
-
-
-def test_every_method_is_classified_by_frame():
-    """The frame decides which integrators are usable at all, so every
-    dispatchable method must declare one (and nothing may declare a frame without
-    being dispatchable)."""
-    from fishbonett.simulate import (METHOD_FRAMES, methods_by_frame,
-                                     _MPO_METHODS, _POLARON_TDVP_METHODS,
-                                     _TREE_METHODS)
-    dispatchable = (set(_MPO_METHODS) | set(_POLARON_TDVP_METHODS)
-                    | set(_TREE_METHODS)
-                    | {"tebd", "trotter-mpo", "polaron"})
-    assert dispatchable == set(METHOD_FRAMES)
-    # a frame is a (picture, bath representation) pair
-    assert set(methods_by_frame()) == {
-        ("schrodinger", "chain"), ("schrodinger", "polaron-chain"),
-        ("interaction", "chain"), ("interaction", "star"),
-    }
-    # the time-independent pictures are exactly the ones offering TDVP on a
-    # statically-built MPO -- and the polaron chain is one of them
-    assert METHOD_FRAMES["mpo-tdvp1"] == ("schrodinger", "chain")
-    assert METHOD_FRAMES["polaron-tdvp1"] == ("schrodinger", "polaron-chain")
-    # star means no chain mapping; trotter-mpo's exact factorization is
-    # interaction-picture-only
-    assert METHOD_FRAMES["mpo-ip-tdvp1"] == ("interaction", "star")
-    assert METHOD_FRAMES["trotter-mpo"] == ("interaction", "chain")
-
-
-def test_unknown_method_error_lists_methods_by_frame():
-    model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=4, d=4))
-    with pytest.raises(ValueError, match="by frame"):
-        model.run(dt=0.05, n_steps=1, method="not-a-method")
 
 
 def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():

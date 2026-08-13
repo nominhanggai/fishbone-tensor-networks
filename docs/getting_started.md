@@ -3,7 +3,7 @@
 ```{admonition} Quick start
 :class: tip
 `from fishbonett import Bath, SystemBath, Truncation` — build a bath, attach it
-to a system, call `model.run(...)`.  See {doc}`systems/index` for the model
+to a system, call `model.run(...)`.  See {doc}`models/index` for the model
 classes, {doc}`methods/index` for propagation methods, and {doc}`bath` for the
 bath itself.
 ```
@@ -33,7 +33,7 @@ per-contraction throughput.
 
 ## A first simulation
 
-The high-level interface ({py:mod}`fishbonett.simulate`) propagates the population
+The high-level interface ({py:mod}`fishbonett.models`) propagates the population
 $\langle\sigma_z\rangle(t)$ of a two-level system coupled to a bath with a single
 call. Declare the bath and the system, then `run`:
 
@@ -60,7 +60,7 @@ result.max_bond          # peak bond dimension per step
 TDVP variants), `"mpo-tdvp1" | "mpo-tdvp2" | "mpo-dtdvp"`,
 `"mpo-ip-tdvp1" | "mpo-ip-tdvp2"`, or `"tree-tdvp" | "tree-tdvp2" | "tree-tebd"`.
 Every method uses the same `dt`/`t_max` and returns the same
-{py:class}`~fishbonett.simulate.Result`, so switching engines is a one-word change.
+{py:class}`~fishbonett.models.result.Result`, so switching engines is a one-word change.
 See {doc}`methods/index` for the theory and an example behind each one.
 
 ### Accuracy: `dt`, `trunc_eps`, `bond_dim`
@@ -85,14 +85,14 @@ require an explicit `bond_dim` — see {doc}`methods/index`.)
 
 A fishbone is a set of electronic sites, each coupled to one bath (a comb) or two
 baths — one on each side of the site (the fishbone).
-{py:class}`~fishbonett.simulate.Fishbone` is the 1D-chain specialization (a linear
+{py:class}`~fishbonett.models.fishbone.Fishbone` is the 1D-chain specialization (a linear
 backbone) of the general tree engine
-{py:class}`~fishbonett.states.tree.TreeFishbone`, to which it delegates; both return
+{py:class}`~fishbonett.models.fishbone.TreeFishbone`, to which it delegates; both return
 per-site data. For a non-chain topology, use ``TreeFishbone`` with an edge list.
 The 1D chain is declared the same way as the single-site system:
 
 ```python
-from fishbonett.simulate import Fishbone
+from fishbonett.models import Fishbone
 
 def bath(op):                                        # one bath, coupling operator op
     return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
@@ -107,7 +107,7 @@ res.expect["sz"]         # (n_steps, n_sites): sigma_z measured on each site
 res.rdm                  # (n_steps, n_sites, d, d): reduced density matrix per site
 ```
 
-{doc}`systems/index` covers the full model vocabulary — arbitrary tree topologies,
+{doc}`models/index` covers the full model vocabulary — arbitrary tree topologies,
 composite (spin + vibration) systems, multichannel baths and multi-site
 observables — and {doc}`bath` covers bath discretization and finite temperature.
 

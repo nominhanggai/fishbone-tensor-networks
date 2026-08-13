@@ -2,29 +2,36 @@
 
 Start from `from fishbonett import Bath, SystemBath, Truncation`.
 
-A calculation is three independent choices, one subpackage each: **frame** (what
-the Hamiltonian looks like — `frames`), **geometry** (the shape of the tensor
-network — `states`), and **propagator** (how a step is taken — `evolve`).
-`simulate` wires them together, `bath` turns a spectral density into the chain
-parameters they all start from, and `linalg`/`operators` hold the shared
-numerics.  The system sits at **site 0** throughout, with the bath modes
-following, nearest first.
+A calculation is three **nested** choices, one subpackage each: **model** (what is
+coupled to what — `models`), **frame** (how the Hamiltonian is written down —
+`frames`), and **propagator** (how a step is taken — `evolve`).  The model fixes
+the state geometry (`states`) and constrains the other two;
+{py:mod}`fishbonett.models.registry` records which combinations exist and why the
+rest do not.  `bath` turns a spectral density into the chain parameters every
+model starts from, and `linalg`/`operators` hold the shared numerics.  The system
+sits at **site 0** throughout, with the bath modes following, nearest first.
 
-## High-level interface
+## Models — the physical setups
+
+The six models and the taxonomy that relates them to frames and propagators.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
    :recursive:
 
-   fishbonett.simulate
+   fishbonett.models.registry
+   fishbonett.models.system_bath
+   fishbonett.models.fishbone
+   fishbonett.models.result
 ```
 
 ## Geometry: the state ansätze
 
 The 1D chain, the comb and the general tree are separate implementations rather
 than a class hierarchy — each is optimized for its own geometry, and they share
-the truncation policy instead of a base class.
+the truncation policy instead of a base class.  These hold tensors only; the
+models that drive them are above.
 
 ```{eval-rst}
 .. autosummary::

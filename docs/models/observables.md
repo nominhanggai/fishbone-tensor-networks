@@ -40,7 +40,7 @@ the bath.  This is exposed on the low-level state as
 {py:meth}`TreeTEBD.expectation <fishbonett.states.tree.TreeTEBD.expectation>`.
 
 All three forms work identically through the 1D
-{py:class}`~fishbonett.simulate.Fishbone`, since it delegates to the same engine.
+{py:class}`~fishbonett.models.fishbone.Fishbone`, since it delegates to the same engine.
 
 ## Per-site reduced density matrices
 

@@ -1,8 +1,8 @@
 """The high-level interface: spin-boson and fishbone dynamics in a few lines.
 
 The low-level engines require the user to hand-write a TEBD/TDVP sweep loop (see
-the other examples).  The :class:`~fishbonett.simulate.SystemBath` and
-:class:`~fishbonett.simulate.Fishbone` classes wrap that away: declare the
+the other examples).  The :class:`~fishbonett.models.SystemBath` and
+:class:`~fishbonett.models.Fishbone` classes wrap that away: declare the
 bath(s) and system, then call ``run`` once.
 
 Run with:  python examples/friendly_interface.py

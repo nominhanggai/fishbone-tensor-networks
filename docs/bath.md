@@ -204,7 +204,7 @@ eps_i, t_i = get_bath_nn_paras(bath.spectral_density(), n=40, domain=(-25, 36))
 ## `legendre` vs `orthpol`
 
 The default uniform-measure Gauss–Legendre grid is robust and shared across
-channels (which is why a {doc}`multichannel bath <systems/composite_multichannel>`
+channels (which is why a {doc}`multichannel bath <models/composite_multichannel>`
 requires it).  For spectral densities that are sharply peaked or infrared-divergent,
 a uniform grid resolves them poorly.  The `"orthpol"` setting instead builds a
 **measure-adapted** star, using $J$ itself as the weight of an orthogonal-polynomial
@@ -234,10 +234,10 @@ $$
 so a *pure-state* simulation on the doubled (signed) domain reproduces the thermal
 dynamics.  In practice you just pass a `temperature` (or `beta`) and a signed
 `domain`; `Bath.spectral_density()` returns the thermalized density.  The
-transform is {py:func}`fishbonett.simulate.thermalize`, usable on its own:
+transform is {py:func}`fishbonett.models.thermalize`, usable on its own:
 
 ```python
-from fishbonett.simulate import thermalize
+from fishbonett.models import thermalize
 
 J0 = lambda w: 0.2 * w * np.exp(-w / 5)            # zero-T density on w > 0
 J_beta = thermalize(J0, beta=1.0)                  # signed, finite-T density

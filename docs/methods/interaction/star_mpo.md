@@ -112,4 +112,4 @@ t, sz = run_ip_tdvp1(bath.spectral_density(), (-25, 36), V=1.0,
   a **smaller bond dimension** thanks to the interaction picture.
 - `h` and the coupling `O` are carried as matrices, so a general Hermitian system
   and coupling of any dimension work (the illustration uses `sigma_z`); see
-  {doc}`/systems/spin_boson`.
+  {doc}`/models/spin_boson`.
