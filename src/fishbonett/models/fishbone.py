@@ -3,9 +3,14 @@
 * ``site-tree`` (:class:`TreeFishbone`) -- sites wired into any loop-free tree;
 * ``comb`` (:class:`Fishbone`) -- the same with a linear backbone, the fishbone.
 
-Both are Schroedinger-picture: :meth:`TreeFishbone.hamiltonians` builds the
-chain-mapped Hamiltonian with the bath frequencies on-site, and the gates are
-static.  The state they evolve is :class:`fishbonett.states.tree.TreeTEBD`.
+Both are Schroedinger-picture, and the Hamiltonian itself is the frame's business,
+not the model's: :meth:`TreeFishbone.local_terms` asks
+:func:`fishbonett.frames.schrodinger.terms` to turn the sites and baths into a
+:class:`~fishbonett.frames.terms.LocalTerms` graph -- bath frequencies on their own
+nodes, couplings on the edges -- and the model only decides the topology and drives
+the propagation.  The state it evolves is
+:class:`fishbonett.states.tree.TreeTEBD`, stepped by
+:mod:`fishbonett.evolve.sitetree`.
 
 Do not confuse ``site-tree`` with the ``mode-tree`` model, where a *single*
 system's bath modes are placed on a tree; see
@@ -14,12 +19,10 @@ system's bath modes are placed on a tree; see
 from dataclasses import replace
 
 import numpy as np
-from scipy.linalg import expm
 
-from fishbonett.bath.chain import get_bath_nn_paras
-from fishbonett.bath.legendre import get_vn_squared
+from fishbonett.frames.schrodinger import terms as schrodinger_terms
 from fishbonett.linalg import Truncation
-from fishbonett.operators import annihilate, sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.states.tree import TreeTEBD
 from fishbonett.models.result import Result
 from fishbonett.models.registry import (
@@ -27,12 +30,6 @@ from fishbonett.models.registry import (
 )
 
 __all__ = ["TreeFishbone", "Fishbone", "STATIC_TREE_TEBD"]
-
-
-def _bath_ops(d):
-    a = annihilate(d)                       # annihilation
-    ad = a.T                        # creation
-    return a, ad, a + ad, ad @ a    # a, a^dag, x = a+a^dag, number
 
 
 def _parse_observable(spec):
@@ -96,73 +93,23 @@ class TreeFishbone:
         if len(self.baths) != self.ns:
             raise ValueError("baths must have one entry per site")
 
-    def hamiltonians(self, t_max=None):
-        """The chain-mapped physical tree: ``(dims, edges, site_H, edge_H)`` where
-        ``site_H[node]`` is the on-site Hamiltonian and ``edge_H[(a, b)]`` the
-        two-site coupling.  Electronic sites are nodes ``0..n_sites-1``; each bath
-        is a chain of nodes hanging off its site.  ``t_max`` sizes any bath whose
-        ``n_modes`` is automatic (see :meth:`fishbonett.bath.spec.Bath.resolved`)."""
-        dims = list(self.de)
-        edges = [(i, j) for (i, j, _) in self.edges]
-        site_H = [self.sites[i].copy() for i in range(self.ns)]
-        edge_H = {(i, j): C for (i, j, C) in self.edges}
-        node = self.ns
-        for i in range(self.ns):
-            for bath in self.baths[i]:
-                bath = bath.resolved(t_max)          # fill automatic domain/n_modes
-                d = bath.phys_dim
-                a, ad, x, numb = _bath_ops(d)
-                if getattr(bath, "is_multichannel", False):
-                    node = self._add_multichannel_star(bath, i, node, dims, edges,
-                                                       site_H, edge_H, a, ad, x, numb)
-                    continue
-                w, k = get_bath_nn_paras(bath.spectral_density(), bath.n_modes,
-                                         list(bath.domain), discretizer=bath.discretizer())
-                w = np.asarray(w, float); k = np.asarray(k, float)
-                cop = np.asarray(bath.coupling if bath.coupling is not None else sigma_z,
-                                 complex)
-                prev = i
-                for m in range(bath.n_modes):
-                    dims.append(d)
-                    site_H.append(w[m] * numb)
-                    edges.append((prev, node))
-                    if m == 0:
-                        edge_H[(prev, node)] = k[0] * np.kron(cop, x)
-                    else:
-                        edge_H[(prev, node)] = k[m] * (np.kron(ad, a) + np.kron(a, ad))
-                    prev = node
-                    node += 1
-        return dims, edges, site_H, edge_H
+    def local_terms(self, t_max=None):
+        """The static Hamiltonian as a
+        :class:`~fishbonett.frames.terms.LocalTerms` graph.
 
-    def _add_multichannel_star(self, bath, site, node, dims, edges, site_H, edge_H,
-                               a, ad, x, numb):
-        """One bath coupled to ``site`` through several operators, as a *shared-mode
-        star*: every channel uses the same Gauss-Legendre nodes ``omega_k`` (so the
-        channels cross-correlate), and mode ``k`` couples via the combined operator
-        ``M_k = sum_c g_{c,k} O_c``, ``g_{c,k} = sqrt(J_c(omega_k) w_k / pi)``."""
-        if bath.discretization != "legendre":
-            raise ValueError("a multichannel bath must use the 'legendre' "
-                             "discretization: its Gauss nodes are shared across "
-                             "channels, whereas measure-adapted TEDOPA nodes are not")
-        channels = bath.channels()
-        freq = None
-        g = []
-        for Jc, _op in channels:
-            f, v_sq = get_vn_squared(Jc, bath.n_modes, list(bath.domain))
-            f = np.asarray(f, float)
-            g.append(np.sqrt(np.asarray(v_sq, float) / np.pi))
-            if freq is None:
-                freq = f
-            elif not np.allclose(freq, f):        # nodes are shared, so unreachable
-                raise ValueError("multichannel channels do not share the mode grid")
-        for k in range(bath.n_modes):
-            dims.append(bath.phys_dim)
-            site_H.append(freq[k] * numb)
-            M = sum(g[c][k] * channels[c][1] for c in range(len(channels)))
-            edges.append((site, node))
-            edge_H[(site, node)] = np.kron(M, x)    # (site op M) (x) (a + a^dag)
-            node += 1
-        return node
+        Delegates to :func:`fishbonett.frames.schrodinger.terms` -- these models are
+        Schroedinger-picture, and the frame owns how a bath becomes nodes and edges.
+        ``t_max`` sizes any bath whose ``n_modes`` is automatic.
+        """
+        return schrodinger_terms(self.sites, self.edges, self.baths, t_max)
+
+    def hamiltonians(self, t_max=None):
+        """``(dims, edges, site_H, edge_H)`` -- :meth:`local_terms` as a 4-tuple.
+
+        Kept because it reads well in tests and reference implementations that want
+        the raw arrays; :meth:`local_terms` is the structured form.
+        """
+        return self.local_terms(t_max).as_tuple()
 
     def _build(self, dt, t_max=None):
         """Physical tree plus the single-site and two-site Trotter gates.
@@ -172,13 +119,9 @@ class TreeFishbone:
         twice, so ``run`` passes half its step here -- the same convention as
         :func:`fishbonett.evolve.tebd.symmetric_static_step`.
         """
-        dims, edges, site_H, edge_H = self.hamiltonians(t_max)
-        site_gates = [expm(-1j * H * dt) if np.any(H) else None for H in site_H]
-        edge_gates = {}
-        for (a_, b_), H in edge_H.items():
-            da, db = dims[a_], dims[b_]
-            edge_gates[(a_, b_)] = expm(-1j * H * dt).reshape(da, db, da, db)
-        return dims, edges, site_gates, edge_gates
+        lt = self.local_terms(t_max)
+        site_gates, edge_gates = lt.gates(dt)
+        return lt.dims, lt.edges, site_gates, edge_gates
 
     def _initial_vec(self, initial, i):
         de = self.de[i]
@@ -336,6 +279,18 @@ class Fishbone:
         edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]
         return TreeFishbone(sites=self.sites, edges=edges,
                             baths=[self._site_baths(b) for b in self.baths])
+
+    def local_terms(self, t_max=None):
+        """The static Hamiltonian as :class:`~fishbonett.frames.terms.LocalTerms`.
+
+        Same as :meth:`fishbonett.models.fishbone.TreeFishbone.local_terms`, with the
+        linear backbone expanded into the equivalent edge list.
+        """
+        return self._tree().local_terms(t_max)
+
+    def hamiltonians(self, t_max=None):
+        """``(dims, edges, site_H, edge_H)`` -- :meth:`local_terms` as a 4-tuple."""
+        return self.local_terms(t_max).as_tuple()
 
     def run(self, *, method=STATIC_TREE_TEBD, **kwargs):
         """Propagate the 1D fishbone (delegates to the general tree engine).  See

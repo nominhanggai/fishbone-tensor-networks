@@ -7,10 +7,12 @@ decides which frames are even available, and the frame in turn decides which
 propagators (:mod:`fishbonett.evolve`) apply.
 
 =============================================  =====================================
+:mod:`~fishbonett.frames.schrodinger`          nothing rotated out; ``H`` static
 :mod:`~fishbonett.frames.interaction_picture`  free bath rotated out; ``H(t)``
 :mod:`~fishbonett.frames.polaron`              Lang-Firsov; static, low entanglement
 :mod:`~fishbonett.frames.multichannel`         interaction picture, several couplings
 :mod:`~fishbonett.frames.coolingchain`         finite ``T`` by a non-unitary gauge
+:mod:`~fishbonett.frames.terms`                ``LocalTerms``, what a static frame emits
 :mod:`~fishbonett.frames.mpo`                  the chain/star MPOs the frames emit
 =============================================  =====================================
 
@@ -21,11 +23,19 @@ a static ``H`` can drive TDVP with a once-built MPO, a time-dependent one must
 rebuild each step, and only the interaction picture makes all the coupling terms
 commute (which is what ``trotter-mpo`` exploits).  See :doc:`/methods/index`.
 
-The **Schroedinger picture has no builder class here**, which is the clearest sign
-that this package is organized by (model, frame) pair rather than by frame: its
-chain and star MPOs are :mod:`fishbonett.frames.mpo` functions called from
-:mod:`fishbonett.evolve.tdvp`, and the multi-site models build their static
-Hamiltonian inline in :meth:`fishbonett.models.fishbone.TreeFishbone.hamiltonians`.
+The **Schroedinger picture** is the one frame that is geometry-independent: it
+rotates nothing away, so its Hamiltonian is just the chain-mapped one written down,
+and :func:`fishbonett.frames.schrodinger.terms` emits it as a
+:class:`~fishbonett.frames.terms.LocalTerms` graph for *any* topology -- one system
+with a chain of modes, a comb, or an arbitrary tree of sites.  That construction used
+to live inside :class:`fishbonett.models.fishbone.TreeFishbone`, so the multi-site
+models bypassed this package entirely; they now go through it like everything else.
+
+The time-dependent frames do **not** produce ``LocalTerms``, and that is the honest
+shape of the physics rather than an omission: the interaction picture has no on-site
+bath terms at all and a coupling that must be rebuilt every step, and the polaron
+frame folds the coupling into a displacement on a single bond.  Those build their
+gates directly.
 
 Not every frame is available for every model: the multi-site models have only the
 Schroedinger picture, and ``coolingchain`` sits outside the taxonomy entirely

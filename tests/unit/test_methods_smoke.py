@@ -61,7 +61,47 @@ def test_removed_comb_engine_is_gone():
     for name in ("FishBoneNet", "FishBoneH", "SystemBath1D",
                  "SystemBathSchrodinger", "init_ttn"):
         assert not hasattr(fb, name), f"{name} should have been removed"
-    for mod in ("fishbonett.states.comb", "fishbonett.frames.schrodinger",
-                "fishbonett.evolve.tebd_comb"):
+    for mod in ("fishbonett.states.comb", "fishbonett.evolve.tebd_comb"):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(mod)
+    # frames.schrodinger exists again, but as the *frame* rather than a pair of
+    # (model, frame) builder classes -- it emits LocalTerms for any topology.
+    sch = importlib.import_module("fishbonett.frames.schrodinger")
+    assert hasattr(sch, "terms")
+    for gone in ("FishBoneH", "SystemBathSchrodinger"):
+        assert not hasattr(sch, gone), f"{gone} should not have come back"
+
+
+def test_schrodinger_frame_serves_every_topology():
+    """The point of Stage 3: one frame implementation, any geometry.
+
+    The multi-site models used to build their static Hamiltonian inline, bypassing
+    frames/ entirely, which is why the package could hold a `frames` directory that
+    half the models never touched.
+    """
+    import numpy as np
+    from fishbonett import Bath, Fishbone
+    from fishbonett.models import TreeFishbone
+    from fishbonett.frames.terms import LocalTerms
+    from fishbonett.operators import sigma_x, sigma_z
+
+    J = lambda w: 0.2 * w * np.exp(-w / 5.0)
+    mk = lambda: Bath(J=J, domain=(0.0, 40.0), n_modes=2, phys_dim=4,
+                      coupling=sigma_z)
+    C = 0.3 * np.kron(sigma_z, sigma_z)
+    h = 0.5 * sigma_z + sigma_x
+
+    comb = Fishbone(sites=[h, h], baths=[mk(), mk()], backbone=[C])
+    tree = TreeFishbone(sites=[h, h], edges=[(0, 1, C)], baths=[mk(), mk()])
+    a, b = comb.local_terms(), tree.local_terms()
+
+    assert isinstance(a, LocalTerms) and isinstance(b, LocalTerms)
+    assert a.dims == b.dims and a.edges == b.edges
+    assert all(np.allclose(x, y) for x, y in zip(a.site, b.site))
+    assert set(a.bond) == set(b.bond)
+    assert all(np.allclose(a.bond[k], b.bond[k]) for k in a.bond)
+
+    # a zero on-site term becomes None, not an identity gate, so the propagators
+    # can skip it
+    site_gates, edge_gates = a.gates(0.01)
+    assert len(site_gates) == a.n_nodes and len(edge_gates) == len(a.edges)
