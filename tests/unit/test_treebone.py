@@ -71,8 +71,10 @@ def test_treetebd_star_matches_exact():
         H = H + Je[(a, b)] * (_embed(sigma_z, a, dims) @ _embed(sigma_z, b, dims))
     dt, ns = 0.02, 12
     st = TreeTEBD(dims, edges, root=0)
-    site_gates = [expm(-1j * hs[i] * dt) for i in range(n)]
-    edge_gates = {e: expm(-1j * Je[e] * np.kron(sigma_z, sigma_z) * dt).reshape(2, 2, 2, 2)
+    # `step` is a symmetric (Strang) step and applies every gate twice, so it takes
+    # **half**-step gates -- same convention as evolve.tebd.symmetric_static_step.
+    site_gates = [expm(-1j * hs[i] * dt / 2) for i in range(n)]
+    edge_gates = {e: expm(-1j * Je[e] * np.kron(sigma_z, sigma_z) * dt / 2).reshape(2, 2, 2, 2)
                   for e in edges}
     sz = []
     for _ in range(ns):
@@ -80,7 +82,9 @@ def test_treetebd_star_matches_exact():
         sz.append([np.trace(st.rdm(i) @ sigma_z).real for i in range(n)])
         st.move_oc_to(0)
     ex = _evolve_sz(dims, H, np.arange(1, ns + 1) * dt, n)
-    assert np.max(np.abs(np.array(sz) - ex)) < 1e-3
+    # A star is the shape where a naive down-and-up Euler tour fails to reach second
+    # order, so this geometry is worth holding to a tight bound.
+    assert np.max(np.abs(np.array(sz) - ex)) < 1e-4
 
 
 def _fb_exact(fb, ts):

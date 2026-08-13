@@ -50,18 +50,30 @@ scalar times one operator.  Gates are rebuilt each step and applied with a swap
 network, as in {doc}`/methods/interaction/tebd`.
 
 The two agree, which is the useful thing about having both — measured against exact
-diagonalization of the same shared-mode star (3 modes, $d=8$, two channels
-$\sigma_z,\sigma_x$):
+diagonalization of the same shared-mode star (3 modes, $d=6$, two channels
+$\sigma_z,\sigma_x$, $\Delta t = 0.01$):
 
-| method | $\langle\sigma_z\rangle$ vs exact | $\langle\sigma_x\rangle$ vs exact |
+| method | $\langle\sigma_z\rangle$ vs exact | $\langle\sigma_x\rangle$ vs exact | peak bond |
+|---|---|---|---|
+| `tree-tebd-static` | $5.2\times10^{-5}$ | $5.4\times10^{-5}$ | 6 |
+| `multichannel-ip` | $6.7\times10^{-6}$ | $8.1\times10^{-6}$ | 9 |
+
+**Both are second order**, so that ~8× gap is a constant prefactor rather than a
+different convergence rate — halving $\Delta t$ divides both errors by 4:
+
+| $\Delta t$ | `tree-tebd-static` | `multichannel-ip` |
 |---|---|---|
-| `tree-tebd-static` | $5.4\times10^{-5}$ | $4.5\times10^{-5}$ |
-| `multichannel-ip` | $6.4\times10^{-6}$ | $7.3\times10^{-6}$ |
+| 0.02 | $2.07\times10^{-4}$ | $1.84\times10^{-5}$ |
+| 0.01 | $5.16\times10^{-5}$ | $4.58\times10^{-6}$ |
+| 0.005 | $1.29\times10^{-5}$ | $1.15\times10^{-6}$ |
+| measured order | 2.00 | 2.00 |
 
-The interaction picture is the more accurate of the two at equal $\Delta t$ because
-the free-bath evolution is exact in it rather than Trotterized; its peak bond is
-correspondingly a little larger (11 vs 7 here), since it carries the coupling in the
-bonds instead of on the sites.
+What makes the interaction picture the more accurate of the two at equal $\Delta t$
+is that the free-bath evolution is *exact* in it rather than Trotterized: the static
+path has to split each mode's $\omega_k n_k$ against the coupling, and $\omega_k$ is
+the largest energy scale in the problem. The IP pays for that with a slightly larger
+bond (9 vs 6 here), since it carries the coupling in the bonds instead of on the
+sites.
 
 ### The chain basis is a free choice here
 

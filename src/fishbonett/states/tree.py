@@ -1,8 +1,10 @@
-"""Mixed-canonical tree tensor-network state with a TEBD step.
+"""Mixed-canonical tree tensor-network state.
 
-The *state* only: node tensors, their canonical form, gate application and
-reduced density matrices.  It knows nothing about baths or frames -- the models
-that drive it live in :mod:`fishbonett.models.fishbone`.
+The *state* only: node tensors, their canonical form, and reduced density
+matrices.  It knows nothing about baths or frames -- the models that drive it live
+in :mod:`fishbonett.models.fishbone`, and the gate application and Trotter step in
+:mod:`fishbonett.evolve.tebd_tree` (the methods here are thin wrappers around it,
+as in :mod:`fishbonett.states.mps`).
 
 Node ``i``'s tensor carries legs ``[bond to each neighbour (in ``order[i]``)
 ..., physical]``, physical last.  A tree has no loops, so there is an exact
@@ -12,15 +14,8 @@ path between any two nodes, and a site's RDM is read straight off the centre.
 import numpy as np
 
 from fishbonett.contract import contract
-from fishbonett.linalg import cap_rank
 
 __all__ = ["TreeTEBD"]
-
-
-def _svd_trunc(mat, chi, eps):
-    U, S, Vh = np.linalg.svd(mat, full_matrices=False)
-    k = cap_rank(np.sum(S > eps * (S[0] if S.size else 1.0)), chi)
-    return U[:, :k], S[:k], Vh[:k, :]
 
 
 class TreeTEBD:
@@ -141,92 +136,38 @@ class TreeTEBD:
         for nxt in self.path(self.oc, target)[1:]:
             self.move_oc(self.oc, nxt)
 
-    # -- two-site gate on an edge (OC at i) ----------------------------------
+    # -- gate application (algorithm lives in fishbonett.evolve.tebd_tree) ----
     def apply_edge(self, i, j, U, chi, eps):
         """Apply gate ``U`` (di_out, dj_out, di_in, dj_in) on edge (i, j); the OC
-        moves from ``i`` to ``j``.  Grows the shared bond by SVD truncation."""
-        li, lj = self._leg(i, j), self._leg(j, i)
-        Ti, Tj = self.T[i], self.T[j]
-        ki, kj = len(self.order[i]), len(self.order[j])
-        pool = iter("abcdefghijklmnopqrstuvwABCDEFGHIJKLMNOPQRSTUVW")
-        shared = next(pool)
-        ib = [next(pool) for _ in range(ki)]; ib[li] = shared
-        jb = [next(pool) for _ in range(kj)]; jb[lj] = shared
-        si, sj = next(pool), next(pool)           # physical in
-        so_i, so_j = next(pool), next(pool)       # physical out
-        theta_out = ([b for k, b in enumerate(ib) if k != li] + [so_i]
-                     + [b for k, b in enumerate(jb) if k != lj] + [so_j])
-        sub = (f"{''.join(ib)}{si},{''.join(jb)}{sj},{so_i}{so_j}{si}{sj}"
-               f"->{''.join(theta_out)}")
-        theta = np.einsum(sub, Ti, Tj, U, optimize=True)
-        nleft = (ki - 1) + 1                       # i's other bonds + phys_out
-        lsh, rsh = theta.shape[:nleft], theta.shape[nleft:]
-        Um, S, Vh = _svd_trunc(theta.reshape(int(np.prod(lsh)), int(np.prod(rsh))),
-                               chi, eps)
-        k = S.shape[0]
-        left = Um.reshape(list(lsh) + [k])         # [i-other-bonds..., phys_i, new]
-        right = (S[:, None] * Vh).reshape([k] + list(rsh))  # [new, j-other-bonds..., phys_j]
-        self.T[i] = self._reassemble_left(left, i, li)
-        self.T[j] = self._reassemble_right(right, j, lj)
-        self.oc = j
+        moves from ``i`` to ``j``.  Grows the shared bond by SVD truncation.
 
-    def _reassemble_left(self, left, i, li):
-        # left legs: [i bonds except li (orig order), phys, new] -> T[i] order
-        ki = len(self.order[i])
-        newax = left.ndim - 1
-        physax = left.ndim - 2
-        src = []
-        other = [ax for ax in range(ki - 1)]       # 0..ki-2 are the non-li bonds
-        oi = iter(other)
-        for t in range(ki):
-            src.append(newax if t == li else next(oi))
-        src.append(physax)
-        return np.transpose(left, src)
+        Thin convenience wrapper: the algorithm lives in
+        :func:`fishbonett.evolve.tebd_tree.apply_edge` (this state object only holds
+        the tensors and their canonical form).
+        """
+        from fishbonett.evolve.tebd_tree import apply_edge as _apply_edge
+        _apply_edge(self, i, j, U, chi, eps)
 
-    def _reassemble_right(self, right, j, lj):
-        # right legs: [new, j bonds except lj (orig order), phys] -> T[j] order
-        kj = len(self.order[j])
-        newax = 0
-        physax = right.ndim - 1
-        other = list(range(1, kj))                 # 1..kj-1 are the non-lj bonds
-        oi = iter(other)
-        src = []
-        for t in range(kj):
-            src.append(newax if t == lj else next(oi))
-        src.append(physax)
-        return np.transpose(right, src)
-
-    # -- single-site gate (bond-preserving, canonical-form preserving) -------
     def apply_site(self, i, U):
         """Apply a single-site gate ``U`` (``(d, d)``) to node ``i``.
 
-        Single-site gates touch no bond, so this neither grows the state nor
-        disturbs the canonical form -- no truncation is needed.
+        Thin wrapper around :func:`fishbonett.evolve.tebd_tree.apply_site`.  
+        Single-site gates touch no bond, so they neither grow the state nor disturb
+        the canonical form -- no truncation is needed.
         """
-        phys = self.T[i].ndim - 1
-        X = np.tensordot(U, self.T[i], axes=([1], [phys]))   # [out, other legs...]
-        self.T[i] = np.moveaxis(X, 0, phys)
+        from fishbonett.evolve.tebd_tree import apply_site as _apply_site
+        _apply_site(self, i, U)
 
-    # -- one Trotter step ----------------------------------------------------
     def step(self, site_gates, edge_gates, chi, eps):
-        """First-order Trotter: all single-site gates, then an Euler tour of the
-        two-site edge gates.  ``site_gates[i]`` is a (d,d) unitary or None;
-        ``edge_gates[(i,j)]`` a (di,dj,di,dj) unitary (either edge orientation)."""
-        for i in range(self.n):
-            g = site_gates[i]
-            if g is not None:
-                self.apply_site(i, g)
+        """One 2nd-order (Strang) Trotter step; ``site_gates``/``edge_gates`` are
+        the **half-step** gates.
 
-        def dfs(node):
-            for c in self.children[node]:
-                U = edge_gates.get((node, c))
-                if U is None:
-                    Ur = edge_gates[(c, node)]
-                    U = np.transpose(Ur, (1, 0, 3, 2))
-                self.apply_edge(node, c, U, chi, eps)   # OC node -> c
-                dfs(c)
-                self.move_oc(c, node)                    # OC c -> node
-        dfs(self.root)
+        Thin wrapper around
+        :func:`fishbonett.evolve.tebd_tree.symmetric_tree_step`, which explains why
+        a palindromic sweep is needed rather than a plain Euler tour.
+        """
+        from fishbonett.evolve.tebd_tree import symmetric_tree_step
+        symmetric_tree_step(self, site_gates, edge_gates, chi, eps)
 
     # -- observables ---------------------------------------------------------
     def rdm(self, i):
