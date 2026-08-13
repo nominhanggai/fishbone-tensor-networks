@@ -42,9 +42,45 @@ Two consequences to keep in mind:
   = \sum_i c_i\,|i\rangle\otimes|\text{coherent}(\lambda_i\kappa_0)\rangle$. Skipping
   this displacement solves a *different* physical problem.
 - **Observables.** Diagonal observables (populations in $O$'s eigenbasis, e.g.
-  $\langle\sigma_z\rangle$) are frame-invariant. Coherences are dressed and are
-  **un-dressed** back to the lab frame from the $(c_0,\text{system})$ two-site RDM;
-  `run` returns lab-frame `expect` and `rdm`.
+  $\langle\sigma_z\rangle$) are frame-invariant; coherences are dressed and must be
+  un-dressed (next section). `run` returns lab-frame `expect` and `rdm`.
+
+### Recovering lab-frame observables
+
+Because $U_p$ is diagonal in $O$'s eigenbasis,
+$U_p=\sum_i |i\rangle\langle i|\otimes D(\lambda_i)$ with
+$D(\lambda)=e^{\lambda\kappa_0 (c_0^\dagger-c_0)}$, the lab-frame system reduced
+density matrix follows from the polaron-frame state $\tilde\rho$ as
+
+$$
+\rho^{\mathrm{lab}}_{ij}
+ = \big\langle i\big|\operatorname{Tr}_B\!\big[U_p^\dagger\,\tilde\rho\,U_p\big]\big|j\big\rangle
+ = \operatorname{Tr}_B\!\big[D(-\lambda_i)\,\tilde\rho_{ij}\,D(\lambda_j)\big]
+ = \operatorname{Tr}_B\!\big[\tilde\rho_{ij}\,D(\lambda_j-\lambda_i)\big],
+$$
+
+where $\tilde\rho_{ij}=\langle i|\tilde\rho|j\rangle$ is a bath operator. The last
+step uses cyclicity of the trace together with
+$D(\lambda_j)D(-\lambda_i)=D(\lambda_j-\lambda_i)$, which is *exact* here (both
+displacements share the generator $c_0^\dagger-c_0$, so they compose with no
+residual phase).
+
+Two things make this cheap and exact:
+
+- For $i=j$ the factor is $D(0)=\mathbb{1}$, so **populations are unchanged** —
+  the frame-invariance quoted above. Off-diagonal elements pick up
+  $D(\lambda_j-\lambda_i)$, whose expectation is the Franck–Condon factor. For a
+  two-level $O=\sigma_z$ ($\lambda=\pm1$) this is the familiar
+  $\langle\sigma_x\rangle_{\mathrm{lab}}=\langle\sigma_+B^2+\mathrm{h.c.}\rangle$
+  with $B=D(2\kappa_0)$.
+- $U_p$ displaces **only** the collective mode $\Lambda$, and the $J/\omega^2$
+  chain mapping makes $c_0\propto\sum_k(g_k/\omega_k)b_k$ *be* that mode (it is the
+  Lanczos seed), so every other chain mode is orthogonal to it and untouched.
+  Tracing them out therefore commutes with the un-dressing, and only the
+  **$(c_0,\text{system})$ two-site** block of the MPS is needed — the coherence is
+  stored in the $c_0$–system entanglement and is read back out by the trace above.
+
+This is implemented as `undress_rdm` in {py:mod}`fishbonett.frames.polaron`.
 
 ## General systems
 
@@ -88,5 +124,12 @@ r.max_bond            # peak bond dimension per step (small in the polaron frame
 - Cost per step is `O(n_modes)` nearest-neighbour two-site updates (no swaps); its
   free-chain bonds act on two boson sites, so the per-gate cost grows with `phys_dim`
   faster than the interaction-picture (system-adjacent) gates.
+- **Fock truncation.** The displacement $D$ used in the dressed gate, the initial
+  coherent state and the un-dressing is exponentiated on the *truncated*
+  `phys_dim`-dimensional ladder, so it is not exactly unitary near the top of the
+  Fock space. Since the displacement scale is $\kappa_0$, choose
+  `phys_dim` $\gg\kappa_0^2$ (the mean occupation of the displaced $c_0$); the
+  returned RDM is trace-normalized, which hides — rather than fixes — a too-small
+  `phys_dim`. Converge in `phys_dim` as you would in `bond_dim`.
 - For the builder see {py:mod}`fishbonett.frames.polaron`, and for the canonical
   MPS/TEBD state see {py:class}`fishbonett.states.mps.BosonicBathMPS`.
