@@ -6,12 +6,15 @@ drift: the previous hand-maintained tables drifted twice (the ``tree-*`` methods
 were labelled ``chain`` although their state is a tree, and the multichannel path
 was labelled interaction picture although it builds a static Hamiltonian).
 """
+import re
+
 import numpy as np
 import pytest
 
-from fishbonett import Bath, SystemBath, Fishbone
+from fishbonett import Bath, SimpleSysBath, Fishbone
 from fishbonett.models import TreeFishbone
 from fishbonett.models import registry as R
+from fishbonett.models.system_bath import _FIXED_BOND_METHODS
 from fishbonett.operators import sigma_x, sigma_z
 
 
@@ -41,7 +44,8 @@ def test_registry_matches_the_dispatch_tables():
     single_system = (set(_MPO_METHODS) | set(_POLARON_TDVP_METHODS)
                      | set(_TREE_METHODS) | {"tebd", "trotter-mpo", "polaron"})
     multi_site = {R.STATIC_TREE_TEBD}
-    assert set(R.all_methods()) == single_system | multi_site
+    bath_selected = {R.MULTICHANNEL_IP}
+    assert set(R.all_methods()) == single_system | multi_site | bath_selected
 
 
 def test_every_model_frame_pair_has_at_least_one_method():
@@ -87,14 +91,20 @@ def test_method_frames_is_derived_and_carries_the_two_corrections():
     assert R.METHOD_FRAMES["trotter-mpo"] == ("interaction", "chain")
 
 
-def test_multichannel_is_schrodinger_because_that_is_what_ships():
-    """F2: the shipped multichannel path routes through TreeFishbone, whose
-    shared-mode star puts the bath frequencies **on-site** -- a static
+def test_multichannel_default_path_is_schrodinger_not_interaction():
+    """F2: the multichannel model's *default* path routes through TreeFishbone,
+    whose shared-mode star puts the bath frequencies **on-site** -- a static
     Hamiltonian, i.e. the Schroedinger picture.  It was previously labelled
     interaction picture.  Assert the label against the built Hamiltonian so a
-    future rewire cannot silently contradict it."""
-    assert "schrodinger" in R.MODELS["multichannel"].frames
-    assert "interaction" in R.MODELS["multichannel"].gaps
+    future rewire cannot silently contradict it.
+
+    The model now has a genuine interaction-picture path too
+    (``multichannel-ip``), which is a *different* method -- the point of this test
+    is that the static one is not it."""
+    frames = R.MODELS["multichannel"].frames
+    assert R.STATIC_TREE_TEBD in frames["schrodinger"]
+    assert R.MULTICHANNEL_IP in frames["interaction"]
+    assert R.STATIC_TREE_TEBD not in frames.get("interaction", ())
 
     mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
@@ -111,11 +121,11 @@ def _run_for(model_key):
     """A minimal runnable instance of each model, plus the method to use."""
     h = 0.5 * sigma_x
     if model_key in ("chain", "star", "mode-tree"):
-        return SystemBath(h=h, coupling=sigma_z, bath=_bath()), None
+        return SimpleSysBath(h=h, coupling=sigma_z, bath=_bath()), None
     if model_key == "multichannel":
         mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
                   n_modes=3, phys_dim=4)
-        return SystemBath(h=h, coupling=[sigma_z, sigma_x], bath=mc), None
+        return SimpleSysBath(h=h, coupling=[sigma_z, sigma_x], bath=mc), None
     if model_key == "comb":
         return Fishbone(sites=[h, h], baths=[_bath(), None]), None
     if model_key == "site-tree":
@@ -126,13 +136,15 @@ def _run_for(model_key):
 @pytest.mark.parametrize("model_key", sorted(R.MODELS))
 def test_each_model_runs_its_own_methods_and_reports_them(model_key):
     obj, _ = _run_for(model_key)
+    default = R.methods_of(model_key, "schrodinger")[0] if model_key == "multichannel" else None
     for method in R.methods_of(model_key):
         kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z})
-        if method in {"mpo-tdvp1", "mpo-ip-tdvp1", "polaron-tdvp1", "mpo-dtdvp",
-                      "polaron-dtdvp", "tree-tdvp"}:
-            kw["bond_dim"] = 12           # fixed-bond methods require a cap
-        if model_key == "multichannel":
-            r = obj.run(**kw)             # selected by the bath, not by method
+        if method in _FIXED_BOND_METHODS:  # these require an explicit cap
+            kw["bond_dim"] = 12
+        if method == default:
+            # the multichannel model is selected by the bath, so its Schrodinger
+            # path is what you get with no `method` at all
+            r = obj.run(**kw)
         else:
             r = obj.run(method=method, **kw)
         assert r.t.shape == (2,)
@@ -149,12 +161,12 @@ def test_multi_site_models_reject_a_single_system_method(model_key):
         obj.run(dt=0.02, n_steps=1, method="tebd")
 
 
-def test_multichannel_bath_rejects_an_explicit_method():
-    """The multichannel model is chosen by the bath's shape, so `method` has
-    nothing to select -- say so instead of ignoring it."""
+def test_multichannel_bath_rejects_another_models_method():
+    """The multichannel model is chosen by the bath's shape, so `method` can only
+    pick among *its* propagators -- say so instead of ignoring it."""
     mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
-    m = SystemBath(h=0.5 * sigma_x, coupling=[sigma_z, sigma_x], bath=mc)
+    m = SimpleSysBath(h=0.5 * sigma_x, coupling=[sigma_z, sigma_x], bath=mc)
     with pytest.raises(ValueError, match="multichannel"):
         m.run(dt=0.02, n_steps=1, method="tebd")
 
@@ -178,7 +190,10 @@ def test_models_of_reports_every_owner():
 
 
 def test_methods_of_explains_a_gap_instead_of_a_bare_keyerror():
-    with pytest.raises(KeyError, match="entanglement-catastrophic"):
+    """Asking for an absent frame must quote the registry's recorded reason, not
+    raise a bare KeyError -- the reason text itself is free to be reworded."""
+    reason = R.MODELS["star"].gaps["polaron"]
+    with pytest.raises(KeyError, match=re.escape(reason)):
         R.methods_of("star", "polaron")
 
 

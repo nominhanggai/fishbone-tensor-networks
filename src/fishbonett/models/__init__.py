@@ -11,10 +11,10 @@ Six models, two classes:
 ================  =====================  ==========================================
 model             class                  what it is
 ================  =====================  ==========================================
-``chain``         :class:`SystemBath`    1 system + 1 bath, modes chain-mapped to 1D
-``star``          :class:`SystemBath`    1 system + 1 bath, no chain mapping
-``mode-tree``     :class:`SystemBath`    1 system + 1 bath, modes on a binary tree
-``multichannel``  :class:`SystemBath`    1 system + 1 bath, several shared couplings
+``chain``         :class:`SimpleSysBath`    1 system + 1 bath, modes chain-mapped to 1D
+``star``          :class:`SimpleSysBath`    1 system + 1 bath, no chain mapping
+``mode-tree``     :class:`SimpleSysBath`    1 system + 1 bath, modes on a binary tree
+``multichannel``  :class:`SimpleSysBath`    1 system + 1 bath, several shared couplings
 ``comb``          :class:`Fishbone`      N sites on a 1D backbone, baths per site
 ``site-tree``     :class:`TreeFishbone`  N sites in any loop-free tree, baths/site
 ================  =====================  ==========================================
@@ -34,7 +34,7 @@ print(d())"`` prints the whole thing.
    rename, ``models/`` is the frames package, not this one.
 """
 from fishbonett.models.result import Result
-from fishbonett.models.system_bath import SystemBath
+from fishbonett.models.system_bath import SimpleSysBath
 from fishbonett.models.fishbone import Fishbone, TreeFishbone
 from fishbonett.models.registry import (
     MODELS, FRAMES, Model, Frame, METHOD_FRAMES,
@@ -44,7 +44,7 @@ from fishbonett.models.registry import (
 
 __all__ = [
     # model classes
-    "SystemBath", "Fishbone", "TreeFishbone", "Result",
+    "SimpleSysBath", "Fishbone", "TreeFishbone", "Result",
     # the taxonomy
     "MODELS", "FRAMES", "Model", "Frame", "METHOD_FRAMES",
     "models_of", "frames_of", "methods_of", "all_methods", "model",

@@ -289,7 +289,7 @@ def test_multichannel_requires_legendre():
     def Jz(w):
         return 0.2 * w * np.exp(-w / 5.0)
     mc = Bath(J=[Jz, Jz], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
-              n_modes=2, phys_dim=3, discretization="orthpol")
+              n_modes=2, phys_dim=3, discretization="tedopa")
     fb = TreeFishbone(sites=[sigma_z], edges=[], baths=[mc])
     with pytest.raises(ValueError):
         fb.run(dt=0.02, n_steps=1, bond_dim=20)

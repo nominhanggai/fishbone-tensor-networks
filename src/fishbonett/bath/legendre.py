@@ -9,7 +9,7 @@ coupling is ``V_n^2 = J(w_n) * weight_n``.
 
 The measure here is **uniform** over the window, independent of ``J``.  That is
 robust and cheap, but it means a sharply peaked or infrared-divergent ``J`` can
-fall between nodes; :mod:`fishbonett.bath.orthpol` adapts the nodes to the
+fall between nodes; :mod:`fishbonett.bath.tedopa` adapts the nodes to the
 measure instead and should be preferred in those cases.
 
 .. rubric:: What's here
@@ -72,7 +72,7 @@ def get_vn_squared(j, n: int, domain):
     Returns ``(freq, V_squared)``.  This is the reference signature every
     discretizer follows: pass a compatible callable as the ``discretizer``
     argument of :func:`fishbonett.bath.chain.get_bath_nn_paras` to swap in the
-    measure-adapted ORTHPOL star instead.
+    measure-adapted TEDOPA star instead.
     """
     alpha, beta = get_legendre_recursion(n, domain)
     M = np.diag(alpha) + np.diag(beta, -1) + np.diag(beta, 1)
@@ -88,7 +88,7 @@ def get_approx_func(J, n, domain, epsilon):
     Replaces each discrete mode by a Lorentzian of width ``epsilon`` and sums
     them, so the result can be plotted against the original ``J``.  A visible
     mismatch means ``n`` is too small or the nodes are in the wrong places (in
-    which case try the ORTHPOL discretizer).  Diagnostic only -- nothing in the
+    which case try the TEDOPA discretizer).  Diagnostic only -- nothing in the
     propagation path uses it.
     """
     delta = lambda x: 1 / np.pi * epsilon / (epsilon ** 2 + x ** 2)

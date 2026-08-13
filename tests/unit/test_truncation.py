@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from fishbonett import Bath, SystemBath, Truncation
+from fishbonett import Bath, SimpleSysBath, Truncation
 from fishbonett.linalg import DEFAULT_EPS, cap_rank
 from fishbonett.operators import sigma_x, sigma_z
 
@@ -10,7 +10,7 @@ from fishbonett.operators import sigma_x, sigma_z
 def _model(n_modes=3, phys_dim=5):
     bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5.0), domain=(-25.0, 36.0),
                 temperature=1.0, n_modes=n_modes, phys_dim=phys_dim)
-    return SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
+    return SimpleSysBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 
 # -- the policy object -------------------------------------------------------

@@ -1,7 +1,11 @@
-"""TEBD propagation on a 1D MPS: bond update, sweeps, and whole symmetric steps.
+"""The linear-chain TEBD engine: bond update, sweeps, and whole symmetric steps.
 
-1D chain only (:class:`~fishbonett.states.mps.SystemBathMPS`).  For trees see
-:mod:`fishbonett.evolve.treetdvp`; for the comb see :mod:`fishbonett.states.comb`.
+TEBD is not a chain-only algorithm -- it is Trotter-split gates plus truncation,
+which works on any loop-free geometry, and this package uses it on trees
+(``tree-tebd``, :mod:`fishbonett.evolve.treetdvp`) and on the comb
+(``tree-tebd-static``, :mod:`fishbonett.states.comb`) as well.  What is 1D here
+is this *implementation*: it acts on an
+:class:`~fishbonett.states.mps.SimpleSysBathMPS` and indexes gates by bond number.
 
 Two sweep patterns, selected by the frame:
 
@@ -33,7 +37,7 @@ def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
 
     Parameters
     ----------
-    state : fishbonett.states.mps.SystemBathMPS
+    state : fishbonett.states.mps.SimpleSysBathMPS
         The MPS whose bond ``i`` is updated **in place**.
     i : int
         Bond index; the gate acts on sites ``i`` and ``i+1``.

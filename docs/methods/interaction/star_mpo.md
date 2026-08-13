@@ -80,12 +80,12 @@ Schrödinger-picture chain methods (re-exported as {py:mod}`fishbonett.evolve.td
 
 ```python
 import numpy as np
-from fishbonett import Bath, SystemBath
+from fishbonett import Bath, SimpleSysBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
-model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
+model = SimpleSysBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 r = model.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp1", bond_dim=80,
               observables={"sz": sigma_z})

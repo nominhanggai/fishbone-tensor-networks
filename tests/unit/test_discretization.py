@@ -30,18 +30,17 @@ def test_recurrence_needs_no_orthpol():
     assert beta[0] > 0  # zeroth moment (system-bath coupling squared) is positive
 
 
-def test_continuous_bath_driver_builds_without_orthpol():
-    """A continuous-bath interaction-picture driver builds its chain via the
-    orthpol-free get_coupling and diagonalises it."""
-    from fishbonett.frames.interaction_picture import SystemBathIP as SystemBath
+def test_continuous_bath_driver_builds_with_the_default_quadrature():
+    """The interaction-picture builder chain-maps via the plain Gauss-Legendre
+    get_coupling (no measure-adapted discretizer) and diagonalises the result."""
+    from fishbonett.frames.interaction_picture import SimpleSysBathIP
 
     n_boson = 4
-    eth = SystemBath([6] * n_boson + [2])
-    eth.domain = [0.0, 50.0]
-    eth.sd = lambda w: 0.5 * w * np.exp(-w / 10.0)
-    eth.he_dy = np.diag([1.0, -1.0])
-    eth.h1e = 10.0 * np.array([[0.0, 1.0], [1.0, 0.0]])
-    eth.build(g=1, ncap=200)
+    eth = SimpleSysBathIP([2] + [6] * n_boson,
+                       h_sys=10.0 * np.array([[0.0, 1.0], [1.0, 0.0]]),
+                       coupling=np.diag([1.0, -1.0]),
+                       sd=lambda w: 0.5 * w * np.exp(-w / 10.0),
+                       domain=[0.0, 50.0], ncap=200).build()
 
     assert len(eth.w_list) == n_boson
     assert len(eth.k_list) == n_boson

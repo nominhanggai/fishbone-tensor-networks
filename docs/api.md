@@ -1,6 +1,6 @@
 # API reference
 
-Start from `from fishbonett import Bath, SystemBath, Truncation`.
+Start from `from fishbonett import Bath, SimpleSysBath, Truncation`.
 
 A calculation is three **nested** choices, one subpackage each: **model** (what is
 coupled to what — `models`), **frame** (how the Hamiltonian is written down —
@@ -87,7 +87,7 @@ the subpackage turns it into chain parameters, in that order.
    fishbonett.bath.spec
    fishbonett.bath.chain
    fishbonett.bath.legendre
-   fishbonett.bath.orthpol
+   fishbonett.bath.tedopa
    fishbonett.bath.lanczos
    fishbonett.bath.recurrence
    fishbonett.bath.auto

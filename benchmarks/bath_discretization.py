@@ -1,8 +1,8 @@
-"""Benchmark: measure-adapted ORTHPOL star vs Gauss-Legendre star.
+"""Benchmark: measure-adapted TEDOPA star vs Gauss-Legendre star.
 
 Compares how well each N-mode star discretization reproduces the exact bath
 correlation function ``C(t) = int J_beta(w) e^{-i w t} dw`` for a few thermalized
-spectral densities. The ORTHPOL star (Gauss quadrature of the actual measure
+spectral densities. The TEDOPA star (Gauss quadrature of the actual measure
 J_beta dw) resolves the infrared and sharp peaks that the uniform-measure
 Legendre star misses.
 
@@ -11,7 +11,7 @@ Run with:  python benchmarks/bath_discretization.py
 import numpy as np
 from scipy.integrate import quad
 
-from fishbonett.bath.orthpol import get_vn_squared_orthpol
+from fishbonett.bath.tedopa import get_vn_squared_tedopa
 from fishbonett.bath.legendre import get_vn_squared
 
 DOMAIN = (-25.0, 36.0)
@@ -49,7 +49,7 @@ def main():
             out.append(re + 1j * im)
         return np.array(out)
 
-    print(f"{'bath':12s} {'sum-rule err':>13s} {'C(t): ORTHPOL':>15s} {'Legendre':>12s}")
+    print(f"{'bath':12s} {'sum-rule err':>13s} {'C(t): TEDOPA':>15s} {'Legendre':>12s}")
     for name, s, peak in [("super-Ohmic", 1.0, None), ("sub-Ohmic", 0.5, None),
                           ("Lorentzian", 0.5, 2.0)]:
         Jb = make_Jb(s, peak)
@@ -57,7 +57,7 @@ def main():
         mass, _ = quad(Jb, *DOMAIN, limit=400, points=pts)
         eb = (peak, -peak) if peak else ()
 
-        fo, vo = get_vn_squared_orthpol(Jb, 100, DOMAIN, m_per=100, extra_breaks=eb)
+        fo, vo = get_vn_squared_tedopa(Jb, 100, DOMAIN, m_per=100, extra_breaks=eb)
         fl, vl = get_vn_squared(Jb, 100, list(DOMAIN))
         Cex = Cexact(Jb, pts)
         e_orth = np.max(np.abs(Cstar(fo, vo) - Cex))

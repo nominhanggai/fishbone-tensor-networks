@@ -2,8 +2,8 @@
 import numpy as np
 from scipy.integrate import trapezoid
 
-from fishbonett.bath.orthpol import (
-    rkpw_recurrence, get_vn_squared_orthpol, make_orthpol_discretizer,
+from fishbonett.bath.tedopa import (
+    rkpw_recurrence, get_vn_squared_tedopa, make_tedopa_discretizer,
 )
 from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.chain import get_bath_nn_paras
@@ -32,16 +32,16 @@ def test_rkpw_matches_analytic_legendre():
     np.testing.assert_allclose(beta, beta_exact, rtol=1e-9, atol=1e-12)
 
 
-def test_orthpol_sum_rule_and_shape():
+def test_tedopa_sum_rule_and_shape():
     Jb = _superohmic_Jb()
     wg = np.linspace(DOMAIN[0], DOMAIN[1], 20001)
     mass = trapezoid(np.array([Jb(w) for w in wg]), wg)
-    f, v = get_vn_squared_orthpol(Jb, 80, DOMAIN, m_per=80)
+    f, v = get_vn_squared_tedopa(Jb, 80, DOMAIN, m_per=80)
     assert f.shape == v.shape == (80,)
     assert abs(v.sum() - mass) / abs(mass) < 1e-6
 
 
-def test_orthpol_beats_legendre_on_correlation():
+def test_tedopa_beats_legendre_on_correlation():
     """The star reproduces C(t) = int J_beta e^{-iwt} dw; ORTHPOL should be far
     more accurate than the uniform-measure Legendre star."""
     Jb = _superohmic_Jb()
@@ -50,7 +50,7 @@ def test_orthpol_beats_legendre_on_correlation():
     ts = np.linspace(0, 3.0, 15)
     Cex = np.array([trapezoid(Jg * np.exp(-1j * wg * t), wg) for t in ts])
 
-    fo, vo = get_vn_squared_orthpol(Jb, 100, DOMAIN, m_per=100)
+    fo, vo = get_vn_squared_tedopa(Jb, 100, DOMAIN, m_per=100)
     fl, vl = get_vn_squared(Jb, 100, list(DOMAIN))
     Co = np.array([np.sum(vo * np.exp(-1j * fo * t)) for t in ts])
     Cl = np.array([np.sum(vl * np.exp(-1j * fl * t)) for t in ts])
@@ -61,9 +61,9 @@ def test_orthpol_beats_legendre_on_correlation():
     assert e_orth < e_leg / 100.0     # at least two orders of magnitude better
 
 
-def test_orthpol_discretizer_is_dropin_for_chain_mapping():
+def test_tedopa_discretizer_is_dropin_for_chain_mapping():
     Jb = _superohmic_Jb()
-    disc = make_orthpol_discretizer(m_per=60)
+    disc = make_tedopa_discretizer(m_per=60)
     w, k = get_bath_nn_paras(Jb, 30, list(DOMAIN), discretizer=disc)
     assert len(w) == 30 and len(k) == 30
     assert np.all(np.isfinite(w)) and np.all(np.isfinite(k))

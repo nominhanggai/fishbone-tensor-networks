@@ -6,7 +6,7 @@
 discretization settings (`n_modes`, `phys_dim`, `domain`, `discretization`).
 Both `domain` and `n_modes` can be left unset — they are derived automatically.
 For finite temperature, set `temperature` or `beta` (T-TEDOPA thermalization).
-Use `discretization="orthpol"` when $J$ is sharply peaked or infrared-divergent.
+Use `discretization="tedopa"` when $J$ is sharply peaked or infrared-divergent.
 ```
 
 Every method starts from a continuous bath spectral density $J(\omega)$ and turns
@@ -20,7 +20,7 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             domain=(-25, 36),                       # signed frequency window
             n_modes=40, phys_dim=20,                # modes, boson Hilbert dim
             temperature=1.0,                        # for thermalization
-            discretization="legendre")              # or "orthpol"
+            discretization="legendre")              # or "tedopa"
 ```
 
 - **`domain`** — the (signed) frequency window the spectral density is sampled on
@@ -28,7 +28,7 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
 - **`n_modes`** — the number of discretized modes (optional — see below).
 - **`phys_dim`** — the local boson Hilbert-space truncation per mode.
 - **`temperature` / `beta`** — finite-temperature thermalization (below).
-- **`discretization`** — `"legendre"` (default) or `"orthpol"`.
+- **`discretization`** — `"legendre"` (default) or `"tedopa"`.
 
 ## Automatic defaults
 
@@ -175,25 +175,24 @@ correlation function (lines); the inset shows the same separation between the
 faithful automatic choice and the degraded discretizations.
 ```
 
-## TEDOPA: discretization then chain mapping
+## TEDOPA: the chain mapping, and the star it implies
 
 `fishbonett` uses the TEDOPA construction (Chin *et al.* 2010; Prior *et al.*
-2010).  Two steps:
+2010).  TEDOPA is a **chain mapping**, and it is the spectral density itself that
+drives it: $J$ is used as the *weight function* of a family of orthogonal
+polynomials, and the chain parameters are read straight off that family's
+three-term recurrence,
 
-1. **Discretize** the continuum into a *star* of modes.  On the default
-   `"legendre"` setting the frequency window is covered by an $n$-point
-   Gauss–Legendre grid (de Vega & Bañuls 2015), giving mode frequencies
-   $\omega_k$ (the
-   nodes) and couplings $g_k = \sqrt{J(\omega_k)\, w_k / \pi}$ from the quadrature
-   weights $w_k$.  This is {py:func}`fishbonett.bath.legendre.get_vn_squared`.
-2. **Chain-map** the star to a nearest-neighbour chain.  A Lanczos iteration
-   tridiagonalizes the star, producing on-site energies $\epsilon_i$ and hoppings
-   $t_i$ together with the single system–bath coupling $c_0$ to the first chain
-   site.  This is {py:func}`fishbonett.bath.chain.get_bath_nn_paras`.
+$$
+\omega\,p_n(\omega) = t_{n+1}\,p_{n+1}(\omega) + \epsilon_n\,p_n(\omega)
+                      + t_n\,p_{n-1}(\omega),
+$$
 
-The chain form is what the MPS/MPO/tree engines evolve; the star form is what the
-`*-ip-*` interaction-picture engines use directly.  The whole mapping is pure
-NumPy/SciPy — there is no external Fortran (ORTHPOL) dependency.
+so the recurrence coefficients $(\epsilon_n, t_n)$ *are* the chain's on-site
+energies and hoppings, with $c_0=\sqrt{\int J}$ the system–bath coupling.  Nothing
+is discretized first — the map goes from the continuum straight to the chain.  This
+is {py:func}`fishbonett.bath.chain.get_bath_nn_paras`, built on the recurrence
+coefficients in {py:mod}`fishbonett.bath.recurrence`.
 
 ```python
 from fishbonett.bath.chain import get_bath_nn_paras
@@ -201,23 +200,54 @@ from fishbonett.bath.chain import get_bath_nn_paras
 eps_i, t_i = get_bath_nn_paras(bath.spectral_density(), n=40, domain=(-25, 36))
 ```
 
-## `legendre` vs `orthpol`
+A **star** of independent modes is the same object seen in a different basis:
+diagonalizing the (tridiagonal) chain Hamiltonian "starizes" it, giving mode
+frequencies $\omega_k$ (the eigenvalues) and couplings $g_k$ (the first components
+of the eigenvectors, times $c_0$).  Truncating the chain to $n$ sites and starizing
+is therefore equivalent to an $n$-point quadrature of $J$ — which is why a
+discretization can stand in for the chain mapping, and why the two routes below
+give the same physics.
 
-The default uniform-measure Gauss–Legendre grid is robust and shared across
-channels (which is why a {doc}`multichannel bath <models/composite_multichannel>`
-requires it).  For spectral densities that are sharply peaked or infrared-divergent,
-a uniform grid resolves them poorly.  The `"orthpol"` setting instead builds a
-**measure-adapted** star, using $J$ itself as the weight of an orthogonal-polynomial
-quadrature (RKPW Lanczos + Golub–Welsch); it places nodes where the density
-actually lives and can reproduce bath autocorrelation functions to near machine
-precision where the uniform grid gives only a few digits.
+The chain form is what the MPS/MPO/tree engines evolve; the star form is what the
+interaction-picture engines use directly, since it is the star modes whose free
+evolution $e^{-i\omega_k t}$ is rotated out.  The whole mapping is pure
+NumPy/SciPy — there is no external Fortran (ORTHPOL) dependency.
+
+## `legendre` vs `tedopa`
+
+Because the quadrature and the chain mapping are two views of one construction,
+`fishbonett` lets you pick which measure the $n$ modes are placed against.
+
+The default `"legendre"` puts them at the Gauss–Legendre nodes of the *uniform*
+measure on the domain (de Vega & Bañuls 2015): frequencies $\omega_k$ are the nodes
+and couplings $g_k=\sqrt{J(\omega_k)\,w_k/\pi}$ come from the quadrature weights.
+The nodes ignore $J$, which makes them robust and — crucially — **shared across
+channels**, which is why a {doc}`multichannel bath <models/composite_multichannel>`
+requires this setting.  This is
+{py:func}`fishbonett.bath.legendre.get_vn_squared`.
+
+`"tedopa"` instead uses the measure $d\mu(\omega)=J(\omega)\,d\omega$ — the actual
+TEDOPA weight function — and builds its $n$-point Gauss quadrature (RKPW Lanczos +
+Golub–Welsch).  The nodes cluster where the density lives, including the infrared,
+and the quadrature is exact for polynomials up to degree $2n-1$, so it reproduces
+bath autocorrelation functions to near machine precision where the uniform grid
+gives only a few digits.  Prefer it when $J$ is sharply peaked or
+infrared-divergent (sub-Ohmic).
 
 ```python
 peaked = Bath(J=my_peaked_density, domain=(0, 40), n_modes=40, phys_dim=20,
-              discretization="orthpol")            # resolves the peak
+              discretization="tedopa")             # resolves the peak
 ```
 
-See {py:mod}`fishbonett.bath.orthpol`; the `discretization` choice is threaded all
+```{note}
+The name is `"tedopa"`, not `"tedopa"`: *both* settings are
+orthogonal-polynomial methods (Legendre polynomials are orthogonal too), so that
+would not name the difference.  What distinguishes this one is that it uses $J$ as
+the weight function, which is exactly TEDOPA.  `ORTHPOL` is the external Fortran
+package the scheme was originally taken from; `fishbonett` does not depend on it.
+```
+
+See {py:mod}`fishbonett.bath.tedopa`; the `discretization` choice is threaded all
 the way down to the chain mapping and the star transforms.
 
 ## Finite temperature (thermofield / T-TEDOPA)
