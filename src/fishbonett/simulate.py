@@ -22,8 +22,9 @@ by hand-writing a TEBD sweep loop::
 from dataclasses import dataclass, field, replace
 
 import numpy as np
+import scipy.linalg as _la
 
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.bath.orthpol import make_orthpol_discretizer
 from fishbonett import mpo as _mpo
 from fishbonett import tree as _tree
@@ -255,6 +256,9 @@ class BosonicBath:
         if m == "tebd":
             return self._run_tebd(dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, engine_kw)
+        if m in ("trotter-mpo", "tebd-mpo", "ip-mpo"):
+            return self._run_trotter_mpo(dt, n_steps, bond_dim, trunc_eps,
+                                         obs_ops, initial, engine_kw)
         if m == "polaron":
             return self._run_polaron(dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                      initial, engine_kw)
@@ -267,8 +271,8 @@ class BosonicBath:
         if m in _TREE_METHODS:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, krylov, engine_kw)
-        raise ValueError(f"unknown method {method!r}; choose from tebd, polaron, "
-                         "polaron-tdvp1/tdvp2/dtdvp, "
+        raise ValueError(f"unknown method {method!r}; choose from tebd, "
+                         "trotter-mpo, polaron, polaron-tdvp1/tdvp2/dtdvp, "
                          "mpo-tdvp1/tdvp2/dtdvp, mpo-ip-tdvp1/tdvp2, "
                          "tree-tdvp/tdvp2/tebd")
 
@@ -427,6 +431,46 @@ class BosonicBath:
         t = np.arange(1, n_steps + 1) * dt
         return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms), method="tebd")
+
+    def _run_trotter_mpo(self, dt, n_steps, bond_dim, trunc_eps, obs_ops,
+                         initial, kw):
+        """Interaction picture propagated by the exact conditional-displacement MPO.
+
+        Same frame and same physics as ``method="tebd"``, but the whole system-bath
+        propagator is applied as one low-bond MPO instead of being Trotterized into
+        two-site gates and shuttled with a swap network: no swaps, no ``d x d``
+        bosonic gates, and the multimode factorization is *exact* (see
+        :meth:`~fishbonett.frames.interaction_picture.BosonicBathIP.displacement_mpo`).
+        The system term is Strang-split around it, so the step is second order."""
+        from fishbonett.frames.interaction_picture import BosonicBathIP
+        from fishbonett.evolve.mpo_apply import (apply_mpo, compress, bond_dims,
+                                                 product_state)
+        self._check_system()
+        b = self.bath.resolved(n_steps * dt)
+        n, d_sys = b.n_modes, self.h.shape[0]
+        builder = BosonicBathIP([b.phys_dim] * n + [d_sys])
+        builder.domain = list(b.domain)
+        builder.sd = b.spectral_density()
+        builder.coupling = self.coupling
+        builder.h_sys = self.h
+        builder.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
+
+        # sites are [system, mode_0, ..., mode_{n-1}] for the MPO
+        A = product_state([d_sys] + [b.phys_dim] * n, self._initial_state(initial))
+        u_half = _la.expm(-0.5j * dt * np.asarray(self.h, complex))
+        rdms, max_bond = [], []
+        for step in range(n_steps):
+            A[0] = np.einsum('ij,ajb->aib', u_half, A[0])        # half system step
+            A = compress(apply_mpo(A, builder.displacement_mpo(step * dt, dt)),
+                         bond_dim, trunc_eps)
+            A[0] = np.einsum('ij,ajb->aib', u_half, A[0])
+            rho = np.einsum('lsr,ltr->st', A[0], A[0].conj())
+            rdms.append(rho / np.trace(rho).real)
+            max_bond.append(max(bond_dims(A)))
+        t = np.arange(1, n_steps + 1) * dt
+        return Result(t=t, expect=self._expect_from_rdm(rdms, obs_ops),
+                      max_bond=np.array(max_bond), rdm=np.asarray(rdms),
+                      method="trotter-mpo")
 
     def _polaron_builder(self, dt, n_steps):
         """Shared polaron setup: validate, resolve the bath and build the frame.
