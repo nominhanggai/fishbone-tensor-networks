@@ -100,6 +100,14 @@ def _exact(sites, specs, backbone, d, ts):
 
 
 def _check(sites, baths, backbone, specs, d, tol, dt=0.02, ns=12):
+    """Propagate and compare against exact diagonalization.
+
+    The ``tol`` values are ~3x the errors actually measured at ``dt=0.02`` with the
+    second-order step (3e-5 to 1.4e-4).  They used to be 1e-3 to 5e-3, which the
+    old first-order step also satisfied -- keeping them loose is what let the wrong
+    Trotter order go unnoticed, so they are now tight enough that a regression to
+    first order fails here as well as in the convergence test.
+    """
     fb = Fishbone(sites=sites, baths=baths, backbone=backbone)
     res = fb.run(dt=dt, n_steps=ns, bond_dim=40, trunc_eps=1e-12,
                  observables={"sz": sigma_z})
@@ -113,20 +121,20 @@ def _check(sites, baths, backbone, specs, d, tol, dt=0.02, ns=12):
 
 def test_single_site_one_bath():
     _check([0.5 * sigma_z + sigma_x], [_bath(2, 4, sigma_z)], None,
-           [[(2, sigma_z, "L")]], d=4, tol=1e-3)
+           [[(2, sigma_z, "L")]], d=4, tol=2e-4)
 
 
 def test_two_sites_one_bath_backbone():
     _check([0.25 * sigma_z + 0.8 * sigma_x, -0.15 * sigma_z + 0.8 * sigma_x],
            [_bath(2, 4, sigma_z), _bath(2, 4, sigma_z)],
            [0.4 * np.kron(sigma_z, sigma_z)],
-           [[(2, sigma_z, "L")], [(2, sigma_z, "L")]], d=4, tol=1e-3)
+           [[(2, sigma_z, "L")], [(2, sigma_z, "L")]], d=4, tol=2e-4)
 
 
 def test_single_site_two_baths():
     _check([0.2 * sigma_z + 0.7 * sigma_x],
            [(_bath(2, 4, sigma_z), _bath(2, 4, sigma_x))], None,
-           [[(2, sigma_z, "L"), (2, sigma_x, "R")]], d=4, tol=3e-3)
+           [[(2, sigma_z, "L"), (2, sigma_x, "R")]], d=4, tol=4e-4)
 
 
 def test_two_sites_two_baths_fishbone():
@@ -135,7 +143,44 @@ def test_two_sites_two_baths_fishbone():
             (_bath(2, 2, sigma_z), _bath(2, 2, sigma_x))],
            [0.3 * np.kron(sigma_z, sigma_z)],
            [[(2, sigma_z, "L"), (2, sigma_x, "R")],
-            [(2, sigma_z, "L"), (2, sigma_x, "R")]], d=2, tol=5e-3)
+            [(2, sigma_z, "L"), (2, sigma_x, "R")]], d=2, tol=5e-4)
+
+
+def test_tree_step_is_second_order_in_dt():
+    """``tree-tebd-static`` must be **second** order, like every other method.
+
+    It was first order for a long time (measured 1.07): the step applied one full
+    gate per edge in a single Euler tour.  Nothing caught that, because every other
+    multi-site test asserts only an upper bound on the error, which a first-order
+    step at a small ``dt`` still satisfies.  Halving ``dt`` is what distinguishes
+    them -- the error must fall by ~4, not ~2.
+
+    Uses a **branching** tree (two electronic sites, each with its own bath chain,
+    joined by a backbone) on purpose: the tempting fix of applying half a gate on
+    the way down and half on the way back up an Euler tour is *not* second order
+    where the tree branches (measured 1.79), so a path-shaped model would not
+    discriminate between the two schemes.
+    """
+    sites = [0.3 * sigma_z + 0.7 * sigma_x, -0.2 * sigma_z + 0.5 * sigma_x]
+    baths = [_bath(2, 3, sigma_z), _bath(2, 3, sigma_z)]
+    backbone = [0.4 * np.kron(sigma_x, sigma_x)]
+    specs = [[(2, sigma_z, "L")], [(2, sigma_z, "L")]]
+    E, U, cc, e_idx, dims = _build_exact(sites, specs, backbone, 3)
+    op = _embed(sigma_z, e_idx[0], dims)
+
+    t_end, errs = 0.24, []
+    for dt in (0.02, 0.01):
+        fb = Fishbone(sites=sites, baths=baths, backbone=backbone)
+        res = fb.run(dt=dt, n_steps=int(round(t_end / dt)), bond_dim=200,
+                     trunc_eps=1e-13, observables={"z0": (sigma_z, 0)})
+        exact = _expect_t(E, U, cc, op, res.t)
+        errs.append(np.max(np.abs(res.expect["z0"] - exact)))
+
+    ratio = errs[0] / errs[1]
+    assert 3.3 < ratio < 4.7, (
+        f"halving dt cut the error by {ratio:.2f}x, so the step is order "
+        f"{np.log2(ratio):.2f}; expected ~4x (second order).  Errors: "
+        f"dt=0.02 -> {errs[0]:.3e}, dt=0.01 -> {errs[1]:.3e}")
 
 
 def test_result_shapes_and_normalization():
@@ -168,8 +213,8 @@ def test_multi_site_observable_vs_exact():
     ex_zz = _expect_t(E, U, cc,
                       _embed(sigma_z, e_idx[0], dims) @ _embed(sigma_z, e_idx[1], dims),
                       res.t)
-    assert np.max(np.abs(res.expect["z0"] - ex_z0)) < 1e-3
-    assert np.max(np.abs(res.expect["zz"] - ex_zz)) < 2e-3
+    assert np.max(np.abs(res.expect["z0"] - ex_z0)) < 1e-4
+    assert np.max(np.abs(res.expect["zz"] - ex_zz)) < 1.5e-4
 
 
 def test_per_bath_domains_allowed():

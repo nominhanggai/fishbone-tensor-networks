@@ -165,7 +165,13 @@ class TreeFishbone:
         return node
 
     def _build(self, dt, t_max=None):
-        """Physical tree plus the single-site and two-site Trotter gates."""
+        """Physical tree plus the single-site and two-site Trotter gates.
+
+        ``dt`` is the gate's own time argument, **not** the step: the symmetric step
+        (:func:`fishbonett.evolve.tebd_tree.symmetric_tree_step`) applies every gate
+        twice, so ``run`` passes half its step here -- the same convention as
+        :func:`fishbonett.evolve.tebd.symmetric_static_step`.
+        """
         dims, edges, site_H, edge_H = self.hamiltonians(t_max)
         site_gates = [expm(-1j * H * dt) if np.any(H) else None for H in site_H]
         edge_gates = {}
@@ -202,6 +208,10 @@ class TreeFishbone:
         method here raises with a message saying which model owns it.  The
         frame gaps are recorded in :mod:`fishbonett.models.registry`.
 
+        The step is second order in ``dt``
+        (:func:`fishbonett.evolve.tebd_tree.symmetric_tree_step`), so halving ``dt``
+        cuts the error by about four.
+
         Truncation is one setting, given either as a
         :class:`~fishbonett.linalg.Truncation` (``trunc=``) or as the loose
         ``trunc_eps`` / ``bond_dim`` keywords.  ``trunc_eps`` (default ``1e-4``)
@@ -236,7 +246,8 @@ class TreeFishbone:
                 d == 2 for d in self.de) else {}
         parsed = [(name, _parse_observable(spec))
                   for name, spec in observables.items()]
-        dims, edges, site_gates, edge_gates = self._build(dt, n_steps * dt)
+        # half-step gates: the symmetric step applies each of them twice
+        dims, edges, site_gates, edge_gates = self._build(dt / 2.0, n_steps * dt)
         st = TreeTEBD(dims, edges, root=0)
         for i in range(self.ns):
             st.set_physical(i, self._initial_vec(initial, i))
