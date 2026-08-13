@@ -47,3 +47,6 @@ examples/**/output/
 
 # archived legacy model builders (moved out of the package)
 legacy/
+
+# documentation figures are generated at build time (docs/figures.py)
+docs/img/

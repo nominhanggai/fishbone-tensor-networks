@@ -30,3 +30,25 @@ jobs:
           python -m pip install -e .[test]
       - name: Run test suite
         run: pytest -q
+
+  docs:
+    name: docs (build + figures)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package with docs extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[docs]
+      - name: Build docs (regenerates the figures, warnings are errors)
+        # docs/conf.py calls docs/figures.py, so the figures in docs/img are
+        # produced here rather than committed to the repository.
+        run: python -m sphinx -b html -W --keep-going docs docs/_build/html
+      - name: Upload rendered docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html

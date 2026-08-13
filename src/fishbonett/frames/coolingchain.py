@@ -3,7 +3,7 @@ import scipy
 
 from copy import deepcopy as dcopy
 from fishbonett.contract import contract as einsum
-import fishbonett.recurrence_coefficients as rc
+import fishbonett.bath.recurrence as rc
 # kron/svd and the sparse two-site gate exponential (calc_U) are shared;
 # _c is the bosonic annihilation operator from fishbonett.operators.
 from fishbonett.linalg import kron, svd, expm_gate_sparse as calc_U

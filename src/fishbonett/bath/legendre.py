@@ -14,7 +14,7 @@ def get_recursion(n, j, domain, g=1, ncap=20000):  # j=weight function
     The old way of calculating. Deprecated due to computational cost.
     Replaced by get_legendre_recursion() where an analytical expression for alpha and beta is used.
     """
-    import fishbonett.recurrence_coefficients as rc
+    import fishbonett.bath.recurrence as rc
     alphaL, sqrt_betaL = rc.recurrenceCoefficients(
         n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
     )

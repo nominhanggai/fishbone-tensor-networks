@@ -129,9 +129,9 @@ $J(\omega) = 0.05\,\omega\,e^{-\omega/2.5} + \sum_{k} \frac{2\lambda_k\gamma_k
 \Omega_k^2\,\omega}{(\Omega_k^2-\omega^2)^2 + \gamma_k^2\omega^2}$ with peaks at
 $\Omega = 6, 13$.  Its correlation function is strongly oscillatory (the two peaks
 beat against each other), yet the automatic construction covers **both** peaks —
-the 99.9% reorganization-energy window reaches out to $\omega_{hi} = 32.1$ — and
-the light cone asks for 118 modes, which sample the peaks finely enough to
-reproduce $C(t)$ to $4\times10^{-3}$:
+the 99.9% reorganization-energy window reaches out to $\omega_{hi} \approx 29.5$ —
+and the light cone asks for ~80 modes, which sample the peaks finely enough to
+reproduce $C(t)$ to a few $\times 10^{-2}$ over the whole run:
 
 ```{figure} img/bath_structured.png
 :alt: Left, a structured spectral density with two peaks, the star modes sampling it within the auto domain edge at 32.1; right, the strongly oscillatory correlation function with the auto-discretized bath (markers) on the exact curve and an inset error around 1e-3.
@@ -139,9 +139,10 @@ reproduce $C(t)$ to $4\times10^{-3}$:
 :align: center
 
 **Left:** a structured spectral density (Ohmic background + two vibrational peaks);
-the automatic domain reaches past both peaks and the 118 star modes (markers)
-sample them.  **Right:** the resulting oscillatory correlation function, reproduced
-by the automatic bath to $\sim\!10^{-3}$ (inset).
+the automatic domain reaches past both peaks and the star modes (markers) sample
+them — densely where $J$ has weight.  **Right:** the resulting oscillatory
+correlation function, reproduced by the automatic bath to a few percent even
+after several beat periods (inset).
 ```
 
 The same holds at **finite temperature**.  There the correlation function carries

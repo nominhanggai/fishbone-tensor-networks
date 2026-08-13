@@ -31,7 +31,7 @@ import numpy as np
 import scipy.linalg
 from fishbonett.contract import contract as einsum
 
-from fishbonett.common import svd
+from fishbonett.linalg import svd, cap_rank
 
 try:  # optional GPU backend
     import cupy as cp
@@ -122,7 +122,7 @@ class BosonicBathMPS:
         chi_ll, phys_l, phys_r, chi_rr = theta.shape
         theta = np.reshape(theta, [chi_ll * phys_l, phys_r * chi_rr])
         A, S, B = svd(theta, chi_max, full_matrices=False)
-        chivC = min(chi_max, int(np.sum(S > eps)))
+        chivC = cap_rank(np.sum(S > eps), chi_max)
         self._store_split(A, S, B, i, chi_ll, phys_l, phys_r, chi_rr, chivC)
         self.R[i] = np.eye(phys_l)
         self.R[i + 1] = np.eye(phys_r)
@@ -145,11 +145,11 @@ class BosonicBathMPS:
 
         chi_try = int(self.pre_factor * len(self.S[i + 1])) + 10
         A, S, B = svd(theta, chi_try, full_matrices=False)
-        chivC = min(chi_max, int(np.sum(S > eps)), chi_try)
+        chivC = min(cap_rank(np.sum(S > eps), chi_max), chi_try)
         while chivC == chi_try and chi_try < min(*theta.shape):
             chi_try = int(round(self.pre_factor * chi_try))
             A, S, B = svd(theta, chi_try, full_matrices=False)
-            chivC = min(chi_max, int(np.sum(S > eps)), chi_try)
+            chivC = min(cap_rank(np.sum(S > eps), chi_max), chi_try)
 
         self._store_split(A, S, B, i, chi_ll, phys_l, phys_r, chi_rr, chivC)
         if eps_lbo is None:
@@ -189,11 +189,11 @@ class BosonicBathMPS:
 
         chi_try = int(self.pre_factor * len(self.S[i + 1])) + 10
         A, S, B = _cusvd(theta, chi_try, full_matrices=False)
-        chivC = min(chi_max, int(cp.sum(S > eps).item()), chi_try)
+        chivC = min(cap_rank(cp.sum(S > eps).item(), chi_max), chi_try)
         while chivC == chi_try and chi_try < min(*theta.shape):
             chi_try = int(round(self.pre_factor * chi_try))
             A, S, B = _cusvd(theta, chi_try, full_matrices=False)
-            chivC = min(chi_max, int(cp.sum(S > eps).item()), chi_try)
+            chivC = min(cap_rank(cp.sum(S > eps).item(), chi_max), chi_try)
         del theta
         _mempool.free_all_blocks()
 

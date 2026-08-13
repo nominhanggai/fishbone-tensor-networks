@@ -4,7 +4,7 @@ import numpy as np
 from numpy import exp
 
 from fishbonett.contract import contract as einsum
-from fishbonett.lanczos import lanczos
+from fishbonett.bath.lanczos import lanczos
 # calc_U here is the dense gate exponential; eye/svd re-exported for back-compat.
 from fishbonett.linalg import eye, kron, svd, expm_gate as calc_U
 from fishbonett.operators import temp_factor, _c

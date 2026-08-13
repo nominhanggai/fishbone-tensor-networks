@@ -36,6 +36,15 @@ _MPO_METHODS = {"tdvp1": "run_tdvp1", "mpo-tdvp1": "run_tdvp1",
                 "dtdvp": "run_dtdvp", "mpo-dtdvp": "run_dtdvp",
                 "mpo-ip-tdvp1": "run_ip_tdvp1", "ip-tdvp1": "run_ip_tdvp1",
                 "mpo-ip-tdvp2": "run_ip_tdvp2", "ip-tdvp2": "run_ip_tdvp2"}
+#: Methods whose bond dimension is fixed up front (1-site TDVP variants cannot grow
+#: a bond, and the adaptive DTDVP needs a finite ceiling), so ``bond_dim=None``
+#: ("unlimited") is not meaningful for them.
+_FIXED_BOND_METHODS = frozenset({
+    "tdvp1", "mpo-tdvp1", "ip-tdvp1", "mpo-ip-tdvp1", "polaron-tdvp1",
+    "polaron-tdvp", "dtdvp", "mpo-dtdvp", "polaron-dtdvp", "polaron-dtdvp1",
+    "tree-tdvp", "tree-tdvp1",
+})
+
 #: Polaron-frame TDVP variants.  The polaron ``H~`` is time-independent, so it has
 #: a plain MPO and can drive the standard 1-site / 2-site / bond-adaptive sweeps.
 _POLARON_TDVP_METHODS = {"polaron-tdvp1": "tdvp1", "polaron-tdvp": "tdvp1",
@@ -225,14 +234,27 @@ class BosonicBath:
 
     # -- public API ----------------------------------------------------------
     def run(self, *, dt, t_max=None, n_steps=None, method="tree-tdvp2",
-            bond_dim=200, trunc_eps=1e-10, observables=None, initial="up",
+            bond_dim=None, trunc_eps=1e-4, observables=None, initial="up",
             krylov=25, **engine_kw):
         """Propagate and return a :class:`Result`.
 
         ``method`` is one of ``'tebd'`` (interaction-picture swap network),
-        ``'mpo-tdvp1' | 'mpo-tdvp2' | 'mpo-dtdvp'`` (Schroedinger-picture MPO),
-        ``'mpo-ip-tdvp1' | 'mpo-ip-tdvp2'`` (interaction-picture star MPO), or
-        ``'tree-tdvp' | 'tree-tdvp2' | 'tree-tebd'`` (interaction-picture tree).
+        ``'trotter-mpo'`` (interaction-picture conditional-displacement MPO),
+        ``'polaron' | 'polaron-tdvp1' | 'polaron-tdvp2' | 'polaron-dtdvp'``
+        (polaron frame), ``'mpo-tdvp1' | 'mpo-tdvp2' | 'mpo-dtdvp'``
+        (Schroedinger-picture MPO), ``'mpo-ip-tdvp1' | 'mpo-ip-tdvp2'``
+        (interaction-picture star MPO), or ``'tree-tdvp' | 'tree-tdvp2' |
+        'tree-tebd'`` (interaction-picture tree).
+
+        **Truncation.**  ``trunc_eps`` is the accuracy knob: singular values below
+        it are discarded, so it alone decides the bond dimension.  ``bond_dim`` is
+        an *optional* safety cap; the default ``None`` means **unlimited**, i.e.
+        the bond grows to whatever ``trunc_eps`` requires.  Set ``bond_dim`` when
+        you need a hard memory bound (``result.max_bond`` reports what was actually
+        used).  Fixed-bond methods (``mpo-tdvp1``, ``mpo-ip-tdvp1``, ``tree-tdvp``,
+        ``polaron-tdvp1``, ``mpo-dtdvp``) cannot grow their own bonds and therefore
+        *require* an explicit ``bond_dim``.
+
         ``observables`` maps a name to a ``(d, d)`` operator on the (single) system;
         ``result.expect[name]`` is then that expectation over time, shape
         ``(n_steps,)``.  The default measures ``sigma_z``/``sigma_x`` for a
@@ -243,6 +265,12 @@ class BosonicBath:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
             n_steps = int(round(t_max / dt))
+        if bond_dim is None and method.lower().replace("_", "-") in _FIXED_BOND_METHODS:
+            raise ValueError(
+                f"method {method!r} has a fixed bond dimension and cannot grow it "
+                "from a product state, so bond_dim must be given explicitly "
+                "(bond_dim=None means 'unlimited', which is only meaningful for "
+                "the truncation-driven methods)")
         if observables is not None:
             obs_ops = observables
         elif self.h.shape[0] == 2:
