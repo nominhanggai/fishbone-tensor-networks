@@ -19,13 +19,13 @@ so the gates are rebuilt each step.  Two propagators use this frame:
 import numpy as np
 import scipy.linalg as la
 from numpy import exp
-from copy import deepcopy as dcopy
 
 import fishbonett.bath.recurrence as rc
 from fishbonett.bath.chain import get_coupling
 from fishbonett.system import check_operator
 from fishbonett.contract import contract as einsum
-from fishbonett.linalg import kron, expm_gate as _expm_gate
+from fishbonett.frames.gates import swap_gate_pairs
+from fishbonett.linalg import kron
 from fishbonett.operators import annihilate
 
 
@@ -183,8 +183,10 @@ class SystemBathIP:
         """
         d_nt = self.mode_couplings(t, delta)
         h2 = []
-        # ul = _expm_gate(self.h_sys, -t)
-        # coupling = ul @ self.coupling @ (ul.T.conj())
+        # The interaction picture here is with respect to the free *bath* only, so
+        # the coupling operator is used as given.  Rotating by the system's free
+        # evolution as well would replace it with U_s(t)^dag A_s U_s(t) and remove
+        # the h_sys term below -- a different frame, not a variant of this one.
         coupling = self.coupling
         for i, k in enumerate(d_nt):
             d1 = self.pd_boson[i]
@@ -212,31 +214,20 @@ class SystemBathIP:
         self.freq, self.coef = self.diag()
         return self
 
-    def get_u(self, t, dt, mode='normal', factor=1, inc_sys=True):
+    def get_u(self, t, dt, factor=1, inc_sys=True):
         """Two-site Trotter gates over ``[t, t+dt]`` as ``(U1, U2)``.
 
-        Exponentiates each two-site Hamiltonian from :meth:`get_h2`.  ``U1`` has
-        legs ``(d1, d2, d1*, d2*)`` and ``U2`` is its leg-transposed variant,
-        which the *swapped* sweeps of the swap network consume -- see
-        :func:`fishbonett.evolve.tebd.symmetric_swap_step`, which calls this twice
-        per step (once per half-interval) to stay second order.
+        Exponentiates each two-site Hamiltonian from :meth:`get_h2` via
+        :func:`fishbonett.frames.gates.swap_gate_pairs`, which is shared with
+        :class:`~fishbonett.frames.multichannel.SystemBathMultiChannel` -- the two
+        frames differ in how ``h`` is built, not in how it is exponentiated.
+        :func:`fishbonett.evolve.tebd.symmetric_swap_step` calls this twice per step
+        (once per half-interval) to stay second order.
 
         Because the frame is time-dependent, the gates are valid only for the
         interval they were built for.
         """
         self.H = self.get_h2(t, dt, inc_sys)
-        U1 = dcopy(self.H)
-        U2 = dcopy(U1)
-        for i, h_d1_d2 in enumerate(self.H):
-            h, d1, d2 = h_d1_d2
-            u = _expm_gate(h.toarray()/factor, 1)
-            # h is in (d1 x d2) basis with d1=boson, d2=system;
-            # reshape to (d2, d1, d2, d1) = (system, boson, system, boson)
-            # so the gate has the system leg first (site 0 convention)
-            u1 = u.reshape([d1, d2, d1, d2]).transpose([1, 0, 3, 2])
-            u2 = np.transpose(u1, [1, 0, 3, 2])
-            U1[i] = u1
-            U2[i] = u2
-        return U1, U2
+        return swap_gate_pairs(self.H, factor)
 
 

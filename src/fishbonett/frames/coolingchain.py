@@ -26,7 +26,7 @@ import scipy
 from fishbonett.contract import contract as einsum
 from fishbonett.bath.chain import get_coupling
 from fishbonett.system import check_operator
-from fishbonett.linalg import kron, expm_gate_sparse as calc_U
+from fishbonett.linalg import kron, expm_gate_sparse
 from fishbonett.operators import temp_factor, annihilate
 
 from fishbonett.states.mps import SystemBathMPS
@@ -181,7 +181,7 @@ class SystemBathCoolingChain(SystemBathMPS):
         U = [0]*len(self.H)
         for i, h_d1_d2 in enumerate(self.H):
             h, d1, d2 = h_d1_d2
-            u = calc_U(h, dt)
+            u = expm_gate_sparse(h, dt)
             r0 = r1 = d1  # physical dimension for site A
             s0 = s1 = d2  # physical dimension for site B
             # u = u.reshape([r0, s0, r1, s1])

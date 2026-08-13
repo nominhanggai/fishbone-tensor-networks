@@ -134,8 +134,8 @@ def symmetric_swap_step(state, builder, t0, dt, n, chi_max, eps, **kw):
     """One 2nd-order (Strang) swap-network step over ``[t0, t0+dt]``.
 
     The interaction-picture step.  ``builder`` supplies time-dependent gates
-    through ``builder.get_u(t, half_dt, mode="normal")``, so gates are rebuilt
-    twice per step -- once per half-interval.
+    through ``builder.get_u(t, half_dt)``, so gates are rebuilt twice per step --
+    once per half-interval.
 
     The ordering is palindromic: the first half-interval's gates sweep inward,
     the second half-interval's sweep back out, and the two innermost (bond-0)
@@ -146,8 +146,8 @@ def symmetric_swap_step(state, builder, t0, dt, n, chi_max, eps, **kw):
     bond-0 updates must both take a ``U1``.
     """
     hdt = dt / 2.0
-    u_in, _ = builder.get_u(t0, hdt, mode="normal")
-    u_mid, u_out = builder.get_u(t0 + hdt, hdt, mode="normal")
+    u_in, _ = builder.get_u(t0, hdt)
+    u_mid, u_out = builder.get_u(t0 + hdt, hdt)
 
     state.U = u_in
     swap_out(state, n, chi_max, eps, **kw)
