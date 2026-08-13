@@ -1,4 +1,17 @@
-# `polaron` — polaron-frame MPS TEBD
+# `polaron` / `polaron-tdvp*` — the polaron frame
+
+```{admonition} Frame: polaron (static $\tilde H$) — the only frame that gets both
+:class: tip
+The polaron transform is the best of both worlds structurally: like the
+{doc}`Schrödinger picture <chain_mpo>` the result is **time-independent**, so the
+gates can be built **once** and a static MPO drives the full TDVP family; and like
+the {doc}`interaction picture <tebd>` it removes a large part of the system–bath
+correlation, so the state carries little entanglement.  What it costs is
+generality — the transform needs $T=0$ and $\int J(\omega)/\omega^2\,d\omega$
+finite.  It does *not* admit the exact conditional-displacement propagator of
+{doc}`trotter_mpo`, because the dressed tunneling does not commute with the
+free-chain hopping.  See {doc}`index` for the compatibility table.
+```
 
 The `polaron` method propagates the model in the **polaron (Lang–Firsov) frame**:
 the static system–bath coupling is absorbed into a displacement of the bath, so the

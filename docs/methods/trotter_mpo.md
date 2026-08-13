@@ -1,5 +1,14 @@
 # `trotter-mpo` — the exact conditional-displacement propagator
 
+```{admonition} Frame: interaction picture (time-dependent $H$) — and *only* this frame
+:class: tip
+The exact factorization below relies on all the coupling terms commuting, which is
+true precisely because the free-bath term has been rotated away.  In the
+Schrödinger picture that term is still present, and in the {doc}`polaron` frame the
+dressed tunneling does not commute with the free-chain hopping — so this propagator
+has no counterpart there.  See {doc}`index` for the full compatibility table.
+```
+
 `trotter-mpo` propagates the **same interaction-picture model as {doc}`tebd`**, but
 instead of Trotterizing the system–bath coupling into two-site gates and shuttling
 the system along the chain with a swap network, it writes the *entire* system–bath

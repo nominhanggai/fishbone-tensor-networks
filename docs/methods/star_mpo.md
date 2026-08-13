@@ -1,5 +1,14 @@
 # `mpo-ip-tdvp1` / `mpo-ip-tdvp2` — interaction-picture star MPO + TDVP
 
+```{admonition} Frame: interaction picture (time-dependent $H$)
+:class: tip
+TDVP in a time-dependent frame: the MPO is **rebuilt at each step's midpoint**
+rather than once up front, which keeps the sweep second order but forfeits the
+energy conservation that TDVP enjoys in a static frame ({doc}`chain_mpo`).  The
+trade is worth it here because the interaction picture leaves far less
+entanglement to represent.  See {doc}`index` for the compatibility table.
+```
+
 These methods evolve the bath in its **star** geometry — every discretized mode
 coupled directly to the spin, with no chain mapping — in the interaction picture,
 using a time-dependent MPO integrated by TDVP.

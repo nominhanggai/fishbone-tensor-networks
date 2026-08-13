@@ -1,5 +1,14 @@
 # `tebd` — interaction-picture MPS TEBD
 
+```{admonition} Frame: interaction picture (time-dependent $H$)
+:class: tip
+The free-bath evolution is rotated out, so entanglement is small — but $H$ is
+time-dependent and the gates are rebuilt every step.  Sibling methods in this
+frame: {doc}`trotter_mpo` (same propagator written exactly as one MPO),
+{doc}`star_mpo` and {doc}`tree` (TDVP variants).  See {doc}`index` for why the
+frame constrains the choice of integrator.
+```
+
 The `tebd` method is an interaction-picture, swap-network time-evolving block
 decimation on a matrix-product state.  Like every engine in the package it accepts
 a general (non-`sigma_z`) system–bath coupling, a system of arbitrary dimension,

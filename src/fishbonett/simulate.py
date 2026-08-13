@@ -29,7 +29,63 @@ from fishbonett.bath.orthpol import make_orthpol_discretizer
 from fishbonett import mpo as _mpo
 from fishbonett import tree as _tree
 
-__all__ = ["Bath", "BosonicBath", "Fishbone", "Result", "thermalize", "SpinBoson"]
+__all__ = ["Bath", "BosonicBath", "Fishbone", "Result", "thermalize", "SpinBoson",
+           "METHOD_FRAMES", "methods_by_frame"]
+
+#: Which **frame** each propagation method works in.  The frame is not cosmetic: it
+#: fixes whether the Hamiltonian is time-dependent, and hence which integrators are
+#: usable at all.
+#:
+#: * ``"schrodinger"`` -- the bare chain-mapped ``H``.  Time-independent and
+#:   nearest-neighbour, so it has a static MPO: the natural home for TDVP.  Carries
+#:   the most entanglement, since nothing has been rotated out.
+#: * ``"interaction"`` -- the free bath rotated out, leaving ``A_s (x) B(t)``.  Low
+#:   entanglement, but ``H`` is *time-dependent*, so gates/MPOs are rebuilt every
+#:   step.  Uniquely, all of its coupling terms commute, which is what lets
+#:   ``trotter-mpo`` write the propagator exactly instead of splitting it.
+#: * ``"polaron"`` -- the static part of the coupling absorbed into a bath
+#:   displacement.  Time-*independent* like the Schroedinger picture (so static
+#:   gates and a static MPO both work) while carrying interaction-picture-like
+#:   entanglement; needs ``T=0`` and a bath with ``int J/w^2`` finite.
+#:
+#: See :doc:`the methods guide </methods/index>` for the frame/propagator
+#: compatibility table.
+METHOD_FRAMES = {
+    # Schroedinger picture: static H, static MPO -> TDVP
+    "tdvp1": "schrodinger", "mpo-tdvp1": "schrodinger",
+    "tdvp2": "schrodinger", "mpo-tdvp2": "schrodinger",
+    "dtdvp": "schrodinger", "mpo-dtdvp": "schrodinger",
+    # Interaction picture: time-dependent H, gates/MPO rebuilt each step
+    "tebd": "interaction", "trotter-mpo": "interaction",
+    "tebd-mpo": "interaction", "ip-mpo": "interaction",
+    "mpo-ip-tdvp1": "interaction", "ip-tdvp1": "interaction",
+    "mpo-ip-tdvp2": "interaction", "ip-tdvp2": "interaction",
+    "tree-tdvp": "interaction", "tree-tdvp1": "interaction",
+    "tree-tdvp2": "interaction", "tree-tebd": "interaction",
+    # Polaron frame: static H~ -> static gates *and* a static MPO
+    "polaron": "polaron", "polaron-tdvp": "polaron",
+    "polaron-tdvp1": "polaron", "polaron-tdvp2": "polaron",
+    "polaron-dtdvp": "polaron", "polaron-dtdvp1": "polaron",
+}
+
+
+def methods_by_frame():
+    """Method names grouped by frame, e.g. ``{"schrodinger": [...], ...}``.
+
+    Useful for sweeping every method of a given frame, or for reporting which
+    alternatives exist when one method is unsuitable.
+    """
+    out = {}
+    for name, frame in sorted(METHOD_FRAMES.items()):
+        out.setdefault(frame, []).append(name)
+    return out
+
+
+def _bond_growing_siblings(method):
+    """Methods in the same frame as ``method`` that grow their own bond dimension."""
+    frame = METHOD_FRAMES.get(method.lower().replace("_", "-"))
+    return [n for n in methods_by_frame().get(frame, [])
+            if n not in _FIXED_BOND_METHODS]
 
 _MPO_METHODS = {"tdvp1": "run_tdvp1", "mpo-tdvp1": "run_tdvp1",
                 "tdvp2": "run_tdvp2", "mpo-tdvp2": "run_tdvp2",
@@ -238,13 +294,21 @@ class BosonicBath:
             krylov=25, **engine_kw):
         """Propagate and return a :class:`Result`.
 
-        ``method`` is one of ``'tebd'`` (interaction-picture swap network),
-        ``'trotter-mpo'`` (interaction-picture conditional-displacement MPO),
-        ``'polaron' | 'polaron-tdvp1' | 'polaron-tdvp2' | 'polaron-dtdvp'``
-        (polaron frame), ``'mpo-tdvp1' | 'mpo-tdvp2' | 'mpo-dtdvp'``
-        (Schroedinger-picture MPO), ``'mpo-ip-tdvp1' | 'mpo-ip-tdvp2'``
-        (interaction-picture star MPO), or ``'tree-tdvp' | 'tree-tdvp2' |
-        'tree-tebd'`` (interaction-picture tree).
+        **Methods are organized by frame** (see :data:`METHOD_FRAMES`), because the
+        frame decides which integrators are usable at all:
+
+        * ``'schrodinger'`` -- ``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp``.  ``H`` is
+          time-independent, so its MPO is built once and TDVP conserves energy;
+          the state carries the most entanglement.
+        * ``'interaction'`` -- ``tebd``, ``trotter-mpo``, ``mpo-ip-tdvp1/2``,
+          ``tree-tdvp | tree-tdvp2 | tree-tebd``.  Low entanglement, but ``H`` is
+          time-dependent so gates/MPOs are rebuilt each step.  All the coupling
+          terms commute in this frame, which is what makes ``trotter-mpo``'s exact
+          factorization possible -- it has no counterpart elsewhere.
+        * ``'polaron'`` -- ``polaron``, ``polaron-tdvp1/tdvp2/dtdvp``.  Static like
+          the Schroedinger picture (so gates are built once *and* a static MPO
+          drives TDVP) while carrying interaction-picture-like entanglement;
+          requires ``T=0`` and ``int J/w^2`` finite.
 
         **Truncation.**  ``trunc_eps`` is the accuracy knob: singular values below
         it are discarded, so it alone decides the bond dimension.  ``bond_dim`` is
@@ -266,11 +330,14 @@ class BosonicBath:
                 raise ValueError("provide either t_max or n_steps")
             n_steps = int(round(t_max / dt))
         if bond_dim is None and method.lower().replace("_", "-") in _FIXED_BOND_METHODS:
+            alternatives = _bond_growing_siblings(method) or ["tebd"]
             raise ValueError(
                 f"method {method!r} has a fixed bond dimension and cannot grow it "
                 "from a product state, so bond_dim must be given explicitly "
                 "(bond_dim=None means 'unlimited', which is only meaningful for "
-                "the truncation-driven methods)")
+                "the truncation-driven methods).  To let trunc_eps choose the bond "
+                "instead, use a bond-growing method of the same frame: "
+                f"{', '.join(alternatives)}")
         if observables is not None:
             obs_ops = observables
         elif self.h.shape[0] == 2:
@@ -299,10 +366,11 @@ class BosonicBath:
         if m in _TREE_METHODS:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, krylov, engine_kw)
-        raise ValueError(f"unknown method {method!r}; choose from tebd, "
-                         "trotter-mpo, polaron, polaron-tdvp1/tdvp2/dtdvp, "
-                         "mpo-tdvp1/tdvp2/dtdvp, mpo-ip-tdvp1/tdvp2, "
-                         "tree-tdvp/tdvp2/tebd")
+        by_frame = methods_by_frame()
+        listing = "\n".join(f"  {frame:12s} {', '.join(names)}"
+                            for frame, names in sorted(by_frame.items()))
+        raise ValueError(f"unknown method {method!r}.  Available methods, by frame:\n"
+                         f"{listing}")
 
     # -- dispatchers ---------------------------------------------------------
     def _expect_from_rdm(self, rdms, obs_ops):
@@ -506,8 +574,13 @@ class BosonicBath:
         from fishbonett.frames.polaron import BosonicBathPolaron
         self._check_system()
         if getattr(self.bath, "temperature", None):
-            raise ValueError("the polaron methods require zero temperature "
-                             "(bath.temperature must be None)")
+            raise ValueError(
+                "the polaron frame requires zero temperature (bath.temperature "
+                "must be None): the transform displaces the bath vacuum, and the "
+                "finite-temperature (thermofield) version is not implemented.  For "
+                "a thermal bath use an interaction-picture method instead -- "
+                f"{', '.join(methods_by_frame()['interaction'])} -- which handles a "
+                "signed/thermalized domain directly.")
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
         pd = [b.phys_dim] * n + [d_sys]

@@ -230,6 +230,32 @@ def _polaron_bath(nm=14, d=8):
                 n_modes=nm, phys_dim=d)
 
 
+def test_every_method_is_classified_by_frame():
+    """The frame decides which integrators are usable at all, so every
+    dispatchable method must declare one (and nothing may declare a frame without
+    being dispatchable)."""
+    from fishbonett.simulate import (METHOD_FRAMES, methods_by_frame,
+                                     _MPO_METHODS, _POLARON_TDVP_METHODS,
+                                     _TREE_METHODS)
+    dispatchable = (set(_MPO_METHODS) | set(_POLARON_TDVP_METHODS)
+                    | set(_TREE_METHODS)
+                    | {"tebd", "trotter-mpo", "tebd-mpo", "ip-mpo", "polaron"})
+    assert dispatchable == set(METHOD_FRAMES)
+    assert set(methods_by_frame()) == {"schrodinger", "interaction", "polaron"}
+    # the frames that are time-independent are exactly the ones offering TDVP on a
+    # statically-built MPO
+    assert METHOD_FRAMES["mpo-tdvp1"] == "schrodinger"
+    assert METHOD_FRAMES["polaron-tdvp1"] == "polaron"
+    # trotter-mpo's exact factorization exists only in the interaction picture
+    assert METHOD_FRAMES["trotter-mpo"] == "interaction"
+
+
+def test_unknown_method_error_lists_methods_by_frame():
+    model = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=4, d=4))
+    with pytest.raises(ValueError, match="by frame"):
+        model.run(dt=0.05, n_steps=1, method="not-a-method")
+
+
 def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
     """The conditional-displacement propagator is a sum of one product operator per
     eigenvalue of the coupling ``O``, so the MPO bond is exactly that count -- 2 for
