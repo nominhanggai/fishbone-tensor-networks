@@ -1,13 +1,19 @@
-"""The linear-chain TEBD engine: bond update, sweeps, and whole symmetric steps.
+"""TEBD on an MPS: bond update, sweeps, and whole symmetric steps.
 
-TEBD is not a chain-only algorithm -- it is Trotter-split gates plus truncation,
-which works on any loop-free geometry, and this package uses it on trees
-(``tree-tebd``, :mod:`fishbonett.evolve.treetdvp`) and on the comb
-(``tree-tebd-static``, :mod:`fishbonett.states.comb`) as well.  What is 1D here
-is this *implementation*: it acts on an
-:class:`~fishbonett.states.mps.SimpleSysBathMPS` and indexes gates by bond number.
+TEBD is Trotter-split gates plus truncation, which works on any loop-free
+geometry -- so this is one of several TEBD implementations here, not *the* one.
+It is the MPS one: it acts on a :class:`~fishbonett.states.mps.SimpleSysBathMPS`
+and indexes gates by bond number, which is what ties it to a linear chain.  The
+others carry their own bookkeeping for their own geometry:
 
-Two sweep patterns, selected by the frame:
+- :func:`fishbonett.evolve.treetdvp.run_tree_tebd` -- a balanced binary tree of
+  *modes* (``tree-tebd``).
+- :class:`fishbonett.states.tree.TreeTEBD` -- any loop-free tree of *sites*
+  (``tree-tebd-static``, which is what the comb and multichannel models use).
+- :class:`fishbonett.states.comb.FishBoneNet` -- a comb-specific engine, not
+  reachable from ``run``.
+
+Two sweep patterns here, selected by the frame:
 
 - *swap network* (:func:`symmetric_swap_step`) — interaction picture, where every
   mode couples to the system.  ``swap=1`` walks the system along the chain.
