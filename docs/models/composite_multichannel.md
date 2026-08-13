@@ -69,7 +69,11 @@ M_k = \sum_c g_{c,k}\, O_c, \qquad g_{c,k} = \sqrt{J_c(\omega_k)\, w_k / \pi},
 $$
 
 so the channels genuinely cross-correlate rather than acting as independent baths.
-Passing a multichannel `Bath` to `SystemBath` routes it through
+That star is {py:meth}`Bath.shared_mode_star
+<fishbonett.bath.spec.Bath.shared_mode_star>` — one construction, used by both the
+Schrödinger frame and the interaction-picture path, which is what makes the two
+frames comparable rather than merely similar.  Passing a multichannel `Bath` to
+`SystemBath` routes it through
 {py:class}`~fishbonett.models.fishbone.TreeFishbone` so the spin stays on its own site.
 
 ```{note}

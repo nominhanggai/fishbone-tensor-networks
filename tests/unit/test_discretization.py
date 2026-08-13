@@ -50,3 +50,48 @@ def test_continuous_bath_driver_builds_with_the_default_quadrature():
     assert len(freq) == n_boson
     # eigenvectors of the (real symmetric) chain are orthonormal
     np.testing.assert_allclose(coef.T @ coef, np.eye(n_boson), atol=1e-10)
+
+
+def test_shared_mode_star_is_the_one_multichannel_discretization():
+    """One star construction, used by both multichannel paths.
+
+    The Schroedinger frame and the interaction-picture model each used to
+    discretize the channels themselves, in two copies of the same loop.  They must
+    place the modes on *one* grid or the two frames stop being comparable, so the
+    construction belongs to the bath.
+    """
+    from fishbonett import Bath
+    from fishbonett.bath.legendre import get_vn_squared
+    from fishbonett.operators import sigma_x, sigma_z
+
+    Ja = lambda w: 0.2 * w * np.exp(-w / 5.0)
+    Jb = lambda w: 0.1 * w * np.exp(-w / 5.0)
+    bath = Bath(J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3,
+                coupling=[sigma_z, sigma_x])
+    freq, coup_mat = bath.shared_mode_star()
+
+    # the grid is the channels' shared Gauss-Legendre one
+    wa, va = get_vn_squared(Ja, 4, [0.0, 30.0])
+    wb, vb = get_vn_squared(Jb, 4, [0.0, 30.0])
+    np.testing.assert_allclose(freq, wa)
+    np.testing.assert_allclose(wa, wb)          # nodes ignore J, so they coincide
+
+    # mode k couples through the single combined operator sum_c g_{c,k} O_c
+    assert len(coup_mat) == 4
+    for k in range(4):
+        expected = (np.sqrt(va[k] / np.pi) * sigma_z
+                    + np.sqrt(vb[k] / np.pi) * sigma_x)
+        np.testing.assert_allclose(coup_mat[k], expected, atol=1e-12)
+        np.testing.assert_allclose(coup_mat[k], coup_mat[k].conj().T)
+
+    # and the frame reads exactly this, one edge per mode
+    from fishbonett.frames.schrodinger import star_terms
+    dims, edges, site_H, edge_H = [2], [], [0.5 * sigma_z], {}
+    assert star_terms(bath, 0, 1, dims, edges, site_H, edge_H) == 5
+    assert edges == [(0, 1), (0, 2), (0, 3), (0, 4)]
+
+    # measure-adapted nodes are per-density, so they cannot be shared
+    with pytest.raises(ValueError, match="legendre"):
+        Bath(J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3,
+             coupling=[sigma_z, sigma_x],
+             discretization="tedopa").shared_mode_star()
