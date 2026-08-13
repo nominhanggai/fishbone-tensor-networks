@@ -51,11 +51,11 @@ models that drive them are above.
    :recursive:
 
    fishbonett.evolve.tebd
-   fishbonett.evolve.tebd_tree
+   fishbonett.evolve.sitetree
    fishbonett.evolve.tebd_comb
    fishbonett.evolve.mpo_apply
    fishbonett.evolve.tdvp
-   fishbonett.evolve.treetdvp
+   fishbonett.evolve.modetree
 ```
 
 ## Frames

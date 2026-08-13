@@ -5,7 +5,7 @@ import pytest
 from fishbonett import Bath, SystemBath, Result
 from fishbonett.bath.chain import get_vn_squared
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.evolve.treetdvp import _star_transform, annihilate, create, SZ, SX
+from fishbonett.evolve.modetree import _star_transform, annihilate, create, SZ, SX
 
 N, D, V = 3, 5, 1.0
 

@@ -15,8 +15,8 @@ geometry              module                               integrators
 ====================  ===================================  ====================
 1D chain (MPS)        :mod:`~fishbonett.evolve.tebd`       TEBD (Trotter gates)
 1D chain (MPS + MPO)  :mod:`~fishbonett.evolve.tdvp`       TDVP 1/2-site, DTDVP
-binary tree of modes  :mod:`~fishbonett.evolve.treetdvp`   TDVP 1/2-site, TEBD
-arbitrary tree        :mod:`~fishbonett.evolve.tebd_tree`  TEBD
+binary tree of modes  :mod:`~fishbonett.evolve.modetree`   TDVP 1/2-site, TEBD
+arbitrary tree        :mod:`~fishbonett.evolve.sitetree`  TEBD
 comb / fishbone       :mod:`~fishbonett.evolve.tebd_comb`  TEBD
 ====================  ===================================  ====================
 
@@ -25,8 +25,8 @@ algorithms lived; they are here now, so *every* gate application is in this pack
 and ``states`` holds only tensors and canonical form.
 
 Note the two tree rows are different **models**, not two integrators for one
-geometry: ``treetdvp`` is a balanced binary tree of *bath modes* around one system
-site (interaction picture, ``tree-tebd``), while ``tebd_tree`` is an arbitrary tree
+geometry: ``modetree`` is a balanced binary tree of *bath modes* around one system
+site (interaction picture, ``tree-tebd``), while ``sitetree`` is an arbitrary tree
 of *system sites* each with its own bath (Schroedinger, ``tree-tebd-static``).  See
 :mod:`fishbonett.models.registry`.
 
@@ -37,14 +37,14 @@ whichever level you need:
 
 *primitive*
     one bond or one site: :func:`~fishbonett.evolve.tebd.update_bond`,
-    :func:`~fishbonett.evolve.tebd_tree.apply_edge`, ``tdvp.applyH1``/``applyH0``.
+    :func:`~fishbonett.evolve.sitetree.apply_edge`, ``tdvp.applyH1``/``applyH0``.
 *sweep*
     one pass over the state: :func:`~fishbonett.evolve.tebd.sweep`,
-    ``tdvp.tdvp1sweep``, ``treetdvp.tdvp_sweep``.
+    ``tdvp.tdvp1sweep``, ``modetree.tdvp_sweep``.
 *whole step / driver*
     one symmetric time step, or a whole simulation:
     :func:`~fishbonett.evolve.tebd.symmetric_swap_step`,
-    :func:`~fishbonett.evolve.tebd_tree.symmetric_tree_step`,
+    :func:`~fishbonett.evolve.sitetree.symmetric_tree_step`,
     :func:`run_tdvp1`, ...
 
 Every whole step here is **second order** (Strang): each takes half-step gates and
@@ -64,7 +64,7 @@ from fishbonett.evolve.tdvp import (
     run_tdvp1, run_tdvp2, run_dtdvp, run_ip_tdvp1, run_ip_tdvp2,
     run_star_tdvp1, run_star_tdvp2,
 )
-from fishbonett.evolve.treetdvp import (
+from fishbonett.evolve.modetree import (
     run_tree_tdvp, run_tree_tdvp2, run_tree_tebd,
 )
 from fishbonett.evolve.mpo_apply import apply_mpo, compress

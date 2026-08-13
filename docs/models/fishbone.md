@@ -69,7 +69,7 @@ step: halving `dt` cuts the error ~4×, as with every other method here
 ({doc}`/getting_started`).  On a tree that takes more care than on a chain — the
 edge gates must be applied in a palindromic order over the whole tree, not just down
 and back up each branch — so the step applies each half-step gate twice.  See
-{py:func}`fishbonett.evolve.tebd_tree.symmetric_tree_step`.
+{py:func}`fishbonett.evolve.sitetree.symmetric_tree_step`.
 
 ```{note}
 Both classes run on the one general tree-TEBD engine.  On a 1D chain this *is* the

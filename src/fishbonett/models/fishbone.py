@@ -168,7 +168,7 @@ class TreeFishbone:
         """Physical tree plus the single-site and two-site Trotter gates.
 
         ``dt`` is the gate's own time argument, **not** the step: the symmetric step
-        (:func:`fishbonett.evolve.tebd_tree.symmetric_tree_step`) applies every gate
+        (:func:`fishbonett.evolve.sitetree.symmetric_tree_step`) applies every gate
         twice, so ``run`` passes half its step here -- the same convention as
         :func:`fishbonett.evolve.tebd.symmetric_static_step`.
         """
@@ -209,7 +209,7 @@ class TreeFishbone:
         frame gaps are recorded in :mod:`fishbonett.models.registry`.
 
         The step is second order in ``dt``
-        (:func:`fishbonett.evolve.tebd_tree.symmetric_tree_step`), so halving ``dt``
+        (:func:`fishbonett.evolve.sitetree.symmetric_tree_step`), so halving ``dt``
         cuts the error by about four.
 
         Truncation is one setting, given either as a

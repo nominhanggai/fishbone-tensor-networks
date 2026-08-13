@@ -6,7 +6,7 @@ It is the MPS one: it acts on a :class:`~fishbonett.states.mps.SystemBathMPS`
 and indexes gates by bond number, which is what ties it to a linear chain.  The
 others carry their own bookkeeping for their own geometry:
 
-- :func:`fishbonett.evolve.treetdvp.run_tree_tebd` -- a balanced binary tree of
+- :func:`fishbonett.evolve.modetree.run_tree_tebd` -- a balanced binary tree of
   *modes* (``tree-tebd``).
 - :class:`fishbonett.states.tree.TreeTEBD` -- any loop-free tree of *sites*
   (``tree-tebd-static``, which is what the comb and multichannel models use).

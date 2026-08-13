@@ -21,7 +21,7 @@ from fishbonett.linalg import Truncation
 from fishbonett.bath.chain import get_vn_squared
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
-from fishbonett.evolve import treetdvp as _tree
+from fishbonett.evolve import modetree as _tree
 from fishbonett.models.result import Result
 from fishbonett.models.registry import (
     METHOD_FRAMES, MULTICHANNEL_IP, methods_of, unknown_method_error,
