@@ -303,12 +303,16 @@ def test_polaron_matches_ip_populations_and_coherence(method):
     coherence <sx> both agree (they differ only by the O(dt^2) Trotter split).
     The TEBD variant uses static gates; the TDVP variants use the polaron MPO."""
     model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_polaron_bath(nm=10, d=8))
-    kw = dict(dt=0.01, n_steps=30, bond_dim=16, trunc_eps=1e-4,
+    kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4,
               observables={"sz": sigma_z, "sx": sigma_x})
     rp = model.run(method=method, **kw)
     ri = model.run(method="tebd", **kw)
-    assert np.max(np.abs(rp.expect["sz"] - ri.expect["sz"])) < 5e-2   # populations
-    assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 8e-2   # un-dressed coherence
+    # The two frames describe the same physics, so they agree far better than the
+    # O(dt^2) splitting bound: ~1e-5 on the population and ~1e-4 on the un-dressed
+    # coherence.  Keep the tolerance tight -- a loose one here once hid a misplaced
+    # on-site frequency in the polaron gates.
+    assert np.max(np.abs(rp.expect["sz"] - ri.expect["sz"])) < 1e-4   # populations
+    assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 1e-3   # un-dressed
 
 
 @pytest.mark.parametrize("method", ["polaron", "polaron-dtdvp"])
@@ -331,3 +335,38 @@ def test_polaron_runs_at_finite_temperature():
             method="polaron", dt=0.05, n_steps=2, bond_dim=20)
     assert r.t.shape == (2,)
     assert np.allclose(np.trace(r.rdm[-1]), 1.0, atol=1e-6)
+
+
+def test_free_chain_gates_put_each_frequency_on_its_own_mode():
+    """Free-chain bond ``m`` must carry ``k_list[m]`` hopping *and* ``w_list[m]``
+    on ``c_m`` -- its **right** leg, because with the system at site 0 the chain
+    runs outward.
+
+    The old layout ran the chain inward, where the new mode was the *left* leg;
+    carrying that convention over silently pairs each frequency with the
+    neighbouring mode.  Populations stay normalized and traces stay 1, so only a
+    structural check catches it.
+    """
+    import scipy.linalg as sla
+    from fishbonett.frames.polaron import SystemBathPolaron
+    from fishbonett.operators import annihilate
+
+    nb, d, ds = 4, 5, 2
+    b = SystemBathPolaron([ds] + [d] * nb)
+    b.domain = [0.3, 12.0]
+    b.sd = lambda w: 0.3 * w * np.exp(-w / 2.5)
+    b.coupling = sigma_z
+    b.h_sys = 0.5 * sigma_x
+    b.build()
+
+    dt = 1e-5                       # small dt so i log(U)/dt recovers h faithfully
+    a = annihilate(d)
+    num, Id = a.conj().T @ a, np.eye(d)
+    gates = b.gates(dt)
+    for m in range(1, nb):          # bond 0 is the dressed bond, checked elsewhere
+        want = (b.k_list[m] * (np.kron(a.conj().T, a) + np.kron(a, a.conj().T))
+                + b.w_list[m] * np.kron(Id, num))          # w_m on c_m (right leg)
+        got = 1j * sla.logm(gates[m].reshape(d * d, d * d)) / dt
+        assert np.allclose(got, want, atol=1e-4), (
+            f"bond {m}: gate Hamiltonian does not match "
+            f"k={b.k_list[m]:.4f} hopping + w={b.w_list[m]:.4f} on c_{m}")

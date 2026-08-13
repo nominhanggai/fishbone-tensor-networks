@@ -107,7 +107,9 @@ has a plain MPO and can drive the full TDVP family as well as Trotter TEBD:
 block, so it avoids the $O(d^4)$ boson–boson gates that make the TEBD sweep
 expensive, and the adaptive bond search finds the smallest representation. Measured
 on a moderate-coupling model (all four agree with the interaction-picture chain to
-$\sim10^{-3}$):
+$\sim10^{-5}$ on populations and $\sim10^{-4}$ on the un-dressed coherence — the
+two frames describe the same physics, so they agree far better than the
+$O(\Delta t^2)$ splitting bound would suggest):
 
 | method | time | peak bond |
 |---|---|---|

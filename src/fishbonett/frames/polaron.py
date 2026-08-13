@@ -96,13 +96,15 @@ class SystemBathPolaron:
         # dressed (system, c0) bond at index 0
         U[0] = expm_gate(self._h_sysbond(), dt).reshape(
             [self.pd_sys, self.pd_boson[0], self.pd_sys, self.pd_boson[0]])
-        # free-chain bonds: bond i connects (c_{i-1}, c_i); c_{i-1} on-site lives here
+        # free-chain bonds: bond m connects (c_{m-1}, c_m).  c_0's on-site term is
+        # already in the dressed bond above, so bond m carries c_m's -- the *right*
+        # leg -- which keeps every mode's frequency on that same mode.
         for m in range(1, n):
             dm_prev, dm = self.pd_boson[m - 1], self.pd_boson[m]
             a1, a2 = annihilate(dm_prev), annihilate(dm)
-            num1 = a1.conj().T @ a1
+            num2 = a2.conj().T @ a2
             h = (self.k_list[m] * (np.kron(a1.conj().T, a2) + np.kron(a1, a2.conj().T))
-                 + self.w_list[m] * np.kron(num1, np.eye(dm)))
+                 + self.w_list[m] * np.kron(np.eye(dm_prev), num2))
             U[m] = expm_gate(h, dt).reshape([dm_prev, dm, dm_prev, dm])
         return U
 

@@ -133,10 +133,12 @@ class SystemBathCoolingChain(SystemBathMPS):
         """Two-site Hamiltonians ``[(h, d1, d2), ...]`` along the chain.
 
         Bond 0 (system to c0) carries the cooling gauge: the coupling is
-        ``k0 (e^{betaOmega} b + e^{-betaOmega} b^dag) (x) he_dy``.
-        Remaining bonds are free-chain mode-mode hoppings.
+        ``k0 (e^{betaOmega} b + e^{-betaOmega} b^dag) (x) he_dy``, plus the
+        system's and ``c0``'s on-site terms.  Bond ``i`` then carries the
+        ``c_{i-1}``-``c_i`` hopping plus ``c_i``'s on-site term -- the **right**
+        leg, so each mode's frequency is placed exactly once.
         """
-        h1 = self.get_h1()
+        h1 = self.get_h1()          # [h_sys, w_0 n_0, w_1 n_1, ...]
         k0 = self.k_list[0]
         h2 = []
         d1 = self.pd_sys
@@ -153,7 +155,7 @@ class SystemBathCoolingChain(SystemBathMPS):
             c1 = annihilate(d1)
             c2 = annihilate(d2)
             coup = self.k_list[i] * (kron(c1.T, c2) + kron(c1, c2.T))
-            site = kron(h1[i], np.eye(d2))
+            site = kron(np.eye(d1), h1[i + 1])      # c_i's on-site term
             h2.append((coup + site, d1, d2))
         return h2
 
