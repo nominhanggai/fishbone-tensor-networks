@@ -18,17 +18,17 @@ from scipy.linalg import expm
 from fishbonett.contract import contract
 
 from fishbonett.common import get_bath_nn_paras
+from fishbonett.linalg import cap_rank
 from fishbonett.bath.legendre import get_vn_squared
-from fishbonett.model import _c
+from fishbonett.operators import _c, sigma_x, sigma_z
 from fishbonett.simulate import Result
-from fishbonett.stuff import sigma_x, sigma_z
 
 __all__ = ["TreeTEBD", "TreeFishbone"]
 
 
 def _svd_trunc(mat, chi, eps):
     U, S, Vh = np.linalg.svd(mat, full_matrices=False)
-    k = min(chi, max(1, int(np.sum(S > eps * (S[0] if S.size else 1.0)))))
+    k = cap_rank(np.sum(S > eps * (S[0] if S.size else 1.0)), chi)
     return U[:, :k], S[:k], Vh[:k, :]
 
 
@@ -460,9 +460,13 @@ class TreeFishbone:
         v = np.asarray(item, complex)
         return v / np.linalg.norm(v)
 
-    def run(self, *, dt, t_max=None, n_steps=None, bond_dim=100, trunc_eps=1e-10,
+    def run(self, *, dt, t_max=None, n_steps=None, bond_dim=None, trunc_eps=1e-4,
             observables=None, initial="up"):
         """Propagate and return a :class:`~fishbonett.simulate.Result`.
+
+        ``trunc_eps`` is the accuracy knob (singular values below it are dropped);
+        ``bond_dim`` is an optional hard cap, ``None`` meaning **unlimited** -- the
+        bond then grows to whatever ``trunc_eps`` requires.
 
         Each entry of ``observables`` is one of:
 

@@ -16,6 +16,7 @@ encodes three orthogonal choices:
 | ``method``        | picture      | state / integrator                 | bond growth        | page |
 |-------------------|--------------|------------------------------------|--------------------|------|
 | ``tebd``          | interaction  | MPS, swap-network TEBD             | SVD truncation     | {doc}`tebd` |
+| ``trotter-mpo``   | interaction  | MPS, exact conditional-displacement MPO | SVD truncation | {doc}`trotter_mpo` |
 | ``polaron``       | polaron      | MPS chain, static-gate TEBD        | SVD truncation     | {doc}`polaron` |
 | ``polaron-tdvp1`` | polaron      | polaron MPO, 1-site TDVP          | fixed              | {doc}`polaron` |
 | ``polaron-tdvp2`` | polaron      | polaron MPO, 2-site TDVP          | SVD truncation     | {doc}`polaron` |
@@ -101,6 +102,7 @@ r.max_bond           # peak bond dimension per step (adaptive methods)
 :hidden:
 
 tebd
+trotter_mpo
 polaron
 chain_mpo
 star_mpo

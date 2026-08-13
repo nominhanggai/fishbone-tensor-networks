@@ -1,5 +1,15 @@
 """Sphinx configuration for the fishbonett documentation."""
+import sys
 from importlib.metadata import version as _version
+from pathlib import Path
+
+# Figures are build artefacts, not repository content: regenerate them (into the
+# gitignored docs/img/) before the build so any checkout -- local, CI or RTD --
+# renders against freshly computed data.  See docs/figures.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import figures as _figures  # noqa: E402
+
+_figures.build_all()
 
 project = "fishbonett"
 copyright = "2020-2026, The fishbonett developers"

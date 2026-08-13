@@ -5,7 +5,7 @@ from scipy.sparse.linalg import expm as sparseExpm
 from scipy.sparse import csc_matrix
 import scipy
 from numpy import exp
-import fishbonett.recurrence_coefficients as rc
+import fishbonett.bath.recurrence as rc
 from copy import deepcopy as dcopy
 from scipy.sparse import kron as skron
 

@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import integrate
-from fishbonett.legendre_discretization import get_vn_squared, get_approx_func
+from fishbonett.bath.legendre import get_vn_squared, get_approx_func
 
 """
 Calculate fermi's golden rule rate for electron transfer reactions, given a spectral density.

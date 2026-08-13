@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import integrate
-from fishbonett.legendre_discretization import get_vn_squared, get_approx_func
+from fishbonett.bath.legendre import get_vn_squared, get_approx_func
 from fishbonett.rates.golden_rule import fgr_rate, fgr_rate_by_order
 import itertools as it
 from fishbonett.rates.mcmc import mcmc_time_ordered

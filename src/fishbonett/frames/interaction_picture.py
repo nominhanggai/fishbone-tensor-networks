@@ -21,7 +21,7 @@ import scipy.linalg as la
 from numpy import exp
 from copy import deepcopy as dcopy
 
-import fishbonett.recurrence_coefficients as rc
+import fishbonett.bath.recurrence as rc
 from fishbonett.contract import contract as einsum
 # eye/svd are re-exported for back-compat; the class below uses kron and the
 # dense gate exponential (_expm_gate).
@@ -31,13 +31,18 @@ from fishbonett.spectral_densities import drude
 
 
 class BosonicBathIP:
-    """Interaction-picture builder: arbitrary system + harmonic bath, TEBD engine.
+    """Interaction-picture builder: arbitrary system + harmonic bath.
 
-    Diagonalizes the chain-mapped bath and rebuilds the time-dependent two-site
-    Trotter gates every step (:meth:`get_u`), working in the interaction picture
-    with respect to the system-bath coupling.  Set :attr:`coupling` (the coupling
-    operator) and :attr:`h_sys` (the system Hamiltonian), call :meth:`build`, then
-    step with :meth:`get_u`.  Historically named ``SpinBoson`` (aliases kept).
+    Diagonalizes the chain-mapped bath into its star modes and absorbs their free
+    evolution into time-dependent couplings ``d_n(t)``
+    (:meth:`mode_couplings`) -- the interaction picture with respect to the **free
+    bath** Hamiltonian.  Set :attr:`coupling` (the system operator ``A_s``) and
+    :attr:`h_sys`, call :meth:`build`, then take either
+
+    * :meth:`get_u` -- two-site Trotter gates for the swap-network TEBD sweep, or
+    * :meth:`displacement_mpo` -- the same propagator as one exact low-bond MPO.
+
+    Historically named ``SpinBoson`` (aliases kept).
     """
 
     def __init__(self, pd):
