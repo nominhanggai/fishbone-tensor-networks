@@ -48,11 +48,30 @@ result.expect["sz"]      # <sigma_z>(t)
 result.max_bond          # peak bond dimension per step
 ```
 
-`method` selects the engine — `"tebd"`, `"mpo-tdvp1" | "mpo-tdvp2" | "mpo-dtdvp"`,
+`method` selects the engine — `"tebd"`, `"trotter-mpo"`, `"polaron"` (and its
+TDVP variants), `"mpo-tdvp1" | "mpo-tdvp2" | "mpo-dtdvp"`,
 `"mpo-ip-tdvp1" | "mpo-ip-tdvp2"`, or `"tree-tdvp" | "tree-tdvp2" | "tree-tebd"`.
 Every method uses the same `dt`/`t_max` and returns the same
 {py:class}`~fishbonett.simulate.Result`, so switching engines is a one-word change.
 See {doc}`methods/index` for the theory and an example behind each one.
+
+### Accuracy: `dt`, `trunc_eps`, `bond_dim`
+
+Three knobs control accuracy, and it is worth knowing which does what:
+
+- **`dt`** — the time step. Every method here is second order, so halving `dt`
+  cuts the time-discretization error roughly 4×.
+- **`trunc_eps`** (default `1e-4`) — the truncation threshold. Singular values
+  below it are discarded, so this alone sets how large the bond dimension grows.
+- **`bond_dim`** (default `None`, meaning **unlimited**) — an optional hard cap on
+  the bond dimension, for when memory rather than accuracy is the binding
+  constraint. `result.max_bond` reports what was actually used.
+
+The recommended workflow: pick `trunc_eps` for the accuracy you need, leave
+`bond_dim` unset, and watch `result.max_bond`. Then confirm convergence by halving
+`dt` and tightening `trunc_eps` one notch each and checking the answer moves less
+than you care about. (A few methods have a *fixed* bond dimension and therefore
+require an explicit `bond_dim` — see {doc}`methods/index`.)
 
 ## The fishbone geometry
 
