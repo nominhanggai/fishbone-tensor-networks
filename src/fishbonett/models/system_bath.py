@@ -20,6 +20,7 @@ from fishbonett.linalg import Truncation
 from fishbonett.system import System
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
+from fishbonett.frames import mpo as _frames_mpo
 from fishbonett.evolve import modetree as _tree
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models.result import Result
@@ -222,28 +223,37 @@ class SystemBath:
                 "Bath's shape and has its own propagators; see "
                 "fishbonett.models.registry.")
 
+    #: which MPO the *(frame, model)* pair implies.  This is the whole point of the
+    #: taxonomy: the frame decides what H looks like, the model decides on what
+    #: geometry, and the integrator (``spec.driver``) is an independent choice.
+    _MPO_FRAMES = {
+        ("schrodinger", "chain"): "chain_mpo_frame",
+        ("schrodinger", "star"): "static_star_mpo_frame",
+        ("interaction", "star"): "ip_star_mpo_frame",
+    }
+
     def _run_mpo(self, spec, ctx):
+        """TDVP on an MPO -- one loop for all seven (frame, sweep) combinations.
+
+        Each of these used to be a whole-run wrapper in
+        :mod:`fishbonett.evolve.tdvp` that built its own Hamiltonian and ran its own
+        loop.  The Hamiltonian is a frame question, so it comes from
+        :mod:`fishbonett.frames.mpo` now; what is left is the loop, which never
+        differed.
+        """
         self._check_system()
         b = self.bath.resolved(ctx.t_max)
-        # The MPO drivers take a half-step and advance 2*dt of physical time per
-        # sweep; pass dt/2 so one sweep advances the user's physical dt (matching
-        # the tree/tebd drivers, so every method reaches the same t_max).
-        common = dict(hsys=self.h, cop=self.coupling,
-                      init=self._initial_state(ctx.initial),
-                      n_chain=b.n_modes, d=b.phys_dim,
-                      dt=ctx.dt / 2.0, nsteps=ctx.n_steps, krylov=ctx.krylov,
-                      discretizer=b.discretizer(), observe=_mpo.measure_rdm,
-                      **ctx.kw)
-        sd, dom = b.spectral_density(), b.domain
-        driver = spec.driver
-        maxb = None
-        if driver in ("run_tdvp1", "run_ip_tdvp1", "run_star_tdvp1"):
-            t, rdms = getattr(_mpo, driver)(sd, dom, D=ctx.bond_dim, **common)
-        elif driver in ("run_tdvp2", "run_ip_tdvp2", "run_star_tdvp2"):
-            t, rdms, maxb = getattr(_mpo, driver)(sd, dom, chi_max=ctx.bond_dim,
-                                                  eps=ctx.trunc_eps, **common)
-        else:
-            t, rdms, maxb = _mpo.run_dtdvp(sd, dom, Dlim=ctx.bond_dim, **common)
+        make = getattr(_frames_mpo, self._MPO_FRAMES[(spec.frame, spec.models[0])])
+        frame = make(b.spectral_density(), b.domain, n_chain=b.n_modes,
+                     d=b.phys_dim, hsys=self.h, cop=self.coupling,
+                     init=self._initial_state(ctx.initial),
+                     discretizer=b.discretizer())
+        t, rdms, maxb = _mpo.run_mpo_frame(
+            frame, dt=ctx.dt, nsteps=ctx.n_steps, sweep=spec.driver,
+            D=ctx.bond_dim, chi_max=ctx.bond_dim, eps=ctx.trunc_eps,
+            krylov=ctx.krylov, observe=_mpo.measure_rdm,
+            prec=ctx.kw.get("prec", 1e-4), Dplusmax=ctx.kw.get("Dplusmax", 4),
+            tol=ctx.kw.get("tol", 1e-7), eshift=ctx.kw.get("eshift", False))
         return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
                       max_bond=maxb, rdm=np.asarray(rdms), method=spec.name)
 

@@ -189,10 +189,10 @@ def _m(name, frame, models, integrator, driver="", fixed_bond=False):
 METHODS = {s.name: s for s in [
     # -- chain -------------------------------------------------------------
     _m("mpo-tdvp1", "schrodinger", ("chain",), "chain-mpo-tdvp",
-       "run_tdvp1", fixed_bond=True),
-    _m("mpo-tdvp2", "schrodinger", ("chain",), "chain-mpo-tdvp", "run_tdvp2"),
+       "tdvp1", fixed_bond=True),
+    _m("mpo-tdvp2", "schrodinger", ("chain",), "chain-mpo-tdvp", "tdvp2"),
     _m("mpo-dtdvp", "schrodinger", ("chain",), "chain-mpo-tdvp",
-       "run_dtdvp", fixed_bond=True),
+       "dtdvp", fixed_bond=True),
     _m("tebd", "interaction", ("chain",), "swap-tebd"),
     _m("trotter-mpo", "interaction", ("chain",), "displacement-mpo"),
     _m("polaron", "polaron", ("chain",), "polaron-tebd"),
@@ -203,13 +203,13 @@ METHODS = {s.name: s for s in [
        "dtdvp", fixed_bond=True),
     # -- star --------------------------------------------------------------
     _m("mpo-star-tdvp1", "schrodinger", ("star",), "chain-mpo-tdvp",
-       "run_star_tdvp1", fixed_bond=True),
+       "tdvp1", fixed_bond=True),
     _m("mpo-star-tdvp2", "schrodinger", ("star",), "chain-mpo-tdvp",
-       "run_star_tdvp2"),
+       "tdvp2"),
     _m("mpo-ip-tdvp1", "interaction", ("star",), "chain-mpo-tdvp",
-       "run_ip_tdvp1", fixed_bond=True),
+       "tdvp1", fixed_bond=True),
     _m("mpo-ip-tdvp2", "interaction", ("star",), "chain-mpo-tdvp",
-       "run_ip_tdvp2"),
+       "tdvp2"),
     # -- mode-tree ---------------------------------------------------------
     _m("tree-tdvp", "interaction", ("mode-tree",), "modetree",
        "run_tree_tdvp", fixed_bond=True),
