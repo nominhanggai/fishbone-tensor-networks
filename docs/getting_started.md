@@ -119,31 +119,34 @@ construction**, then `build()` does the chain mapping:
 
 ```python
 import numpy as np
-from fishbonett.frames.schrodinger import SystemBathSchrodinger
+from fishbonett.frames.polaron import SystemBathPolaron
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.evolve import tebd
 from fishbonett.operators import sigma_x, sigma_z
 
 pd = [2] + [10] * 8                        # system on site 0, then the bath chain
-builder = SystemBathSchrodinger(
-    pd, h_sys=sigma_x, coupling=sigma_z,
-    sd=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0.0, 40.0)).build()
+builder = SystemBathPolaron(
+    pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+    sd=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0)).build()
 
 state = SystemBathMPS(pd)
-state.U = builder.get_u(0.02)              # static frame: gates built once
-for bond in range(len(pd) - 1):
-    tebd.update_bond(state, bond, chi_max=60, eps=1e-4)
+gates = builder.gates(0.02 / 2)            # static frame: gates built once...
+tebd.symmetric_static_step(state, gates, len(pd) - 1, chi_max=60, eps=1e-4)
 rho = np.einsum('LiR,LjR->ij', state.get_theta1(0), state.get_theta1(0).conj())
 ```
 
-The same shape applies to
-{py:class}`~fishbonett.frames.interaction_picture.SystemBathIP`,
-{py:class}`~fishbonett.frames.polaron.SystemBathPolaron` and
-{py:class}`~fishbonett.frames.schrodinger.FishBoneH` (with
-{py:class}`~fishbonett.states.comb.FishBoneNet` as its state).  The high-level
-interface above is a thin wrapper over exactly this loop, and additionally resolves
-the automatic `domain` / `n_modes`, prepares the initial state, and — in
-time-dependent frames — rebuilds the gates each step.
+`symmetric_static_step` applies each gate twice, so it takes **half**-step gates —
+the convention every second-order step here uses.  The same construction applies to
+{py:class}`~fishbonett.frames.interaction_picture.SystemBathIP` (whose gates are
+time-dependent, so they are rebuilt each step by
+{py:func}`~fishbonett.evolve.tebd.symmetric_swap_step`) and to
+{py:class}`~fishbonett.frames.multichannel.SystemBathMultiChannel`.  For a
+multi-site model the state is a {py:class}`~fishbonett.states.tree.TreeTEBD` driven
+by {py:mod}`fishbonett.evolve.sitetree` instead.
+
+The high-level interface above is a thin wrapper over exactly this loop, and
+additionally resolves the automatic `domain` / `n_modes`, prepares the initial
+state, and — in time-dependent frames — rebuilds the gates each step.
 
 See the [`examples/`](https://github.com/nominhanggai/fishbone-tensor-networks/tree/main/examples)
 directory for runnable scripts — start with `friendly_interface.py`, which also

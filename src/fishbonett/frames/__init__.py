@@ -7,7 +7,6 @@ decides which frames are even available, and the frame in turn decides which
 propagators (:mod:`fishbonett.evolve`) apply.
 
 =============================================  =====================================
-:mod:`~fishbonett.frames.schrodinger`          nothing rotated out; ``H`` static
 :mod:`~fishbonett.frames.interaction_picture`  free bath rotated out; ``H(t)``
 :mod:`~fishbonett.frames.polaron`              Lang-Firsov; static, low entanglement
 :mod:`~fishbonett.frames.multichannel`         interaction picture, several couplings
@@ -21,6 +20,12 @@ Each module produces either Trotter gates or an MPO; the state lives in
 a static ``H`` can drive TDVP with a once-built MPO, a time-dependent one must
 rebuild each step, and only the interaction picture makes all the coupling terms
 commute (which is what ``trotter-mpo`` exploits).  See :doc:`/methods/index`.
+
+The **Schroedinger picture has no builder class here**, which is the clearest sign
+that this package is organized by (model, frame) pair rather than by frame: its
+chain and star MPOs are :mod:`fishbonett.frames.mpo` functions called from
+:mod:`fishbonett.evolve.tdvp`, and the multi-site models build their static
+Hamiltonian inline in :meth:`fishbonett.models.fishbone.TreeFishbone.hamiltonians`.
 
 Not every frame is available for every model: the multi-site models have only the
 Schroedinger picture, and ``coolingchain`` sits outside the taxonomy entirely

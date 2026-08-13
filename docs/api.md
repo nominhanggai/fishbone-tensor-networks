@@ -39,7 +39,6 @@ models that drive them are above.
    :recursive:
 
    fishbonett.states.mps
-   fishbonett.states.comb
    fishbonett.states.tree
 ```
 
@@ -52,7 +51,6 @@ models that drive them are above.
 
    fishbonett.evolve.tebd
    fishbonett.evolve.sitetree
-   fishbonett.evolve.tebd_comb
    fishbonett.evolve.mpo_apply
    fishbonett.evolve.tdvp
    fishbonett.evolve.modetree
@@ -68,7 +66,6 @@ propagator suits which frame.
    :toctree: generated
    :recursive:
 
-   fishbonett.frames.schrodinger
    fishbonett.frames.interaction_picture
    fishbonett.frames.polaron
    fishbonett.frames.multichannel
