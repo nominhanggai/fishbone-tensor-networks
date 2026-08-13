@@ -1,6 +1,6 @@
 """Spin (Pauli) and bosonic operators, plus small utilities.
 
-Formerly part of the catch-all ``fishbonett.stuff`` module, now split into this
+Formerly part of the catch-all ``fishbonett.operators`` module, now split into this
 operator module and :mod:`fishbonett.spectral_densities`.
 """
 import numpy as np

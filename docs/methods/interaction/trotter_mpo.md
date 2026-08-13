@@ -1,15 +1,15 @@
-# `trotter-mpo` — the exact conditional-displacement propagator
+# Interaction picture · chain — conditional-displacement MPO
 
 ```{admonition} Frame: interaction picture (time-dependent $H$) — and *only* this frame
 :class: tip
 The exact factorization below relies on all the coupling terms commuting, which is
 true precisely because the free-bath term has been rotated away.  In the
-Schrödinger picture that term is still present, and in the {doc}`polaron` frame the
+Schrödinger picture that term is still present, and in the {doc}`/methods/schrodinger/polaron_chain` frame the
 dressed tunneling does not commute with the free-chain hopping — so this propagator
-has no counterpart there.  See {doc}`index` for the full compatibility table.
+has no counterpart there.  See {doc}`/methods/index` for the full compatibility table.
 ```
 
-`trotter-mpo` propagates the **same interaction-picture model as {doc}`tebd`**, but
+`trotter-mpo` propagates the **same interaction-picture model as {doc}`/methods/interaction/tebd`**, but
 instead of Trotterizing the system–bath coupling into two-site gates and shuttling
 the system along the chain with a swap network, it writes the *entire* system–bath
 propagator as a single matrix-product operator whose bond dimension is the number
@@ -23,7 +23,7 @@ is no inter-mode Trotter error to make in the first place.
 
 ### The interaction-picture coupling
 
-After the chain mapping and the star diagonalization ({doc}`../bath`), the
+After the chain mapping and the star diagonalization ({doc}`/bath`), the
 interaction picture with respect to the *free bath* leaves a coupling that is a
 single product of a system operator and a bath operator,
 
@@ -136,7 +136,7 @@ Applying the MPO multiplies the MPS bond by $\chi_U$; a QR + truncated-SVD sweep
 
 ## What this buys
 
-Compared with the swap network of {doc}`tebd`, per step:
+Compared with the swap network of {doc}`/methods/interaction/tebd`, per step:
 
 - **no swap gates** — the system never travels along the chain;
 - **no $d\times d$ bosonic two-site gates** — each mode sees only a $d\times d$
@@ -154,7 +154,7 @@ smaller prefactor).
 The bond dimension of the *state* is unchanged — this is the same frame and the
 same physics as `tebd`, so it carries the same entanglement. `trotter-mpo` changes
 the cost of applying the propagator, not the cost of representing the state.  For a
-method that lowers the state entanglement itself, see {doc}`polaron`.
+method that lowers the state entanglement itself, see {doc}`/methods/schrodinger/polaron_chain`.
 ```
 
 ## General systems

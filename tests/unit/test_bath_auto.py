@@ -5,7 +5,7 @@ import pytest
 from fishbonett.bath.auto import (reorganization_energy, auto_domain, auto_n_modes,
                                   _reorg_profile)
 from fishbonett.simulate import Bath, BosonicBath
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 
 
 def _ohmic(w):

@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 
 from fishbonett.simulate import Bath, BosonicBath, Result
-from fishbonett.stuff import sigma_x, sigma_z
-from fishbonett.tree import _star_transform, anih, crea, SZ, SX
+from fishbonett.operators import sigma_x, sigma_z
+from fishbonett.evolve.treetdvp import _star_transform, anih, crea, SZ, SX
 
 N, D, V = 3, 5, 1.0
 
@@ -239,15 +239,21 @@ def test_every_method_is_classified_by_frame():
                                      _TREE_METHODS)
     dispatchable = (set(_MPO_METHODS) | set(_POLARON_TDVP_METHODS)
                     | set(_TREE_METHODS)
-                    | {"tebd", "trotter-mpo", "tebd-mpo", "ip-mpo", "polaron"})
+                    | {"tebd", "trotter-mpo", "polaron"})
     assert dispatchable == set(METHOD_FRAMES)
-    assert set(methods_by_frame()) == {"schrodinger", "interaction", "polaron"}
-    # the frames that are time-independent are exactly the ones offering TDVP on a
-    # statically-built MPO
-    assert METHOD_FRAMES["mpo-tdvp1"] == "schrodinger"
-    assert METHOD_FRAMES["polaron-tdvp1"] == "polaron"
-    # trotter-mpo's exact factorization exists only in the interaction picture
-    assert METHOD_FRAMES["trotter-mpo"] == "interaction"
+    # a frame is a (picture, bath representation) pair
+    assert set(methods_by_frame()) == {
+        ("schrodinger", "chain"), ("schrodinger", "polaron-chain"),
+        ("interaction", "chain"), ("interaction", "star"),
+    }
+    # the time-independent pictures are exactly the ones offering TDVP on a
+    # statically-built MPO -- and the polaron chain is one of them
+    assert METHOD_FRAMES["mpo-tdvp1"] == ("schrodinger", "chain")
+    assert METHOD_FRAMES["polaron-tdvp1"] == ("schrodinger", "polaron-chain")
+    # star means no chain mapping; trotter-mpo's exact factorization is
+    # interaction-picture-only
+    assert METHOD_FRAMES["mpo-ip-tdvp1"] == ("interaction", "star")
+    assert METHOD_FRAMES["trotter-mpo"] == ("interaction", "chain")
 
 
 def test_unknown_method_error_lists_methods_by_frame():

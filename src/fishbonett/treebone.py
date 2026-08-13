@@ -1,6 +1,6 @@
 """General tree tensor-network TEBD over an arbitrary loop-free site graph.
 
-Unlike the 1D comb (:mod:`fishbonett.fishbone`), this engine evolves *any* tree
+Unlike the 1D comb (:mod:`fishbonett.states.comb`), this engine evolves *any* tree
 of physical sites: electronic sites wired into an arbitrary tree, each carrying
 one or more TEDOPA bath chains.  Because a tree has no loops it admits an exact
 mixed-canonical form, so a site's reduced density matrix is read off from the

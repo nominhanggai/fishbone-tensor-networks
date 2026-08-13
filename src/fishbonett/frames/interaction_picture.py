@@ -23,9 +23,7 @@ from copy import deepcopy as dcopy
 
 import fishbonett.bath.recurrence as rc
 from fishbonett.contract import contract as einsum
-# eye/svd are re-exported for back-compat; the class below uses kron and the
-# dense gate exponential (_expm_gate).
-from fishbonett.linalg import eye, kron, svd, expm_gate as _expm_gate
+from fishbonett.linalg import kron, expm_gate as _expm_gate
 from fishbonett.operators import temp_factor, _c
 from fishbonett.spectral_densities import drude
 
@@ -42,7 +40,6 @@ class BosonicBathIP:
     * :meth:`get_u` -- two-site Trotter gates for the swap-network TEBD sweep, or
     * :meth:`displacement_mpo` -- the same propagator as one exact low-bond MPO.
 
-    Historically named ``SpinBoson`` (aliases kept).
     """
 
     def __init__(self, pd):
@@ -189,6 +186,3 @@ class BosonicBathIP:
         return U1, U2
 
 
-#: ``BosonicBathIP`` was historically named ``SpinBoson``; both aliases kept.
-BosonicBath = BosonicBathIP
-SpinBoson = BosonicBathIP  # deprecated

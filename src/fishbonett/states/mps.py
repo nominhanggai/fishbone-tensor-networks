@@ -215,5 +215,3 @@ class BosonicBathMPS:
 
 # Backwards-compatible aliases for the historical class names.
 BosonicBath1D = BosonicBathMPS
-SpinBosonMPS = BosonicBathMPS   # deprecated
-SpinBoson1D = BosonicBathMPS    # deprecated

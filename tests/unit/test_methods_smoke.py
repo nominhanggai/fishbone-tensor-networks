@@ -6,8 +6,8 @@ import pytest
 
 
 def test_chain_cooling_gives_normalized_rdm():
-    from fishbonett.coolingC_SpinBoson import BosonicBath
-    from fishbonett.stuff import sigma_x, sigma_z
+    from fishbonett.frames.coolingchain import BosonicBathCoolingChain as BosonicBath
+    from fishbonett.operators import sigma_x, sigma_z
 
     pd = [6, 6, 6, 2]
     eth = BosonicBath(pd, betaOmega=0.2)
@@ -24,16 +24,16 @@ def test_chain_cooling_gives_normalized_rdm():
     assert np.isclose(np.trace(rho).real, 1.0, atol=1e-6)
 
 
-@pytest.mark.parametrize("module", ["coolingC_SpinBoson"])
-def test_cooling_shares_the_canonical_engine(module):
+@pytest.mark.parametrize("module,cls", [("frames.coolingchain", "BosonicBathCoolingChain")])
+def test_cooling_shares_the_canonical_engine(module, cls):
     mod = importlib.import_module(f"fishbonett.{module}")
-    bases = [b.__name__ for b in mod.BosonicBath.__mro__]
+    bases = [b.__name__ for b in getattr(mod, cls).__mro__]
     assert "BosonicBathMPS" in bases
 
 
 def test_polaron_builds_and_gives_normalized_rdm():
     from fishbonett.simulate import Bath, BosonicBath
-    from fishbonett.stuff import sigma_x, sigma_z
+    from fishbonett.operators import sigma_x, sigma_z
 
     bath = Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
                 n_modes=6, phys_dim=6)

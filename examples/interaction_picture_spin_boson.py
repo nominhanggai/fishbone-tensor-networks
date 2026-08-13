@@ -9,9 +9,9 @@ Run with:  python examples/interaction_picture_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.backwardSpinBosonMultiChannel import BosonicBath
-from fishbonett.mps import BosonicBathMPS
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.frames.multichannel import BosonicBathMultiChannel as BosonicBath
+from fishbonett.states.mps import BosonicBathMPS
+from fishbonett.operators import sigma_x, sigma_z
 
 
 def main():

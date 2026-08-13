@@ -3,7 +3,7 @@ diagonalization of the star Hamiltonian (interaction- and Schroedinger-picture
 <sigma_z> agree because sigma_z commutes with the bath)."""
 import numpy as np
 
-from fishbonett.tree import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
+from fishbonett.evolve.treetdvp import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
                              run_tree_tebd, build_balanced_tree, build_tree_mpo,
                              tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
                              anih, crea, SZ, SX)

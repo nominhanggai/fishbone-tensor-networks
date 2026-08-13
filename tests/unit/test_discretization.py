@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from fishbonett.recurrence_coefficients import recurrenceCoefficients
+from fishbonett.bath.recurrence import recurrenceCoefficients
 
 
 def test_recurrence_matches_analytic_legendre():
@@ -33,7 +33,7 @@ def test_recurrence_needs_no_orthpol():
 def test_continuous_bath_driver_builds_without_orthpol():
     """A continuous-bath interaction-picture driver builds its chain via the
     orthpol-free get_coupling and diagonalises it."""
-    from fishbonett.backwardSpinBoson import BosonicBath
+    from fishbonett.frames.interaction_picture import BosonicBathIP as BosonicBath
 
     n_boson = 4
     eth = BosonicBath([6] * n_boson + [2])

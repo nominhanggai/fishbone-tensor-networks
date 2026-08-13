@@ -9,8 +9,9 @@ Run with:  python examples/cooling_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.coolingC_SpinBoson import BosonicBath
-from fishbonett.stuff import drude, sigma_x, sigma_z, temp_factor
+from fishbonett.frames.coolingchain import BosonicBathCoolingChain as BosonicBath
+from fishbonett.operators import sigma_x, sigma_z, temp_factor
+from fishbonett.spectral_densities import drude
 
 
 def main():

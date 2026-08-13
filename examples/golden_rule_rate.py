@@ -8,7 +8,7 @@ Run with:  python examples/golden_rule_rate.py
 """
 import numpy as np
 
-from fishbonett.legendre_discretization import get_vn_squared
+from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.rates import fgr_rate, marcus_rate
 
 

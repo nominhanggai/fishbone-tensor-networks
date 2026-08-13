@@ -9,7 +9,7 @@ import fishbonett.bath.recurrence as rc
 from fishbonett.linalg import kron, svd, expm_gate_sparse as calc_U
 from fishbonett.operators import temp_factor, _c
 
-from fishbonett.mps import BosonicBathMPS
+from fishbonett.states.mps import BosonicBathMPS
 
 
 class BosonicBathCoolingChain(BosonicBathMPS):
@@ -18,8 +18,7 @@ class BosonicBathCoolingChain(BosonicBathMPS):
     Extends the 1D :class:`~fishbonett.states.mps.BosonicBathMPS` engine with a
     ``betaOmega`` cooling gauge: each bath mode carries a heating operator so the
     chain is progressively cooled, and :meth:`get_rdm` reads the system reduced
-    density matrix through those operators.  Historically named ``SpinBoson``
-    (aliases kept).
+    density matrix through those operators.
     """
 
     def __init__(self, pd, betaOmega=2.):
@@ -134,9 +133,6 @@ class BosonicBathCoolingChain(BosonicBathMPS):
         return U
 
 
-#: ``BosonicBathCoolingChain`` was historically named ``SpinBoson``; both aliases kept.
-BosonicBath = BosonicBathCoolingChain
-SpinBoson = BosonicBathCoolingChain  # deprecated
 
 
 if __name__ == '__main__':

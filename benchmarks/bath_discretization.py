@@ -11,8 +11,8 @@ Run with:  python benchmarks/bath_discretization.py
 import numpy as np
 from scipy.integrate import quad
 
-from fishbonett.orthpol_discretization import get_vn_squared_orthpol
-from fishbonett.legendre_discretization import get_vn_squared
+from fishbonett.bath.orthpol import get_vn_squared_orthpol
+from fishbonett.bath.legendre import get_vn_squared
 
 DOMAIN = (-25.0, 36.0)
 BETA, WC, ALPHA = 1.0, 5.0, 0.2

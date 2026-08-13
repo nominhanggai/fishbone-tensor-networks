@@ -5,15 +5,13 @@ from numpy import exp
 
 from fishbonett.contract import contract as einsum
 from fishbonett.bath.lanczos import lanczos
-# calc_U here is the dense gate exponential; eye/svd re-exported for back-compat.
-from fishbonett.linalg import eye, kron, svd, expm_gate as calc_U
+from fishbonett.linalg import kron, expm_gate as calc_U
 from fishbonett.operators import temp_factor, _c
 
 
 
 
 
-from fishbonett.mps import BosonicBathMPS as BosonicBath1D  # engine unified into fishbonett.mps
 
 
 class BosonicBathMultiChannel:
@@ -22,8 +20,7 @@ class BosonicBathMultiChannel:
     Generalizes :class:`~fishbonett.frames.interaction_picture.BosonicBathIP` to a
     matrix-valued coupling -- several coupling channels ``A_k`` share one bath (any
     Hermitian system, not just a spin), with the finite-temperature thermofield
-    doubling folded in via ``temp_factor``.  Historically named ``SpinBoson``
-    (aliases kept).
+    doubling folded in via ``temp_factor``.
     """
 
     def __init__(self, pd, coup_mat, freq, temp, H_add=None):
@@ -111,6 +108,3 @@ class BosonicBathMultiChannel:
         return U1, U2
 
 
-#: ``BosonicBathMultiChannel`` was historically named ``SpinBoson``; both aliases kept.
-BosonicBath = BosonicBathMultiChannel
-SpinBoson = BosonicBathMultiChannel  # deprecated

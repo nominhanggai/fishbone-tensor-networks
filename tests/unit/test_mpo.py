@@ -2,7 +2,7 @@
 of a small spin-boson chain."""
 import numpy as np
 
-from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp,
+from fishbonett.evolve.tdvp import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp,
                             run_ip_tdvp1, run_ip_tdvp2, crea, anih, numb, SX, SZ)
 
 DOMAIN = (-25.0, 36.0)

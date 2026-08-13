@@ -8,7 +8,7 @@ Run with:  python benchmarks/mpo_tdvp.py
 """
 import numpy as np
 
-from fishbonett.mpo import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp, crea,
+from fishbonett.evolve.tdvp import (chain_coeffs, run_tdvp1, run_tdvp2, run_dtdvp, crea,
                             anih, numb, SX, SZ)
 
 DOMAIN = (-25.0, 36.0)
