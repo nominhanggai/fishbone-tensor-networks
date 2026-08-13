@@ -33,10 +33,10 @@ def test_recurrence_needs_no_orthpol():
 def test_continuous_bath_driver_builds_with_the_default_quadrature():
     """The interaction-picture builder chain-maps via the plain Gauss-Legendre
     get_coupling (no measure-adapted discretizer) and diagonalises the result."""
-    from fishbonett.frames.interaction_picture import SimpleSysBathIP
+    from fishbonett.frames.interaction_picture import SystemBathIP
 
     n_boson = 4
-    eth = SimpleSysBathIP([2] + [6] * n_boson,
+    eth = SystemBathIP([2] + [6] * n_boson,
                        h_sys=10.0 * np.array([[0.0, 1.0], [1.0, 0.0]]),
                        coupling=np.diag([1.0, -1.0]),
                        sd=lambda w: 0.5 * w * np.exp(-w / 10.0),

@@ -67,7 +67,7 @@ bonds instead of on the sites.
 
 In the interaction picture there are no mode–mode terms at all — the bath enters
 only through the phases $e(\omega_k,t,\delta)$. The "chain" that
-{py:meth}`~fishbonett.frames.multichannel.SimpleSysBathMultiChannel.build` produces
+{py:meth}`~fishbonett.frames.multichannel.SystemBathMultiChannel.build` produces
 is therefore just an orthogonal change of basis $b_k=\sum_n Q_{kn}c_n$, and
 
 $$
@@ -95,20 +95,20 @@ Both paths take it the same T-TEDOPA way as every other method: set `temperature
 or `beta` on the `Bath` and the density is thermalized onto a signed frequency axis
 before discretization (see {doc}`/bath`).
 
-{py:class}`~fishbonett.frames.multichannel.SimpleSysBathMultiChannel` also has an
+{py:class}`~fishbonett.frames.multichannel.SystemBathMultiChannel` also has an
 older constructor that does the thermofield doubling itself, from a bare $T=0$ star
 plus a `temp` argument. Prefer the T-TEDOPA route unless you are handing it an
 explicit discrete mode list: that `temp` is in **kelvin** with frequencies in
 cm⁻¹, which is *not* the natural-units convention `Bath` uses, so mixing the two
 silently rescales the temperature.
-{py:meth}`~fishbonett.frames.multichannel.SimpleSysBathMultiChannel.from_signed_star`
+{py:meth}`~fishbonett.frames.multichannel.SystemBathMultiChannel.from_signed_star`
 is the entry point that avoids the question, and is what `run` calls.
 
 ## Example
 
 ```python
 import numpy as np
-from fishbonett import Bath, SimpleSysBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 Jz = lambda w: 0.2 * w * np.exp(-w / 5)
@@ -118,7 +118,7 @@ Jx = lambda w: 0.1 * w * np.exp(-w / 8)
 bath = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x],
             domain=(0.0, 40.0), n_modes=20, phys_dim=8)
 
-model = SimpleSysBath(h=0.3 * sigma_z + 0.8 * sigma_x,
+model = SystemBath(h=0.3 * sigma_z + 0.8 * sigma_x,
                       coupling=[sigma_z, sigma_x], bath=bath)
 
 r = model.run(dt=0.02, t_max=2.0, observables={"sz": sigma_z})   # Schrodinger

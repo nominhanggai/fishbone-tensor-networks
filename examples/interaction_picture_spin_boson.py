@@ -8,15 +8,15 @@ is cross-correlated (see :mod:`fishbonett.frames.multichannel`).
 This is the **low-level** route, and the reason to reach for it is the bath: the
 modes are given explicitly rather than sampled from a continuous ``J(omega)``.  For
 a continuous spectral density use the high-level interface instead --
-``SimpleSysBath(...).run(method="multichannel-ip")``, which builds the same
+``SystemBath(...).run(method="multichannel-ip")``, which builds the same
 frame from a :class:`~fishbonett.bath.spec.Bath`.
 
 Run with:  python examples/interaction_picture_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.frames.multichannel import SimpleSysBathMultiChannel
-from fishbonett.states.mps import SimpleSysBathMPS
+from fishbonett.frames.multichannel import SystemBathMultiChannel
+from fishbonett.states.mps import SystemBathMPS
 from fishbonett.evolve import tebd
 from fishbonett.operators import sigma_x, sigma_z
 
@@ -31,11 +31,11 @@ def main():
     n_boson = 2 * len(freq)
     pd = [2] + [10] * n_boson                          # system on site 0, then bath
 
-    eth = SimpleSysBathMultiChannel(
+    eth = SystemBathMultiChannel(
         pd, coup_mat=coup_mat, freq=freq, temp=100.0,
         h_sys=130.0 * sigma_x + np.diag([0.0, -200.0])).build(n=0)
 
-    etn = SimpleSysBathMPS(pd)
+    etn = SystemBathMPS(pd)
     etn.B[0][:] = 0.0
     etn.B[0][0, 0, 0] = 1.0                            # start in |0>
 

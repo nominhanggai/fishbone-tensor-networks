@@ -10,10 +10,10 @@ only in how the bath is represented, which `run(method=...)` selects:
 
 | model | what it is | class | frames |
 |---|---|---|---|
-| `chain` | one system, one bath, modes chain-mapped into 1D | {py:class}`~fishbonett.models.system_bath.SimpleSysBath` | Schrödinger, interaction, polaron |
-| `star` | one system, one bath, **no** chain mapping | {py:class}`~fishbonett.models.system_bath.SimpleSysBath` | interaction |
-| `mode-tree` | one system, one bath, modes on a balanced binary tree | {py:class}`~fishbonett.models.system_bath.SimpleSysBath` | interaction |
-| `multichannel` | one system, one bath through several couplings on shared modes | {py:class}`~fishbonett.models.system_bath.SimpleSysBath` | Schrödinger |
+| `chain` | one system, one bath, modes chain-mapped into 1D | {py:class}`~fishbonett.models.system_bath.SystemBath` | Schrödinger, interaction, polaron |
+| `star` | one system, one bath, **no** chain mapping | {py:class}`~fishbonett.models.system_bath.SystemBath` | interaction |
+| `mode-tree` | one system, one bath, modes on a balanced binary tree | {py:class}`~fishbonett.models.system_bath.SystemBath` | interaction |
+| `multichannel` | one system, one bath through several couplings on shared modes | {py:class}`~fishbonett.models.system_bath.SystemBath` | Schrödinger |
 | `comb` | several sites on a 1D backbone, baths per site — the fishbone | {py:class}`~fishbonett.models.fishbone.Fishbone` | Schrödinger |
 | `site-tree` | several sites in any loop-free tree, baths per site | {py:class}`~fishbonett.models.fishbone.TreeFishbone` | Schrödinger |
 
@@ -37,7 +37,7 @@ a genuinely different physical model.
 
 ## Picking one
 
-- One system coupled to one bath → {py:class}`~fishbonett.models.system_bath.SimpleSysBath`, and
+- One system coupled to one bath → {py:class}`~fishbonett.models.system_bath.SystemBath`, and
   let `method=` choose how the bath is represented.  Start with `tebd` or
   `tree-tdvp2`.  See {doc}`spin_boson`.
 - Several electronic sites, each with a bath → {py:class}`~fishbonett.models.fishbone.Fishbone`

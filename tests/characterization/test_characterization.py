@@ -26,9 +26,9 @@ def _load(name):
 
 def _run(name):
     from fishbonett.operators import sigma_x, sigma_z, number
-    from fishbonett.states.mps import SimpleSysBathMPS
-    from fishbonett.frames.multichannel import SimpleSysBathMultiChannel as SimpleSysBath
-    return run_multichannel_ic(SimpleSysBath, SimpleSysBathMPS, sigma_x, sigma_z, number,
+    from fishbonett.states.mps import SystemBathMPS
+    from fishbonett.frames.multichannel import SystemBathMultiChannel as SystemBath
+    return run_multichannel_ic(SystemBath, SystemBathMPS, sigma_x, sigma_z, number,
                                lbo=(name == "lbo"))
 
 

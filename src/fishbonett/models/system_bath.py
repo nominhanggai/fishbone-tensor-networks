@@ -27,7 +27,7 @@ from fishbonett.models.registry import (
     METHOD_FRAMES, MULTICHANNEL_IP, methods_of, unknown_method_error,
 )
 
-__all__ = ["SimpleSysBath"]
+__all__ = ["SystemBath"]
 
 #: ``run``'s default.  Used to tell "the user asked for a method" apart from
 #: "the user left it alone", which matters for the multichannel model where
@@ -70,18 +70,16 @@ _TREE_METHODS = {"tree-tdvp": "run_tree_tdvp",
                  "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
 
 
-class SimpleSysBath:
-    """**One** system site coupled to **one** bath.
+class SystemBath:
+    """**One** system site coupled to **one** bath -- a *single-system* model.
 
-    "Simple" is about the topology, not the physics: a single system site and a
-    single bath.  The system itself can be as complicated as you like -- ``h`` is
-    any ``(d, d)`` Hermitian matrix and the coupling ``O`` any ``(d, d)`` Hermitian
-    operator, and every method supports an arbitrary system dimension, a general
-    coupling and an arbitrary initial state.  What makes it simple is that there is
-    nothing to wire up: no site topology, no per-site baths.  For those see
-    :class:`~fishbonett.models.fishbone.Fishbone` (sites on a 1D backbone) or
-    :class:`~fishbonett.models.fishbone.TreeFishbone` (sites in any loop-free
-    tree).
+    Only the topology is fixed: there is no site graph and no per-site baths.  The
+    system itself is unrestricted -- ``h`` is any ``(d, d)`` Hermitian matrix and the
+    coupling ``O`` any ``(d, d)`` Hermitian operator, and every method here supports
+    an arbitrary system dimension, a general coupling and an arbitrary initial
+    state.  For several system sites, each with its own bath(s), use the *multi-site*
+    models :class:`~fishbonett.models.fishbone.Fishbone` (sites on a 1D backbone) or
+    :class:`~fishbonett.models.fishbone.TreeFishbone` (sites in any loop-free tree).
 
     This one class covers four models -- ``chain``, ``star``, ``mode-tree`` and
     ``multichannel`` -- because they differ only in how the *bath* is represented,
@@ -314,10 +312,10 @@ class SimpleSysBath:
         frame, so the two must agree.  Temperature comes in the same T-TEDOPA way as
         every other method -- the thermalized density on a signed domain -- rather
         than through the explicit thermofield doubling of
-        :meth:`~fishbonett.frames.multichannel.SimpleSysBathMultiChannel.__init__`,
+        :meth:`~fishbonett.frames.multichannel.SystemBathMultiChannel.__init__`,
         which uses a different unit convention for ``temp``."""
-        from fishbonett.frames.multichannel import SimpleSysBathMultiChannel
-        from fishbonett.states.mps import SimpleSysBathMPS
+        from fishbonett.frames.multichannel import SystemBathMultiChannel
+        from fishbonett.states.mps import SystemBathMPS
         b = self.bath.resolved(n_steps * dt)
         if b.discretization != "legendre":
             raise ValueError("a multichannel bath must use the 'legendre' "
@@ -334,10 +332,10 @@ class SimpleSysBath:
                     for k in range(b.n_modes)]
         d_sys = self.h.shape[0]
         pd = [d_sys] + [b.phys_dim] * b.n_modes
-        builder = SimpleSysBathMultiChannel.from_signed_star(
+        builder = SystemBathMultiChannel.from_signed_star(
             pd, coup_mat, freq, h_sys=self.h).build(n=0)
 
-        state = SimpleSysBathMPS(pd)
+        state = SystemBathMPS(pd)
         psi0 = self._initial_state(initial)
         state.B[0][:] = 0.0
         for a in range(d_sys):
@@ -377,8 +375,8 @@ class SimpleSysBath:
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.frames.interaction_picture import SimpleSysBathIP as _IPBuilder
-        from fishbonett.states.mps import SimpleSysBathMPS
+        from fishbonett.frames.interaction_picture import SystemBathIP as _IPBuilder
+        from fishbonett.states.mps import SystemBathMPS
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
         d_sys = self.h.shape[0]
@@ -388,7 +386,7 @@ class SimpleSysBath:
                              ncap=kw.get("ncap", 20000),
                              discretizer=b.discretizer()).build()
 
-        state = SimpleSysBathMPS(pd)               # the MPS being evolved
+        state = SystemBathMPS(pd)               # the MPS being evolved
         psi0 = self._initial_state(initial)
         state.B[0][:] = 0.0
         for a in range(d_sys):
@@ -416,15 +414,15 @@ class SimpleSysBath:
         propagator is applied as one low-bond MPO instead of being Trotterized into
         two-site gates and shuttled with a swap network: no swaps, no ``d x d``
         bosonic gates, and the multimode factorization is *exact* (see
-        :meth:`~fishbonett.frames.interaction_picture.SimpleSysBathIP.displacement_mpo`).
+        :meth:`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`).
         The system term is Strang-split around it, so the step is second order."""
-        from fishbonett.frames.interaction_picture import SimpleSysBathIP
+        from fishbonett.frames.interaction_picture import SystemBathIP
         from fishbonett.evolve.mpo_apply import (apply_mpo, compress, bond_dims,
                                                  product_state)
         self._check_system()
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
-        builder = SimpleSysBathIP([d_sys] + [b.phys_dim] * n, h_sys=self.h,
+        builder = SystemBathIP([d_sys] + [b.phys_dim] * n, h_sys=self.h,
                                coupling=self.coupling, sd=b.spectral_density(),
                                domain=b.domain, ncap=kw.get("ncap", 20000),
                                discretizer=b.discretizer()).build()
@@ -449,12 +447,12 @@ class SimpleSysBath:
     def _polaron_builder(self, dt, n_steps):
         """Shared polaron setup: validate, resolve the bath and build the frame.
         Returns ``(builder, resolved_bath, n_modes, pd)``."""
-        from fishbonett.frames.polaron import SimpleSysBathPolaron
+        from fishbonett.frames.polaron import SystemBathPolaron
         self._check_system()
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
         pd = [d_sys] + [b.phys_dim] * n
-        builder = SimpleSysBathPolaron(pd, h_sys=self.h, coupling=self.coupling,
+        builder = SystemBathPolaron(pd, h_sys=self.h, coupling=self.coupling,
                                     sd=b.spectral_density(), domain=b.domain,
                                     discretizer=b.discretizer()).build()
         return builder, b, n, pd
@@ -462,7 +460,7 @@ class SimpleSysBath:
     def _run_polaron_tdvp(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                           initial, krylov, kw):
         """Polaron frame propagated with TDVP.  Because ``H~`` is time-independent
-        it has a plain MPO (:meth:`~fishbonett.frames.polaron.SimpleSysBathPolaron.mpo`),
+        it has a plain MPO (:meth:`~fishbonett.frames.polaron.SystemBathPolaron.mpo`),
         so the 1-site / 2-site / bond-adaptive sweeps all apply.  1-site TDVP never
         forms a two-site block, which avoids the ``O(d^4)`` boson-boson gates of the
         polaron TEBD sweep."""
@@ -502,9 +500,9 @@ class SimpleSysBath:
         Trotter (no swap network); the physical bath vacuum is a displaced coherent
         state on ``c0``; lab-frame observables are recovered by un-dressing.
         See :mod:`fishbonett.frames.polaron`."""
-        from fishbonett.states.mps import SimpleSysBathMPS
+        from fishbonett.states.mps import SystemBathMPS
         builder, b, n, pd = self._polaron_builder(dt, n_steps)
-        state = SimpleSysBathMPS(pd)               # boson sites default to vacuum
+        state = SystemBathMPS(pd)               # boson sites default to vacuum
         psi0 = self._initial_state(initial)
         # displaced (system, c0) initial block at bond 0; other boson sites stay vacuum
         state.split_truncate_theta(builder.initial_theta(psi0), 0, bond_dim,

@@ -1,16 +1,16 @@
 """Matrix-product-state ansatz for a spin-boson chain (the *state*, separate from
 the propagation algorithms in :mod:`fishbonett.evolve`).
 
-:class:`SimpleSysBathMPS` holds the chain tensors ``B``/``S`` and their canonical
+:class:`SystemBathMPS` holds the chain tensors ``B``/``S`` and their canonical
 form, the per-bond gate store ``U``, and the local-basis-optimization projectors
 ``R``.  It provides the wavefunction accessors (:meth:`get_theta1`,
 :meth:`get_theta2`) and the canonical-form primitive :meth:`split_truncate_theta`
 (single / adaptive SVD split, optional LBO, optional CuPy GPU).  The
 swap-network TEBD sweep that applies the gates lives in
 :func:`fishbonett.evolve.tebd.update_bond`; :meth:`update_bond` is a thin wrapper
-around it.  This single state replaces the ~20 near-identical ``SimpleSysBath1D``
-copies that used to live inside the individual driver modules; every truncation
-scheme they implemented is selected per :meth:`update_bond` call:
+around it.  This single state replaces the ~20 near-identical chain-MPS copies that
+used to live inside the individual driver modules; every truncation scheme they
+implemented is selected per :meth:`update_bond` call:
 
 * **swap** -- ``swap=1`` transposes the two physical legs during the gate, so the
   two sites come back exchanged.  Sweeping outward from site 0 therefore walks the
@@ -50,7 +50,7 @@ except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 
 
-class SimpleSysBathMPS:
+class SystemBathMPS:
     """Matrix-product state of a system (spin) site followed by a boson chain.
 
     Parameters
@@ -234,7 +234,3 @@ class SimpleSysBathMPS:
             self.R[i] = np.eye(phys_l)
             self.R[i + 1] = np.eye(phys_r)
         _mempool.free_all_blocks()
-
-
-# Backwards-compatible aliases for the historical class names.
-SimpleSysBath1D = SimpleSysBathMPS

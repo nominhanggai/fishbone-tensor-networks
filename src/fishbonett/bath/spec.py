@@ -3,7 +3,7 @@
 A :class:`Bath` is a declarative description: a spectral density, a frequency
 window, how finely to discretize it, how big each mode's Fock space is, and which
 system operator(s) it couples to.  It does no tensor work itself; it is the input
-that :class:`fishbonett.models.system_bath.SimpleSysBath` turns into chain parameters.
+that :class:`fishbonett.models.system_bath.SystemBath` turns into chain parameters.
 
 It lives here rather than in :mod:`fishbonett.models` because it is bath
 physics, not simulation machinery: everything it knows about (thermalization,

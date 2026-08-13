@@ -43,7 +43,7 @@ def _coherent(d, alpha):
     return la.expm(alpha * (a.conj().T - a)) @ np.eye(d)[:, 0]
 
 
-class SimpleSysBathPolaron:
+class SystemBathPolaron:
     """Polaron-frame gate builder for a general system ``O``-coupled to a harmonic bath.
 
     Everything the frame needs is given at construction; :meth:`build` then does the

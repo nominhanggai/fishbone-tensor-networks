@@ -7,7 +7,7 @@ interaction picture) — static gates, low entanglement.  Requires
 $\int J(\omega)/\omega^2\,d\omega$ finite (gapped or super-ohmic); finite
 temperature works through T-TEDOPA.  Populations in $O$'s eigenbasis are
 frame-invariant; coherences are un-dressed automatically
-({py:meth}`~fishbonett.frames.polaron.SimpleSysBathPolaron.undress_rdm`).
+({py:meth}`~fishbonett.frames.polaron.SystemBathPolaron.undress_rdm`).
 
 The `polaron` method propagates the model in the **polaron (Lang–Firsov) frame**:
 the static system–bath coupling is absorbed into a displacement of the bath, so the
@@ -136,14 +136,14 @@ Like the other engines, the polaron builder accepts a general system:
 
 ```python
 import numpy as np
-from fishbonett import Bath, SimpleSysBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 # gapped bath so int J/w^2 is finite (the polaron precondition)
 bath = Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
             n_modes=24, phys_dim=14)
 
-model = SimpleSysBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath)
 
 r = model.run(dt=0.02, t_max=8.0, method="polaron", bond_dim=80,
               observables={"sz": sigma_z, "sx": sigma_x})
@@ -173,4 +173,4 @@ r.max_bond            # peak bond dimension per step (small in the polaron frame
   returned RDM is trace-normalized, which hides — rather than fixes — a too-small
   `phys_dim`. Converge in `phys_dim` as you would in `bond_dim`.
 - For the builder see {py:mod}`fishbonett.frames.polaron`, and for the canonical
-  MPS/TEBD state see {py:class}`fishbonett.states.mps.SimpleSysBathMPS`.
+  MPS/TEBD state see {py:class}`fishbonett.states.mps.SystemBathMPS`.

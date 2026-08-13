@@ -9,7 +9,7 @@ Run with:  python examples/cooling_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.frames.coolingchain import SimpleSysBathCoolingChain
+from fishbonett.frames.coolingchain import SystemBathCoolingChain
 from fishbonett.operators import sigma_x, sigma_z, temp_factor
 from fishbonett.spectral_densities import drude
 
@@ -20,7 +20,7 @@ def main():
 
     g = 1000.0
     temp = 226.0
-    eth = SimpleSysBathCoolingChain(
+    eth = SystemBathCoolingChain(
         pd, betaOmega=0.2, h_sys=78.5 * sigma_x, coupling=sigma_z,
         sd=lambda w: drude(w, lam=4 * 39.0, gam=78.5) * temp_factor(temp, w),
         domain=[-g, g], ncap=20000).build()

@@ -139,7 +139,7 @@ MODELS = {
         blurb="One system site coupled to one bath, the bath chain-mapped into a "
               "1D chain of effective modes.  The most developed model: all three "
               "frames and the whole propagator family.",
-        cls="SimpleSysBath", geometry="MPS (system at site 0, modes 1..N)",
+        cls="SystemBath", geometry="MPS (system at site 0, modes 1..N)",
         frames={
             "schrodinger": ("mpo-tdvp1", "mpo-tdvp2", "mpo-dtdvp"),
             "interaction": ("tebd", "trotter-mpo"),
@@ -151,7 +151,7 @@ MODELS = {
         blurb="One system site, one bath, *no* chain mapping: every discretized "
               "mode couples straight to the system.  No mode-mode terms, but no "
               "locality for the MPS to exploit either.",
-        cls="SimpleSysBath", geometry="MPS over a linearized star",
+        cls="SystemBath", geometry="MPS over a linearized star",
         frames={
             "schrodinger": ("mpo-star-tdvp1", "mpo-star-tdvp2"),
             "interaction": ("mpo-ip-tdvp1", "mpo-ip-tdvp2"),
@@ -171,7 +171,7 @@ MODELS = {
               "the root.  Keeps the high-bond region O(log N) edges deep instead "
               "of O(N).  Distinct from ``site-tree``, where it is the *system "
               "sites* that form a tree.",
-        cls="SimpleSysBath", geometry="balanced binary TTN, system at the root",
+        cls="SystemBath", geometry="balanced binary TTN, system at the root",
         frames={"interaction": ("tree-tdvp", "tree-tdvp2", "tree-tebd")},
         gaps={
             "schrodinger": _NO_MODE_MODE,
@@ -183,7 +183,7 @@ MODELS = {
               "that share the same modes -- so the channels are cross-correlated, "
               "unlike independent baths.  Selected by giving the Bath a list of "
               "couplings, not by a method name.",
-        cls="SimpleSysBath", geometry="shared-mode star on a one-site tree",
+        cls="SystemBath", geometry="shared-mode star on a one-site tree",
         frames={
             "schrodinger": (_TREE_STATIC,),
             "interaction": (MULTICHANNEL_IP,),

@@ -6,14 +6,14 @@ of three nested choices: the :mod:`model <fishbonett.models>` comes first and
 decides which frames are even available, and the frame in turn decides which
 propagators (:mod:`fishbonett.evolve`) apply.
 
-============================================  =================================
-:mod:`~fishbonett.frames.schrodinger`         nothing rotated out; ``H`` static
-:mod:`~fishbonett.frames.interaction_picture` free bath rotated out; ``H(t)``
-:mod:`~fishbonett.frames.polaron`             Lang-Firsov; static, low entanglement
-:mod:`~fishbonett.frames.multichannel`        interaction picture, several couplings
-:mod:`~fishbonett.frames.coolingchain`        finite ``T`` by a non-unitary gauge
-:mod:`~fishbonett.frames.mpo`                 the chain/star MPOs the frames emit
-============================================  =================================
+=============================================  =====================================
+:mod:`~fishbonett.frames.schrodinger`          nothing rotated out; ``H`` static
+:mod:`~fishbonett.frames.interaction_picture`  free bath rotated out; ``H(t)``
+:mod:`~fishbonett.frames.polaron`              Lang-Firsov; static, low entanglement
+:mod:`~fishbonett.frames.multichannel`         interaction picture, several couplings
+:mod:`~fishbonett.frames.coolingchain`         finite ``T`` by a non-unitary gauge
+:mod:`~fishbonett.frames.mpo`                  the chain/star MPOs the frames emit
+=============================================  =====================================
 
 Each module produces either Trotter gates or an MPO; the state lives in
 :mod:`fishbonett.states` and the propagation algorithm in

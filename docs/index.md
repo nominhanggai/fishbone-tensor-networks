@@ -54,7 +54,7 @@ api
 ## Highlights
 
 - **A declarative interface.** Describe a bath and a system as `Bath` /
-  `SimpleSysBath` / `Fishbone` / `TreeFishbone` objects and propagate with a single
+  `SystemBath` / `Fishbone` / `TreeFishbone` objects and propagate with a single
   `run(dt=..., t_max=..., method=...)` call. Every method takes the same arguments
   and returns the same `Result`, so switching engines — or cross-validating one
   against another — is a one-word change.

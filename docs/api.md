@@ -1,6 +1,6 @@
 # API reference
 
-Start from `from fishbonett import Bath, SimpleSysBath, Truncation`.
+Start from `from fishbonett import Bath, SystemBath, Truncation`.
 
 A calculation is three **nested** choices, one subpackage each: **model** (what is
 coupled to what — `models`), **frame** (how the Hamiltonian is written down —

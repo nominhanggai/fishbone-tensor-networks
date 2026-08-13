@@ -196,7 +196,7 @@ class TreeFishbone:
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
         ``method`` exists for symmetry with
-        :meth:`fishbonett.models.system_bath.SimpleSysBath.run`; the multi-site models have a
+        :meth:`fishbonett.models.system_bath.SystemBath.run`; the multi-site models have a
         single propagator, :data:`STATIC_TREE_TEBD` (Schroedinger-picture tree
         TEBD), so it is the only accepted value.  Asking for a single-system
         method here raises with a message saying which model owns it.  The
