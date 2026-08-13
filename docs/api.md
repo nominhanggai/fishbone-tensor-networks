@@ -11,20 +11,36 @@
    fishbonett.treebone
 ```
 
-## State engines and models
+## State ansätze and propagators
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
    :recursive:
 
-   fishbonett.mps
-   fishbonett.mpo
-   fishbonett.tree
-   fishbonett.fishbone
-   fishbonett.model
+   fishbonett.states.mps
+   fishbonett.states.comb
+   fishbonett.evolve.tebd
+   fishbonett.evolve.mpo_apply
+   fishbonett.evolve.tdvp
+   fishbonett.evolve.treetdvp
+```
+
+## Frames
+
+One Hamiltonian, several representations — see {doc}`/methods/index` for the
+frame taxonomy and which propagator suits which frame.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :recursive:
+
+   fishbonett.frames.hamiltonian
    fishbonett.frames.interaction_picture
    fishbonett.frames.polaron
+   fishbonett.frames.multichannel
+   fishbonett.frames.coolingchain
 ```
 
 ## Bath discretization and chain mapping

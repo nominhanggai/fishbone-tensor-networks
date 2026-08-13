@@ -2,7 +2,7 @@
 
 The low-level engines require the user to hand-write a TEBD/TDVP sweep loop (see
 the other examples).  The :class:`~fishbonett.simulate.BosonicBath` and
-:class:`~fishbonett.fishbone_sim.Fishbone` classes wrap that away: declare the
+:class:`~fishbonett.simulate.Fishbone` classes wrap that away: declare the
 bath(s) and system, then call ``run`` once.
 
 Run with:  python examples/friendly_interface.py
@@ -10,7 +10,7 @@ Run with:  python examples/friendly_interface.py
 import numpy as np
 
 from fishbonett.simulate import Bath, BosonicBath, Fishbone
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.operators import sigma_x, sigma_z
 
 
 def spin_boson():

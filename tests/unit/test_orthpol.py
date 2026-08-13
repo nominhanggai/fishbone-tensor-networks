@@ -2,10 +2,10 @@
 import numpy as np
 from scipy.integrate import trapezoid
 
-from fishbonett.orthpol_discretization import (
+from fishbonett.bath.orthpol import (
     rkpw_recurrence, get_vn_squared_orthpol, make_orthpol_discretizer,
 )
-from fishbonett.legendre_discretization import get_vn_squared
+from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.common import get_bath_nn_paras
 
 DOMAIN = (-25.0, 36.0)

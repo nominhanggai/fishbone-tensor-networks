@@ -2,10 +2,11 @@
 import numpy as np
 import pytest
 
-from fishbonett.fishbone_sim import Fishbone
+from fishbonett.simulate import Fishbone
 from fishbonett.simulate import Bath, Result
-from fishbonett.model import FishBoneH, _c
-from fishbonett.stuff import sigma_x, sigma_z
+from fishbonett.frames.hamiltonian import FishBoneH
+from fishbonett.operators import _c
+from fishbonett.operators import sigma_x, sigma_z
 
 DOM = (0.0, 40.0)
 

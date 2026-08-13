@@ -106,9 +106,9 @@ observables — and {doc}`bath` covers bath discretization and finite temperatur
 ## Low-level engines
 
 For finer control the underlying engines are available directly: build a model /
-bath object (for example {py:class}`~fishbonett.model.BosonicBath` or
-{py:class}`~fishbonett.model.FishBoneH`), discretize with `build(...)`, construct
-the {py:class}`~fishbonett.mps.BosonicBathMPS` (or {py:class}`~fishbonett.fishbone.FishBoneNet`)
+bath object (for example {py:class}`~fishbonett.frames.hamiltonian.BosonicBathSchrodinger` or
+{py:class}`~fishbonett.frames.hamiltonian.FishBoneH`), discretize with `build(...)`, construct
+the {py:class}`~fishbonett.states.mps.BosonicBathMPS` (or {py:class}`~fishbonett.states.comb.FishBoneNet`)
 state, obtain the Trotter gates with `get_u(...)`, sweep with `update_bond(...)`,
 and read out observables from `get_theta1(...)`. The high-level interface above is
 a thin wrapper over exactly this loop.

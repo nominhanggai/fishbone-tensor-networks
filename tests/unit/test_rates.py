@@ -3,7 +3,7 @@ import numpy as np
 
 from fishbonett.rates import marcus_rate, fgr_rate, transfer_mat
 from fishbonett.diabatization import boys_func, diabatize
-from fishbonett.legendre_discretization import get_vn_squared
+from fishbonett.bath.legendre import get_vn_squared
 
 
 def test_marcus_rate_matches_closed_form():

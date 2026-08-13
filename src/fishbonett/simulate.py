@@ -26,51 +26,77 @@ import scipy.linalg as _la
 
 from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.bath.orthpol import make_orthpol_discretizer
-from fishbonett import mpo as _mpo
-from fishbonett import tree as _tree
+from fishbonett.evolve import tdvp as _mpo
+from fishbonett.evolve import treetdvp as _tree
 
-__all__ = ["Bath", "BosonicBath", "Fishbone", "Result", "thermalize", "SpinBoson",
-           "METHOD_FRAMES", "methods_by_frame"]
+__all__ = ["Bath", "BosonicBath", "Fishbone", "Result", "thermalize",
+           "METHOD_FRAMES", "MULTICHANNEL_FRAME", "methods_by_frame",
+           "frame_label", "methods_in_picture"]
 
-#: Which **frame** each propagation method works in.  The frame is not cosmetic: it
-#: fixes whether the Hamiltonian is time-dependent, and hence which integrators are
-#: usable at all.
+#: The **frame** each propagation method works in, as a
+#: ``(picture, bath representation)`` pair.  Both halves matter:
 #:
-#: * ``"schrodinger"`` -- the bare chain-mapped ``H``.  Time-independent and
-#:   nearest-neighbour, so it has a static MPO: the natural home for TDVP.  Carries
-#:   the most entanglement, since nothing has been rotated out.
-#: * ``"interaction"`` -- the free bath rotated out, leaving ``A_s (x) B(t)``.  Low
-#:   entanglement, but ``H`` is *time-dependent*, so gates/MPOs are rebuilt every
-#:   step.  Uniquely, all of its coupling terms commute, which is what lets
-#:   ``trotter-mpo`` write the propagator exactly instead of splitting it.
-#: * ``"polaron"`` -- the static part of the coupling absorbed into a bath
-#:   displacement.  Time-*independent* like the Schroedinger picture (so static
-#:   gates and a static MPO both work) while carrying interaction-picture-like
-#:   entanglement; needs ``T=0`` and a bath with ``int J/w^2`` finite.
+#: * the **picture** fixes whether ``H`` is time-dependent, and hence which
+#:   integrators are usable -- TDVP wants a *static* MPO (built once, energy
+#:   conserved), whereas a time-dependent picture must rebuild its gates/MPO every
+#:   step;
+#: * the **representation** fixes the *locality* of the coupling, and hence which
+#:   ansatz is efficient -- a ``chain`` is nearest-neighbour (an MPS has locality to
+#:   exploit), a ``star`` couples every mode directly to the system (no locality,
+#:   but no mode-mode terms either).
+#:
+#: The pairs in use:
+#:
+#: * ``("schrodinger", "chain")`` -- the bare TEDOPA chain.  Static and
+#:   nearest-neighbour: the natural home for TDVP.  Carries the most entanglement,
+#:   since nothing has been rotated out.
+#: * ``("interaction", "chain")`` -- free bath rotated out, chain-mapped modes.
+#:   Low entanglement; ``H`` time-dependent.  All coupling terms commute here,
+#:   which is what lets ``trotter-mpo`` write the propagator exactly.
+#: * ``("interaction", "star")`` -- free bath rotated out, *no* chain mapping: every
+#:   mode couples straight to the system, so there are no mode-mode terms at all.
+#: * ``("interaction", "multichannel")`` -- one bath coupled through several system
+#:   operators on shared modes (selected by giving :class:`Bath` a list of
+#:   couplings, not by a ``method`` name).
+#: * ``("schrodinger", "polaron-chain")`` -- the polaron/Lang-Firsov chain.  The
+#:   transform makes ``H~`` **time-independent**, i.e. Schroedinger-like, so static
+#:   gates *and* a static MPO both work, while the entanglement stays low.  Needs
+#:   ``T=0`` and a bath with ``int J/w^2`` finite.
+#:
+#: ``("schrodinger", "star")`` -- the un-chain-mapped bare Hamiltonian -- is a
+#: coherent combination but is not currently provided.
 #:
 #: See :doc:`the methods guide </methods/index>` for the frame/propagator
 #: compatibility table.
 METHOD_FRAMES = {
-    # Schroedinger picture: static H, static MPO -> TDVP
-    "tdvp1": "schrodinger", "mpo-tdvp1": "schrodinger",
-    "tdvp2": "schrodinger", "mpo-tdvp2": "schrodinger",
-    "dtdvp": "schrodinger", "mpo-dtdvp": "schrodinger",
-    # Interaction picture: time-dependent H, gates/MPO rebuilt each step
-    "tebd": "interaction", "trotter-mpo": "interaction",
-    "tebd-mpo": "interaction", "ip-mpo": "interaction",
-    "mpo-ip-tdvp1": "interaction", "ip-tdvp1": "interaction",
-    "mpo-ip-tdvp2": "interaction", "ip-tdvp2": "interaction",
-    "tree-tdvp": "interaction", "tree-tdvp1": "interaction",
-    "tree-tdvp2": "interaction", "tree-tebd": "interaction",
-    # Polaron frame: static H~ -> static gates *and* a static MPO
-    "polaron": "polaron", "polaron-tdvp": "polaron",
-    "polaron-tdvp1": "polaron", "polaron-tdvp2": "polaron",
-    "polaron-dtdvp": "polaron", "polaron-dtdvp1": "polaron",
+    # Schroedinger picture, TEDOPA chain: static H, static MPO -> TDVP
+    "mpo-tdvp1": ("schrodinger", "chain"),
+    "mpo-tdvp2": ("schrodinger", "chain"),
+    "mpo-dtdvp": ("schrodinger", "chain"),
+    # Interaction picture, chain: time-dependent H, gates/MPO rebuilt each step
+    "tebd": ("interaction", "chain"),
+    "trotter-mpo": ("interaction", "chain"),
+    "tree-tdvp": ("interaction", "chain"),
+    "tree-tdvp2": ("interaction", "chain"),
+    "tree-tebd": ("interaction", "chain"),
+    # Interaction picture, star: no chain mapping, every mode meets the system
+    "mpo-ip-tdvp1": ("interaction", "star"),
+    "mpo-ip-tdvp2": ("interaction", "star"),
+    # Polaron chain: the transform makes it Schroedinger-like (time-independent)
+    "polaron": ("schrodinger", "polaron-chain"),
+    "polaron-tdvp1": ("schrodinger", "polaron-chain"),
+    "polaron-tdvp2": ("schrodinger", "polaron-chain"),
+    "polaron-dtdvp": ("schrodinger", "polaron-chain"),
 }
+
+#: The multichannel path is selected by the *bath* (a list of coupling operators),
+#: not by a ``method`` name, so it has no entry in :data:`METHOD_FRAMES`.
+MULTICHANNEL_FRAME = ("interaction", "multichannel")
 
 
 def methods_by_frame():
-    """Method names grouped by frame, e.g. ``{"schrodinger": [...], ...}``.
+    """Method names grouped by frame, keyed by the ``(picture, representation)``
+    pair -- e.g. ``{("schrodinger", "chain"): [...], ...}``.
 
     Useful for sweeping every method of a given frame, or for reporting which
     alternatives exist when one method is unsuitable.
@@ -81,32 +107,44 @@ def methods_by_frame():
     return out
 
 
+def frame_label(frame):
+    """Human-readable name of a ``(picture, representation)`` frame, e.g.
+    ``"interaction picture / star"``."""
+    picture, rep = frame
+    return f"{picture} picture / {rep}"
+
+
+def methods_in_picture(picture):
+    """Every method whose frame uses ``picture`` (``'schrodinger'`` or
+    ``'interaction'``), across all bath representations."""
+    return sorted(n for n, (p, _) in METHOD_FRAMES.items() if p == picture)
+
+
 def _bond_growing_siblings(method):
     """Methods in the same frame as ``method`` that grow their own bond dimension."""
     frame = METHOD_FRAMES.get(method.lower().replace("_", "-"))
     return [n for n in methods_by_frame().get(frame, [])
             if n not in _FIXED_BOND_METHODS]
 
-_MPO_METHODS = {"tdvp1": "run_tdvp1", "mpo-tdvp1": "run_tdvp1",
-                "tdvp2": "run_tdvp2", "mpo-tdvp2": "run_tdvp2",
-                "dtdvp": "run_dtdvp", "mpo-dtdvp": "run_dtdvp",
-                "mpo-ip-tdvp1": "run_ip_tdvp1", "ip-tdvp1": "run_ip_tdvp1",
-                "mpo-ip-tdvp2": "run_ip_tdvp2", "ip-tdvp2": "run_ip_tdvp2"}
+_MPO_METHODS = {"mpo-tdvp1": "run_tdvp1",
+                "mpo-tdvp2": "run_tdvp2",
+                "mpo-dtdvp": "run_dtdvp",
+                "mpo-ip-tdvp1": "run_ip_tdvp1",
+                "mpo-ip-tdvp2": "run_ip_tdvp2"}
 #: Methods whose bond dimension is fixed up front (1-site TDVP variants cannot grow
 #: a bond, and the adaptive DTDVP needs a finite ceiling), so ``bond_dim=None``
 #: ("unlimited") is not meaningful for them.
 _FIXED_BOND_METHODS = frozenset({
-    "tdvp1", "mpo-tdvp1", "ip-tdvp1", "mpo-ip-tdvp1", "polaron-tdvp1",
-    "polaron-tdvp", "dtdvp", "mpo-dtdvp", "polaron-dtdvp", "polaron-dtdvp1",
-    "tree-tdvp", "tree-tdvp1",
+    "mpo-tdvp1", "mpo-ip-tdvp1", "polaron-tdvp1",
+    "mpo-dtdvp", "polaron-dtdvp", "tree-tdvp",
 })
 
 #: Polaron-frame TDVP variants.  The polaron ``H~`` is time-independent, so it has
 #: a plain MPO and can drive the standard 1-site / 2-site / bond-adaptive sweeps.
-_POLARON_TDVP_METHODS = {"polaron-tdvp1": "tdvp1", "polaron-tdvp": "tdvp1",
+_POLARON_TDVP_METHODS = {"polaron-tdvp1": "tdvp1",
                          "polaron-tdvp2": "tdvp2",
-                         "polaron-dtdvp": "dtdvp", "polaron-dtdvp1": "dtdvp"}
-_TREE_METHODS = {"tree-tdvp": "run_tree_tdvp", "tree-tdvp1": "run_tree_tdvp",
+                         "polaron-dtdvp": "dtdvp"}
+_TREE_METHODS = {"tree-tdvp": "run_tree_tdvp",
                  "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
 
 
@@ -294,21 +332,29 @@ class BosonicBath:
             krylov=25, **engine_kw):
         """Propagate and return a :class:`Result`.
 
-        **Methods are organized by frame** (see :data:`METHOD_FRAMES`), because the
-        frame decides which integrators are usable at all:
+        **Methods are organized by frame** -- a ``(picture, bath representation)``
+        pair (see :data:`METHOD_FRAMES`).  The picture decides whether ``H`` is
+        time-dependent (and hence which integrators apply); the representation
+        decides the locality of the coupling (and hence which ansatz is efficient):
 
-        * ``'schrodinger'`` -- ``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp``.  ``H`` is
-          time-independent, so its MPO is built once and TDVP conserves energy;
-          the state carries the most entanglement.
-        * ``'interaction'`` -- ``tebd``, ``trotter-mpo``, ``mpo-ip-tdvp1/2``,
-          ``tree-tdvp | tree-tdvp2 | tree-tebd``.  Low entanglement, but ``H`` is
-          time-dependent so gates/MPOs are rebuilt each step.  All the coupling
-          terms commute in this frame, which is what makes ``trotter-mpo``'s exact
-          factorization possible -- it has no counterpart elsewhere.
-        * ``'polaron'`` -- ``polaron``, ``polaron-tdvp1/tdvp2/dtdvp``.  Static like
-          the Schroedinger picture (so gates are built once *and* a static MPO
-          drives TDVP) while carrying interaction-picture-like entanglement;
-          requires ``T=0`` and ``int J/w^2`` finite.
+        * **Schroedinger / chain** -- ``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp``.  Static
+          and nearest-neighbour, so the MPO is built once and TDVP conserves energy;
+          carries the most entanglement.
+        * **interaction / chain** -- ``tebd``, ``trotter-mpo``, ``tree-tdvp |
+          tree-tdvp2 | tree-tebd``.  Low entanglement, but ``H`` is time-dependent so
+          gates/MPOs are rebuilt each step.  All the coupling terms commute here,
+          which is what makes ``trotter-mpo``'s exact factorization possible.
+        * **interaction / star** -- ``mpo-ip-tdvp1 | mpo-ip-tdvp2``.  No chain
+          mapping at all: every mode couples straight to the system, so there are no
+          mode-mode terms (but no locality for the MPS to exploit either).
+        * **interaction / multichannel** -- selected by giving :class:`Bath` a *list*
+          of coupling operators rather than by a ``method`` name; one bath couples
+          through several system operators on shared modes.
+        * **Schroedinger / polaron-chain** -- ``polaron``,
+          ``polaron-tdvp1/tdvp2/dtdvp``.  The polaron transform makes ``H~``
+          time-independent, i.e. Schroedinger-like, so static gates *and* a static
+          MPO both work while the entanglement stays low; requires ``T=0`` and
+          ``int J/w^2`` finite.
 
         **Truncation.**  ``trunc_eps`` is the accuracy knob: singular values below
         it are discarded, so it alone decides the bond dimension.  ``bond_dim`` is
@@ -351,7 +397,7 @@ class BosonicBath:
         if m == "tebd":
             return self._run_tebd(dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, engine_kw)
-        if m in ("trotter-mpo", "tebd-mpo", "ip-mpo"):
+        if m == "trotter-mpo":
             return self._run_trotter_mpo(dt, n_steps, bond_dim, trunc_eps,
                                          obs_ops, initial, engine_kw)
         if m == "polaron":
@@ -367,7 +413,7 @@ class BosonicBath:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, krylov, engine_kw)
         by_frame = methods_by_frame()
-        listing = "\n".join(f"  {frame:12s} {', '.join(names)}"
+        listing = "\n".join(f"  {frame_label(frame):34s} {', '.join(names)}"
                             for frame, names in sorted(by_frame.items()))
         raise ValueError(f"unknown method {method!r}.  Available methods, by frame:\n"
                          f"{listing}")
@@ -579,7 +625,7 @@ class BosonicBath:
                 "must be None): the transform displaces the bath vacuum, and the "
                 "finite-temperature (thermofield) version is not implemented.  For "
                 "a thermal bath use an interaction-picture method instead -- "
-                f"{', '.join(methods_by_frame()['interaction'])} -- which handles a "
+                f"{', '.join(methods_in_picture('interaction'))} -- which handle a "
                 "signed/thermalized domain directly.")
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
@@ -716,7 +762,3 @@ class Fishbone:
         :meth:`fishbonett.treebone.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout."""
         return self._tree().run(**kwargs)
-
-
-#: Deprecated back-compat alias for the high-level :class:`BosonicBath` interface.
-SpinBoson = BosonicBath

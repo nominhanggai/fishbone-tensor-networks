@@ -405,8 +405,7 @@ class BosonicBathSchrodinger:
     Builds the explicit (time-independent) chain Hamiltonian and its two-site
     Trotter gates directly, without moving to the interaction picture (any
     Hermitian system, not just a spin -- the "spin-boson" name is historical).
-    Exported publicly as :class:`fishbonett.BosonicBath`; the deprecated
-    ``SpinBoson`` alias is kept for back-compat.
+    Exported publicly as :class:`fishbonett.BosonicBathSchrodinger`.
     """
 
     def __init__(self, pd):
@@ -507,11 +506,6 @@ def exponential(h_d1_d2, dt):
     # u = u.reshape([r0, s0, r1, s1])
     return u
 
-#: ``BosonicBathSchrodinger`` was historically named ``SpinBoson``.  The module-local
-#: ``BosonicBath`` and the deprecated ``SpinBoson`` both map here; the public
-#: ``fishbonett.SpinBoson`` (back-compat) resolves to this class too.
-BosonicBath = BosonicBathSchrodinger
-SpinBoson = BosonicBathSchrodinger  # deprecated
 
 
 if __name__ == "__main__":

@@ -29,14 +29,35 @@ available, because it decides two structural properties of the Hamiltonian:
   they split are local *and* their non-commutation is mild. Occasionally a frame
   makes a whole family of terms commute exactly — and then the propagator can be
   written in closed form instead of split at all, which is precisely what
-  {doc}`trotter_mpo` exploits.
+  {doc}`/methods/interaction/trotter_mpo` exploits.
 
-So the methods are organized below **by frame**, with the propagators that suit
-each.
+## The frame taxonomy
 
-## The three frames
+A frame is therefore a **pair**: the *picture* (is $H$ time-dependent?) and the
+*bath representation* (how are the modes wired?). Both halves constrain what works.
 
-### Schrödinger picture — static $H$
+| picture \\ representation | **chain** (TEDOPA, nearest-neighbour) | **star** (no chain mapping) | **multichannel** (shared modes, several couplings) |
+|---|---|---|---|
+| **Schrödinger** ($H$ static) | {doc}`schrodinger/chain` — `mpo-tdvp1/tdvp2/dtdvp` | *coherent but not provided* | — |
+| — *polaron chain* (static after Lang–Firsov) | {doc}`schrodinger/polaron_chain` — `polaron`, `polaron-tdvp1/tdvp2/dtdvp` | ✗ entanglement-catastrophic in an MPS | — |
+| **interaction** ($H(t)$) | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/tree` | {doc}`interaction/star_mpo` — `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/multichannel` |
+
+Reading the rows and columns:
+
+- The **picture** (row) decides the *integrator*. Static rows host TDVP with a
+  once-built MPO and exact energy conservation; the time-dependent row must rebuild
+  gates/MPOs each step.
+- The **representation** (column) decides the *ansatz*. A chain is
+  nearest-neighbour, so an MPS has locality to exploit; a star has none, but also no
+  mode–mode terms; multichannel shares modes across couplings, so the channels are
+  cross-correlated and the system must keep its own site.
+- The **polaron chain** is listed under Schrödinger because that is what it *is*
+  after the transform: time-independent. It is the only representation that combines
+  a static Hamiltonian with low entanglement.
+
+## The frames in detail
+
+### Schrödinger picture / chain — static $H$
 
 The bare chain-mapped Hamiltonian, nothing rotated out. $H$ is time-independent
 and strictly nearest-neighbour, so it has a small exact MPO built **once**. This is
@@ -44,15 +65,15 @@ the natural home for TDVP.
 
 | ``method``    | integrator                       | bond growth         | page |
 |---------------|----------------------------------|---------------------|------|
-| ``mpo-tdvp1`` | chain MPO, 1-site TDVP           | fixed               | {doc}`chain_mpo` |
-| ``mpo-tdvp2`` | chain MPO, 2-site TDVP           | SVD truncation      | {doc}`chain_mpo` |
-| ``mpo-dtdvp`` | chain MPO, bond-adaptive DTDVP   | precision threshold | {doc}`chain_mpo` |
+| ``mpo-tdvp1`` | chain MPO, 1-site TDVP           | fixed               | {doc}`/methods/schrodinger/chain` |
+| ``mpo-tdvp2`` | chain MPO, 2-site TDVP           | SVD truncation      | {doc}`/methods/schrodinger/chain` |
+| ``mpo-dtdvp`` | chain MPO, bond-adaptive DTDVP   | precision threshold | {doc}`/methods/schrodinger/chain` |
 
 The cost of this frame is entanglement: nothing has been removed, so the state
 carries the full system–bath correlation and the bond dimension is the largest of
 the three frames for a given accuracy.
 
-### Interaction picture — time-dependent $H(t)$
+### Interaction picture — time-dependent $H(t)$ (chain, star, multichannel)
 
 The free-bath evolution is rotated out, leaving only the system–bath coupling,
 $H_{sb}(t) = A_s \otimes \sum_n [d_n(t) b_n + \mathrm{h.c.}]$. Entanglement is now
@@ -61,13 +82,13 @@ propagator here rebuilds its gates or its MPO each step.
 
 | ``method``       | integrator                                   | bond growth    | page |
 |------------------|----------------------------------------------|----------------|------|
-| ``tebd``         | MPS, swap-network Trotter gates              | SVD truncation | {doc}`tebd` |
-| ``trotter-mpo``  | MPS, **exact** conditional-displacement MPO  | SVD truncation | {doc}`trotter_mpo` |
-| ``mpo-ip-tdvp1`` | star MPO, 1-site TDVP (rebuilt at midpoint)  | fixed          | {doc}`star_mpo` |
-| ``mpo-ip-tdvp2`` | star MPO, 2-site TDVP (rebuilt at midpoint)  | SVD truncation | {doc}`star_mpo` |
-| ``tree-tdvp``    | binary-tree TTN, 1-site TDVP                 | fixed          | {doc}`tree` |
-| ``tree-tdvp2``   | binary-tree TTN, 2-site TDVP                 | SVD truncation | {doc}`tree` |
-| ``tree-tebd``    | binary-tree TTN, TEBD                        | SVD truncation | {doc}`tree` |
+| ``tebd``         | MPS, swap-network Trotter gates              | SVD truncation | {doc}`/methods/interaction/tebd` |
+| ``trotter-mpo``  | MPS, **exact** conditional-displacement MPO  | SVD truncation | {doc}`/methods/interaction/trotter_mpo` |
+| ``mpo-ip-tdvp1`` | star MPO, 1-site TDVP (rebuilt at midpoint)  | fixed          | {doc}`/methods/interaction/star_mpo` |
+| ``mpo-ip-tdvp2`` | star MPO, 2-site TDVP (rebuilt at midpoint)  | SVD truncation | {doc}`/methods/interaction/star_mpo` |
+| ``tree-tdvp``    | binary-tree TTN, 1-site TDVP                 | fixed          | {doc}`/methods/interaction/tree` |
+| ``tree-tdvp2``   | binary-tree TTN, 2-site TDVP                 | SVD truncation | {doc}`/methods/interaction/tree` |
+| ``tree-tebd``    | binary-tree TTN, TEBD                        | SVD truncation | {doc}`/methods/interaction/tree` |
 
 This frame has a property the other two lack: **all the coupling terms
 $A_s\otimes X_n$ commute with one another**, because the bath term that would
@@ -75,20 +96,21 @@ spoil it has been rotated away. That is what makes `trotter-mpo` possible — th
 multimode propagator factorizes exactly into a conditional displacement, with no
 splitting error at all. It is unique to this frame.
 
-### Polaron frame — static $\tilde H$
+### Schrödinger picture / polaron chain — static $\tilde H$
 
 The polaron transform additionally absorbs the *static* part of the coupling into a
-displacement of the bath, leaving a free chain plus a dressed tunneling term. Like
-the Schrödinger picture the result is **time-independent**, so it supports both a
-static MPO (TDVP) and static Trotter gates built once — and like the interaction
-picture it carries little entanglement.
+displacement of the bath, leaving a free chain plus a dressed tunneling term. The
+result is **time-independent** — which is why it belongs to the Schrödinger picture
+rather than to a frame of its own — so it supports both a static MPO (TDVP) and
+static Trotter gates built once, while carrying interaction-picture-like
+entanglement.
 
 | ``method``        | integrator                             | bond growth         | page |
 |-------------------|----------------------------------------|---------------------|------|
-| ``polaron``       | MPS chain, **static** Trotter gates    | SVD truncation      | {doc}`polaron` |
-| ``polaron-tdvp1`` | polaron MPO, 1-site TDVP               | fixed               | {doc}`polaron` |
-| ``polaron-tdvp2`` | polaron MPO, 2-site TDVP               | SVD truncation      | {doc}`polaron` |
-| ``polaron-dtdvp`` | polaron MPO, bond-adaptive DTDVP       | precision threshold | {doc}`polaron` |
+| ``polaron``       | MPS chain, **static** Trotter gates    | SVD truncation      | {doc}`/methods/schrodinger/polaron_chain` |
+| ``polaron-tdvp1`` | polaron MPO, 1-site TDVP               | fixed               | {doc}`/methods/schrodinger/polaron_chain` |
+| ``polaron-tdvp2`` | polaron MPO, 2-site TDVP               | SVD truncation      | {doc}`/methods/schrodinger/polaron_chain` |
+| ``polaron-dtdvp`` | polaron MPO, bond-adaptive DTDVP       | precision threshold | {doc}`/methods/schrodinger/polaron_chain` |
 
 The restriction is physical rather than algorithmic: the transform needs $T=0$ and
 a bath with $\int J(\omega)/\omega^2\,d\omega$ finite (gapped or super-ohmic).
@@ -101,11 +123,11 @@ a bath with $\int J(\omega)/\omega^2\,d\omega$ finite (gapped or super-ohmic).
 | **Exact conditional-displacement MPO** | ❌ the coupling does not commute with the free-bath term, which is still present | ✅ `trotter-mpo` — the only frame where the factorization is exact | ❌ the dressed tunneling does not commute with the free-chain hopping |
 | **TDVP (1-site / 2-site / adaptive)** | ✅ `mpo-*` — MPO built once, energy conserved | ⚠️ `mpo-ip-*`, `tree-*` — works, but the MPO must be rebuilt at each step midpoint and energy is no longer conserved | ✅ `polaron-*` — MPO built once |
 
-Reading the table by column: the **Schrödinger** frame is the TDVP frame; the
-**interaction picture** is the Trotter frame (and uniquely admits the exact MPO
-propagator); the **polaron** frame is static and therefore admits everything the
-Schrödinger frame does, while carrying interaction-picture-like entanglement — its
-one cost is the $T=0$ restriction.
+Reading the table by column: **TDVP** wants a static picture (Schrödinger chain or
+polaron chain); **Trotter gates** work anywhere but are cheapest where the gates are
+static (polaron) or the coupling is local; and the **exact conditional-displacement
+MPO** exists only in the interaction picture, because only there do all the coupling
+terms commute.
 
 All methods take the same `dt` / `t_max` and return the same
 {py:class}`~fishbonett.simulate.Result`, so switching engines is a one-word
@@ -133,7 +155,7 @@ for method in ["tebd", "trotter-mpo",
 ```
 
 (The polaron methods are omitted from that loop only because they need `T=0` and a
-gapped bath — see {doc}`polaron`.)
+gapped bath — see {doc}`/methods/schrodinger/polaron_chain`.)
 
 ## Choosing a method
 
@@ -170,19 +192,19 @@ the propagator within it.
 - **In the polaron frame?** `polaron-dtdvp` is usually best — 1-site TDVP avoids
   the $O(d^4)$ boson–boson gates that the static-gate TEBD sweep has to form.
 
-**Just starting out?** The default `tree-tdvp2`, or `tebd` — both grow their own
-bonds, so you only choose `dt` and `trunc_eps`.
+**Step 3: the special cases.**
+
+- **Long chains where entanglement piles up in the middle?** The `tree-*`
+  methods keep the high-bond region `O(log n)` edges deep instead of `O(n)`
+  (see {doc}`/methods/interaction/tree`).
+- **Several coupling channels sharing one set of modes?** That is chosen by the
+  bath, not by `method` — see {doc}`/methods/interaction/multichannel`.
 - **Non-`sigma_z` coupling, a non-two-level system, or a custom initial state?**
   Every engine supports these — a Hermitian `h` of any dimension, a Hermitian
   coupling `O`, and any `initial` state (see {doc}`../systems/spin_boson`).
-- **Long chains where entanglement piles up in the middle?** The `tree-*`
-  methods keep the high-bond region `O(log n)` edges deep instead of `O(n)`
-  (see {doc}`tree`).
-- **Strong system–bath coupling at zero temperature?** The `polaron` method works
-  in the polaron frame — it folds the static reorganization into a bath
-  displacement, so the MPS carries less entanglement (smaller `bond_dim`) than the
-  interaction-picture chain. It needs `T=0` and a gapped/super-ohmic bath
-  (see {doc}`polaron`).
+
+**Just starting out?** Take the default `tree-tdvp2`, or `tebd` — both grow their
+own bonds, so the only things you have to choose are `dt` and `trunc_eps`.
 
 ## Shared conventions
 
@@ -232,10 +254,11 @@ r.max_bond           # peak bond dimension per step (adaptive methods)
 :maxdepth: 1
 :hidden:
 
-tebd
-trotter_mpo
-polaron
-chain_mpo
-star_mpo
-tree
+schrodinger/chain
+schrodinger/polaron_chain
+interaction/tebd
+interaction/trotter_mpo
+interaction/tree
+interaction/star_mpo
+interaction/multichannel
 ```

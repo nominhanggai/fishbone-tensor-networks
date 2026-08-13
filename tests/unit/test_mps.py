@@ -1,10 +1,10 @@
-"""Direct unit tests for the canonical TEBD engine (fishbonett.mps)."""
+"""Direct unit tests for the canonical TEBD engine (fishbonett.states.mps)."""
 import numpy as np
 import pytest
 import scipy.linalg
 from fishbonett.contract import contract as einsum
 
-from fishbonett.mps import BosonicBathMPS
+from fishbonett.states.mps import BosonicBathMPS
 
 
 def _random_gate(d1, d2, rng, dt=0.05):

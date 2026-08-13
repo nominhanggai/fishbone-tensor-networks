@@ -1,12 +1,12 @@
-# `mpo-ip-tdvp1` / `mpo-ip-tdvp2` — interaction-picture star MPO + TDVP
+# Interaction picture · star — MPO + TDVP
 
 ```{admonition} Frame: interaction picture (time-dependent $H$)
 :class: tip
 TDVP in a time-dependent frame: the MPO is **rebuilt at each step's midpoint**
 rather than once up front, which keeps the sweep second order but forfeits the
-energy conservation that TDVP enjoys in a static frame ({doc}`chain_mpo`).  The
+energy conservation that TDVP enjoys in a static frame ({doc}`/methods/schrodinger/chain`).  The
 trade is worth it here because the interaction picture leaves far less
-entanglement to represent.  See {doc}`index` for the compatibility table.
+entanglement to represent.  See {doc}`/methods/index` for the compatibility table.
 ```
 
 These methods evolve the bath in its **star** geometry — every discretized mode
@@ -41,7 +41,7 @@ is advanced with a TDVP sweep.  Because there is no free bath evolution left to
 resolve, the accumulated entanglement is small.
 
 ```{note}
-That bond-2 structure is the same fact exploited by {doc}`trotter_mpo`: because the
+That bond-2 structure is the same fact exploited by {doc}`/methods/interaction/trotter_mpo`: because the
 coupling is a single product $\sigma_z \otimes \sum_j d_j (a_j + a_j^\dagger)$ and
 all its mode terms commute, the operator connecting the system to *every* mode
 needs only a rank-2 string — one channel per eigenvalue of the coupling operator.
@@ -72,13 +72,13 @@ error) is the dominant saving.
 Two variants:
 
 - **`mpo-ip-tdvp1`** — 1-site TDVP at a **fixed** bond dimension `bond_dim`
-  (required — a 1-site sweep cannot grow a bond; see {doc}`chain_mpo`).
+  (required — a 1-site sweep cannot grow a bond; see {doc}`/methods/schrodinger/chain`).
 - **`mpo-ip-tdvp2`** — 2-site TDVP, **growing** the bond from the product state
   by SVD truncation (`trunc_eps`, optionally capped by `bond_dim`);
   `result.max_bond` reports the peak bond.
 
 The star MPO engine shares {py:mod}`fishbonett.evolve.tdvp` with the
-Schrödinger-picture chain methods (re-exported as {py:mod}`fishbonett.mpo`).
+Schrödinger-picture chain methods (re-exported as {py:mod}`fishbonett.evolve.tdvp`).
 
 ## Example
 
@@ -103,7 +103,7 @@ r2.max_bond
 ## Low-level driver
 
 ```python
-from fishbonett.mpo import run_ip_tdvp1
+from fishbonett.evolve.tdvp import run_ip_tdvp1
 
 t, sz = run_ip_tdvp1(bath.spectral_density(), (-25, 36), V=1.0,
                      n_chain=40, d=20, dt=0.025, nsteps=80, D=100)
@@ -116,4 +116,4 @@ t, sz = run_ip_tdvp1(bath.spectral_density(), (-25, 36), V=1.0,
   a **smaller bond dimension** thanks to the interaction picture.
 - `h` and the coupling `O` are carried as matrices, so a general Hermitian system
   and coupling of any dimension work (the illustration uses `sigma_z`); see
-  {doc}`../systems/spin_boson`.
+  {doc}`/systems/spin_boson`.

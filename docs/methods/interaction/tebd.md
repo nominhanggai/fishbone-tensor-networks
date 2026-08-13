@@ -1,11 +1,11 @@
-# `tebd` — interaction-picture MPS TEBD
+# Interaction picture · chain — swap-network TEBD
 
 ```{admonition} Frame: interaction picture (time-dependent $H$)
 :class: tip
 The free-bath evolution is rotated out, so entanglement is small — but $H$ is
 time-dependent and the gates are rebuilt every step.  Sibling methods in this
-frame: {doc}`trotter_mpo` (same propagator written exactly as one MPO),
-{doc}`star_mpo` and {doc}`tree` (TDVP variants).  See {doc}`index` for why the
+frame: {doc}`/methods/interaction/trotter_mpo` (same propagator written exactly as one MPO),
+{doc}`/methods/interaction/star_mpo` and {doc}`/methods/interaction/tree` (TDVP variants).  See {doc}`/methods/index` for why the
 frame constrains the choice of integrator.
 ```
 
@@ -19,7 +19,7 @@ single MPS.
 
 Start from the chain-mapped spin-boson Hamiltonian, in which the continuous bath
 has been replaced by a one-dimensional chain of effective modes (see
-{doc}`../bath`):
+{doc}`/bath`):
 
 $$
 H = H_{\mathrm{sys}} + \underbrace{c_0\, O\,(b_0 + b_0^\dagger)}_{\text{system–bath}}
@@ -66,7 +66,7 @@ truncation: `trunc_eps` sets the accuracy and `bond_dim` is an optional cap.
 ```{note}
 Splitting the coupling over modes is **exact**, not an approximation: the terms
 $O\otimes X_n$ all commute with one another. The only splitting error in a step is
-between $h_{\mathrm{sys}}$ and the coupling.  {doc}`trotter_mpo` exploits the same
+between $h_{\mathrm{sys}}$ and the coupling.  {doc}`/methods/interaction/trotter_mpo` exploits the same
 commutation to apply the whole propagator as one bond-2 MPO, avoiding the swaps
 altogether — same frame, same physics, cheaper per step.
 ```
@@ -74,7 +74,7 @@ altogether — same frame, same physics, cheaper per step.
 Keeping the system on its own MPS site (rather than absorbing bath modes into it)
 is what makes the ansatz efficient, and it is why composite systems should be
 built as trees rather than fattened onto one site — see
-{doc}`../systems/composite_multichannel`.
+{doc}`/systems/composite_multichannel`.
 
 ## General systems
 
@@ -92,7 +92,7 @@ arbitrary initial state:
 interaction-picture gates diagonalize `O`).  Only a *multichannel* bath — one bath
 coupled through several operators at once — is handled elsewhere (it routes through
 the tree so the system stays on its own site; see
-{doc}`../systems/composite_multichannel`).
+{doc}`/systems/composite_multichannel`).
 
 ## Example
 
@@ -124,7 +124,7 @@ way — just pass a `(3, 3)` `h` and `coupling` and a length-3 `initial` vector.
 ## Notes
 
 - `tebd` is interaction-picture, so it needs no separate bath-frequency gauge and
-  handles a signed `domain` (thermofield / T-TEDOPA) directly; see {doc}`../bath`.
+  handles a signed `domain` (thermofield / T-TEDOPA) directly; see {doc}`/bath`.
 - Cost per step is $O(N)$ two-site updates in each direction ($2N$ SVDs); the bond
   dimension is set by the physical system–bath entanglement, controlled by
   `trunc_eps` and optionally capped by `bond_dim`.
