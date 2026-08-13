@@ -218,12 +218,11 @@ class SystemBath:
 
     #: ``registry.Method.integrator`` -> the driver on this class that realizes it.
     _DRIVERS = {
-        "chain-mpo-tdvp": "_run_mpo",
+        "mpo-tdvp": "_run_mpo",
         "modetree": "_run_tree",
         "swap-tebd": "_run_swap_tebd",
         "displacement-mpo": "_run_trotter_mpo",
         "polaron-tebd": "_run_polaron",
-        "polaron-tdvp": "_run_polaron_tdvp",
         "static-tree-tebd": "_run_multichannel",
     }
 
@@ -247,14 +246,66 @@ class SystemBath:
                 "Bath's shape and has its own propagators; see "
                 "fishbonett.models.registry.")
 
-    #: which MPO the *(frame, model)* pair implies.  This is the whole point of the
-    #: taxonomy: the frame decides what H looks like, the model decides on what
-    #: geometry, and the integrator (``spec.driver``) is an independent choice.
+    #: which MPO the *(frame, model)* pair implies, and how that frame needs to be
+    #: driven.  This is the whole point of the taxonomy: the frame decides what H
+    #: looks like, the model decides on what geometry, and the integrator
+    #: (``spec.driver``) is an independent choice.  Each returns
+    #: ``(MPOFrame, hooks)`` -- the hooks being whatever that frame does to the
+    #: state on the way in and to the observable on the way out.
     _MPO_FRAMES = {
-        ("schrodinger", "chain"): "chain_mpo_frame",
-        ("schrodinger", "star"): "static_star_mpo_frame",
-        ("interaction", "star"): "ip_star_mpo_frame",
+        ("schrodinger", "chain"): "_chain_mpo_frame",
+        ("schrodinger", "star"): "_static_star_mpo_frame",
+        ("interaction", "star"): "_ip_star_mpo_frame",
+        ("polaron", "chain"): "_polaron_mpo_frame",
     }
+
+    def _undressed_mpo_frame(self, maker, b, ctx):
+        """A frame that does nothing to the state: read the RDM straight off it."""
+        frame = maker(b.spectral_density(), b.domain, n_chain=b.n_modes,
+                      d=b.phys_dim, hsys=self.h, cop=self.coupling,
+                      init=self._initial_state(ctx.initial),
+                      discretizer=b.discretizer())
+        return frame, dict(observe=lambda A: _mpo.measure_rdm(A[0]),
+                           prec=ctx.kw.get("prec", 1e-4),
+                           tol=ctx.kw.get("tol", 1e-7),
+                           eshift=ctx.kw.get("eshift", False))
+
+    def _chain_mpo_frame(self, b, ctx):
+        return self._undressed_mpo_frame(_frames_mpo.chain_mpo_frame, b, ctx)
+
+    def _static_star_mpo_frame(self, b, ctx):
+        return self._undressed_mpo_frame(_frames_mpo.static_star_mpo_frame, b, ctx)
+
+    def _ip_star_mpo_frame(self, b, ctx):
+        return self._undressed_mpo_frame(_frames_mpo.ip_star_mpo_frame, b, ctx)
+
+    def _polaron_mpo_frame(self, b, ctx):
+        """The polaron ``H~`` as an MPO, plus the dressing that makes it a frame.
+
+        ``H~`` is time-independent, so it has a plain MPO and the ordinary sweeps
+        apply.  What is polaron-specific is not the loop but the two hooks: the bath
+        vacuum is a *displaced* coherent state on ``c0``, and the RDM read off that
+        pair has to be un-dressed to get back to the lab frame.
+
+        Two settings stay per-frame because they are genuine differences: ``prec``
+        defaults to ``trunc_eps`` rather than ``1e-4``, and the two-site sweep must
+        **not** be re-canonicalized -- that would re-gauge the displaced block this
+        frame just installed.
+        """
+        builder, _b, _n, _pd = self._polaron_builder(ctx)
+        M = builder.mpo()
+
+        def prepare(A):
+            A[0], A[1] = builder.initial_mps_pair(self._initial_state(ctx.initial))
+            return A
+
+        frame = _frames_mpo.MPOFrame(
+            n_sites=len(M), phys_dim=b.phys_dim,
+            system=(self.h, self.coupling, np.zeros(self.h.shape[0], complex)),
+            mpo=lambda t=None: M, static=True)
+        return frame, dict(prepare=prepare, canonicalize=False,
+                           observe=lambda A: builder.undress_rdm_tdvp(A[0], A[1]),
+                           prec=ctx.kw.get("prec", ctx.trunc_eps))
 
     def _run_mpo(self, spec, ctx):
         """TDVP on an MPO -- one loop for all seven (frame, sweep) combinations.
@@ -267,17 +318,12 @@ class SystemBath:
         """
         self._check_system()
         b = self.bath.resolved(ctx.t_max)
-        make = getattr(_frames_mpo, self._MPO_FRAMES[(spec.frame, spec.models[0])])
-        frame = make(b.spectral_density(), b.domain, n_chain=b.n_modes,
-                     d=b.phys_dim, hsys=self.h, cop=self.coupling,
-                     init=self._initial_state(ctx.initial),
-                     discretizer=b.discretizer())
+        make = getattr(self, self._MPO_FRAMES[(spec.frame, spec.models[0])])
+        frame, hooks = make(b, ctx)
         t, rdms, maxb = _mpo.run_mpo_frame(
             frame, dt=ctx.dt, nsteps=ctx.n_steps, sweep=spec.driver,
             D=ctx.bond_dim, chi_max=ctx.bond_dim, eps=ctx.trunc_eps,
-            krylov=ctx.krylov, observe=_mpo.measure_rdm,
-            prec=ctx.kw.get("prec", 1e-4), Dplusmax=ctx.kw.get("Dplusmax", 4),
-            tol=ctx.kw.get("tol", 1e-7), eshift=ctx.kw.get("eshift", False))
+            krylov=ctx.krylov, Dplusmax=ctx.kw.get("Dplusmax", 4), **hooks)
         return Result(t=t, expect=self._expect_from_rdm(rdms, ctx.obs_ops),
                       max_bond=maxb, rdm=np.asarray(rdms), method=spec.name)
 
@@ -472,47 +518,6 @@ class SystemBath:
                                     sd=b.spectral_density(), domain=b.domain,
                                     discretizer=b.discretizer()).build()
         return builder, b, n, pd
-
-    def _run_polaron_tdvp(self, spec, ctx):
-        """Polaron frame propagated with TDVP.  Because ``H~`` is time-independent
-        it has a plain MPO (:meth:`~fishbonett.frames.polaron.SystemBathPolaron.mpo`),
-        so the 1-site / 2-site / bond-adaptive sweeps all apply.  1-site TDVP never
-        forms a two-site block, which avoids the ``O(d^4)`` boson-boson gates of the
-        polaron TEBD sweep."""
-        from fishbonett.evolve.tdvp import (init_mps, tdvp1sweep, tdvp2sweep,
-                                            tdvp1sweep_dynamic, bonddims,
-                                            _pad_bonds, right_canonicalize)
-        builder, b, n, pd = self._polaron_builder(ctx)
-        variant = spec.driver
-        M = builder.mpo()
-        A = init_mps(len(M), b.phys_dim, np.zeros(self.h.shape[0], complex))
-        A[0], A[1] = builder.initial_mps_pair(self._initial_state(ctx.initial))
-        if variant == "tdvp1":
-            # 1-site TDVP conserves the bond dimension, so it cannot grow out of a
-            # product state: pad to the requested bond first (as run_tdvp1 does).
-            A = right_canonicalize(_pad_bonds(A, ctx.bond_dim))
-        env = Afull = FRs = None
-
-        def step(_k):
-            nonlocal A, env, Afull, FRs
-            if variant == "tdvp1":
-                A, env = tdvp1sweep(ctx.dt, A, M, env, m=ctx.krylov)
-            elif variant == "tdvp2":
-                A, env = tdvp2sweep(ctx.dt, A, M, ctx.bond_dim, ctx.trunc_eps,
-                                    env, m=ctx.krylov)
-            else:
-                A, Afull, FRs, _ = tdvp1sweep_dynamic(
-                    ctx.dt, A, M, Afull, FRs,
-                    prec=ctx.kw.get("prec", ctx.trunc_eps),
-                    Dlim=ctx.bond_dim, Dplusmax=ctx.kw.get("Dplusmax", 4),
-                    m=ctx.krylov)
-
-        # the frame dressed the state, so the frame undresses the observable
-        return propagate(
-            spec, ctx, step=step,
-            rdm=lambda: builder.undress_rdm_tdvp(A[0], A[1]),
-            peak_bond=lambda: max(bonddims(A)),
-            expect_from_rdm=self._expect_from_rdm)
 
     def _run_polaron(self, spec, ctx):
         """Polaron-frame chain: the static system-bath coupling is absorbed into a
