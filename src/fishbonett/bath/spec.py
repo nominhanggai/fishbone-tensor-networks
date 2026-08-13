@@ -26,6 +26,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
+from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.tedopa import make_tedopa_discretizer
 
 __all__ = ["Bath", "thermalize"]
@@ -134,6 +135,39 @@ class Bath:
                              "same length (one spectral density per channel)")
         return [(self._thermalized(Jc), np.asarray(op, complex))
                 for Jc, op in zip(Js, ops)]
+
+    def shared_mode_star(self):
+        """This multichannel bath as a star of shared modes: ``(freq, coup_mat)``.
+
+        Every channel is discretized on the **same** Gauss-Legendre nodes
+        ``omega_k``, which is what makes the channels cross-correlated rather than
+        independent baths.  Mode ``k`` then couples through the single combined
+        operator ``M_k = sum_c g_{c,k} O_c`` with
+        ``g_{c,k} = sqrt(J_c(omega_k) w_k / pi)``, so ``coup_mat[k]`` is one
+        ``(d, d)`` matrix and the star has one edge per mode.
+
+        This is a *view* of the bath, the star counterpart of the chain that
+        :func:`fishbonett.bath.chain.get_coupling` returns; it lives here so the
+        Schroedinger frame and the interaction-picture model share one construction
+        rather than each discretizing the channels themselves.
+        """
+        if self.discretization != "legendre":
+            raise ValueError("a multichannel bath must use the 'legendre' "
+                             "discretization: its Gauss nodes are shared across "
+                             "channels, whereas measure-adapted TEDOPA nodes are not")
+        channels = self.channels()
+        freq, g = None, []
+        for Jc, _op in channels:
+            f, v_sq = get_vn_squared(Jc, self.n_modes, list(self.domain))
+            f = np.asarray(f, float)
+            g.append(np.sqrt(np.asarray(v_sq, float) / np.pi))
+            if freq is None:
+                freq = f
+            elif not np.allclose(freq, f):      # nodes are shared, so unreachable
+                raise ValueError("multichannel channels do not share the mode grid")
+        coup_mat = [sum(g[c][k] * channels[c][1] for c in range(len(channels)))
+                    for k in range(self.n_modes)]
+        return freq, coup_mat
 
     def discretizer(self):
         """The star-discretization callable this bath's ``discretization`` selects

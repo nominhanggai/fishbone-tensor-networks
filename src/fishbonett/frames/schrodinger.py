@@ -28,7 +28,6 @@ driven by :mod:`fishbonett.evolve.tdvp`; the gate form is driven by
 import numpy as np
 
 from fishbonett.bath.chain import get_bath_nn_paras
-from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.frames.terms import LocalTerms
 from fishbonett.operators import annihilate, sigma_z
 
@@ -79,28 +78,15 @@ def star_terms(bath, site, next_node, dims, edges, site_H, edge_H):
     through the combined operator ``M_k = sum_c g_{c,k} O_c`` with
     ``g_{c,k} = sqrt(J_c(omega_k) w_k / pi)``.  Returns the next free node id.
     """
-    if bath.discretization != "legendre":
-        raise ValueError("a multichannel bath must use the 'legendre' "
-                         "discretization: its Gauss nodes are shared across "
-                         "channels, whereas measure-adapted TEDOPA nodes are not")
     _a, _ad, x, numb = bath_ops(bath.phys_dim)
-    channels = bath.channels()
-    freq, g = None, []
-    for Jc, _op in channels:
-        f, v_sq = get_vn_squared(Jc, bath.n_modes, list(bath.domain))
-        f = np.asarray(f, float)
-        g.append(np.sqrt(np.asarray(v_sq, float) / np.pi))
-        if freq is None:
-            freq = f
-        elif not np.allclose(freq, f):        # nodes are shared, so unreachable
-            raise ValueError("multichannel channels do not share the mode grid")
+    freq, coup_mat = bath.shared_mode_star()
     node = next_node
     for k in range(bath.n_modes):
         dims.append(bath.phys_dim)
         site_H.append(freq[k] * numb)
-        M = sum(g[c][k] * channels[c][1] for c in range(len(channels)))
         edges.append((site, node))
-        edge_H[(site, node)] = np.kron(M, x)          # (site op M) (x) (a + a^dag)
+        # (site op M_k) (x) (a + a^dag)
+        edge_H[(site, node)] = np.kron(coup_mat[k], x)
         node += 1
     return node
 

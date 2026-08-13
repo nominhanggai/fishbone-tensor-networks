@@ -18,15 +18,16 @@ matching TEDOPA exactly (:func:`make_tedopa_discretizer`,
 
 .. rubric:: What's here
 
-================================  ==============================================
-:class:`Bath`                     the bath specification you pass to ``run``
-:func:`thermalize`                T-TEDOPA thermalized density from a ``T=0`` one
-:func:`get_bath_nn_paras`         spectral density -> chain ``(w_list, k_list)``
-:func:`get_coupling`              the same, via polynomial recurrences
-:func:`get_vn_squared`            Gauss-Legendre (uniform-measure) star
-:func:`make_tedopa_discretizer`   measure-adapted TEDOPA star (peaked/IR baths)
-:func:`lanczos`                   star -> chain tridiagonalization
-================================  ==============================================
+=================================  =============================================
+:class:`Bath`                      the bath specification you pass to ``run``
+:func:`thermalize`                 T-TEDOPA thermalized density from a ``T=0`` one
+:func:`get_bath_nn_paras`          spectral density -> chain ``(w_list, k_list)``
+:func:`get_coupling`               the same, via polynomial recurrences
+:func:`get_vn_squared`             Gauss-Legendre (uniform-measure) star
+:func:`make_tedopa_discretizer`    measure-adapted TEDOPA star (peaked/IR baths)
+:meth:`Bath.shared_mode_star`      multichannel star: one grid, combined ``M_k``
+:func:`lanczos`                    star -> chain tridiagonalization
+=================================  =============================================
 
 Submodules: :mod:`~fishbonett.bath.spec`, :mod:`~fishbonett.bath.chain`,
 :mod:`~fishbonett.bath.legendre`, :mod:`~fishbonett.bath.tedopa`,

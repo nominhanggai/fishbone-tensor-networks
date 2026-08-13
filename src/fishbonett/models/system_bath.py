@@ -18,7 +18,6 @@ import scipy.linalg as _la
 
 from fishbonett.linalg import Truncation
 from fishbonett.system import System
-from fishbonett.bath.chain import get_vn_squared
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
 from fishbonett.evolve import modetree as _tree
@@ -317,19 +316,9 @@ class SystemBath:
         from fishbonett.frames.multichannel import SystemBathMultiChannel
         from fishbonett.states.mps import SystemBathMPS
         b = self.bath.resolved(n_steps * dt)
-        if b.discretization != "legendre":
-            raise ValueError("a multichannel bath must use the 'legendre' "
-                             "discretization: its Gauss nodes are shared across "
-                             "channels, whereas measure-adapted nodes are not")
-        channels = b.channels()          # already thermalized on a signed domain
-        freq, g = None, []
-        for Jc, _op in channels:
-            f, v_sq = get_vn_squared(Jc, b.n_modes, list(b.domain))
-            g.append(np.sqrt(np.asarray(v_sq, float) / np.pi))
-            freq = np.asarray(f, float) if freq is None else freq
-        # mode k couples through the combined operator sum_c g[c][k] O_c
-        coup_mat = [sum(g[c][k] * channels[c][1] for c in range(len(channels)))
-                    for k in range(b.n_modes)]
+        # the same shared-mode star the Schroedinger frame builds, from the same
+        # Bath method -- the two paths must discretize identically to cross-check
+        freq, coup_mat = b.shared_mode_star()
         d_sys = self.h.shape[0]
         pd = [d_sys] + [b.phys_dim] * b.n_modes
         builder = SystemBathMultiChannel.from_signed_star(
