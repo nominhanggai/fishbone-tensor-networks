@@ -67,8 +67,11 @@ class SystemBathMPS(TensorNetwork):
       :mod:`fishbonett.states`.
     * **gauge.**  This is Vidal (``Gamma-Lambda``) form: singular values live on the
       bonds in ``S`` and *every* site is already canonical, so
-      :meth:`_prepare_for` is a no-op rather than an orthogonality-centre walk.
-      ``R`` additionally carries the local-basis-optimization projectors.
+      :meth:`_prepare_for` picks a centre without moving any data, where the
+      mixed-canonical tree has to sweep QRs.  The price is that the bond weights sit
+      inside :meth:`tensor`, so multi-node contractions go through
+      :meth:`_gauged_tensor` instead.  ``R`` additionally carries the
+      local-basis-optimization projectors.
 
     Parameters
     ----------
@@ -133,9 +136,32 @@ class SystemBathMPS(TensorNetwork):
             "maintain the gauge.")
 
     def _prepare_for(self, i):
-        """No-op: in Vidal form every site is already canonical, so unlike the
-        mixed-canonical tree there is no orthogonality centre to move."""
-        return
+        """Choose ``i`` as the orthogonality centre.  Moves **no data**: in Vidal
+        form every site is already canonical, so unlike the mixed-canonical tree
+        this is a change of view rather than a sweep of QRs."""
+        self.oc = i
+
+    def _gauged_tensor(self, i):
+        """``i``'s tensor as a multi-site contraction needs it, given the centre.
+
+        At the centre that is :meth:`tensor` (``= Lambda_i B_i``, the full local
+        state).  To its right it is the bare right-canonical ``B[i]`` -- taking
+        :meth:`tensor` there instead would contract ``Lambda`` a second time on
+        every internal bond, since the centre tensor already carries it.
+        """
+        if i == self.oc:
+            return self.tensor(i)
+        if i < self.oc:
+            # would need the left-isometric Lambda_i Gamma_i, which this Vidal
+            # storage can only form as B[i] Lambda_{i+1}^-1.  joint_rdm always puts
+            # the centre at the lowest node of the subtree, so it never asks.
+            raise NotImplementedError(
+                f"no left-isometric form stored for site {i} < oc {self.oc}")
+        t = einsum('KI,aIb->aKb', self.R[i], self.B[i])   # (vL, p, vR)
+        t = np.moveaxis(t, 1, -1)                        # (vL, vR, p)
+        if i == self.n - 1:
+            t = t[..., 0, :]                             # drop the dummy right bond
+        return t
 
     # -- wavefunction accessors ------------------------------------------------
     def get_theta1(self, i, gpu=False):

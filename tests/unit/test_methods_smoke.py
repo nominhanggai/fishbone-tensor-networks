@@ -121,8 +121,59 @@ def test_mps_and_tree_are_one_tensor_network():
     assert np.isclose(st.expectation(sigma_z, 0),
                       np.einsum('ij,ji->', st.rdm(0), sigma_z).real)
 
-    # Vidal form means every site is already canonical, so no OC walk happens
-    assert st._prepare_for(0) is None and st.oc == 0
+    # Vidal form means every site is already canonical, so choosing a centre moves
+    # no data -- it only records which gauge view the observables read from
+    B_before = [b.copy() for b in st.B]
+    st._prepare_for(3)
+    assert st.oc == 3
+    assert all(np.array_equal(a, b) for a, b in zip(B_before, st.B))
+
+
+def test_mps_joint_rdm_matches_the_dense_state():
+    """Multi-site observables on the MPS, against the full state vector.
+
+    The inherited ``joint_rdm`` cannot contract ``tensor(n)`` at every node of the
+    subtree the way the mixed-canonical tree does: in Vidal form that tensor carries
+    the bond weights, so an internal bond would count ``Lambda`` twice (a ~9e-2 error
+    on a nearest-neighbour pair, i.e. not subtle).  The centre goes to the lowest
+    node of the subtree and every node above it contributes its bare right-isometry.
+    """
+    import numpy as np
+    from fishbonett.states.mps import SystemBathMPS
+    from fishbonett.evolve import tebd
+    from fishbonett.frames.polaron import SystemBathPolaron
+    from fishbonett.operators import sigma_x, sigma_z
+
+    pd = [2, 3, 3, 3, 3]
+    builder = SystemBathPolaron(pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+                                sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
+                                domain=(0.3, 12.0)).build()
+    st = SystemBathMPS(pd)
+    for _ in range(4):                     # entangle it; a product state proves nothing
+        tebd.symmetric_static_step(st, builder.gates(0.05), len(pd) - 1, 40, 1e-12)
+
+    # the dense wavefunction: psi = B_0 B_1 ... B_{n-1}, with each R put back
+    psi = np.einsum('KI,aIb->aKb', st.R[0],
+                    np.tensordot(np.diag(st.S[0]), st.B[0], [1, 0]))
+    for i in range(1, len(pd)):
+        psi = np.tensordot(psi, np.einsum('KI,aIb->aKb', st.R[i], st.B[i]),
+                           [psi.ndim - 1, 0])
+    psi = psi[0, ..., 0]
+    psi /= np.linalg.norm(psi)
+
+    def exact(sites):
+        rest = [k for k in range(len(pd)) if k not in sites]
+        d = int(np.prod([pd[k] for k in sites]))
+        p = np.transpose(psi, list(sites) + rest).reshape(d, -1)
+        rho = p @ p.conj().T
+        return rho / np.trace(rho).real
+
+    for sites in ([0, 1], [0, 2], [1, 3], [0, 4], [2, 1], [1, 2, 3], [0, 2, 4]):
+        assert np.allclose(st.joint_rdm(sites), exact(sites), atol=1e-12), sites
+
+    # a one-site operator padded to two sites must agree with the one-site value
+    assert np.isclose(st.expectation(np.kron(sigma_z, np.eye(3)), [0, 2]),
+                      st.expectation(sigma_z, 0))
 
 
 def test_schrodinger_frame_serves_every_topology():

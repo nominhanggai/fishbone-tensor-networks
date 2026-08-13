@@ -58,9 +58,9 @@ class TreeFishbone:
     ----------
     sites : list of (d, d) array
         Electronic site Hamiltonians.
-    edges : list of (i, j) or (i, j, coupling)
+    edges : list of (i, j) or (i, j, C)
         Electronic-electronic couplings; the pairs must form a tree over the
-        sites.  ``coupling`` is a ``(d_i*d_j, d_i*d_j)`` operator (default: none).
+        sites.  ``C`` is a ``(d_i*d_j, d_i*d_j)`` operator (default: none).
     baths : list
         One entry per site: a single :class:`~fishbonett.bath.spec.Bath`, a list of
         baths, or ``None``.  Each bath carries its own ``coupling`` operator

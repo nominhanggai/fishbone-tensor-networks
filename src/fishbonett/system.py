@@ -10,11 +10,11 @@ so the frames and models do not each re-derive it.
 
 .. rubric:: What's here
 
-=====================  =========================================================
-:class:`System`        ``h`` + ``coupling`` + ``initial``, validated
+======================  ========================================================
+:class:`System`         ``h`` + ``coupling`` + ``initial``, validated
 :func:`check_operator`  one ``(d, d)`` Hermitian operator, for callers holding
-                       loose arrays rather than a :class:`System`
-=====================  =========================================================
+                        loose arrays rather than a :class:`System`
+======================  ========================================================
 """
 from dataclasses import dataclass, field
 

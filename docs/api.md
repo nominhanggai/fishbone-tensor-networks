@@ -13,7 +13,10 @@ sits at **site 0** throughout, with the bath modes following, nearest first.
 
 ## Models — the physical setups
 
-The six models and the taxonomy that relates them to frames and propagators.
+The six models and the taxonomy that relates them to frames and propagators.  A
+model's two inputs are a `Bath` (the environment, below) and a
+{py:class}`~fishbonett.system.System` — any Hermitian `h`, any Hermitian coupling
+and an initial state, validated once so that no frame re-derives it.
 
 ```{eval-rst}
 .. autosummary::
@@ -23,21 +26,27 @@ The six models and the taxonomy that relates them to frames and propagators.
    fishbonett.models.registry
    fishbonett.models.system_bath
    fishbonett.models.fishbone
+   fishbonett.system
    fishbonett.models.result
 ```
 
 ## Geometry: the state ansätze
 
-The 1D chain, the comb and the general tree are separate implementations rather
-than a class hierarchy — each is optimized for its own geometry, and they share
-the truncation policy instead of a base class.  These hold tensors only; the
-models that drive them are above.
+A chain is a tree, so both containers are the same object: tensors on a loop-free
+graph.  `TensorNetwork` holds everything that follows from loop-freeness — topology,
+the orthogonality centre, and the reduced density matrices read off it — and asks
+each container for `tensor` / `set_tensor` / `neighbours` so it never has to know
+whether the physical leg is stored in the middle (`vL, p, vR`) or last.  What stays
+per-container is the gauge policy and the gate splitting: `SystemBathMPS` is in
+Vidal form with LBO and a GPU path, `TreeTensorNetwork` is mixed-canonical.  These
+hold tensors only; the models that drive them are above.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
    :recursive:
 
+   fishbonett.states.network
    fishbonett.states.mps
    fishbonett.states.tree
 ```
@@ -59,13 +68,19 @@ models that drive them are above.
 ## Frames
 
 One Hamiltonian, several representations — see {doc}`/methods/index` for which
-propagator suits which frame.
+propagator suits which frame.  A frame's output is always
+{py:class}`~fishbonett.frames.terms.LocalTerms`: one operator per node and one per
+edge, static or a function of `t`.  That is the single interface between the physics
+and the numerics — it is what lets one propagator serve every geometry, since it
+describes the terms without saying what the graph looks like.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
    :recursive:
 
+   fishbonett.frames.terms
+   fishbonett.frames.schrodinger
    fishbonett.frames.interaction_picture
    fishbonett.frames.polaron
    fishbonett.frames.multichannel

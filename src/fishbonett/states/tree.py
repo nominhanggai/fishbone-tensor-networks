@@ -11,10 +11,14 @@ Node ``i``'s tensor carries legs ``[bond to each neighbour (in ``order[i]``)
 mixed-canonical form: a single orthogonality centre moves by QR along the unique
 path between any two nodes, and a site's RDM is read straight off the centre.
 
-That leg order -- physical **last**, after a variable number of bonds -- is the only
-thing separating this from :class:`fishbonett.states.mps.SystemBathMPS`, which puts
-the physical leg in the middle of a fixed ``(vL, p, vR)``.  A chain is a tree, so one
-container should serve both; see :mod:`fishbonett.states` for what that would take.
+That leg order is exactly the one
+:class:`~fishbonett.states.network.TensorNetwork` asks for, so the three storage
+hooks below are the identity and everything structural -- topology, the
+orthogonality-centre walk, the RDMs -- is inherited.  What is left here is the
+storage itself, the product-state constructor, and the wrappers around
+:mod:`fishbonett.evolve.sitetree`.  :class:`fishbonett.states.mps.SystemBathMPS` is
+the same network over a path, differing only in that it stores the physical leg in
+the middle of a fixed ``(vL, p, vR)`` and keeps its gauge in Vidal form.
 """
 import numpy as np
 
