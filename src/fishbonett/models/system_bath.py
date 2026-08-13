@@ -25,9 +25,9 @@ from fishbonett.evolve import modetree as _tree
 from fishbonett.models.propagate import (RunCtx, modetree_peak_bond,
                                          mps_peak_bond, propagate)
 from fishbonett.models.result import Result
+from fishbonett.models import registry
 from fishbonett.models.registry import (
-    FIXED_BOND_METHODS, METHOD_FRAMES, METHODS, methods_of,
-    unknown_method_error,
+    FIXED_BOND_METHODS, METHOD_FRAMES, methods_of, unknown_method_error,
 )
 
 __all__ = ["SystemBath"]
@@ -93,15 +93,34 @@ class SystemBath:
         self.bath = bath
 
     # -- public API ----------------------------------------------------------
-    def run(self, *, dt, t_max=None, n_steps=None, method=_DEFAULT_METHOD,
+    def run(self, *, dt, t_max=None, n_steps=None, method=None,
+            model=None, frame=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial="up", krylov=25, **engine_kw):
         """Propagate and return a :class:`Result`.
 
-        ``method`` picks a **model** and a **frame** at once -- the four
-        single-system models live on this class, and each admits its own frames
-        (see :mod:`fishbonett.models.registry`; ``describe_taxonomy()`` prints the
-        table):
+        .. rubric:: Two spellings, one lookup
+
+        A run is three nested choices, and they can be given **as themselves**::
+
+            sb.run(dt=..., t_max=..., model="star", frame="interaction",
+                   integrator="tdvp2")
+
+        ``model`` is what is coupled to what, ``frame`` how ``H`` is written down,
+        ``integrator`` how a step is taken (``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
+        ``"dtdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
+        one combination fits; if several do, the error lists them.
+
+        The named combinations still work and are often shorter::
+
+            sb.run(dt=..., t_max=..., method="mpo-ip-tdvp2")   # the same run
+
+        because ``"mpo-ip-tdvp2"`` *is* ``(star, interaction, tdvp2)``.  Give one
+        spelling or the other, not both.  ``describe_taxonomy()`` prints the table;
+        :mod:`fishbonett.models.registry` is its source.
+
+        The four single-system models live on this class, and each admits its own
+        frames:
 
         * **chain** -- 1 system + 1 bath, modes chain-mapped to 1D.  The only
           model with all three frames.  *Schroedinger*: ``mpo-tdvp1 | mpo-tdvp2 |
@@ -154,39 +173,44 @@ class SystemBath:
             n_steps = int(round(t_max / dt))
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
         bond_dim, trunc_eps = trunc.max_bond, trunc.eps
-        if bond_dim is None and method.lower().replace("_", "-") in FIXED_BOND_METHODS:
-            alternatives = _bond_growing_siblings(method) or ["tebd"]
-            raise ValueError(
-                f"method {method!r} has a fixed bond dimension and cannot grow it "
-                "from a product state, so bond_dim must be given explicitly "
-                "(bond_dim=None means 'unlimited', which is only meaningful for "
-                "the truncation-driven methods).  To let trunc_eps choose the bond "
-                "instead, use a bond-growing method of the same frame: "
-                f"{', '.join(alternatives)}")
         # a general system has no canonical observables, so it gets the RDM only
         obs_ops = observables if observables is not None else self.system.observables()
-        m = method.lower().replace("_", "-")
-        if getattr(self.bath, "is_multichannel", False):
-            # The multichannel model is selected by the bath's shape, so `method`
-            # can only pick among *its* propagators -- say so rather than ignoring it.
+
+        axes = model is not None or frame is not None or integrator is not None
+        multichannel = getattr(self.bath, "is_multichannel", False)
+        if multichannel:
+            # This model is selected by the *bath's shape*, so `method` can only
+            # pick among its propagators -- say so rather than ignoring it.
+            mine = {"multichannel"}
             own = methods_of("multichannel")
-            if m not in own and method != _DEFAULT_METHOD:
+            if method is not None and method.lower().replace("_", "-") not in own:
                 raise ValueError(
                     f"this Bath is multichannel (a list of couplings), which "
                     f"selects the 'multichannel' model; it does not have "
                     f"method={method!r}.  Its propagators are {', '.join(own)} "
                     f"(or drop the method argument for the default).  To use the "
                     f"single-channel models, pass a single coupling operator.")
-            m = m if m in own else own[0]        # no method given -> its default
-            mine = {"multichannel"}
         else:
             mine = {"chain", "star", "mode-tree"}
-        # one lookup instead of a chain of `if`s: the registry says which driver
-        # realizes this (model, frame, integrator), and the driver table says
+        if method is None and not axes:
+            method = own[0] if multichannel else _DEFAULT_METHOD
+        # one lookup, either spelling: the registry says which (model, frame,
+        # integrator) this is and which driver realizes it; the driver table says
         # where that driver lives on this class.
-        spec = METHODS.get(m)
-        if spec is None or not set(spec.models) & mine:
-            raise unknown_method_error(m)
+        spec = registry.resolve(
+            mine, method=None if method is None else method.lower().replace("_", "-"),
+            model=model, frame=frame, integrator=integrator)
+        if not set(spec.models) & mine:
+            raise unknown_method_error(spec.name)
+        if bond_dim is None and spec.fixed_bond:
+            alternatives = _bond_growing_siblings(spec.name) or ["tebd"]
+            raise ValueError(
+                f"method {spec.name!r} has a fixed bond dimension and cannot grow "
+                "it from a product state, so bond_dim must be given explicitly "
+                "(bond_dim=None means 'unlimited', which is only meaningful for "
+                "the truncation-driven methods).  To let trunc_eps choose the bond "
+                "instead, use a bond-growing method of the same frame: "
+                f"{', '.join(alternatives)}")
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
                      krylov=krylov, kw=engine_kw)

@@ -195,6 +195,51 @@ def test_every_method_reports_max_bond(model_key):
         assert np.all(np.asarray(r.max_bond) >= 1), f"{model_key}/{method}"
 
 
+def test_run_takes_the_three_axes_directly():
+    """A method name *is* a (model, frame, integrator) triple, so both spell the
+    same run.  The axes are the structure; the name is the shorthand."""
+    kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z}, trunc_eps=1e-7)
+    by_axes = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
+        model="star", frame="interaction", integrator="tdvp2", **kw)
+    by_name = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
+        method="mpo-ip-tdvp2", **kw)
+    assert by_axes.method == by_name.method == "mpo-ip-tdvp2"
+    assert np.array_equal(by_axes.rdm, by_name.rdm)
+
+    # the axis vocabulary is uniform across frames: "tebd" means the same word
+    # whether the frame dresses the state or not
+    sb = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
+    assert sb.run(model="chain", frame="polaron", integrator="tebd",
+                  **kw).method == "polaron"
+    assert sb.run(model="chain", frame="interaction", integrator="tebd",
+                  **kw).method == "tebd"
+
+
+def test_axis_errors_name_what_is_available():
+    kw = dict(dt=0.02, n_steps=2, trunc_eps=1e-7)
+    sb = lambda: SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
+
+    # a recorded gap: star has no polaron frame
+    with pytest.raises(ValueError, match="no method for"):
+        sb().run(model="star", frame="polaron", **kw)
+    # under-specified: schrodinger exists on both chain and star
+    with pytest.raises(ValueError, match="ambiguous"):
+        sb().run(frame="schrodinger", **kw)
+    # a name already fixes all three axes, so mixing spellings is a mistake
+    with pytest.raises(ValueError, match="not both"):
+        sb().run(method="tebd", frame="polaron", **kw)
+
+
+def test_every_method_is_reachable_by_its_axes():
+    """Whatever the registry declares must be selectable both ways."""
+    for mk in ("chain", "star", "mode-tree"):
+        for name in R.methods_of(mk):
+            spec = R.METHODS[name]
+            got = R.resolve({"chain", "star", "mode-tree"}, model=mk,
+                            frame=spec.frame, integrator=spec.algo)
+            assert got.name == name, f"{mk}/{spec.frame}/{spec.algo} -> {got.name}"
+
+
 @pytest.mark.parametrize("model_key", ["comb", "site-tree"])
 def test_multi_site_models_reject_a_single_system_method(model_key):
     """Asking a multi-site model for `tebd` must name the model that owns it,
