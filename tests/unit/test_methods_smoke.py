@@ -43,7 +43,7 @@ def test_polaron_builds_and_gives_normalized_rdm():
 
 def test_public_api_surface():
     import fishbonett as fb
-    for name in ("SystemBathMPS", "TreeTEBD", "SystemBath", "Fishbone",
+    for name in ("SystemBathMPS", "TreeTensorNetwork", "SystemBath", "Fishbone",
                  "TreeFishbone", "Bath", "Result", "Truncation",
                  "get_bath_nn_paras", "get_coupling", "lanczos",
                  "sigma_x", "sigma_z", "drude", "lorentzian"):
@@ -56,7 +56,7 @@ def test_public_api_surface():
 def test_removed_comb_engine_is_gone():
     """FishBoneNet/FishBoneH/SystemBath1D/SystemBathSchrodinger were unreachable
     from run() and exercised only by a name check; the comb geometry is covered by
-    Fishbone -> TreeTEBD, which is validated against exact diagonalization."""
+    Fishbone -> TreeTensorNetwork, which is validated against exact diagonalization."""
     import fishbonett as fb
     for name in ("FishBoneNet", "FishBoneH", "SystemBath1D",
                  "SystemBathSchrodinger", "init_ttn"):

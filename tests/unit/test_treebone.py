@@ -1,9 +1,9 @@
-"""Tests for the general tree-topology engine (TreeTEBD) and TreeFishbone."""
+"""Tests for the general tree-topology engine (TreeTensorNetwork) and TreeFishbone."""
 import numpy as np
 import pytest
 from scipy.linalg import expm
 
-from fishbonett.states.tree import TreeTEBD
+from fishbonett.states.tree import TreeTensorNetwork
 from fishbonett.models.fishbone import TreeFishbone
 from fishbonett import Bath, Result
 from fishbonett.operators import sigma_x, sigma_z
@@ -70,7 +70,7 @@ def test_treetebd_star_matches_exact():
     for (a, b) in edges:
         H = H + Je[(a, b)] * (_embed(sigma_z, a, dims) @ _embed(sigma_z, b, dims))
     dt, ns = 0.02, 12
-    st = TreeTEBD(dims, edges, root=0)
+    st = TreeTensorNetwork(dims, edges, root=0)
     # `step` is a symmetric (Strang) step and applies every gate twice, so it takes
     # **half**-step gates -- same convention as evolve.tebd.symmetric_static_step.
     site_gates = [expm(-1j * hs[i] * dt / 2) for i in range(n)]
@@ -301,7 +301,7 @@ def test_multichannel_requires_legendre():
 
 def test_non_tree_edges_raise():
     with pytest.raises(ValueError):
-        TreeTEBD([2, 2, 2], [(0, 1), (1, 2), (2, 0)])       # a loop
+        TreeTensorNetwork([2, 2, 2], [(0, 1), (1, 2), (2, 0)])       # a loop
     with pytest.raises(ValueError):
         TreeFishbone(sites=[sigma_z, sigma_z, sigma_z],
                      edges=[(0, 1)],                          # too few edges (not a tree)

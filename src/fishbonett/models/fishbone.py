@@ -9,7 +9,7 @@ not the model's: :meth:`TreeFishbone.local_terms` asks
 :class:`~fishbonett.frames.terms.LocalTerms` graph -- bath frequencies on their own
 nodes, couplings on the edges -- and the model only decides the topology and drives
 the propagation.  The state it evolves is
-:class:`fishbonett.states.tree.TreeTEBD`, stepped by
+:class:`fishbonett.states.tree.TreeTensorNetwork`, stepped by
 :mod:`fishbonett.evolve.sitetree`.
 
 Do not confuse ``site-tree`` with the ``mode-tree`` model, where a *single*
@@ -23,7 +23,7 @@ import numpy as np
 from fishbonett.frames.schrodinger import terms as schrodinger_terms
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.states.tree import TreeTEBD
+from fishbonett.states.tree import TreeTensorNetwork
 from fishbonett.models.result import Result
 from fishbonett.models.registry import (
     STATIC_TREE_TEBD, methods_of, unknown_method_error,
@@ -191,7 +191,7 @@ class TreeFishbone:
                   for name, spec in observables.items()]
         # half-step gates: the symmetric step applies each of them twice
         dims, edges, site_gates, edge_gates = self._build(dt / 2.0, n_steps * dt)
-        st = TreeTEBD(dims, edges, root=0)
+        st = TreeTensorNetwork(dims, edges, root=0)
         for i in range(self.ns):
             st.set_physical(i, self._initial_vec(initial, i))
 

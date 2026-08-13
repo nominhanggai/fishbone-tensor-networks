@@ -10,16 +10,25 @@ Node ``i``'s tensor carries legs ``[bond to each neighbour (in ``order[i]``)
 ..., physical]``, physical last.  A tree has no loops, so there is an exact
 mixed-canonical form: a single orthogonality centre moves by QR along the unique
 path between any two nodes, and a site's RDM is read straight off the centre.
+
+That leg order -- physical **last**, after a variable number of bonds -- is the only
+thing separating this from :class:`fishbonett.states.mps.SystemBathMPS`, which puts
+the physical leg in the middle of a fixed ``(vL, p, vR)``.  A chain is a tree, so one
+container should serve both; see :mod:`fishbonett.states` for what that would take.
 """
 import numpy as np
 
 from fishbonett.contract import contract
 
-__all__ = ["TreeTEBD"]
+__all__ = ["TreeTensorNetwork"]
 
 
-class TreeTEBD:
-    """Mixed-canonical tree TEBD state.
+class TreeTensorNetwork:
+    """Mixed-canonical tree tensor-network state (TTN).
+
+    Named for the ansatz, as :class:`fishbonett.states.mps.SystemBathMPS` is.  It was
+    called ``TreeTEBD``, which named an *algorithm* -- and one that now lives in
+    :mod:`fishbonett.evolve.sitetree` rather than here.
 
     Parameters
     ----------

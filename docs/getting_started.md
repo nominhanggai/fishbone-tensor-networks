@@ -141,7 +141,7 @@ the convention every second-order step here uses.  The same construction applies
 time-dependent, so they are rebuilt each step by
 {py:func}`~fishbonett.evolve.tebd.symmetric_swap_step`) and to
 {py:class}`~fishbonett.frames.multichannel.SystemBathMultiChannel`.  For a
-multi-site model the state is a {py:class}`~fishbonett.states.tree.TreeTEBD` driven
+multi-site model the state is a {py:class}`~fishbonett.states.tree.TreeTensorNetwork` driven
 by {py:mod}`fishbonett.evolve.sitetree` instead.
 
 The high-level interface above is a thin wrapper over exactly this loop, and
