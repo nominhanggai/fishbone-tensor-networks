@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 from scipy.linalg import expm
 
-from fishbonett.states.tree import TreeTEBD, TreeFishbone
+from fishbonett.states.tree import TreeTEBD
+from fishbonett.models.fishbone import TreeFishbone
 from fishbonett import Bath, Result
 from fishbonett.operators import sigma_x, sigma_z
 

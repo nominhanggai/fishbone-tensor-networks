@@ -1,6 +1,6 @@
 # Spin-boson: one system, one bath
 
-{py:class}`~fishbonett.simulate.SystemBath` couples one system to one
+{py:class}`~fishbonett.models.system_bath.SystemBath` couples one system to one
 {py:class}`~fishbonett.bath.spec.Bath`.  The system can have any dimension — the
 name "spin-boson" is just convention.  For several sites or several baths, see
 {doc}`fishbone`; for internal structure or multichannel baths, see
@@ -24,7 +24,7 @@ r = model.run(dt=0.02, t_max=2.0, method="mpo-tdvp1", bond_dim=100,
 - `bath` — the {py:class}`~fishbonett.bath.spec.Bath` (see {doc}`../bath`).
 
 `run(...)` dispatches to any {doc}`propagation method <../methods/index>` via
-`method=`; they all return the same {py:class}`~fishbonett.simulate.Result`.
+`method=`; they all return the same {py:class}`~fishbonett.models.result.Result`.
 
 ## System dimension and initial state
 

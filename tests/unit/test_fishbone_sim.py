@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from fishbonett.simulate import Fishbone
+from fishbonett.models import Fishbone
 from fishbonett import Bath, Result
 from fishbonett.frames.schrodinger import FishBoneH
 from fishbonett.operators import annihilate

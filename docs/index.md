@@ -25,16 +25,17 @@ The four sections are meant to be read in this order, though each stands alone:
 
 1. **{doc}`getting_started`** — install, then a complete first simulation in a
    dozen lines. Start here.
-2. **{doc}`systems/index`** — the model vocabulary: what you can express, from a
-   single spin-boson system to arbitrary loop-free trees of sites and baths, plus
-   how to define observables.
+2. **{doc}`models/index`** — the six models: what you can express, from a single
+   spin-boson system to arbitrary loop-free trees of sites and baths, plus how to
+   define observables.  The model you pick decides which frames and propagators
+   are available.
 3. **{doc}`bath`** — how a continuous $J(\omega)$ becomes a finite chain of modes:
    discretization, the TEDOPA chain mapping, finite temperature (thermofield), and
    the automatic `domain` / `n_modes` choices, with numerical evidence that they
    are faithful.
-4. **{doc}`methods/index`** — the propagation methods: the frame (interaction
-   picture, polaron, Schrödinger), the ansatz (MPS, tree), and the integrator
-   (TEBD, exact MPO propagator, TDVP), with the theory behind each.
+4. **{doc}`methods/index`** — the propagation methods: for each model, the frame
+   (interaction picture, polaron, Schrödinger) and the integrator (TEBD, exact
+   MPO propagator, TDVP), with the theory behind each.
 
 {doc}`api` is the generated reference for every public module.
 
@@ -44,7 +45,7 @@ The four sections are meant to be read in this order, though each stands alone:
 :hidden:
 
 getting_started
-systems/index
+models/index
 bath
 methods/index
 api
@@ -57,9 +58,11 @@ api
   `run(dt=..., t_max=..., method=...)` call. Every method takes the same arguments
   and returns the same `Result`, so switching engines — or cross-validating one
   against another — is a one-word change.
-- **Many frames, one model.** The same Hamiltonian can be propagated in the
+- **Many frames, one model.** The same physical model can be propagated in the
   Schrödinger picture, the interaction picture, or the polaron frame; the frame is
-  what determines how much entanglement the state has to carry.
+  what determines how much entanglement the state has to carry. Which frames a
+  model admits — and why the others are absent — is recorded in
+  {py:mod}`fishbonett.models.registry`.
 - **Sensible automation.** The bath `domain` and mode count can be derived from the
   spectral density and the propagation time; truncation is driven by an accuracy
   threshold, with the bond dimension left unbounded unless you cap it.

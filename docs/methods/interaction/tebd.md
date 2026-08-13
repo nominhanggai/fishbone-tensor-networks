@@ -64,7 +64,7 @@ altogether — same frame, same physics, cheaper per step.
 Keeping the system on its own MPS site (rather than absorbing bath modes into it)
 is what makes the ansatz efficient, and it is why composite systems should be
 built as trees rather than fattened onto one site — see
-{doc}`/systems/composite_multichannel`.
+{doc}`/models/composite_multichannel`.
 
 ## General systems
 
@@ -82,7 +82,7 @@ arbitrary initial state:
 interaction-picture gates diagonalize `O`).  Only a *multichannel* bath — one bath
 coupled through several operators at once — is handled elsewhere (it routes through
 the tree so the system stays on its own site; see
-{doc}`/systems/composite_multichannel`).
+{doc}`/models/composite_multichannel`).
 
 ## Example
 

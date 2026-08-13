@@ -1,9 +1,10 @@
 """Frames: the same physical model, written down in different ways.
 
 A *frame* is a choice of what the Hamiltonian looks like -- which terms have been
-rotated or transformed away, and what is left to propagate.  It is one of three
-independent choices you make (see :mod:`fishbonett` for the other two: the
-geometry, and the propagator).
+rotated or transformed away, and what is left to propagate.  It is the **middle**
+of three nested choices: the :mod:`model <fishbonett.models>` comes first and
+decides which frames are even available, and the frame in turn decides which
+propagators (:mod:`fishbonett.evolve`) apply.
 
 ============================================  =================================
 :mod:`~fishbonett.frames.schrodinger`         nothing rotated out; ``H`` static
@@ -20,6 +21,11 @@ Each module produces either Trotter gates or an MPO; the state lives in
 a static ``H`` can drive TDVP with a once-built MPO, a time-dependent one must
 rebuild each step, and only the interaction picture makes all the coupling terms
 commute (which is what ``trotter-mpo`` exploits).  See :doc:`/methods/index`.
+
+Not every frame is available for every model: the multi-site models have only the
+Schroedinger picture, and ``coolingchain`` sits outside the taxonomy entirely
+(there the frame *is* the state).  :mod:`fishbonett.models.registry` records which
+combinations exist and why the rest do not.
 
 Site ordering: the system is **site 0** and the bath modes follow, nearest first
 (``[system, c_0, c_1, ...]``).

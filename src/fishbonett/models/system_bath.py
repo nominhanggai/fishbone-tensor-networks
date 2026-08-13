@@ -1,41 +1,17 @@
-"""User-friendly high-level interface: declare a model, call ``run``.
+"""The single-system models: one system site coupled to one bath.
 
-Wraps the low-level engines (TEBD, MPO/TDVP, tree) behind a small set of classes,
-so a simulation is specified declaratively and run with a single call instead of
-by hand-writing a TEBD sweep loop::
+Four models share this one class, distinguished by how the bath is represented
+and selected through ``run(method=...)``:
 
-    import numpy as np
-    from fishbonett import Bath, SystemBath
-    from fishbonett.operators import sigma_x, sigma_z
+* ``chain`` -- modes chain-mapped into 1D (all three frames);
+* ``star`` -- no chain mapping (interaction picture);
+* ``mode-tree`` -- modes on a balanced binary tree (interaction picture);
+* ``multichannel`` -- several couplings on shared modes, selected automatically
+  by giving the :class:`~fishbonett.bath.spec.Bath` a *list* of couplings.
 
-    bath = Bath(J=lambda w: 0.5 * w * np.exp(-w / 5),
-                domain=(-25, 36), temperature=1.0,
-                n_modes=40, phys_dim=20, discretization='orthpol')
-    model = SystemBath(h=0.5 * eps * sigma_z + V * sigma_x, coupling=sigma_z, bath=bath)
-    result = model.run(dt=0.01, t_max=4.0, method='tree-tdvp2', trunc_eps=1e-4,
-                       observables={'sz': sigma_z, 'sx': sigma_x})
-
-    result.t                 # time grid
-    result.expect['sz']      # <sigma_z>(t)
-    result.max_bond          # peak bond dimension per step (adaptive methods)
-
-.. rubric:: What's here
-
-==============================  =================================================
-:class:`SystemBath`             one system + one bath; ``run(method=...)``
-:class:`Fishbone`               several sites, several baths each (1D backbone)
-:class:`Result`                 what ``run`` returns: ``t``, ``expect``, ``rdm``
-:data:`METHOD_FRAMES`           every ``method`` name -> its ``(picture, rep)`` frame
-:func:`methods_by_frame`        the method names grouped by frame
-==============================  =================================================
-
-The bath *specification* lives next door in :class:`fishbonett.bath.spec.Bath`, and the
-truncation policy in :class:`fishbonett.linalg.Truncation`; both are re-exported
-at the top level, so ``from fishbonett import Bath, SystemBath, Truncation``
-covers the usual case.
+:mod:`fishbonett.models.registry` is the authority on which method belongs to
+which model and frame.
 """
-from dataclasses import dataclass, field, replace
-
 import numpy as np
 import scipy.linalg as _la
 
@@ -44,103 +20,28 @@ from fishbonett.linalg import Truncation
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
 from fishbonett.evolve import treetdvp as _tree
+from fishbonett.models.result import Result
+from fishbonett.models.registry import (
+    METHOD_FRAMES, methods_of, unknown_method_error,
+)
 
-__all__ = ["SystemBath", "Fishbone", "Result",
-           "METHOD_FRAMES", "MULTICHANNEL_FRAME", "methods_by_frame",
-           "frame_label", "methods_in_picture"]
+__all__ = ["SystemBath"]
 
-#: The **frame** each propagation method works in, as a
-#: ``(picture, bath representation)`` pair.  Both halves matter:
-#:
-#: * the **picture** fixes whether ``H`` is time-dependent, and hence which
-#:   integrators are usable -- TDVP wants a *static* MPO (built once, energy
-#:   conserved), whereas a time-dependent picture must rebuild its gates/MPO every
-#:   step;
-#: * the **representation** fixes the *locality* of the coupling, and hence which
-#:   ansatz is efficient -- a ``chain`` is nearest-neighbour (an MPS has locality to
-#:   exploit), a ``star`` couples every mode directly to the system (no locality,
-#:   but no mode-mode terms either).
-#:
-#: The pairs in use:
-#:
-#: * ``("schrodinger", "chain")`` -- the bare TEDOPA chain.  Static and
-#:   nearest-neighbour: the natural home for TDVP.  Carries the most entanglement,
-#:   since nothing has been rotated out.
-#: * ``("interaction", "chain")`` -- free bath rotated out, chain-mapped modes.
-#:   Low entanglement; ``H`` time-dependent.  All coupling terms commute here,
-#:   which is what lets ``trotter-mpo`` write the propagator exactly.
-#: * ``("interaction", "star")`` -- free bath rotated out, *no* chain mapping: every
-#:   mode couples straight to the system, so there are no mode-mode terms at all.
-#: * ``("interaction", "multichannel")`` -- one bath coupled through several system
-#:   operators on shared modes (selected by giving :class:`Bath` a list of
-#:   couplings, not by a ``method`` name).
-#: * ``("schrodinger", "polaron-chain")`` -- the polaron/Lang-Firsov chain.  The
-#:   transform makes ``H~`` **time-independent**, i.e. Schroedinger-like, so static
-#:   gates *and* a static MPO both work, while the entanglement stays low.  Needs
-#:   ``int J/w^2`` finite (gapped or super-ohmic).  Finite temperature works via
-#:   T-TEDOPA thermalization of the spectral density.
-#:
-#: ``("schrodinger", "star")`` -- the un-chain-mapped bare Hamiltonian -- is a
-#: coherent combination but is not currently provided.
-#:
-#: See :doc:`the methods guide </methods/index>` for the frame/propagator
-#: compatibility table.
-METHOD_FRAMES = {
-    # Schroedinger picture, TEDOPA chain: static H, static MPO -> TDVP
-    "mpo-tdvp1": ("schrodinger", "chain"),
-    "mpo-tdvp2": ("schrodinger", "chain"),
-    "mpo-dtdvp": ("schrodinger", "chain"),
-    # Interaction picture, chain: time-dependent H, gates/MPO rebuilt each step
-    "tebd": ("interaction", "chain"),
-    "trotter-mpo": ("interaction", "chain"),
-    "tree-tdvp": ("interaction", "chain"),
-    "tree-tdvp2": ("interaction", "chain"),
-    "tree-tebd": ("interaction", "chain"),
-    # Interaction picture, star: no chain mapping, every mode meets the system
-    "mpo-ip-tdvp1": ("interaction", "star"),
-    "mpo-ip-tdvp2": ("interaction", "star"),
-    # Polaron chain: the transform makes it Schroedinger-like (time-independent)
-    "polaron": ("schrodinger", "polaron-chain"),
-    "polaron-tdvp1": ("schrodinger", "polaron-chain"),
-    "polaron-tdvp2": ("schrodinger", "polaron-chain"),
-    "polaron-dtdvp": ("schrodinger", "polaron-chain"),
-}
-
-#: The multichannel path is selected by the *bath* (a list of coupling operators),
-#: not by a ``method`` name, so it has no entry in :data:`METHOD_FRAMES`.
-MULTICHANNEL_FRAME = ("interaction", "multichannel")
-
-
-def methods_by_frame():
-    """Method names grouped by frame, keyed by the ``(picture, representation)``
-    pair -- e.g. ``{("schrodinger", "chain"): [...], ...}``.
-
-    Useful for sweeping every method of a given frame, or for reporting which
-    alternatives exist when one method is unsuitable.
-    """
-    out = {}
-    for name, frame in sorted(METHOD_FRAMES.items()):
-        out.setdefault(frame, []).append(name)
-    return out
-
-
-def frame_label(frame):
-    """Human-readable name of a ``(picture, representation)`` frame, e.g.
-    ``"interaction picture / star"``."""
-    picture, rep = frame
-    return f"{picture} picture / {rep}"
-
-
-def methods_in_picture(picture):
-    """Every method whose frame uses ``picture`` (``'schrodinger'`` or
-    ``'interaction'``), across all bath representations."""
-    return sorted(n for n, (p, _) in METHOD_FRAMES.items() if p == picture)
+#: ``run``'s default.  Used to tell "the user asked for a method" apart from
+#: "the user left it alone", which matters for the multichannel model where
+#: ``method`` has nothing to choose.
+_DEFAULT_METHOD = "tree-tdvp2"
 
 
 def _bond_growing_siblings(method):
-    """Methods in the same frame as ``method`` that grow their own bond dimension."""
-    frame = METHOD_FRAMES.get(method.lower().replace("_", "-"))
-    return [n for n in methods_by_frame().get(frame, [])
+    """Methods in the same ``(frame, model)`` as ``method`` that grow their own
+    bond dimension -- what to suggest when a fixed-bond method is asked for
+    ``bond_dim=None``."""
+    key = METHOD_FRAMES.get(method.lower().replace("_", "-"))
+    if key is None:
+        return []
+    frame, model_key = key
+    return [n for n in methods_of(model_key, frame)
             if n not in _FIXED_BOND_METHODS]
 
 _MPO_METHODS = {"mpo-tdvp1": "run_tdvp1",
@@ -165,23 +66,6 @@ _TREE_METHODS = {"tree-tdvp": "run_tree_tdvp",
                  "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
 
 
-@dataclass
-class Result:
-    """Result of a propagation."""
-    t: np.ndarray
-    expect: dict                      # observable name -> array over time
-    max_bond: np.ndarray = None       # peak bond dimension per step (adaptive)
-    rdm: np.ndarray = None            # spin reduced density matrix per step (T,2,2)
-    method: str = ""
-    meta: dict = field(default_factory=dict)
-
-
-def _decompose_h(h):
-    """Decompose ``h`` assuming ``h = (eps/2) sigma_z + V sigma_x``."""
-    h = np.asarray(h, complex)
-    return float((h[0, 0] - h[1, 1]).real), float(h[0, 1].real)
-
-
 class SystemBath:
     """A system coupled to a :class:`Bath`.
 
@@ -191,7 +75,7 @@ class SystemBath:
     dimension, a general coupling and an arbitrary initial state.  When the system
     has *distinct* internal degrees of freedom (e.g. a spin **and** a vibration),
     prefer to keep each on its own site with
-    :class:`~fishbonett.states.tree.TreeFishbone` (a spin site and a vibration site
+    :class:`~fishbonett.models.fishbone.TreeFishbone` (a spin site and a vibration site
     joined by an edge, with the bath on the spin) -- putting ``spin (x) vibration``
     on a single ``d = 2*d_vib`` site here works but defeats the MPS advantage.
     Passing a multichannel :class:`Bath` (``coupling`` a list) routes through the
@@ -212,35 +96,39 @@ class SystemBath:
         self.bath = bath
 
     # -- public API ----------------------------------------------------------
-    def run(self, *, dt, t_max=None, n_steps=None, method="tree-tdvp2",
+    def run(self, *, dt, t_max=None, n_steps=None, method=_DEFAULT_METHOD,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial="up", krylov=25, **engine_kw):
         """Propagate and return a :class:`Result`.
 
-        **Methods are organized by frame** -- a ``(picture, bath representation)``
-        pair (see :data:`METHOD_FRAMES`).  The picture decides whether ``H`` is
-        time-dependent (and hence which integrators apply); the representation
-        decides the locality of the coupling (and hence which ansatz is efficient):
+        ``method`` picks a **model** and a **frame** at once -- the four
+        single-system models live on this class, and each admits its own frames
+        (see :mod:`fishbonett.models.registry`; ``describe_taxonomy()`` prints the
+        table):
 
-        * **Schroedinger / chain** -- ``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp``.  Static
-          and nearest-neighbour, so the MPO is built once and TDVP conserves energy;
-          carries the most entanglement.
-        * **interaction / chain** -- ``tebd``, ``trotter-mpo``, ``tree-tdvp |
-          tree-tdvp2 | tree-tebd``.  Low entanglement, but ``H`` is time-dependent so
-          gates/MPOs are rebuilt each step.  All the coupling terms commute here,
-          which is what makes ``trotter-mpo``'s exact factorization possible.
-        * **interaction / star** -- ``mpo-ip-tdvp1 | mpo-ip-tdvp2``.  No chain
-          mapping at all: every mode couples straight to the system, so there are no
-          mode-mode terms (but no locality for the MPS to exploit either).
-        * **interaction / multichannel** -- selected by giving :class:`Bath` a *list*
-          of coupling operators rather than by a ``method`` name; one bath couples
-          through several system operators on shared modes.
-        * **Schroedinger / polaron-chain** -- ``polaron``,
-          ``polaron-tdvp1/tdvp2/dtdvp``.  The polaron transform makes ``H~``
-          time-independent, i.e. Schroedinger-like, so static gates *and* a static
-          MPO both work while the entanglement stays low; requires
-          ``int J/w^2`` finite (gapped or super-ohmic).  Finite temperature
-          works via T-TEDOPA thermalization.
+        * **chain** -- 1 system + 1 bath, modes chain-mapped to 1D.  The only
+          model with all three frames.  *Schroedinger*: ``mpo-tdvp1 | mpo-tdvp2 |
+          mpo-dtdvp`` -- static, so the MPO is built once and TDVP conserves
+          energy, at the cost of the largest bond dimensions.  *interaction*:
+          ``tebd``, ``trotter-mpo`` -- low entanglement, gates rebuilt each step;
+          all coupling terms commute here, which is what makes ``trotter-mpo``'s
+          exact factorization possible.  *polaron*: ``polaron``,
+          ``polaron-tdvp1/tdvp2/dtdvp`` -- static *and* low-entanglement; needs
+          ``int J/w^2`` finite (gapped or super-ohmic).  Finite temperature works
+          via T-TEDOPA thermalization.
+        * **star** -- no chain mapping; every mode couples straight to the system,
+          so there are no mode-mode terms but no locality either.
+          *interaction*: ``mpo-ip-tdvp1 | mpo-ip-tdvp2``.
+        * **mode-tree** -- the same chain-mapped modes placed on a balanced binary
+          tree, keeping the high-bond region ``O(log N)`` edges deep instead of
+          ``O(N)``.  *interaction*: ``tree-tdvp | tree-tdvp2 | tree-tebd``.
+        * **multichannel** -- one bath through several couplings on shared modes.
+          Selected by giving :class:`~fishbonett.bath.spec.Bath` a *list* of
+          coupling operators, **not** by a ``method`` name; ``method`` is then
+          ignored.
+
+        For several system sites use :class:`~fishbonett.models.fishbone.Fishbone` (1D
+        backbone) or :class:`~fishbonett.models.fishbone.TreeFishbone` (any tree).
 
         **Truncation.**  Accuracy and memory are one setting, expressed either as
         a :class:`~fishbonett.linalg.Truncation` or as the two loose keywords::
@@ -284,10 +172,19 @@ class SystemBath:
             obs_ops = {"sz": sigma_z, "sx": sigma_x}
         else:
             obs_ops = {}                    # general system: return the RDM only
+        m = method.lower().replace("_", "-")
         if getattr(self.bath, "is_multichannel", False):
+            # The multichannel model is selected by the bath's shape, so there is
+            # nothing for `method` to choose.  Say so rather than ignoring it.
+            if m not in methods_of("multichannel") and method != _DEFAULT_METHOD:
+                raise ValueError(
+                    f"this Bath is multichannel (a list of couplings), which "
+                    f"selects the 'multichannel' model -- it has one propagator "
+                    f"and does not take method={method!r}.  Drop the method "
+                    f"argument, or pass a single coupling operator to use the "
+                    f"single-channel models.")
             return self._run_multichannel(dt, n_steps, bond_dim, trunc_eps,
                                           obs_ops, initial)
-        m = method.lower().replace("_", "-")
         if m == "tebd":
             return self._run_tebd(dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, engine_kw)
@@ -306,11 +203,7 @@ class SystemBath:
         if m in _TREE_METHODS:
             return self._run_tree(m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                                   initial, krylov, engine_kw)
-        by_frame = methods_by_frame()
-        listing = "\n".join(f"  {frame_label(frame):34s} {', '.join(names)}"
-                            for frame, names in sorted(by_frame.items()))
-        raise ValueError(f"unknown method {method!r}.  Available methods, by frame:\n"
-                         f"{listing}")
+        raise unknown_method_error(m)
 
     # -- dispatchers ---------------------------------------------------------
     def _expect_from_rdm(self, rdms, obs_ops):
@@ -388,13 +281,16 @@ class SystemBath:
         """One bath coupled to the system through several operators: a shared-mode
         star attached to the (single) system site.  Built on the tree engine so the
         system stays on its own site."""
-        from fishbonett.states.tree import TreeFishbone
+        from fishbonett.models.fishbone import TreeFishbone
         fb = TreeFishbone(sites=[self.h], edges=[], baths=[self.bath])
         r = fb.run(dt=dt, n_steps=n_steps, bond_dim=bond_dim, trunc_eps=trunc_eps,
                    observables=obs_ops, initial=[self._initial_state(initial)])
+        # collapse the single-site axis: this is a single-system model, so the
+        # Result should have the single-system shape (see models/result.py)
         expect = {name: r.expect[name][:, 0] for name in r.expect}
         rdm = np.array([r.rdm[k, 0] for k in range(n_steps)])
-        return Result(t=r.t, expect=expect, rdm=rdm, method="multichannel")
+        return Result(t=r.t, expect=expect, rdm=rdm, max_bond=r.max_bond,
+                      method=methods_of("multichannel")[0])
 
     def _initial_state(self, initial):
         """Initial system state as a ``d_sys``-vector.  ``"up"``/``"down"`` are the
@@ -569,60 +465,3 @@ class SystemBath:
                       max_bond=np.array(max_bond), rdm=np.asarray(rdms),
                       method="polaron")
 
-
-# -- 1D fishbone: a specialization of TreeFishbone to a linear backbone -------
-class Fishbone:
-    """A 1D chain of electronic sites, each coupled to one or two baths.
-
-    A convenience specialization of :class:`~fishbonett.states.tree.TreeFishbone`
-    (which handles *any* loop-free electronic topology) to a **linear** backbone:
-    site ``i`` is joined to site ``i+1`` by ``backbone[i]``.  Each ``baths`` entry
-    is a single :class:`Bath` (one bath -- may be multichannel), a ``(left, right)``
-    pair (two baths per site -- the fishbone), or ``None``.  A left bath defaults
-    to a ``sigma_z`` coupling and a right bath to ``sigma_x`` when the :class:`Bath`
-    itself sets none.  ``run`` and the returned :class:`Result` are exactly those
-    of :meth:`fishbonett.states.tree.TreeFishbone.run`.
-    """
-
-    def __init__(self, sites, baths, backbone=None):
-        self.sites = [np.asarray(h, complex) for h in sites]
-        self.nc = len(self.sites)
-        self.de = [h.shape[0] for h in self.sites]
-        if len(baths) != self.nc:
-            raise ValueError("baths must have one entry per site")
-        self.baths = list(baths)
-        if backbone is None:
-            backbone = [np.zeros((self.de[i] * self.de[i + 1],) * 2, complex)
-                        for i in range(self.nc - 1)]
-        if len(backbone) != max(self.nc - 1, 0):
-            raise ValueError("backbone must have n_sites - 1 entries")
-        self.backbone = [np.asarray(b, complex) for b in backbone]
-
-    @staticmethod
-    def _site_baths(entry):
-        """Map a per-site bath spec to the TreeFishbone form, defaulting a
-        left/right pair's couplings to sigma_z / sigma_x when unset."""
-        if entry is None:
-            return None
-        if isinstance(entry, (tuple, list)):
-            out = []
-            for pos, b in enumerate(entry):
-                if b is None:
-                    continue
-                if b.coupling is None:
-                    b = replace(b, coupling=(sigma_z if pos == 0 else sigma_x))
-                out.append(b)
-            return out
-        return entry
-
-    def _tree(self):
-        from fishbonett.states.tree import TreeFishbone
-        edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]
-        return TreeFishbone(sites=self.sites, edges=edges,
-                            baths=[self._site_baths(b) for b in self.baths])
-
-    def run(self, **kwargs):
-        """Propagate the 1D fishbone (delegates to the general tree engine).  See
-        :meth:`fishbonett.states.tree.TreeFishbone.run` for the arguments, the
-        observable spec and the per-site :class:`Result` layout."""
-        return self._tree().run(**kwargs)

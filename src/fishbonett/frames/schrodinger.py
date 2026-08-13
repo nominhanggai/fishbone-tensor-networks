@@ -20,7 +20,7 @@ of any frame.  See :doc:`/methods/schrodinger/chain` and :doc:`/methods/index`.
 electron-bath chain ``eb``, the electronic site ``e``, the vibrational site ``v``
 and the vibration-bath chain ``vb``, plus the electronic couplings ``h2ee``
 between neighbouring chains.  For an arbitrary (non-comb) tree of sites use
-:class:`fishbonett.states.tree.TreeFishbone` instead.
+:class:`fishbonett.models.fishbone.TreeFishbone` instead.
 
 .. note::
    This module was called ``frames.hamiltonian``.  It is named for its *frame*
@@ -86,7 +86,7 @@ class FishBoneH:
     one-element list are both accepted.
 
     For an arbitrary tree of sites (rather than this fixed comb) use
-    :class:`fishbonett.states.tree.TreeFishbone`.
+    :class:`fishbonett.models.fishbone.TreeFishbone`.
     """
 
     @property

@@ -2,9 +2,9 @@
 
 A **fishbone** is a set of electronic sites, each carrying its own bath (or two
 baths — one on each side).  The electronic sites need not form a chain: the
-general engine {py:class}`~fishbonett.states.tree.TreeFishbone` wires them into
+general engine {py:class}`~fishbonett.models.fishbone.TreeFishbone` wires them into
 *any* loop-free tree, and the common 1D chain
-{py:class}`~fishbonett.simulate.Fishbone` is a convenience specialization of it.
+{py:class}`~fishbonett.models.fishbone.Fishbone` is a convenience specialization of it.
 
 ## The general engine: `TreeFishbone`
 
@@ -15,7 +15,7 @@ bath:
 
 ```python
 import numpy as np
-from fishbonett.states.tree import TreeFishbone
+from fishbonett.models.fishbone import TreeFishbone
 from fishbonett import Bath
 from fishbonett.operators import sigma_x, sigma_z
 
@@ -42,11 +42,11 @@ discretizations.
 
 The 1D chain is the most common case, so it has a convenience class that takes a
 linear **backbone** instead of an edge list and delegates to the same engine — so
-it has the identical observable interface and {py:class}`~fishbonett.simulate.Result`
+it has the identical observable interface and {py:class}`~fishbonett.models.result.Result`
 layout:
 
 ```python
-from fishbonett.simulate import Fishbone
+from fishbonett.models import Fishbone
 
 fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
               baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site

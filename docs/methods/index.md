@@ -1,53 +1,56 @@
 # Propagation methods
 
 All methods are selected by the `method` argument of
-{py:meth}`SystemBath.run <fishbonett.simulate.SystemBath.run>` and return the same
-{py:class}`~fishbonett.simulate.Result`, so you can switch methods by changing one
+{py:meth}`SystemBath.run <fishbonett.models.system_bath.SystemBath.run>` and return the same
+{py:class}`~fishbonett.models.result.Result`, so you can switch methods by changing one
 string.  If you don't know which to pick, start with `tree-tdvp2` or `tebd` —
 both grow their own bonds.
 
-Every method here solves the **same problem**: a system coupled to a harmonic bath
-that has been chain-mapped into a 1D chain of effective modes ({doc}`../bath`).
-They differ only in *how* they represent and propagate that chain, and they are all
-selected by the `method` argument of
-{py:meth}`SystemBath.run <fishbonett.simulate.SystemBath.run>`.
+A method name picks two things at once: a **model** (what is coupled to what —
+{doc}`../models/index`) and a **frame** (how the Hamiltonian is written down).
+What remains is the **propagator**: a Trotter splitting (TEBD, or an exact MPO
+propagator) or TDVP in 1-site, 2-site or bond-adaptive form, which sets the cost
+per step and the error in `dt`.
 
-A method name encodes three choices:
-
-1. **Frame** — the picture the model is written in, which fixes *what the
-   Hamiltonian looks like* and therefore **how much entanglement the state carries**.
-2. **State ansatz** — a matrix-product state (MPS) for a chain, or a tree tensor
-   network (TTN) when the geometry branches.
-3. **Integrator** — a Trotter splitting (TEBD, or an exact MPO propagator), or the
-   time-dependent variational principle (TDVP) in 1-site, 2-site or bond-adaptive
-   form.  This sets **the cost per step and the error in `dt`**.
-
-These choices are linked.  The frame fixes two structural properties of the
-Hamiltonian, and those in turn constrain which integrators work:
+The three are nested, not free: the model fixes the state geometry, and that plus
+the frame decides which propagators apply at all.  Two structural properties do
+the constraining:
 
 - *Is $H$ time-dependent?*  A frame that rotates out the free bath makes $H$
-  time-dependent.  TDVP wants a static MPO (built once, energy conserved);
-  in a time-dependent frame the MPO must be rebuilt each step.
+  time-dependent.  TDVP wants a static MPO (built once, energy conserved); in a
+  time-dependent frame the MPO must be rebuilt each step.
 - *Which terms commute?*  The interaction picture makes all system–bath coupling
   terms commute, because the bath part has been rotated away.  That is what makes
   the exact conditional-displacement MPO ({doc}`/methods/interaction/trotter_mpo`)
   possible — the propagator factorizes without Trotter error.
 
-## The frame taxonomy
+## Model × frame
 
-A frame is a pair: the *picture* (is $H$ time-dependent?) and the *bath
-representation* (how are the modes wired?).
-
-| picture \\ representation | **chain** (TEDOPA, nearest-neighbour) | **star** (no chain mapping) | **multichannel** (shared modes, several couplings) |
+| model | Schrödinger ($H$ static) | interaction ($H(t)$) | polaron (static, low entanglement) |
 |---|---|---|---|
-| **Schrödinger** ($H$ static) | {doc}`schrodinger/chain` — `mpo-tdvp1/tdvp2/dtdvp` | *coherent but not provided* | — |
-| — *polaron chain* (static after Lang–Firsov) | {doc}`schrodinger/polaron_chain` — `polaron`, `polaron-tdvp1/tdvp2/dtdvp` | ✗ entanglement-catastrophic in an MPS | — |
-| **interaction** ($H(t)$) | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/tree` | {doc}`interaction/star_mpo` — `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/multichannel` |
+| **`chain`** 1 system + 1 bath, 1D | {doc}`schrodinger/chain` — `mpo-tdvp1/tdvp2/dtdvp` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo` | {doc}`schrodinger/polaron_chain` — `polaron`, `polaron-tdvp1/tdvp2/dtdvp` |
+| **`star`** no chain mapping | *coherent, not provided* | {doc}`interaction/star_mpo` — `mpo-ip-tdvp1/tdvp2` | ✗ entanglement-catastrophic in an MPS |
+| **`mode-tree`** modes on a binary tree | not implemented | {doc}`interaction/tree` — `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | not implemented |
+| **`multichannel`** several couplings, shared modes | {doc}`interaction/multichannel` — `tree-tebd-static` | IP builder exists but is not wired in | not implemented |
+| **`comb`** / **`site-tree`** several sites + baths | `tree-tebd-static` ({doc}`/models/fishbone`) | not implemented | not implemented |
 
-Rows are the picture (static vs. time-dependent $H$), columns the bath wiring
-(chain, star, multichannel).  The polaron chain sits under Schrödinger because
-the transform makes $H$ time-independent — it combines a static Hamiltonian with
-low entanglement.
+Reading it: the `chain` model is the developed one and the only one with all three
+frames.  Everything else has a single frame today.  The blank cells are not all
+the same kind of blank — some are impossible, some unwise, some simply unwritten
+— and {py:mod}`fishbonett.models.registry` records which is which:
+
+```python
+from fishbonett.models.registry import describe_taxonomy
+print(describe_taxonomy())
+```
+
+```{note}
+The `multichannel` row is Schrödinger, not interaction picture: the path that
+ships routes through the tree engine, whose shared-mode star carries the bath
+frequencies on-site.  An interaction-picture multichannel builder exists
+({py:class}`~fishbonett.frames.multichannel.SystemBathMultiChannel`) but is not
+reachable from `run`.
+```
 
 ## The frames in detail
 
@@ -125,7 +128,7 @@ MPO** exists only in the interaction picture, because only there do all the coup
 terms commute.
 
 All methods take the same `dt` / `t_max` and return the same
-{py:class}`~fishbonett.simulate.Result`, so switching engines is a one-word
+{py:class}`~fishbonett.models.result.Result`, so switching engines is a one-word
 change and the results are directly comparable — which also makes cross-checking
 one method against another the easiest way to validate a calculation.  The example
 below runs the same spin-boson model through several and prints the final
@@ -196,7 +199,7 @@ the propagator within it.
   bath, not by `method` — see {doc}`/methods/interaction/multichannel`.
 - **Non-`sigma_z` coupling, a non-two-level system, or a custom initial state?**
   Every engine supports these — a Hermitian `h` of any dimension, a Hermitian
-  coupling `O`, and any `initial` state (see {doc}`../systems/spin_boson`).
+  coupling `O`, and any `initial` state (see {doc}`../models/spin_boson`).
 
 **Just starting out?** Take the default `tree-tdvp2`, or `tebd` — both grow their
 own bonds, so the only things you have to choose are `dt` and `trunc_eps`.
@@ -231,10 +234,10 @@ Two exceptions to be aware of:
   `polaron-dtdvp` need a ceiling to grow towards. These **require** an explicit
   `bond_dim` and raise a clear error without one.
 - For the tree methods on heavily-entangled multi-bath geometries an over-tight
-  `trunc_eps` inflates cost sharply — see {doc}`../systems/fishbone`.
+  `trunc_eps` inflates cost sharply — see {doc}`../models/fishbone`.
 
 **Reading the result.** Every method returns a
-{py:class}`~fishbonett.simulate.Result`:
+{py:class}`~fishbonett.models.result.Result`:
 
 ```python
 r = model.run(dt=0.02, t_max=2.0, method="mpo-tdvp2", bond_dim=100,
