@@ -1,19 +1,27 @@
 # Schrödinger picture · polaron chain — static gates or MPO + TDVP
 
-*Methods: `polaron` (static Trotter gates), `polaron-tdvp1`, `polaron-tdvp2`,
-`polaron-dtdvp` (the polaron MPO propagated by TDVP).*
-
-```{admonition} Frame: polaron (static $\tilde H$) — the only frame that gets both
+```{admonition} At a glance
 :class: tip
-The polaron transform is the best of both worlds structurally: like the
-{doc}`Schrödinger picture </methods/schrodinger/chain>` the result is **time-independent**, so the
-gates can be built **once** and a static MPO drives the full TDVP family; and like
-the {doc}`interaction picture </methods/interaction/tebd>` it removes a large part of the system–bath
-correlation, so the state carries little entanglement.  What it costs is
-generality — the transform needs $T=0$ and $\int J(\omega)/\omega^2\,d\omega$
-finite.  It does *not* admit the exact conditional-displacement propagator of
-{doc}`/methods/interaction/trotter_mpo`, because the dressed tunneling does not commute with the
-free-chain hopping.  See {doc}`/methods/index` for the compatibility table.
+- **Provides** — `method="polaron"` (static Trotter gates), `"polaron-tdvp1"`,
+  `"polaron-tdvp2"`, `"polaron-dtdvp"` (the polaron MPO propagated by TDVP).
+- **Frame** — Schrödinger picture / polaron chain — **the only frame that gets
+  both**. Like the {doc}`Schrödinger picture </methods/schrodinger/chain>` the
+  result is *time-independent*, so gates are built **once** and a static MPO
+  drives the full TDVP family; like the
+  {doc}`interaction picture </methods/interaction/tebd>` it removes most of the
+  system–bath correlation, so the state carries little entanglement.
+- **Requires** — $T = 0$ and $\int J(\omega)/\omega^2\,\mathrm{d}\omega$ finite
+  (gapped or super-ohmic). `run` raises a clear error otherwise.
+- **Key options** — `dt`; `bond_dim` (**required** for `polaron-tdvp1` and
+  `polaron-dtdvp`); `trunc_eps` (accuracy for `polaron` and `polaron-tdvp2`).
+- **Observables** — populations in the coupling eigenbasis are frame-invariant;
+  coherences are **un-dressed** back to the lab frame for you
+  ({py:meth}`~fishbonett.frames.polaron.SystemBathPolaron.undress_rdm`).
+- **API** — {py:class}`~fishbonett.frames.polaron.SystemBathPolaron`, step
+  {py:func}`~fishbonett.evolve.tebd.symmetric_static_step`.
+- **See also** — {doc}`/methods/index`. This frame does *not* admit the exact
+  conditional-displacement propagator of {doc}`/methods/interaction/trotter_mpo`,
+  because the dressed tunneling does not commute with the free-chain hopping.
 ```
 
 The `polaron` method propagates the model in the **polaron (Lang–Firsov) frame**:
@@ -141,14 +149,14 @@ Like the other engines, the polaron builder accepts a general system:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, BosonicBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 # T=0, gapped bath so int J/w^2 is finite (the polaron precondition)
 bath = Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
             n_modes=24, phys_dim=14)
 
-model = BosonicBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath)
 
 r = model.run(dt=0.02, t_max=8.0, method="polaron", bond_dim=80,
               observables={"sz": sigma_z, "sx": sigma_x})
@@ -177,4 +185,4 @@ r.max_bond            # peak bond dimension per step (small in the polaron frame
   returned RDM is trace-normalized, which hides — rather than fixes — a too-small
   `phys_dim`. Converge in `phys_dim` as you would in `bond_dim`.
 - For the builder see {py:mod}`fishbonett.frames.polaron`, and for the canonical
-  MPS/TEBD state see {py:class}`fishbonett.states.mps.BosonicBathMPS`.
+  MPS/TEBD state see {py:class}`fishbonett.states.mps.SystemBathMPS`.

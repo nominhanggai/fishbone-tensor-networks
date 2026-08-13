@@ -1,10 +1,40 @@
-"""Swap-network TEBD propagation for a matrix-product state.
+"""TEBD propagation of a matrix-product state: bond update, sweeps, whole steps.
 
-The state (:class:`fishbonett.states.mps.BosonicBathMPS`) holds the tensors and
-their canonical form; this module holds the *algorithm* -- applying the two-site
-Trotter gate stored on the state and re-splitting the bond.  Keeping the two
-separate is why the state module is called ``states.mps`` and this one
-``evolve.tebd``.
+Layered the same way as :mod:`fishbonett.evolve.tdvp`, so the two propagators
+read alike:
+
+===========  =====================================  ==========================
+layer        TEBD (here)                            TDVP
+===========  =====================================  ==========================
+primitive    :func:`update_bond`                    ``applyH1`` / ``applyH0``
+sweep        :func:`sweep`, :func:`swap_in`,        ``tdvp1sweep``,
+             :func:`swap_out`                       ``tdvp2sweep``
+whole step   :func:`symmetric_swap_step`,           ``tdvp1sweep`` (already
+             :func:`symmetric_static_step`           symmetric)
+===========  =====================================  ==========================
+
+.. rubric:: Geometry -- 1D chains only
+
+Everything here evolves a :class:`~fishbonett.states.mps.SystemBathMPS`, an open
+1D chain.  Branching geometries have their own engines:
+:mod:`fishbonett.evolve.treetdvp` (binary-tree TTN, TEBD and TDVP),
+:class:`fishbonett.treebone.TreeTEBD` (arbitrary loop-free site graph) and
+:mod:`fishbonett.states.comb` (the fishbone comb).
+
+The split of responsibility is deliberate: the *state* holds tensors and their
+canonical form, this module holds the *algorithm*.  That is why the state module
+is ``states.mps`` and this one is ``evolve.tebd``.
+
+.. rubric:: Two sweep patterns, chosen by the frame
+
+*swap network* (:func:`symmetric_swap_step`)
+    The **interaction picture**, where *every* mode couples to the system.  The
+    system site is walked along the chain so each mode meets it in turn;
+    ``swap=1`` transposes the physical legs to carry it along.
+*static nearest-neighbour* (:func:`symmetric_static_step`)
+    The **polaron** frame, where the Hamiltonian is time-independent and strictly
+    nearest-neighbour: gates are built once and applied in place, with no
+    swapping and no per-step rebuild.
 """
 from fishbonett.contract import contract as einsum
 
@@ -14,25 +44,40 @@ try:  # optional GPU backend (only used when a state requests gpu=True)
 except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 
-__all__ = ["update_bond"]
+__all__ = ["update_bond", "sweep", "swap_in", "swap_out",
+           "symmetric_swap_step", "symmetric_static_step"]
 
 
+# -- primitive ---------------------------------------------------------------
 def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
                 gpu=False):
     """Apply the two-site gate ``state.U[i]`` at bond ``i`` and re-split ``state``.
 
+    The primitive every sweep is built from: contract the two site tensors with
+    the gate, then SVD back apart, keeping singular values above ``eps``
+    (relative) and at most ``chi_max`` of them.
+
     Parameters
     ----------
-    state : fishbonett.states.mps.BosonicBathMPS
-        The MPS whose bond ``i`` is updated in place.
+    state : fishbonett.states.mps.SystemBathMPS
+        The MPS whose bond ``i`` is updated **in place**.
+    i : int
+        Bond index; the gate acts on sites ``i`` and ``i+1``.
+    chi_max : int or None
+        Hard bond-dimension cap; ``None`` means unlimited.
+    eps : float
+        Relative singular-value threshold.
     swap : {0, 1}
         1 transposes the two physical legs during the gate (moves a distant bath
-        mode next to the system site -- the interaction / "backward" picture).
+        mode next to the system site -- the swap network of the interaction
+        picture).  0 leaves the sites where they are.
     eps_lbo : float, optional
         Local-basis-optimization threshold; enables LBO and the adaptive search.
     adaptive : bool
         Adaptive bond-dimension search without LBO.  Ignored when ``eps_lbo`` is
         given.  Default is a single truncated SVD at ``chi_max``.
+    gpu : bool
+        Use the CuPy backend if it is installed.
     """
     use_gpu = bool(gpu and _CUPY)
     theta = state.get_theta2(i, gpu=use_gpu)
@@ -45,3 +90,68 @@ def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
         raise ValueError(f"swap must be 0 or 1, got {swap!r}")
     state.split_truncate_theta(utheta, i, chi_max, eps, eps_lbo=eps_lbo,
                                adaptive=adaptive, gpu=use_gpu)
+
+
+# -- sweeps ------------------------------------------------------------------
+def sweep(state, bonds, chi_max, eps, swap=0, **kw):
+    """Apply the state's current gates along ``bonds``, in the order given.
+
+    ``bonds`` is any iterable of bond indices, so the caller picks the direction;
+    remaining keywords go straight to :func:`update_bond`.
+    """
+    for j in bonds:
+        update_bond(state, j, chi_max, eps, swap=swap, **kw)
+
+
+def swap_in(state, n, chi_max, eps, **kw):
+    """Swap-network sweep *inward* over bonds ``n-1, ..., 1``, carrying the system
+    site toward bond 0 so that every mode meets it exactly once."""
+    sweep(state, range(n - 1, 0, -1), chi_max, eps, swap=1, **kw)
+
+
+def swap_out(state, n, chi_max, eps, **kw):
+    """Swap-network sweep *outward* over bonds ``1, ..., n-1`` -- the reverse of
+    :func:`swap_in`, returning the system site to where it started."""
+    sweep(state, range(1, n), chi_max, eps, swap=1, **kw)
+
+
+# -- whole symmetric steps ---------------------------------------------------
+def symmetric_static_step(state, gates, n, chi_max, eps, **kw):
+    """One 2nd-order (Strang) step with **time-independent** gates.
+
+    ``gates`` are the half-step (``dt/2``) two-site gates, built once.  Sweeping
+    up the chain and straight back down applies them in palindromic order, which
+    is what makes the step second order in ``dt``.  This is the polaron frame's
+    step: no swapping, no per-step rebuild.
+    """
+    state.U = gates
+    sweep(state, range(n), chi_max, eps, swap=0, **kw)
+    sweep(state, range(n - 1, -1, -1), chi_max, eps, swap=0, **kw)
+
+
+def symmetric_swap_step(state, builder, t0, dt, n, chi_max, eps, **kw):
+    """One 2nd-order (Strang) swap-network step over ``[t0, t0+dt]``.
+
+    The interaction-picture step.  ``builder`` supplies time-dependent gates
+    through ``builder.get_u(t, half_dt, mode="normal")``, so gates are rebuilt
+    twice per step -- once per half-interval.
+
+    The ordering is palindromic: the first half-interval's gates sweep inward,
+    the second half-interval's sweep back out, and the two innermost (bond-0)
+    applications straddle the midpoint, one from each half.  Reusing the *same*
+    half-step gates for both would break time symmetry and drop the step to first
+    order in ``dt``.  ``get_u`` returns ``(U1, U2)`` where ``U2`` is the
+    leg-transposed variant used by the swapped sweeps, so the two un-swapped
+    bond-0 updates must both take a ``U1``.
+    """
+    hdt = dt / 2.0
+    u_in, _ = builder.get_u(t0, hdt, mode="normal")
+    u_mid, u_out = builder.get_u(t0 + hdt, hdt, mode="normal")
+
+    state.U = u_in
+    swap_in(state, n, chi_max, eps, **kw)
+    update_bond(state, 0, chi_max, eps, swap=0, **kw)
+    state.U = u_mid
+    update_bond(state, 0, chi_max, eps, swap=0, **kw)
+    state.U = u_out
+    swap_out(state, n, chi_max, eps, **kw)

@@ -6,7 +6,8 @@ import numpy as np
 from fishbonett.evolve.treetdvp import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
                              run_tree_tebd, build_balanced_tree, build_tree_mpo,
                              tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
-                             anih, crea, SZ, SX)
+                             SZ, SX)
+from fishbonett.operators import annihilate, create
 
 DOMAIN = (-25.0, 36.0)
 
@@ -34,8 +35,8 @@ def _exact_sz(n_chain, d, V, ts):
     dims = [2] + [d] * n_chain
     H = _embed(V * SX, 0, dims)
     for k in range(n_chain):
-        H = H + freq[k] * _embed(crea(d) @ anih(d), 1 + k, dims)
-        H = H + Vn[k] * (_embed(SZ, 0, dims) @ _embed(anih(d) + crea(d), 1 + k, dims))
+        H = H + freq[k] * _embed(create(d) @ annihilate(d), 1 + k, dims)
+        H = H + Vn[k] * (_embed(SZ, 0, dims) @ _embed(annihilate(d) + create(d), 1 + k, dims))
     E, Uv = np.linalg.eigh(H)
     psi0 = np.zeros(int(np.prod(dims)), dtype=complex)
     psi0[0] = 1.0

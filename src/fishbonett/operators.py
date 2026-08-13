@@ -1,9 +1,30 @@
-"""Spin (Pauli) and bosonic operators, plus small utilities.
+"""Spin (Pauli) and bosonic operators, plus entropy helpers.
 
-Formerly part of the catch-all ``fishbonett.operators`` module, now split into this
-operator module and :mod:`fishbonett.spectral_densities`.
+The single home for the small dense matrices every other module needs.  The
+bosonic ladder operators in particular used to be redefined in four places
+(``crea``/``anih``/``numb`` in the propagators, ``c_``/``_c`` in the builders);
+they are defined **once** here and imported everywhere else.
+
+.. rubric:: What's here
+
+=========================================  ==================================
+:data:`sigma_x`, :data:`sigma_y`, ...      Pauli matrices and the 2x2 identity
+:func:`annihilate`, :func:`create`         bosonic ladder operators ``b``, ``b^dag``
+:func:`number`                             ``b^dag b`` on a truncated Fock space
+:func:`temp_factor`                        thermal weight for thermofield doubling
+:func:`entang`, :func:`rlogr`              von Neumann entropy from Schmidt values
+=========================================  ==================================
+
+All the bosonic operators act on a **truncated** ``dim``-level Fock space, so
+``[b, b^dag] != 1`` at the top of the ladder.  Operator-norm identities are
+therefore not exact near the truncation edge; convergence must be checked by
+raising ``phys_dim`` and watching the dynamics, not by testing such identities.
 """
 import numpy as np
+
+__all__ = ["sigma_p", "sigma_m", "sigma_x", "sigma_y", "sigma_z", "sigma_0",
+           "sigma_1", "annihilate", "create", "number", "temp_factor",
+           "rlogr", "entang"]
 
 # -- Pauli matrices ----------------------------------------------------------
 sigma_p = np.float64([[0, 1], [0, 0]])        # raising  S^+
@@ -35,14 +56,24 @@ def entang(s):
     return etg
 
 
-def _c(dim: int):
-    """Bosonic annihilation operator on a ``dim``-level Fock truncation."""
+def annihilate(dim: int):
+    """Bosonic annihilation operator ``b`` on a ``dim``-level Fock truncation.
+
+    ``b|n> = sqrt(n)|n-1>``, i.e. the real upper-bidiagonal matrix with
+    ``sqrt(1), sqrt(2), ...`` above the diagonal.
+    """
     op = np.zeros((dim, dim))
     for i in range(dim - 1):
         op[i, i + 1] = np.sqrt(i + 1)
     return op
 
 
-def _num(dim: int):
-    """Bosonic number operator ``a^dagger a`` on a ``dim``-level truncation."""
-    return _c(dim).T @ _c(dim)
+def create(dim: int):
+    """Bosonic creation operator ``b^dagger`` -- the transpose of
+    :func:`annihilate` (which is real)."""
+    return annihilate(dim).T
+
+
+def number(dim: int):
+    """Bosonic number operator ``b^dagger b = diag(0, 1, ..., dim-1)``."""
+    return annihilate(dim).T @ annihilate(dim)

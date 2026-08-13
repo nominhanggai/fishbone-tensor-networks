@@ -1,10 +1,28 @@
 # Propagation methods
 
+```{admonition} At a glance
+:class: tip
+- **Provides** — the `method=` argument of
+  {py:meth}`SystemBath.run <fishbonett.simulate.SystemBath.run>`; 14 names in 5
+  frames. The frame taxonomy table below is the map.
+- **Don't know which?** — the default `tree-tdvp2`, or `tebd`. Both grow their own
+  bonds, so you only pick `dt` and `trunc_eps`.
+- **Truncation** — `trunc_eps` (accuracy, default `1e-4`) and `bond_dim`
+  (optional hard cap, `None` = unlimited); or pass one
+  {py:class}`~fishbonett.linalg.Truncation`. Fixed-bond methods (`mpo-tdvp1`,
+  `mpo-ip-tdvp1`, `tree-tdvp`, `polaron-tdvp1`, `mpo-dtdvp`) **require** a cap.
+- **Same interface everywhere** — every method takes the same `dt`/`t_max` and
+  returns the same {py:class}`~fishbonett.simulate.Result`, so cross-checking one
+  method against another is the easiest way to validate a calculation.
+- **Not chosen by `method`** — a multichannel bath routes automatically; see
+  {doc}`/methods/interaction/multichannel`.
+```
+
 Every method here solves the **same problem**: a system coupled to a harmonic bath
 that has been chain-mapped into a 1D chain of effective modes ({doc}`../bath`).
 They differ only in *how* they represent and propagate that chain, and they are all
 selected by the `method` argument of
-{py:meth}`BosonicBath.run <fishbonett.simulate.BosonicBath.run>`.
+{py:meth}`SystemBath.run <fishbonett.simulate.SystemBath.run>`.
 
 A method name encodes three choices:
 
@@ -138,12 +156,12 @@ population:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, BosonicBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
-model = BosonicBath(h=sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 for method in ["tebd", "trotter-mpo",
                "mpo-tdvp1", "mpo-tdvp2", "mpo-dtdvp",

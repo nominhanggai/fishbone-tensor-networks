@@ -1,9 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Nov 16 15:20:02 2021
+"""Gauss-Legendre star discretization -- the default way to make a bath finite.
 
-@author: michaelwu, Mulliken
+Replaces the continuous spectral density by ``n`` discrete modes.  The nodes are
+the Gauss-Legendre quadrature points of the frequency window, obtained as the
+eigenvalues of the Jacobi matrix of the Legendre recurrence, and each mode's
+coupling is ``V_n^2 = J(w_n) * weight_n``.
+
+The measure here is **uniform** over the window, independent of ``J``.  That is
+robust and cheap, but it means a sharply peaked or infrared-divergent ``J`` can
+fall between nodes; :mod:`fishbonett.bath.orthpol` adapts the nodes to the
+measure instead and should be preferred in those cases.
+
+.. rubric:: What's here
+
+==============================  =================================================
+:func:`get_legendre_recursion`  Legendre recurrence coefficients on a window
+:func:`get_vn_squared`          the star: ``(freq, V_squared)`` -- the main entry
+:func:`get_approx_func`         the discretized ``J`` as a smooth function, to plot
+:func:`get_recursion`           the old, costly route (deprecated)
+==============================  =================================================
+
+Created on Tue Nov 16 15:20:02 2021 by michaelwu, Mulliken.
 """
 
 import numpy as np
@@ -26,6 +44,14 @@ def get_recursion(n, j, domain, g=1, ncap=20000):  # j=weight function
 
 
 def get_legendre_recursion(n, domain):
+    """Legendre recurrence coefficients ``(alpha, beta)`` on ``domain``.
+
+    Analytic, so this costs nothing: shifting the standard Legendre recurrence to
+    ``[l, r]`` gives ``alpha_k = (l+r)/2`` (constant) and
+    ``beta_k = (r-l)/2 * k / sqrt(4k^2 - 1)``.  ``alpha`` has length ``n`` and
+    ``beta`` length ``n-1``; together they are the Jacobi matrix whose eigenvalues
+    are the quadrature nodes.
+    """
     l = domain[0]
     r = domain[1]
     assert l < r
@@ -37,6 +63,17 @@ def get_legendre_recursion(n, domain):
 
 
 def get_vn_squared(j, n: int, domain):
+    """Discretize the spectral density ``j`` into ``n`` star modes on ``domain``.
+
+    Diagonalizing the Jacobi matrix of the Legendre recurrence gives the
+    quadrature nodes ``freq`` and, from the first component of each eigenvector,
+    the weights; the squared coupling of each mode is ``J(w_n) * weight_n``.
+
+    Returns ``(freq, V_squared)``.  This is the reference signature every
+    discretizer follows: pass a compatible callable as the ``discretizer``
+    argument of :func:`fishbonett.bath.chain.get_bath_nn_paras` to swap in the
+    measure-adapted ORTHPOL star instead.
+    """
     alpha, beta = get_legendre_recursion(n, domain)
     M = np.diag(alpha) + np.diag(beta, -1) + np.diag(beta, 1)
     freq, eig_vec = np.linalg.eigh(M)
@@ -46,6 +83,14 @@ def get_vn_squared(j, n: int, domain):
 
 
 def get_approx_func(J, n, domain, epsilon):
+    """The discretized ``J`` back as a smooth function, for checking the star.
+
+    Replaces each discrete mode by a Lorentzian of width ``epsilon`` and sums
+    them, so the result can be plotted against the original ``J``.  A visible
+    mismatch means ``n`` is too small or the nodes are in the wrong places (in
+    which case try the ORTHPOL discretizer).  Diagnostic only -- nothing in the
+    propagation path uses it.
+    """
     delta = lambda x: 1 / np.pi * epsilon / (epsilon ** 2 + x ** 2)
     w, V_squared = get_vn_squared(J, n, domain)
     j_approx = lambda x: np.sum([vi * delta(x - wi) for wi, vi in zip(w, V_squared)])

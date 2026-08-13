@@ -1,13 +1,53 @@
+"""Fermi golden-rule electron-transfer rates from a discretized spectral density.
+
+A perturbative alternative to propagating the dynamics: when the donor-acceptor
+coupling ``c`` is small, the transfer rate follows from the *bath correlation
+function* alone, with no tensor network involved.  The rate is the Fourier
+transform of the lineshape function ``exp(g(t))``, with
+
+    ``g(t) = -sum_n (V_n^2 / pi w_n^2) [coth(w_n/2kT)(1 - cos w_n t) + i sin w_n t]``
+
+evaluated on the star modes ``(w, V^2)`` that
+:func:`fishbonett.bath.legendre.get_vn_squared` returns.
+
+.. rubric:: What's here
+
+===============================  ================================================
+:func:`fgr_rate`                 the golden-rule rate (2nd order in ``c``)
+:func:`fgr_rate_by_order`        rate with the donor-acceptor coupling expanded
+                                 to a given Taylor order
+:func:`fgr_decay_profile`        ``|exp(g(t))|`` itself, to check convergence
+:func:`marcus_rate`              the classical Marcus limit, for comparison
+===============================  ================================================
+
+Units are whatever ``J``, ``e`` and ``kbT`` share (atomic units in the example
+below).  For the multi-state / higher-order corrections see
+:mod:`fishbonett.rates.golden_rule_multi`.
+"""
 import numpy as np
 from scipy import integrate
-from fishbonett.bath.legendre import get_vn_squared, get_approx_func
-
-"""
-Calculate fermi's golden rule rate for electron transfer reactions, given a spectral density.
-"""
+from fishbonett.bath.legendre import get_vn_squared
 
 
 def fgr_rate(c, e, kbT, _w, _v_sq):
+    """Golden-rule transfer rate ``2 c^2 Re int_0^inf dt e^{g(t)} e^{i e t}``.
+
+    Parameters
+    ----------
+    c : float
+        Donor-acceptor electronic coupling.  The rate is second order in it.
+    e : float
+        Driving force (donor-acceptor energy gap).
+    kbT : float
+        Temperature in energy units.
+    _w, _v_sq : arrays
+        Star-mode frequencies and squared couplings, e.g. from
+        :func:`fishbonett.bath.legendre.get_vn_squared`.
+
+    The time integral is taken to infinity by ``scipy.integrate.quad``; it
+    converges because ``Re g(t)`` decays.  A near-zero mode frequency makes
+    ``1/w^2`` blow up, so keep the discretization domain away from ``w = 0``.
+    """
     w = np.array(_w)
     v_sq = np.array(_v_sq)
     j_factor = (-v_sq / np.pi / w ** 2)
@@ -19,6 +59,13 @@ def fgr_rate(c, e, kbT, _w, _v_sq):
 
 
 def fgr_decay_profile(e, kbT, _w, _v_sq, t):
+    """The lineshape decay ``Re e^{g(t)}`` on ``[0, t]``, sampled at 500 points.
+
+    A diagnostic for :func:`fgr_rate`: the rate integral only converges if this
+    profile has decayed within the window.  Returns ``(t_grid, values)`` and warns
+    when ``t < 5/e``, where the oscillatory factor ``e^{i e t}`` is not yet
+    resolved.
+    """
     if t < 5 / e:
         print("Warning: t is too small for this energy difference" + f"Recommend t > {5 / e}")
     t = np.linspace(0, t, 500)
@@ -33,6 +80,14 @@ def fgr_decay_profile(e, kbT, _w, _v_sq, t):
 
 
 def fgr_rate_by_order(c, e, kbT, _w, _v_sq, perturbation, order: int):
+    """Golden-rule rate with an extra ``perturbation`` expanded to ``order``.
+
+    Same integral as :func:`fgr_rate` with the additional factor
+    ``exp(-i * perturbation * t)`` replaced by its Taylor series truncated at
+    ``order``.  Comparing successive orders shows whether treating that term
+    perturbatively is justified; if the series has not settled, propagate the
+    dynamics instead.
+    """
     import math
     def taylor_exp(x, n):
         exp_approx = 1
@@ -56,6 +111,13 @@ def fgr_rate_by_order(c, e, kbT, _w, _v_sq, perturbation, order: int):
 
 
 def marcus_rate(c: float, e: float, kbT: float, reorg_e: float):
+    """Classical Marcus rate for reorganization energy ``reorg_e``.
+
+    The high-temperature / classical-bath limit of :func:`fgr_rate`, depending on
+    the bath only through ``reorg_e = (1/pi) int J(w)/w dw``.  Useful as a sanity
+    check: the two agree when ``kbT`` is large compared with the bath frequencies,
+    and diverge when nuclear tunneling matters.
+    """
     return 2 * np.pi * c ** 2 / np.sqrt(4 * np.pi * kbT * reorg_e) * np.exp(
         -(reorg_e - e) ** 2 / (4 * kbT * reorg_e))
 

@@ -1,13 +1,25 @@
 # Building models
 
+```{admonition} At a glance
+:class: tip
+- **Provides** — the model classes: {py:class}`~fishbonett.simulate.SystemBath`,
+  {py:class}`~fishbonett.simulate.Fishbone`,
+  {py:class}`~fishbonett.treebone.TreeFishbone`, and the multichannel `Bath`.
+- **Same vocabulary throughout** — a {py:class}`~fishbonett.bath.spec.Bath` plus a
+  system object; every one returns the same
+  {py:class}`~fishbonett.simulate.Result`.
+- **Pick by geometry** — one site, a 1D chain of sites, or an arbitrary
+  loop-free tree. The table below maps what you want to model onto the class.
+```
+
 The {doc}`propagation methods <../methods/index>` answer *how* to time-evolve; this
 section covers *what* you can build.  Every model is declared with the same small
-vocabulary — a {py:class}`~fishbonett.simulate.Bath` plus a system object — and
+vocabulary — a {py:class}`~fishbonett.bath.spec.Bath` plus a system object — and
 returns the same {py:class}`~fishbonett.simulate.Result`.
 
 | you want to model | use | page |
 |-------------------|-----|------|
-| one system (spin or `d`-level) coupled to a bath | {py:class}`~fishbonett.simulate.BosonicBath` | {doc}`spin_boson` |
+| one system (spin or `d`-level) coupled to a bath | {py:class}`~fishbonett.simulate.SystemBath` | {doc}`spin_boson` |
 | a 1D chain of electronic sites, each with bath(s) | {py:class}`~fishbonett.simulate.Fishbone` | {doc}`fishbone` |
 | electronic sites in any loop-free tree, each with bath(s) | {py:class}`~fishbonett.treebone.TreeFishbone` | {doc}`fishbone` |
 | a system with internal structure (e.g. spin **+** vibration) | `TreeFishbone` (one site per DOF) | {doc}`composite_multichannel` |

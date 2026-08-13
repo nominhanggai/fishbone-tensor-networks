@@ -1,12 +1,21 @@
 # Interaction picture · chain — swap-network TEBD
 
-```{admonition} Frame: interaction picture (time-dependent $H$)
+```{admonition} At a glance
 :class: tip
-The free-bath evolution is rotated out, so entanglement is small — but $H$ is
-time-dependent and the gates are rebuilt every step.  Sibling methods in this
-frame: {doc}`/methods/interaction/trotter_mpo` (same propagator written exactly as one MPO),
-{doc}`/methods/interaction/star_mpo` and {doc}`/methods/interaction/tree` (TDVP variants).  See {doc}`/methods/index` for why the
-frame constrains the choice of integrator.
+- **Provides** — `method="tebd"`: swap-network time-evolving block decimation on
+  a matrix-product state.
+- **Frame** — interaction picture / chain. The free-bath evolution is rotated out,
+  so entanglement is small — but $H$ is time-dependent and the gates are rebuilt
+  every step.
+- **Key options** — `dt`; `trunc_eps` (accuracy, default `1e-4`); `bond_dim`
+  (optional hard cap, `None` = unlimited); `ncap` (chain-mapping quadrature).
+- **API** — builder {py:class}`~fishbonett.frames.interaction_picture.SystemBathIP`,
+  step {py:func}`~fishbonett.evolve.tebd.symmetric_swap_step`, state
+  {py:class}`~fishbonett.states.mps.SystemBathMPS`.
+- **See also** — {doc}`/methods/interaction/trotter_mpo` (same propagator written
+  exactly as one MPO, ~1.6× faster), {doc}`/methods/interaction/star_mpo` and
+  {doc}`/methods/interaction/tree` (TDVP variants), {doc}`/methods/index` (why the
+  frame constrains the integrator).
 ```
 
 The `tebd` method is an interaction-picture, swap-network time-evolving block
@@ -78,7 +87,7 @@ built as trees rather than fattened onto one site — see
 
 ## General systems
 
-Every `BosonicBath` engine accepts a general system — a Hermitian `h` of any
+Every `SystemBath` engine accepts a general system — a Hermitian `h` of any
 dimension `d`, a Hermitian coupling operator `O` of the same dimension, and an
 arbitrary initial state:
 
@@ -101,13 +110,13 @@ from the ground state of its Hamiltonian:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, BosonicBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
 
-model = BosonicBath(h=0.5 * sigma_z + sigma_x,   # biased two-level system
+model = SystemBath(h=0.5 * sigma_z + sigma_x,   # biased two-level system
                   coupling=sigma_x,            # transverse coupling (not sigma_z)
                   bath=bath)
 
@@ -130,4 +139,4 @@ way — just pass a `(3, 3)` `h` and `coupling` and a length-3 `initial` vector.
   `trunc_eps` and optionally capped by `bond_dim`.
 - The step is second order in `dt`: halving `dt` cuts the error ~4×.
 - For the underlying builder see {py:mod}`fishbonett.frames.interaction_picture`, and for the
-  canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.BosonicBathMPS`.
+  canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.SystemBathMPS`.

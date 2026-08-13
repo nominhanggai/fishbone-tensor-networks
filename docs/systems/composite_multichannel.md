@@ -1,5 +1,19 @@
 # Composite systems and multichannel baths
 
+```{admonition} At a glance
+:class: tip
+- **Composite system** (e.g. spin **+** explicit vibration) — give each degree of
+  freedom **its own site** in a {py:class}`~fishbonett.treebone.TreeFishbone`;
+  fattening them onto one tensor defeats the tensor-network advantage.
+- **Multichannel bath** (one bath, several couplings, shared modes) — pass
+  {py:class}`~fishbonett.bath.spec.Bath` a *list* of `coupling` operators; the channels
+  are then cross-correlated, unlike independent baths.
+- **Choosing between them** — a *composite system* adds a degree of freedom; a
+  *multichannel bath* adds a coupling route to the same modes.
+- **See also** — {doc}`/methods/interaction/multichannel` (the engine and its
+  restrictions), {doc}`fishbone`.
+```
+
 The "system" need not be a bare two-level spin, and a single bath may couple
 through more than one operator.  Both cases are handled by keeping every degree of
 freedom on **its own site** — fattening them onto one tensor defeats the
@@ -14,7 +28,7 @@ to the spin; the bath attaches to the spin.  Build it as a two-site
 ```python
 import numpy as np
 from fishbonett.treebone import TreeFishbone
-from fishbonett.simulate import Bath
+from fishbonett import Bath
 from fishbonett.operators import sigma_x, sigma_z
 
 b = np.diag(np.sqrt(np.arange(1, 4)), 1)           # vibration annihilation (dv=4)
@@ -37,7 +51,7 @@ to the spin site of such a tree while the spin also carries the multichannel sta
 below; the two features compose.
 
 ```{tip}
-`BosonicBath` will also let you put `spin ⊗ vibration` on a single `d = 2·d_vib`
+`SystemBath` will also let you put `spin ⊗ vibration` on a single `d = 2·d_vib`
 site, but that grows the local Hilbert space and defeats the MPS advantage.  Keep
 each DOF on its own site with `TreeFishbone`.
 ```
@@ -46,17 +60,17 @@ each DOF on its own site with `TreeFishbone`.
 
 One bath coupled to the system through **several** operators (e.g. `sigma_z` *and*
 `sigma_x`) is distinct from two independent baths: the channels share the same
-modes and therefore **cross-correlate**.  Give the {py:class}`~fishbonett.simulate.Bath`
+modes and therefore **cross-correlate**.  Give the {py:class}`~fishbonett.bath.spec.Bath`
 a list of couplings and (optionally) a list of per-channel spectral densities:
 
 ```python
-from fishbonett.simulate import BosonicBath
+from fishbonett.simulate import SystemBath
 
 mc = Bath(J=[lambda w: 0.2 * w * np.exp(-w / 5),   # sigma_z channel
              lambda w: 0.1 * w * np.exp(-w / 8)],  # sigma_x channel (different J)
           coupling=[sigma_z, sigma_x], domain=(0, 40), n_modes=30, phys_dim=8)
 
-res = BosonicBath(h=sigma_x, coupling=[sigma_z, sigma_x], bath=mc).run(
+res = SystemBath(h=sigma_x, coupling=[sigma_z, sigma_x], bath=mc).run(
         dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
 ```
 
@@ -69,7 +83,7 @@ M_k = \sum_c g_{c,k}\, O_c, \qquad g_{c,k} = \sqrt{J_c(\omega_k)\, w_k / \pi},
 $$
 
 so the channels genuinely cross-correlate rather than acting as independent baths.
-Passing a multichannel `Bath` to `BosonicBath` routes it through
+Passing a multichannel `Bath` to `SystemBath` routes it through
 {py:class}`~fishbonett.treebone.TreeFishbone` so the spin stays on its own site.
 
 ```{note}

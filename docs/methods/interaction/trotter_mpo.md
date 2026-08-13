@@ -1,12 +1,20 @@
 # Interaction picture · chain — conditional-displacement MPO
 
-```{admonition} Frame: interaction picture (time-dependent $H$) — and *only* this frame
+```{admonition} At a glance
 :class: tip
-The exact factorization below relies on all the coupling terms commuting, which is
-true precisely because the free-bath term has been rotated away.  In the
-Schrödinger picture that term is still present, and in the {doc}`/methods/schrodinger/polaron_chain` frame the
-dressed tunneling does not commute with the free-chain hopping — so this propagator
-has no counterpart there.  See {doc}`/methods/index` for the full compatibility table.
+- **Provides** — `method="trotter-mpo"`: the system–bath propagator as one
+  **exact** low-bond conditional-displacement MPO — no Trotter splitting error
+  between modes and no swap network.
+- **Frame** — interaction picture / chain, **and only this frame**. The exact
+  factorization relies on all the coupling terms commuting, which holds precisely
+  because the free-bath term has been rotated away.
+- **Key options** — `dt`; `trunc_eps` (accuracy, default `1e-4`); `bond_dim`
+  (optional hard cap, `None` = unlimited).
+- **API** — MPO {py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`,
+  applied by {py:func}`~fishbonett.evolve.mpo_apply.apply_mpo` +
+  {py:func}`~fishbonett.evolve.mpo_apply.compress`.
+- **See also** — {doc}`/methods/interaction/tebd` (identical physics, gate-based),
+  {doc}`/methods/index` (full compatibility table).
 ```
 
 `trotter-mpo` propagates the **same interaction-picture model as {doc}`/methods/interaction/tebd`**, but
@@ -35,7 +43,7 @@ $$
 
 where $A_s$ is the (Hermitian) system coupling operator and the $d_n(t)$ are the
 time-integrated couplings computed by
-{py:meth}`~fishbonett.frames.interaction_picture.BosonicBathIP.mode_couplings`
+{py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.mode_couplings`
 (they already contain $\int_t^{t+\Delta t}$, so no extra factor of $\Delta t$
 appears below).
 
@@ -116,7 +124,7 @@ $$
 $$
 
 **independent of the number of bath modes**. Built by
-{py:meth}`~fishbonett.frames.interaction_picture.BosonicBathIP.displacement_mpo`.
+{py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`.
 
 ### The full step
 
@@ -173,12 +181,12 @@ Nothing above assumed a two-level system:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath, BosonicBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
-model = BosonicBath(h=sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 r = model.run(dt=0.02, t_max=2.0, method="trotter-mpo", trunc_eps=1e-4,
               observables={"sz": sigma_z})
@@ -194,6 +202,6 @@ r.max_bond         # peak bond dimension of the state
 - Accepts the same truncation controls as every other method: `trunc_eps` sets the
   accuracy and `bond_dim` is an optional cap (default `None` = unlimited).
 - For the builder see
-  {py:meth}`~fishbonett.frames.interaction_picture.BosonicBathIP.displacement_mpo`;
+  {py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`;
   for the application/compression algorithm see
   {py:mod}`fishbonett.evolve.mpo_apply`.

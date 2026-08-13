@@ -1,11 +1,29 @@
 # Baths: discretization, chain mapping and temperature
 
+```{admonition} At a glance
+:class: tip
+- **Provides** — {py:class}`~fishbonett.bath.spec.Bath`, the declarative bath
+  specification, plus the discretization and chain-mapping routines behind it.
+- **Options that set accuracy** — `n_modes` (how many modes; omit for automatic),
+  `phys_dim` (Fock truncation per mode), `domain` (frequency window; omit for
+  automatic), `discretization` (`"legendre"` or `"orthpol"`).
+- **Temperature** — set `temperature` or `beta` and the density is thermalized
+  onto a signed frequency axis (T-TEDOPA); set `thermalized=True` if you pass one
+  that already is.
+- **Use `"orthpol"`** when $J$ is sharply peaked or infrared-divergent; the
+  uniform Gauss–Legendre nodes miss such structure.
+- **API** — {py:func}`~fishbonett.bath.get_bath_nn_paras` (density → chain),
+  {py:func}`~fishbonett.bath.get_vn_squared` (density → star),
+  {py:func}`~fishbonett.bath.lanczos` (star → chain),
+  {py:func}`~fishbonett.bath.thermalize`.
+```
+
 Every method starts from a continuous bath spectral density $J(\omega)$ and turns
-it into a finite set of harmonic modes.  The {py:class}`~fishbonett.simulate.Bath`
+it into a finite set of harmonic modes.  The {py:class}`~fishbonett.bath.spec.Bath`
 object bundles that spectral density with the choices that control the mapping.
 
 ```python
-from fishbonett.simulate import Bath
+from fishbonett import Bath
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             domain=(-25, 36),                       # signed frequency window
@@ -79,7 +97,7 @@ to read off:
 
 ```python
 import numpy as np
-from fishbonett.simulate import Bath
+from fishbonett import Bath
 from fishbonett.bath.legendre import get_vn_squared
 
 eta, wc, t_max = 0.2, 5.0, 4.0
@@ -180,14 +198,14 @@ faithful automatic choice and the degraded discretizations.
 2. **Chain-map** the star to a nearest-neighbour chain.  A Lanczos iteration
    tridiagonalizes the star, producing on-site energies $\epsilon_i$ and hoppings
    $t_i$ together with the single system–bath coupling $c_0$ to the first chain
-   site.  This is {py:func}`fishbonett.common.get_bath_nn_paras`.
+   site.  This is {py:func}`fishbonett.bath.chain.get_bath_nn_paras`.
 
 The chain form is what the MPS/MPO/tree engines evolve; the star form is what the
 `*-ip-*` interaction-picture engines use directly.  The whole mapping is pure
 NumPy/SciPy — there is no external Fortran (ORTHPOL) dependency.
 
 ```python
-from fishbonett.common import get_bath_nn_paras
+from fishbonett.bath.chain import get_bath_nn_paras
 
 eps_i, t_i = get_bath_nn_paras(bath.spectral_density(), n=40, domain=(-25, 36))
 ```

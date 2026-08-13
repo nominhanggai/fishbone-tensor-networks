@@ -9,7 +9,7 @@ Run with:  python examples/cooling_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.frames.coolingchain import BosonicBathCoolingChain as BosonicBath
+from fishbonett.frames.coolingchain import SystemBathCoolingChain as SystemBath
 from fishbonett.operators import sigma_x, sigma_z, temp_factor
 from fishbonett.spectral_densities import drude
 
@@ -17,7 +17,7 @@ from fishbonett.spectral_densities import drude
 def main():
     n_boson = 20
     pd = [12] * n_boson + [2]
-    eth = BosonicBath(pd, betaOmega=0.2)
+    eth = SystemBath(pd, betaOmega=0.2)
 
     g = 1000.0
     temp = 226.0

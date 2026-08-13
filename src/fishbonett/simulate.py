@@ -1,23 +1,38 @@
-"""User-friendly high-level interface for spin-boson dynamics.
+"""User-friendly high-level interface: declare a model, call ``run``.
 
 Wraps the low-level engines (TEBD, MPO/TDVP, tree) behind a small set of classes,
 so a simulation is specified declaratively and run with a single call instead of
 by hand-writing a TEBD sweep loop::
 
     import numpy as np
-    from fishbonett.simulate import Bath, BosonicBath
+    from fishbonett import Bath, SystemBath
     from fishbonett.operators import sigma_x, sigma_z
 
     bath = Bath(J=lambda w: 0.5 * w * np.exp(-w / 5),
                 domain=(-25, 36), temperature=1.0,
                 n_modes=40, phys_dim=20, discretization='orthpol')
-    model = BosonicBath(h=0.5 * eps * sigma_z + V * sigma_x, coupling=sigma_z, bath=bath)
+    model = SystemBath(h=0.5 * eps * sigma_z + V * sigma_x, coupling=sigma_z, bath=bath)
     result = model.run(dt=0.01, t_max=4.0, method='tree-tdvp2', trunc_eps=1e-4,
                        observables={'sz': sigma_z, 'sx': sigma_x})
 
     result.t                 # time grid
     result.expect['sz']      # <sigma_z>(t)
     result.max_bond          # peak bond dimension per step (adaptive methods)
+
+.. rubric:: What's here
+
+==============================  =================================================
+:class:`SystemBath`             one system + one bath; ``run(method=...)``
+:class:`Fishbone`               several sites, several baths each (1D backbone)
+:class:`Result`                 what ``run`` returns: ``t``, ``expect``, ``rdm``
+:data:`METHOD_FRAMES`           every ``method`` name -> its ``(picture, rep)`` frame
+:func:`methods_by_frame`        the method names grouped by frame
+==============================  =================================================
+
+The bath *specification* lives next door in :class:`fishbonett.bath.spec.Bath`, and the
+truncation policy in :class:`fishbonett.linalg.Truncation`; both are re-exported
+at the top level, so ``from fishbonett import Bath, SystemBath, Truncation``
+covers the usual case.
 """
 from dataclasses import dataclass, field, replace
 
@@ -25,11 +40,12 @@ import numpy as np
 import scipy.linalg as _la
 
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.bath.orthpol import make_orthpol_discretizer
+from fishbonett.linalg import Truncation
 from fishbonett.evolve import tdvp as _mpo
+from fishbonett.evolve import tebd as _tebd
 from fishbonett.evolve import treetdvp as _tree
 
-__all__ = ["Bath", "BosonicBath", "Fishbone", "Result", "thermalize",
+__all__ = ["SystemBath", "Fishbone", "Result",
            "METHOD_FRAMES", "MULTICHANNEL_FRAME", "methods_by_frame",
            "frame_label", "methods_in_picture"]
 
@@ -148,138 +164,6 @@ _TREE_METHODS = {"tree-tdvp": "run_tree_tdvp",
                  "tree-tdvp2": "run_tree_tdvp2", "tree-tebd": "run_tree_tebd"}
 
 
-def thermalize(J, beta):
-    """T-TEDOPA thermalized spectral density ``J_beta`` (positive on both halves)
-    from a zero-temperature ``J(w>0)``."""
-    def Jb(w):
-        aw = abs(w)
-        if aw < 1e-12:
-            return 0.0
-        nb = 1.0 / np.expm1(beta * aw)
-        j = float(J(aw))
-        return j * (nb + 1.0) if w > 0 else j * nb
-    return Jb
-
-
-@dataclass
-class Bath:
-    """A bosonic bath specified by its spectral density and discretization.
-
-    Parameters
-    ----------
-    J : callable
-        Spectral density ``J(w)``.  If ``temperature`` (or ``beta``) is given and
-        ``thermalized`` is False, ``J`` is treated as the zero-temperature density
-        and thermalized internally.
-    domain : (float, float), optional
-        Signed bath frequency window.  If omitted, it is chosen automatically as
-        the window covering 99.9% of the reorganization energy
-        ``lambda = (1/pi) int J(w)/w dw`` (signed when a temperature is set).
-    n_modes : int, optional
-        Number of discretized modes.  If omitted, it is chosen automatically from
-        the light-cone of the interaction-picture chain couplings ``d_j(t)`` for
-        the propagation time (so it depends on ``t_max``); see
-        :func:`fishbonett.bath.auto.auto_n_modes`.
-    phys_dim : int
-        The local boson Hilbert-space dimension of each mode.
-    temperature, beta : float, optional
-        Temperature (or inverse temperature) for thermalization.
-    thermalized : bool
-        Set True if ``J`` is already the thermalized density.
-    discretization : {'legendre', 'orthpol'}
-        Bath discretization: uniform-measure Gauss-Legendre star, or the
-        measure-adapted ORTHPOL star (resolves IR-divergent / sharply peaked baths).
-    extra_breaks, m_per : ORTHPOL quadrature options.
-    coupling : (d, d) array, or list of (d, d) arrays
-        System operator(s) this bath couples to.  A single operator is an ordinary
-        bath.  A **list** of operators makes this a *multichannel single bath*: the
-        one bath couples through every operator on shared modes (distinct from
-        several independent baths -- the channels cross-correlate).  For a
-        multichannel bath ``J`` is either one spectral density (shared) or a list of
-        the same length as ``coupling`` (one per channel), and the discretization
-        must be ``'legendre'`` (shared Gauss nodes).  Defaults to ``sigma_z``.
-    """
-    J: object
-    domain: tuple = None
-    n_modes: int = None
-    phys_dim: int = 20
-    temperature: float = None
-    beta: float = None
-    thermalized: bool = False
-    discretization: str = "legendre"
-    extra_breaks: tuple = ()
-    m_per: int = 60
-    coupling: object = None
-
-    def _thermalized(self, Jfunc):
-        if self.thermalized or (self.temperature is None and self.beta is None):
-            return Jfunc
-        b = self.beta if self.beta is not None else 1.0 / self.temperature
-        return thermalize(Jfunc, b)
-
-    def spectral_density(self):
-        J0 = self.J[0] if isinstance(self.J, (list, tuple)) else self.J
-        return self._thermalized(J0)
-
-    @property
-    def is_multichannel(self):
-        """True when the bath couples through several operators (``coupling`` is a
-        list) -- a single bath with cross-correlated channels, distinct from
-        several independent baths."""
-        return isinstance(self.coupling, (list, tuple))
-
-    def channels(self):
-        """``[(thermalized_J_c, operator_c), ...]`` for a multichannel bath.
-
-        The channels share the same mode grid (same ``domain``/``n_modes``/
-        ``discretization``); ``J`` may be one spectral density (shared by all
-        channels) or a list of the same length as ``coupling``."""
-        ops = list(self.coupling)
-        Js = self.J if isinstance(self.J, (list, tuple)) else [self.J] * len(ops)
-        if len(Js) != len(ops):
-            raise ValueError("a multichannel Bath needs `J` and `coupling` of the "
-                             "same length (one spectral density per channel)")
-        return [(self._thermalized(Jc), np.asarray(op, complex))
-                for Jc, op in zip(Js, ops)]
-
-    def discretizer(self):
-        if self.discretization == "orthpol":
-            return make_orthpol_discretizer(m_per=self.m_per,
-                                            extra_breaks=self.extra_breaks)
-        if self.discretization == "legendre":
-            return None
-        raise ValueError(f"unknown discretization {self.discretization!r}")
-
-    def _auto_domain(self):
-        from fishbonett.bath.auto import auto_domain
-        beta = self.beta if self.beta is not None else (
-            1.0 / self.temperature if self.temperature is not None else None)
-        Js = self.J if isinstance(self.J, (list, tuple)) else [self.J]
-        doms = [auto_domain(Jc, beta=beta) for Jc in Js]          # cover every channel
-        return (min(d[0] for d in doms), max(d[1] for d in doms))
-
-    def resolved(self, t_max=None):
-        """A copy with automatic ``domain`` / ``n_modes`` filled in.
-
-        ``domain`` (if unset) becomes the window covering 99.9% of the
-        reorganization energy; ``n_modes`` (if unset) the light-cone extent of the
-        interaction-picture chain couplings up to ``t_max``.  Returns ``self`` when
-        both are already given.  Called by ``run`` with the propagation time."""
-        domain = self.domain if self.domain is not None else self._auto_domain()
-        n_modes = self.n_modes
-        if n_modes is None:
-            if t_max is None:
-                raise ValueError("Bath.n_modes is automatic and needs the "
-                                 "propagation time; call from run() (which supplies "
-                                 "t_max) or set n_modes explicitly")
-            from fishbonett.bath.auto import auto_n_modes
-            n_modes = auto_n_modes(self.spectral_density(), domain, t_max,
-                                   discretizer=self.discretizer())
-        if domain is self.domain and n_modes == self.n_modes:
-            return self
-        return replace(self, domain=tuple(domain), n_modes=int(n_modes))
-
-
 @dataclass
 class Result:
     """Result of a propagation."""
@@ -297,7 +181,7 @@ def _decompose_h(h):
     return float((h[0, 0] - h[1, 1]).real), float(h[0, 1].real)
 
 
-class BosonicBath:
+class SystemBath:
     """A system coupled to a :class:`Bath`.
 
     ``h`` may be any ``(d, d)`` Hermitian Hamiltonian (not only two-level) and the
@@ -328,8 +212,8 @@ class BosonicBath:
 
     # -- public API ----------------------------------------------------------
     def run(self, *, dt, t_max=None, n_steps=None, method="tree-tdvp2",
-            bond_dim=None, trunc_eps=1e-4, observables=None, initial="up",
-            krylov=25, **engine_kw):
+            trunc=None, bond_dim=None, trunc_eps=None, observables=None,
+            initial="up", krylov=25, **engine_kw):
         """Propagate and return a :class:`Result`.
 
         **Methods are organized by frame** -- a ``(picture, bath representation)``
@@ -356,14 +240,20 @@ class BosonicBath:
           MPO both work while the entanglement stays low; requires ``T=0`` and
           ``int J/w^2`` finite.
 
-        **Truncation.**  ``trunc_eps`` is the accuracy knob: singular values below
-        it are discarded, so it alone decides the bond dimension.  ``bond_dim`` is
-        an *optional* safety cap; the default ``None`` means **unlimited**, i.e.
-        the bond grows to whatever ``trunc_eps`` requires.  Set ``bond_dim`` when
-        you need a hard memory bound (``result.max_bond`` reports what was actually
-        used).  Fixed-bond methods (``mpo-tdvp1``, ``mpo-ip-tdvp1``, ``tree-tdvp``,
-        ``polaron-tdvp1``, ``mpo-dtdvp``) cannot grow their own bonds and therefore
-        *require* an explicit ``bond_dim``.
+        **Truncation.**  Accuracy and memory are one setting, expressed either as
+        a :class:`~fishbonett.linalg.Truncation` or as the two loose keywords::
+
+            model.run(..., trunc=Truncation(eps=1e-5, max_bond=200))
+            model.run(..., trunc_eps=1e-5, bond_dim=200)     # equivalent
+
+        ``trunc_eps`` (default ``1e-4``) is the accuracy knob: singular values
+        below it are discarded, so it alone decides the bond dimension.
+        ``bond_dim`` is an *optional* safety cap; the default ``None`` means
+        **unlimited**, i.e. the bond grows to whatever ``trunc_eps`` requires
+        (``result.max_bond`` reports what was actually used).  Fixed-bond methods
+        (``mpo-tdvp1``, ``mpo-ip-tdvp1``, ``tree-tdvp``, ``polaron-tdvp1``,
+        ``mpo-dtdvp``) cannot grow their own bonds and therefore *require* an
+        explicit cap.
 
         ``observables`` maps a name to a ``(d, d)`` operator on the (single) system;
         ``result.expect[name]`` is then that expectation over time, shape
@@ -375,6 +265,8 @@ class BosonicBath:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
             n_steps = int(round(t_max / dt))
+        trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+        bond_dim, trunc_eps = trunc.max_bond, trunc.eps
         if bond_dim is None and method.lower().replace("_", "-") in _FIXED_BOND_METHODS:
             alternatives = _bond_growing_siblings(method) or ["tebd"]
             raise ValueError(
@@ -523,8 +415,8 @@ class BosonicBath:
         return v / np.linalg.norm(v)
 
     def _run_tebd(self, dt, n_steps, bond_dim, trunc_eps, obs_ops, initial, kw):
-        from fishbonett.frames.interaction_picture import BosonicBathIP as _IPBuilder
-        from fishbonett.states.mps import BosonicBathMPS
+        from fishbonett.frames.interaction_picture import SystemBathIP as _IPBuilder
+        from fishbonett.states.mps import SystemBathMPS
         b = self.bath.resolved(n_steps * dt)
         n = b.n_modes
         d_sys = self.h.shape[0]
@@ -536,36 +428,18 @@ class BosonicBath:
         builder.h_sys = self.h
         builder.build(g=1, ncap=kw.get("ncap", 20000), discretizer=b.discretizer())
 
-        state = BosonicBathMPS(pd)               # the MPS being evolved
+        state = SystemBathMPS(pd)               # the MPS being evolved
         psi0 = self._initial_state(initial)
         state.B[-1][:] = 0.0
         for a in range(d_sys):
             state.B[-1][0, a, 0] = psi0[a]
 
-        # Each iteration is a symmetric forward/backward pair over hdt = dt/2, so
-        # it advances the user's physical dt (matching the tree/mpo drivers).
-        hdt = dt / 2.0
+        # One symmetric (Strang) swap-network step per iteration, so each advances
+        # the user's physical dt -- matching the tree/mpo drivers.
         rdms, max_bond = [], []
         for step in range(n_steps):
-            t0 = 2 * step * hdt
-            # Palindromic (Strang) ordering: the first half-interval's gates run
-            # inward, the second half-interval's gates run back out, and the two
-            # innermost (bond-0) applications straddle the midpoint -- one from each
-            # half.  Using the *same* half-step gates for both would break the time
-            # symmetry and drop the sweep to first order in dt.  ``get_u`` returns
-            # ``(U1, U2)``; ``U2`` is the leg-transposed variant used by the swapped
-            # sweeps, so the un-swapped bond-0 updates must both use a ``U1``.
-            u_in, _ = builder.get_u(t0, hdt, mode="normal")
-            u_mid, u_out = builder.get_u(t0 + hdt, hdt, mode="normal")
-            state.U = u_in
-            for j in range(n - 1, 0, -1):
-                state.update_bond(j, bond_dim, trunc_eps, swap=1)
-            state.update_bond(0, bond_dim, trunc_eps, swap=0)
-            state.U = u_mid
-            state.update_bond(0, bond_dim, trunc_eps, swap=0)
-            state.U = u_out
-            for j in range(1, n):
-                state.update_bond(j, bond_dim, trunc_eps, swap=1)
+            _tebd.symmetric_swap_step(state, builder, step * dt, dt, n,
+                                      bond_dim, trunc_eps)
             theta = state.get_theta1(n)
             rho = np.einsum("LiR,LjR->ij", theta, theta.conj())
             rdms.append(rho / np.trace(rho).real)
@@ -582,15 +456,15 @@ class BosonicBath:
         propagator is applied as one low-bond MPO instead of being Trotterized into
         two-site gates and shuttled with a swap network: no swaps, no ``d x d``
         bosonic gates, and the multimode factorization is *exact* (see
-        :meth:`~fishbonett.frames.interaction_picture.BosonicBathIP.displacement_mpo`).
+        :meth:`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`).
         The system term is Strang-split around it, so the step is second order."""
-        from fishbonett.frames.interaction_picture import BosonicBathIP
+        from fishbonett.frames.interaction_picture import SystemBathIP
         from fishbonett.evolve.mpo_apply import (apply_mpo, compress, bond_dims,
                                                  product_state)
         self._check_system()
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
-        builder = BosonicBathIP([b.phys_dim] * n + [d_sys])
+        builder = SystemBathIP([b.phys_dim] * n + [d_sys])
         builder.domain = list(b.domain)
         builder.sd = b.spectral_density()
         builder.coupling = self.coupling
@@ -617,7 +491,7 @@ class BosonicBath:
     def _polaron_builder(self, dt, n_steps):
         """Shared polaron setup: validate, resolve the bath and build the frame.
         Returns ``(builder, resolved_bath, n_modes, pd)``."""
-        from fishbonett.frames.polaron import BosonicBathPolaron
+        from fishbonett.frames.polaron import SystemBathPolaron
         self._check_system()
         if getattr(self.bath, "temperature", None):
             raise ValueError(
@@ -630,7 +504,7 @@ class BosonicBath:
         b = self.bath.resolved(n_steps * dt)
         n, d_sys = b.n_modes, self.h.shape[0]
         pd = [b.phys_dim] * n + [d_sys]
-        builder = BosonicBathPolaron(pd)
+        builder = SystemBathPolaron(pd)
         builder.domain = list(b.domain)
         builder.sd = b.spectral_density()
         builder.coupling = self.coupling
@@ -641,7 +515,7 @@ class BosonicBath:
     def _run_polaron_tdvp(self, m, dt, n_steps, bond_dim, trunc_eps, obs_ops,
                           initial, krylov, kw):
         """Polaron frame propagated with TDVP.  Because ``H~`` is time-independent
-        it has a plain MPO (:meth:`~fishbonett.frames.polaron.BosonicBathPolaron.mpo`),
+        it has a plain MPO (:meth:`~fishbonett.frames.polaron.SystemBathPolaron.mpo`),
         so the 1-site / 2-site / bond-adaptive sweeps all apply.  1-site TDVP never
         forms a two-site block, which avoids the ``O(d^4)`` boson-boson gates of the
         polaron TEBD sweep."""
@@ -681,9 +555,9 @@ class BosonicBath:
         Trotter (no swap network); the physical bath vacuum is a displaced coherent
         state on ``c0``; lab-frame observables are recovered by un-dressing.  Zero
         temperature only.  See :mod:`fishbonett.frames.polaron`."""
-        from fishbonett.states.mps import BosonicBathMPS
+        from fishbonett.states.mps import SystemBathMPS
         builder, b, n, pd = self._polaron_builder(dt, n_steps)
-        state = BosonicBathMPS(pd)               # boson sites default to vacuum
+        state = SystemBathMPS(pd)               # boson sites default to vacuum
         psi0 = self._initial_state(initial)
         # displaced (c0, system) initial block; the other boson sites stay vacuum
         state.split_truncate_theta(builder.initial_theta(psi0), n - 1, bond_dim,
@@ -692,11 +566,7 @@ class BosonicBath:
         gates = builder.gates(dt / 2.0)          # static; symmetric Strang per step
         rdms, max_bond = [], []
         for step in range(n_steps):
-            state.U = gates
-            for j in range(n):
-                state.update_bond(j, bond_dim, trunc_eps, swap=0)
-            for j in range(n - 1, -1, -1):
-                state.update_bond(j, bond_dim, trunc_eps, swap=0)
+            _tebd.symmetric_static_step(state, gates, n, bond_dim, trunc_eps)
             rho = builder.undress_rdm(state.get_theta2(n - 1))   # lab-frame RDM
             rdms.append(rho)
             max_bond.append(max((len(s) for s in state.S), default=1))

@@ -1,14 +1,14 @@
 """Matrix-product-state ansatz for a spin-boson chain (the *state*, separate from
 the propagation algorithms in :mod:`fishbonett.evolve`).
 
-:class:`BosonicBathMPS` holds the chain tensors ``B``/``S`` and their canonical
+:class:`SystemBathMPS` holds the chain tensors ``B``/``S`` and their canonical
 form, the per-bond gate store ``U``, and the local-basis-optimization projectors
 ``R``.  It provides the wavefunction accessors (:meth:`get_theta1`,
 :meth:`get_theta2`) and the canonical-form primitive :meth:`split_truncate_theta`
 (single / adaptive SVD split, optional LBO, optional CuPy GPU).  The
 swap-network TEBD sweep that applies the gates lives in
 :func:`fishbonett.evolve.tebd.update_bond`; :meth:`update_bond` is a thin wrapper
-around it.  This single state replaces the ~20 near-identical ``BosonicBath1D``
+around it.  This single state replaces the ~20 near-identical ``SystemBath1D``
 copies that used to live inside the individual driver modules; every truncation
 scheme they implemented is selected per :meth:`update_bond` call:
 
@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 
 
-class BosonicBathMPS:
+class SystemBathMPS:
     """Matrix-product state of a boson chain terminated by a system (spin) site.
 
     Parameters
@@ -78,6 +78,13 @@ class BosonicBathMPS:
 
     # -- wavefunction accessors ------------------------------------------------
     def get_theta1(self, i, gpu=False):
+        """One-site wavefunction at site ``i``, legs ``(bond_l, phys, bond_r)``.
+
+        Contracts the stored singular values ``S[i]`` and the local basis ``R[i]``
+        back into the right-canonical tensor ``B[i]``, so the result is the
+        physical state around that site (the orthogonality centre).  Trace it
+        against its conjugate to get the site reduced density matrix.
+        """
         if gpu and _CUPY:
             proj = cp.tensordot(cp.diag(self.S[i]), cp.array(self.B[i]), [1, 0])
             return einsum('KI,aIb->aKb', cp.array(self.R[i]), proj)
@@ -85,6 +92,9 @@ class BosonicBathMPS:
         return einsum('KI,aIb->aKb', self.R[i], proj)
 
     def get_theta2(self, i, gpu=False):
+        """Two-site wavefunction on bond ``i``, legs ``(bond_l, phys_i, phys_i+1,
+        bond_r)`` -- the object a two-site gate acts on before
+        :meth:`split_truncate_theta` puts it back."""
         j = i + 1
         if gpu and _CUPY:
             return einsum('aIb,LJ,bJc->aILc', self.get_theta1(i, gpu),
@@ -110,6 +120,17 @@ class BosonicBathMPS:
     # -- canonical-form primitives (state operations) --------------------------
     def split_truncate_theta(self, theta, i, chi_max, eps, eps_lbo=None,
                              adaptive=False, gpu=False):
+        """Split a two-site ``theta`` back into two sites, truncating bond ``i``.
+
+        Restores the canonical form in place: SVD the two-site tensor, keep
+        singular values above ``eps`` (relative) and at most ``chi_max`` of them
+        (``None`` = unlimited), and write back ``B[i]``, ``B[i+1]`` and ``S[i+1]``.
+
+        Three strategies, selected by the arguments: a plain truncated SVD
+        (default), a *local-basis-optimization* pass when ``eps_lbo`` is given
+        (which also compresses the local boson basis ``R``), or the adaptive
+        bond-dimension search when ``adaptive`` is set.
+        """
         if gpu and _CUPY:
             self._split_gpu(theta, i, chi_max, eps, eps_lbo)
         elif eps_lbo is None and not adaptive:
@@ -214,4 +235,4 @@ class BosonicBathMPS:
 
 
 # Backwards-compatible aliases for the historical class names.
-BosonicBath1D = BosonicBathMPS
+SystemBath1D = SystemBathMPS

@@ -6,7 +6,7 @@ from fishbonett.bath.orthpol import (
     rkpw_recurrence, get_vn_squared_orthpol, make_orthpol_discretizer,
 )
 from fishbonett.bath.legendre import get_vn_squared
-from fishbonett.common import get_bath_nn_paras
+from fishbonett.bath.chain import get_bath_nn_paras
 
 DOMAIN = (-25.0, 36.0)
 

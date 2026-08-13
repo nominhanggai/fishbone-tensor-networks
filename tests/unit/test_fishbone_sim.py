@@ -3,9 +3,9 @@ import numpy as np
 import pytest
 
 from fishbonett.simulate import Fishbone
-from fishbonett.simulate import Bath, Result
-from fishbonett.frames.hamiltonian import FishBoneH
-from fishbonett.operators import _c
+from fishbonett import Bath, Result
+from fishbonett.frames.schrodinger import FishBoneH
+from fishbonett.operators import annihilate
 from fishbonett.operators import sigma_x, sigma_z
 
 DOM = (0.0, 40.0)
@@ -62,7 +62,7 @@ def _build_exact(sites, specs, backbone, d):
         slots.append(slot)
     tot = int(np.prod(dims))
     H = np.zeros((tot, tot), complex)
-    c = _c(d)
+    c = annihilate(d)
     for i in range(nc):
         for (nm, op, side) in specs[i]:
             w, k = FishBoneH.get_coupling(nm, _J, list(DOM), 1.0)
