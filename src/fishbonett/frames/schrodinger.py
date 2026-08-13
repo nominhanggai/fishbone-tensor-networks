@@ -2,11 +2,11 @@
 
 The bare chain-mapped Hamiltonian, in two geometries:
 
-=================================  ==============================================
-:class:`SimpleSysBathSchrodinger`  one system + one bath, a 1D chain
-:class:`FishBoneH`                 the **comb**: several electronic sites, each
-                                   with an electronic and a vibrational bath chain
-=================================  ==============================================
+==============================  ==============================================
+:class:`SystemBathSchrodinger`  one system + one bath, a 1D chain
+:class:`FishBoneH`              the **comb**: several electronic sites, each
+                                with an electronic and a vibrational bath chain
+==============================  ==============================================
 
 Because nothing is transformed away, ``H`` is **time-independent** and strictly
 nearest-neighbour.  Two things follow, and they are the reason this frame exists:
@@ -509,7 +509,7 @@ class FishBoneH:
         return U
 
 
-class SimpleSysBathSchrodinger:
+class SystemBathSchrodinger:
     """Schroedinger-picture chain Hamiltonian builder: arbitrary system + harmonic bath.
 
     Builds the explicit (time-independent) chain Hamiltonian and its two-site
@@ -517,7 +517,7 @@ class SimpleSysBathSchrodinger:
     Hermitian system, not just a spin -- the "spin-boson" name is historical).
     Everything the frame needs is given at construction; :meth:`build` then does
     the chain mapping.  Exported publicly as
-    :class:`fishbonett.SimpleSysBathSchrodinger`.
+    :class:`fishbonett.SystemBathSchrodinger`.
 
     Parameters
     ----------

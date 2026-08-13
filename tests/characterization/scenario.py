@@ -1,7 +1,7 @@
 """Deterministic small-scale characterization scenarios.
 
 These reproduce a tiny multichannel interaction-picture spin-boson propagation
-using whatever ``(SimpleSysBath model, MPS engine)`` classes are passed in.  The same
+using whatever ``(SystemBath model, MPS engine)`` classes are passed in.  The same
 scenario is therefore runnable against the *pre-refactor* and *post-refactor* code
 and the resulting physical observables compared numerically, which is how we
 guarantee the "unify + preserve" refactor does not silently change the numerics.
@@ -26,16 +26,16 @@ def _discrete_bath():
     return freq, coup_mat
 
 
-def run_multichannel_ic(SimpleSysBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
+def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
                         phys_dim=4, bond_dim=30, threshold=1e-8, dt=1e-3,
                         num_steps=4, temp=100.0, seed=1234):
     """Run the scenario and return a dict of physical observables.
 
     Parameters
     ----------
-    SimpleSysBath : class
+    SystemBath : class
         Multichannel interaction-picture Hamiltonian builder, constructed as
-        ``SimpleSysBath(pd, coup_mat=..., freq=..., temp=..., h_sys=...)`` with
+        ``SystemBath(pd, coup_mat=..., freq=..., temp=..., h_sys=...)`` with
         ``.build(n=0)`` and ``.get_u(t, dt, factor=...)``.
     Mps : class
         TEBD engine constructed as ``Mps(pd)`` exposing ``B``, ``U``,
@@ -50,7 +50,7 @@ def run_multichannel_ic(SimpleSysBath, Mps, sigma_x, sigma_z, num_op, *, lbo=Fal
 
     buf = io.StringIO()
     with redirect_stdout(buf):          # the legacy engine is extremely chatty
-        eth = SimpleSysBath(pd, coup_mat=coup_mat, freq=freq, temp=temp,
+        eth = SystemBath(pd, coup_mat=coup_mat, freq=freq, temp=temp,
                                h_sys=130.0 * sigma_x + np.diag([0.0, -200.0]))
         eth.build(n=0)
 

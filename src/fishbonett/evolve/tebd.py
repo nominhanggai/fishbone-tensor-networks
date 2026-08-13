@@ -2,7 +2,7 @@
 
 TEBD is Trotter-split gates plus truncation, which works on any loop-free
 geometry -- so this is one of several TEBD implementations here, not *the* one.
-It is the MPS one: it acts on a :class:`~fishbonett.states.mps.SimpleSysBathMPS`
+It is the MPS one: it acts on a :class:`~fishbonett.states.mps.SystemBathMPS`
 and indexes gates by bond number, which is what ties it to a linear chain.  The
 others carry their own bookkeeping for their own geometry:
 
@@ -43,7 +43,7 @@ def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
 
     Parameters
     ----------
-    state : fishbonett.states.mps.SimpleSysBathMPS
+    state : fishbonett.states.mps.SystemBathMPS
         The MPS whose bond ``i`` is updated **in place**.
     i : int
         Bond index; the gate acts on sites ``i`` and ``i+1``.

@@ -15,13 +15,13 @@ Two consequences shape the code below:
 * the coupling is **matrix-valued** -- each mode carries a matrix ``A(d_n(t))``
   rather than a scalar times one operator.  In this frame that costs nothing:
   there are no mode-mode terms to tridiagonalize, so the star-to-chain map is a
-  free choice of orthogonal basis and :meth:`SimpleSysBathMultiChannel.build` takes a
+  free choice of orthogonal basis and :meth:`SystemBathMultiChannel.build` takes a
   plain single-vector :func:`~fishbonett.bath.lanczos.lanczos` seeded by one
   channel.  See that method for why the seed does not change the physics.
 * finite temperature needs the negative half of the frequency axis, either by
-  mirroring the star explicitly (:meth:`SimpleSysBathMultiChannel.__init__`) or by
+  mirroring the star explicitly (:meth:`SystemBathMultiChannel.__init__`) or by
   folding the weight into the spectral density beforehand
-  (:meth:`SimpleSysBathMultiChannel.from_signed_star`, what ``run`` uses).
+  (:meth:`SystemBathMultiChannel.from_signed_star`, what ``run`` uses).
 
 Selected by the *bath*, not by a ``method`` name: give
 :class:`~fishbonett.bath.spec.Bath` a list of ``coupling`` operators.  See
@@ -43,10 +43,10 @@ from fishbonett.operators import temp_factor, annihilate
 
 
 
-class SimpleSysBathMultiChannel:
+class SystemBathMultiChannel:
     """Multichannel interaction-picture builder: system + harmonic bath, >=2 channels.
 
-    Generalizes :class:`~fishbonett.frames.interaction_picture.SimpleSysBathIP` to a
+    Generalizes :class:`~fishbonett.frames.interaction_picture.SystemBathIP` to a
     matrix-valued coupling -- several coupling channels ``A_k`` share one bath (any
     Hermitian system, not just a spin), with the finite-temperature thermofield
     doubling folded in via ``temp_factor``.

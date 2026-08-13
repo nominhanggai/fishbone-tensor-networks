@@ -37,7 +37,7 @@ to the spin site of such a tree while the spin also carries the multichannel sta
 below; the two features compose.
 
 ```{tip}
-`SimpleSysBath` will also let you put `spin ⊗ vibration` on a single `d = 2·d_vib`
+`SystemBath` will also let you put `spin ⊗ vibration` on a single `d = 2·d_vib`
 site, but that grows the local Hilbert space and defeats the MPS advantage.  Keep
 each DOF on its own site with `TreeFishbone`.
 ```
@@ -50,13 +50,13 @@ modes and therefore **cross-correlate**.  Give the {py:class}`~fishbonett.bath.s
 a list of couplings and (optionally) a list of per-channel spectral densities:
 
 ```python
-from fishbonett.models import SimpleSysBath
+from fishbonett.models import SystemBath
 
 mc = Bath(J=[lambda w: 0.2 * w * np.exp(-w / 5),   # sigma_z channel
              lambda w: 0.1 * w * np.exp(-w / 8)],  # sigma_x channel (different J)
           coupling=[sigma_z, sigma_x], domain=(0, 40), n_modes=30, phys_dim=8)
 
-res = SimpleSysBath(h=sigma_x, coupling=[sigma_z, sigma_x], bath=mc).run(
+res = SystemBath(h=sigma_x, coupling=[sigma_z, sigma_x], bath=mc).run(
         dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
 ```
 
@@ -69,7 +69,7 @@ M_k = \sum_c g_{c,k}\, O_c, \qquad g_{c,k} = \sqrt{J_c(\omega_k)\, w_k / \pi},
 $$
 
 so the channels genuinely cross-correlate rather than acting as independent baths.
-Passing a multichannel `Bath` to `SimpleSysBath` routes it through
+Passing a multichannel `Bath` to `SystemBath` routes it through
 {py:class}`~fishbonett.models.fishbone.TreeFishbone` so the spin stays on its own site.
 
 ```{note}

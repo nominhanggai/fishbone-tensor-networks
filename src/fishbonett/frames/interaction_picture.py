@@ -7,13 +7,13 @@ constrained to be harmonic/bosonic.
 
 Works in the interaction picture with respect to the **free bath** Hamiltonian:
 the chain-mapped bath is diagonalized into its star modes, whose free evolution is
-absorbed into time-dependent couplings ``d_n(t)`` (:meth:`SimpleSysBathIP.mode_couplings`).
+absorbed into time-dependent couplings ``d_n(t)`` (:meth:`SystemBathIP.mode_couplings`).
 What remains is ``H_sb(t) = A_s (x) sum_n [d_n b_n + h.c.]`` plus the system term,
 so the gates are rebuilt each step.  Two propagators use this frame:
 
-* ``SimpleSysBath.run(method="tebd")`` -- two-site Trotter gates (:meth:`get_u`)
+* ``SystemBath.run(method="tebd")`` -- two-site Trotter gates (:meth:`get_u`)
   applied by the swap network;
-* ``SimpleSysBath.run(method="trotter-mpo")`` -- the same propagator written exactly
+* ``SystemBath.run(method="trotter-mpo")`` -- the same propagator written exactly
   as one low-bond conditional-displacement MPO (:meth:`displacement_mpo`).
 """
 import numpy as np
@@ -27,7 +27,7 @@ from fishbonett.linalg import kron, expm_gate as _expm_gate
 from fishbonett.operators import annihilate
 
 
-class SimpleSysBathIP:
+class SystemBathIP:
     """Interaction-picture builder: arbitrary system + harmonic bath.
 
     Diagonalizes the chain-mapped bath into its star modes and absorbs their free

@@ -70,7 +70,7 @@ built as trees rather than fattened onto one site — see
 
 ## General systems
 
-Every `SimpleSysBath` engine accepts a general system — a Hermitian `h` of any
+Every `SystemBath` engine accepts a general system — a Hermitian `h` of any
 dimension `d`, a Hermitian coupling operator `O` of the same dimension, and an
 arbitrary initial state:
 
@@ -93,13 +93,13 @@ from the ground state of its Hamiltonian:
 
 ```python
 import numpy as np
-from fishbonett import Bath, SimpleSysBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
 
-model = SimpleSysBath(h=0.5 * sigma_z + sigma_x,   # biased two-level system
+model = SystemBath(h=0.5 * sigma_z + sigma_x,   # biased two-level system
                   coupling=sigma_x,            # transverse coupling (not sigma_z)
                   bath=bath)
 
@@ -125,4 +125,4 @@ way — just pass a `(3, 3)` `h` and `coupling` and a length-3 `initial` vector.
   `trunc_eps` and optionally capped by `bond_dim`.
 - The step is second order in `dt`: halving `dt` cuts the error ~4×.
 - For the underlying builder see {py:mod}`fishbonett.frames.interaction_picture`, and for the
-  canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.SimpleSysBathMPS`.
+  canonical MPS/TEBD state see {py:class}`fishbonett.states.mps.SystemBathMPS`.

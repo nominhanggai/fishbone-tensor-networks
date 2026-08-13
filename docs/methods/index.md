@@ -1,7 +1,7 @@
 # Propagation methods
 
 All methods are selected by the `method` argument of
-{py:meth}`SimpleSysBath.run <fishbonett.models.system_bath.SimpleSysBath.run>` and return the same
+{py:meth}`SystemBath.run <fishbonett.models.system_bath.SystemBath.run>` and return the same
 {py:class}`~fishbonett.models.result.Result`, so you can switch methods by changing one
 string.  If you don't know which to pick, start with `tree-tdvp2` or `tebd` —
 both grow their own bonds.
@@ -141,12 +141,12 @@ population:
 
 ```python
 import numpy as np
-from fishbonett import Bath, SimpleSysBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
-model = SimpleSysBath(h=sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
 for method in ["tebd", "trotter-mpo",
                "mpo-tdvp1", "mpo-tdvp2", "mpo-dtdvp",

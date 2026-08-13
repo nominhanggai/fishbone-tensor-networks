@@ -10,14 +10,14 @@ non-unitary gauge instead of by extra modes.
 
 The gauge makes the propagation **non-unitary**, so the state's norm is not the
 physical one: observables must be read through the matching heating operators
-``exp(2 betaOmega n_i)``, which is what :meth:`SimpleSysBathCoolingChain.get_rdm`
+``exp(2 betaOmega n_i)``, which is what :meth:`SystemBathCoolingChain.get_rdm`
 does (renormalizing as it contracts).  Reading the RDM the ordinary way would give
 the wrong answer.
 
 Unlike the other frames this class *is* the state -- it subclasses
-:class:`~fishbonett.states.mps.SimpleSysBathMPS` rather than building gates for a
+:class:`~fishbonett.states.mps.SystemBathMPS` rather than building gates for a
 separate state object.  It is exploratory rather than part of the ``method=``
-dispatch; see :class:`~fishbonett.frames.interaction_picture.SimpleSysBathIP` for
+dispatch; see :class:`~fishbonett.frames.interaction_picture.SystemBathIP` for
 the maintained finite-temperature route.
 """
 import numpy as np
@@ -28,13 +28,13 @@ import fishbonett.bath.recurrence as rc
 from fishbonett.linalg import kron, expm_gate_sparse as calc_U
 from fishbonett.operators import temp_factor, annihilate
 
-from fishbonett.states.mps import SimpleSysBathMPS
+from fishbonett.states.mps import SystemBathMPS
 
 
-class SimpleSysBathCoolingChain(SimpleSysBathMPS):
+class SystemBathCoolingChain(SystemBathMPS):
     """Cooling-chain builder: system + harmonic bath, dissipative cooling ansatz.
 
-    Extends the 1D :class:`~fishbonett.states.mps.SimpleSysBathMPS` engine with a
+    Extends the 1D :class:`~fishbonett.states.mps.SystemBathMPS` engine with a
     ``betaOmega`` cooling gauge: each bath mode carries a heating operator so the
     chain is progressively cooled, and :meth:`get_rdm` reads the system reduced
     density matrix through those operators.  Everything the frame needs is given at

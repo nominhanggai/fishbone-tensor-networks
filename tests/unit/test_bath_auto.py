@@ -4,7 +4,7 @@ import pytest
 
 from fishbonett.bath.auto import (reorganization_energy, auto_domain, auto_n_modes,
                                   _reorg_profile)
-from fishbonett import Bath, SimpleSysBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 
@@ -62,11 +62,11 @@ def test_auto_n_modes_needs_tmax():
 def test_auto_defaults_match_explicit_dynamics():
     """A bath with automatic domain/n_modes reproduces a generously-sized
     explicit bath (short time so the light-cone stays small and cheap)."""
-    ref = SimpleSysBath(sigma_x, sigma_z, Bath(J=_ohmic, domain=(-40, 40),
+    ref = SystemBath(sigma_x, sigma_z, Bath(J=_ohmic, domain=(-40, 40),
                                            temperature=1.0, n_modes=40, phys_dim=8))
     rr = ref.run(dt=0.05, t_max=0.5, method="tree-tebd", bond_dim=30,
                  observables={"sz": sigma_z})
-    auto = SimpleSysBath(sigma_x, sigma_z, Bath(J=_ohmic, temperature=1.0, phys_dim=8))
+    auto = SystemBath(sigma_x, sigma_z, Bath(J=_ohmic, temperature=1.0, phys_dim=8))
     ra = auto.run(dt=0.05, t_max=0.5, method="tree-tebd", bond_dim=30,
                   observables={"sz": sigma_z})
     assert np.max(np.abs(ra.expect["sz"] - rr.expect["sz"])) < 5e-3

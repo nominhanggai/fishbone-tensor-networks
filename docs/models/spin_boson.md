@@ -1,6 +1,6 @@
 # Spin-boson: one system, one bath
 
-{py:class}`~fishbonett.models.system_bath.SimpleSysBath` couples one system to one
+{py:class}`~fishbonett.models.system_bath.SystemBath` couples one system to one
 {py:class}`~fishbonett.bath.spec.Bath`.  The system can have any dimension — the
 name "spin-boson" is just convention.  For several sites or several baths, see
 {doc}`fishbone`; for internal structure or multichannel baths, see
@@ -8,12 +8,12 @@ name "spin-boson" is just convention.  For several sites or several baths, see
 
 ```python
 import numpy as np
-from fishbonett import Bath, SimpleSysBath
+from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
-model = SimpleSysBath(h=sigma_x, coupling=sigma_z, bath=bath)
+model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 r = model.run(dt=0.02, t_max=2.0, method="mpo-tdvp1", bond_dim=100,
               observables={"sz": sigma_z})
 ```
@@ -43,7 +43,7 @@ h3 = np.diag([0.0, 1.0, 2.5])
 coup3 = np.diag([1.0, 0.0, -1.0])
 bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=30, phys_dim=15)
-r = SimpleSysBath(h=h3, coupling=coup3, bath=bath).run(
+r = SystemBath(h=h3, coupling=coup3, bath=bath).run(
         dt=0.02, t_max=1.0, method="tebd", bond_dim=80,
         initial=[1, 1, 0], observables={"n": np.diag([0, 1, 2])})
 ```

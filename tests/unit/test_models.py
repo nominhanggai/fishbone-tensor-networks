@@ -11,7 +11,7 @@ import re
 import numpy as np
 import pytest
 
-from fishbonett import Bath, SimpleSysBath, Fishbone
+from fishbonett import Bath, SystemBath, Fishbone
 from fishbonett.models import TreeFishbone
 from fishbonett.models import registry as R
 from fishbonett.models.system_bath import _FIXED_BOND_METHODS
@@ -121,11 +121,11 @@ def _run_for(model_key):
     """A minimal runnable instance of each model, plus the method to use."""
     h = 0.5 * sigma_x
     if model_key in ("chain", "star", "mode-tree"):
-        return SimpleSysBath(h=h, coupling=sigma_z, bath=_bath()), None
+        return SystemBath(h=h, coupling=sigma_z, bath=_bath()), None
     if model_key == "multichannel":
         mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
                   n_modes=3, phys_dim=4)
-        return SimpleSysBath(h=h, coupling=[sigma_z, sigma_x], bath=mc), None
+        return SystemBath(h=h, coupling=[sigma_z, sigma_x], bath=mc), None
     if model_key == "comb":
         return Fishbone(sites=[h, h], baths=[_bath(), None]), None
     if model_key == "site-tree":
@@ -166,7 +166,7 @@ def test_multichannel_bath_rejects_another_models_method():
     pick among *its* propagators -- say so instead of ignoring it."""
     mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
-    m = SimpleSysBath(h=0.5 * sigma_x, coupling=[sigma_z, sigma_x], bath=mc)
+    m = SystemBath(h=0.5 * sigma_x, coupling=[sigma_z, sigma_x], bath=mc)
     with pytest.raises(ValueError, match="multichannel"):
         m.run(dt=0.02, n_steps=1, method="tebd")
 
