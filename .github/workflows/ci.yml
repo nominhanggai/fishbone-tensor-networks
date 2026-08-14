@@ -25,11 +25,41 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install package with test extras
+        # Deliberately without `speed`: this matrix covers the NumPy contraction
+        # fallback, which is what a plain `pip install fishbonett` gives you.
+        # The opt_einsum path is covered by the `test-opt-einsum` job below.
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[test]
       - name: Run test suite
         run: pytest -q
+
+  test-opt-einsum:
+    # `speed` is the configuration the docs recommend, and until this job existed
+    # the unit suite never ran with it: the matrix above installs only [test], so
+    # every CI run exercised the NumPy fallback and nothing exercised opt_einsum.
+    # The two agree to within one ULP (measured across the whole method table), and
+    # test_both_contraction_backends_agree pins that -- but it skips unless both
+    # backends are present, so without this job it never actually ran anywhere.
+    name: tests (opt_einsum)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package with the speed extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[test,speed]
+      - name: Run test suite on the opt_einsum backend
+        run: pytest -q
+      - name: Run test suite on the NumPy backend for comparison
+        # Same install, both paths -- so a divergence shows up as one job failing
+        # two ways rather than as a mystery difference between jobs.
+        run: pytest -q
+        env:
+          FISHBONETT_EINSUM: numpy
 
   smoke:
     # The unit suite does not import examples/ or benchmarks/, so nothing was
