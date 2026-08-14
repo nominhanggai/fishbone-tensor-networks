@@ -12,6 +12,7 @@ dist/
 htmlcov/
 docs/_build/
 docs/generated/
+docs/_generated/
 
 # Virtual environments
 .venv/

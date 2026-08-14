@@ -124,8 +124,15 @@ res = sb.run(dt=0.02, t_max=2.0, model="chain", frame="polaron",
 **model** is what is coupled to what, **frame** is how `H` is written down
 (`schrodinger` / `interaction` / `polaron`), **integrator** is how a step is taken
 (`tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo`).  Ask for a combination that does
-not exist and the error says whether it is a recorded gap or just under-specified —
-`fishbonett.models.registry.describe_taxonomy()` prints the full table.
+not exist and the error says whether it is a recorded gap or just under-specified.
+
+Every model, the frames it admits, and the reason each absent combination is absent —
+generated from {py:mod}`fishbonett.models.registry` when these docs are built, so it
+is whatever the code actually offers:
+
+```{literalinclude} _generated/taxonomy.txt
+:language: text
+```
 
 ## Low-level engines
 
