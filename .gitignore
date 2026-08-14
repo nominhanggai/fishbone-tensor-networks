@@ -5,6 +5,8 @@ __pycache__/
 .eggs/
 build/
 dist/
+.tmp-build/
+.tmp-dist/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

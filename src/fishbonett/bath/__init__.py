@@ -23,6 +23,7 @@ matching TEDOPA exactly (:func:`make_tedopa_discretizer`,
 :class:`CoupledBath`               explicit model binding to system operator(s)
 :class:`ChainBath`                 compiled nearest-neighbour coefficients
 :class:`StarBath`                  compiled shared-grid oscillator coefficients
+:class:`PolaronBath`               compiled ``J/w^2`` chain + reorganization shift
 :func:`thermalize`                 T-TEDOPA thermalized density from a ``T=0`` one
 :func:`get_bath_nn_paras`          spectral density -> chain ``(w_list, k_list)``
 :func:`get_coupling`               the same, via polynomial recurrences
@@ -30,6 +31,7 @@ matching TEDOPA exactly (:func:`make_tedopa_discretizer`,
 :func:`make_tedopa_discretizer`    measure-adapted TEDOPA star (peaked/IR baths)
 :func:`compile_chain`              resolved specification -> ``ChainBath``
 :func:`compile_star`               resolved specification -> ``StarBath``
+:func:`compile_polaron`            resolved specification -> ``PolaronBath``
 :func:`lanczos`                    star -> chain tridiagonalization
 =================================  =============================================
 
@@ -41,7 +43,11 @@ Submodules: :mod:`~fishbonett.bath.spec`, :mod:`~fishbonett.bath.chain`,
 from fishbonett.bath.spec import Bath, thermalize
 from fishbonett.bath.coupled import CoupledBath, bind_bath
 from fishbonett.bath.compiled import (
-    StarBath, ChainBath, compile_star, compile_chain,
+    StarBath, ChainBath, PolaronBath, compile_star, compile_chain,
+    compile_polaron,
+)
+from fishbonett.bath.conventions import (
+    integrated_free_phase, reorganization_energy, star_coupling_squared,
 )
 from fishbonett.bath.chain import get_bath_nn_paras, get_coupling
 from fishbonett.bath.legendre import get_vn_squared, get_legendre_recursion
@@ -53,7 +59,9 @@ from fishbonett.bath.recurrence import recurrenceCoefficients
 
 __all__ = [
     "Bath", "CoupledBath", "bind_bath", "thermalize",
-    "StarBath", "ChainBath", "compile_star", "compile_chain",
+    "StarBath", "ChainBath", "PolaronBath", "compile_star", "compile_chain",
+    "compile_polaron", "integrated_free_phase", "reorganization_energy",
+    "star_coupling_squared",
     "get_bath_nn_paras", "get_coupling",
     "get_vn_squared", "get_legendre_recursion",
     "get_vn_squared_tedopa", "make_tedopa_discretizer",

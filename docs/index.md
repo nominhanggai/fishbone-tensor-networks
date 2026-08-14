@@ -33,11 +33,15 @@ The main sections are meant to be read in this order, though each stands alone:
    discretization, the TEDOPA chain mapping, finite temperature (thermofield), and
    the automatic `domain` / `n_modes` choices, with numerical evidence that they
    are faithful.
-4. **{doc}`methods/index`** — the propagation methods: for each model, the frame
+4. **{doc}`conventions`** — units, spectral-density normalization, phase signs,
+   temperature, and the reference checks that keep representations consistent.
+5. **{doc}`methods/index`** — the propagation methods: for each model, the frame
    (interaction picture, polaron, Schrödinger) and the integrator (TEBD, exact
    MPO propagator, TDVP), with the theory behind each.
-5. **{doc}`architecture`** — the ownership and dependency boundaries used by the
+6. **{doc}`architecture`** — the ownership and dependency boundaries used by the
    implementation.
+7. **{doc}`licensing`** — the scope of the MIT license and third-party
+   provenance retained by the distribution.
 
 {doc}`api` is the generated reference for every public module.
 
@@ -49,8 +53,10 @@ The main sections are meant to be read in this order, though each stands alone:
 getting_started
 models/index
 bath
+conventions
 methods/index
 architecture
+licensing
 api
 ```
 

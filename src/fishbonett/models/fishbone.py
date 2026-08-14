@@ -16,19 +16,15 @@ Do not confuse the ``site-tree`` *model* with the ``binary-tree`` *geometry*, wh
 a single system's bath modes are placed on a tree; see
 :mod:`fishbonett.models.registry`.
 """
-from dataclasses import replace
-
 import numpy as np
 
 from fishbonett.frames.schrodinger import terms as schrodinger_terms
-from fishbonett.bath.coupled import CoupledBath
+from fishbonett.bath.coupled import CoupledBath, bind_bath
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.states.tree import TreeTensorNetwork
-from fishbonett.models.propagate import tree_peak_bond
-from fishbonett.models.result import Result
+from fishbonett.models.propagate import RunCtx
 from fishbonett.models.registry import (
-    STATIC_TREE_TEBD, methods_of, unknown_method_error,
+    STATIC_TREE_TEBD, method_spec, methods_of, unknown_method_error,
 )
 
 __all__ = ["TreeFishbone", "Fishbone", "STATIC_TREE_TEBD"]
@@ -65,8 +61,9 @@ class TreeFishbone:
         sites.  ``C`` is a ``(d_i*d_j, d_i*d_j)`` operator (default: none).
     baths : list
         One entry per site: a single :class:`~fishbonett.bath.spec.Bath`, a list of
-        baths, or ``None``.  Each bath carries its own ``coupling`` operator
-        (default ``sigma_z``).  Baths may have different domains/discretizations.
+        baths, or ``None``.  Prefer :class:`~fishbonett.bath.coupled.CoupledBath`
+        entries made with ``bath.bind(operator)``.  A bare bath is bound to
+        ``sigma_z`` for compatibility.  Baths may have different settings.
     """
 
     def __init__(self, sites, edges, baths):
@@ -89,9 +86,16 @@ class TreeFishbone:
             if entry is None:
                 self.baths.append([])
             elif isinstance(entry, (list, tuple)):
-                self.baths.append(list(entry))
+                self.baths.append([
+                    item if isinstance(item, CoupledBath)
+                    else bind_bath(item, default_operator=sigma_z)
+                    for item in entry if item is not None
+                ])
             else:
-                self.baths.append([entry])
+                self.baths.append([
+                    entry if isinstance(entry, CoupledBath)
+                    else bind_bath(entry, default_operator=sigma_z)
+                ])
         if len(self.baths) != self.ns:
             raise ValueError("baths must have one entry per site")
 
@@ -143,7 +147,7 @@ class TreeFishbone:
 
     def run(self, *, dt, t_max=None, n_steps=None, method=STATIC_TREE_TEBD,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial="up"):
+            initial="up", seed=None):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
         ``method`` exists for symmetry with
@@ -189,42 +193,13 @@ class TreeFishbone:
         if observables is None:
             observables = {"sz": sigma_z, "sx": sigma_x} if all(
                 d == 2 for d in self.de) else {}
-        parsed = [(name, _parse_observable(spec))
-                  for name, spec in observables.items()]
-        # half-step gates: the symmetric step applies each of them twice
-        dims, edges, site_gates, edge_gates = self._build(dt / 2.0, n_steps * dt)
-        st = TreeTensorNetwork(dims, edges, root=0)
-        for i in range(self.ns):
-            st.set_physical(i, self._initial_vec(initial, i))
-
-        expect = {name: (np.full((n_steps, self.ns), np.nan) if kind == "persite"
-                         else np.full(n_steps, np.nan))
-                  for name, (kind, _O, _s) in parsed}
-        rdms = np.empty((n_steps, self.ns), dtype=object)
-        max_bond = np.empty(n_steps, dtype=int)
-        for tn in range(n_steps):
-            st.step(site_gates, edge_gates, bond_dim, trunc_eps)
-            for i in range(self.ns):
-                rdms[tn, i] = st.rdm(i)
-            for name, (kind, O, sites) in parsed:
-                if kind == "persite":
-                    for i in range(self.ns):
-                        if O.shape == (self.de[i], self.de[i]):
-                            expect[name][tn, i] = np.trace(rdms[tn, i] @ O).real
-                else:
-                    expect[name][tn] = st.expectation(O, sites)
-            # peak bond over every edge of the tree, so the truncation reporting
-            # matches what the single-system models give
-            max_bond[tn] = tree_peak_bond(st)
-            st.move_oc_to(0)
-        if len(set(self.de)) == 1:                        # uniform sites -> dense
-            rdm = np.array([[rdms[tn, i] for i in range(self.ns)]
-                            for tn in range(n_steps)])
-        else:                                             # mixed dims -> object array
-            rdm = rdms
-        t = np.arange(1, n_steps + 1) * dt
-        return Result(t=t, expect=expect, rdm=rdm, max_bond=max_bond, method=m,
-                      meta={"n_sites": self.ns})
+        context = RunCtx(
+            dt=dt, n_steps=n_steps, bond_dim=bond_dim,
+            trunc_eps=trunc_eps, obs_ops=observables, initial=initial,
+            seed=seed,
+        )
+        from fishbonett.models.simulation import compile_plan
+        return compile_plan(self, method_spec(m, self._MODEL), context).run()
 
 # -- 1D fishbone: a specialization of TreeFishbone to a linear backbone -------
 class Fishbone:
@@ -234,9 +209,10 @@ class Fishbone:
     (which handles *any* loop-free electronic topology) to a **linear** backbone:
     site ``i`` is joined to site ``i+1`` by ``backbone[i]``.  Each ``baths`` entry
     is a single :class:`Bath` (one bath -- may be multichannel), a ``(left, right)``
-    pair (two baths per site -- the fishbone), or ``None``.  A left bath defaults
-    to a ``sigma_z`` coupling and a right bath to ``sigma_x`` when the :class:`Bath`
-    itself sets none.  ``run`` and the returned :class:`Result` are exactly those
+    pair (two baths per site -- the fishbone), or ``None``.  Prefer explicit
+    ``bath.bind(operator)`` values.  For compatibility, a bare left bath defaults
+    to ``sigma_z`` and a bare right bath to ``sigma_x``.  ``run`` and the returned
+    :class:`Result` are exactly those
     of :meth:`fishbonett.models.fishbone.TreeFishbone.run`.
     """
 
@@ -270,14 +246,11 @@ class Fishbone:
             for pos, b in enumerate(entry):
                 if b is None:
                     continue
-                if isinstance(b, CoupledBath):
-                    out.append(b)
-                    continue
-                if b.coupling is None:
-                    b = replace(b, coupling=(sigma_z if pos == 0 else sigma_x))
-                out.append(b)
+                out.append(b if isinstance(b, CoupledBath) else bind_bath(
+                    b, default_operator=(sigma_z if pos == 0 else sigma_x)))
             return out
-        return entry
+        return (entry if isinstance(entry, CoupledBath)
+                else bind_bath(entry, default_operator=sigma_z))
 
     def _tree(self):
         edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]
@@ -296,8 +269,10 @@ class Fishbone:
         """``(dims, edges, site_H, edge_H)`` -- :meth:`local_terms` as a 4-tuple."""
         return self.local_terms(t_max).as_tuple()
 
-    def run(self, *, method=STATIC_TREE_TEBD, **kwargs):
-        """Propagate the 1D fishbone (delegates to the general tree engine).  See
+    def run(self, *, dt, t_max=None, n_steps=None, method=STATIC_TREE_TEBD,
+            trunc=None, bond_dim=None, trunc_eps=None, observables=None,
+            initial="up", seed=None):
+        """Propagate the 1D fishbone through the shared simulation planner. See
         :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout.
 
@@ -306,4 +281,18 @@ class Fishbone:
         m = method.lower().replace("_", "-")
         if m not in methods_of(self._MODEL):
             raise unknown_method_error(m, self._MODEL)
-        return self._tree().run(method=m, **kwargs)
+        if n_steps is None:
+            if t_max is None:
+                raise ValueError("provide either t_max or n_steps")
+            n_steps = int(round(t_max / dt))
+        trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+        if observables is None:
+            observables = ({"sz": sigma_z, "sx": sigma_x}
+                           if all(d == 2 for d in self.de) else {})
+        context = RunCtx(
+            dt=dt, n_steps=n_steps, bond_dim=trunc.max_bond,
+            trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
+            seed=seed,
+        )
+        from fishbonett.models.simulation import compile_plan
+        return compile_plan(self, method_spec(m, self._MODEL), context).run()

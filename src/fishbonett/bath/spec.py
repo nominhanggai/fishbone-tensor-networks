@@ -83,11 +83,12 @@ class Bath:
         measure-adapted TEDOPA star (resolves IR-divergent / sharply peaked baths).
     extra_breaks, m_per : TEDOPA quadrature options.
     coupling : (d, d) array, or list of (d, d) arrays
-        Compatibility field for the Fishbone API, where each bath historically
+        Deprecated compatibility field for the Fishbone API, where each bath historically
         carried its edge operator.  New code should bind operators explicitly with
         :meth:`Bath.bind`; ``SystemBath(coupling=...)`` is authoritative for the
-        single-system API.  A conflicting duplicate is rejected.  A list denotes
-        channels sharing one mode grid and therefore requires ``'legendre'``.
+        single-system API. Using it emits ``DeprecationWarning`` and a conflicting
+        duplicate is rejected. A list denotes channels sharing one mode grid and
+        therefore requires ``'legendre'``.
     """
     J: object
     domain: tuple = None
@@ -170,8 +171,9 @@ class Bath:
         """Bind this bath to model-owned coupling operator(s).
 
         New code should keep the operator outside the bath specification and use
-        this explicit binding.  ``Bath.coupling`` remains accepted for the existing
-        Fishbone API and is checked when ``validate_legacy`` is requested.
+        this explicit binding.  ``Bath.coupling`` remains temporarily accepted for
+        the Fishbone API and emits ``DeprecationWarning``; it is checked when
+        ``validate_legacy`` is requested.
         """
         from fishbonett.bath.coupled import bind_bath
         return bind_bath(self, coupling, default_operator=default_operator,

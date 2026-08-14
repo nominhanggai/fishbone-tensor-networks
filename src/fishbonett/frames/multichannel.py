@@ -32,6 +32,7 @@ from numpy import exp
 
 from fishbonett.contract import contract as einsum
 from fishbonett.bath.lanczos import lanczos
+from fishbonett.bath.conventions import integrated_free_phase
 from fishbonett.frames.gates import SwapNetworkFrame
 from fishbonett.linalg import kron
 from fishbonett.operators import temp_factor, annihilate
@@ -127,7 +128,7 @@ class SystemBathMultiChannel(SwapNetworkFrame):
         #  ↑ A list of coupling matrices A_k. H_i = \sum_k A_k \otimes (a+a^\dagger)
         self.H = []
         self.coef = []
-        self.phase = lambda lam, t, delta: (np.exp(-1j * lam * (t + delta)) - np.exp(-1j * lam * t)) / (-1j * lam)
+        self.phase = integrated_free_phase
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
 
     def get_h2(self, t, delta, inc_sys=True):
@@ -213,4 +214,3 @@ class SystemBathMultiChannel(SwapNetworkFrame):
     # get_u comes from SwapNetworkFrame.  This frame is the interaction picture with
     # a matrix-valued coupling, so get_h2 is the only part that differs from
     # SystemBathIP -- which is exactly what the mixin's contract says.
-

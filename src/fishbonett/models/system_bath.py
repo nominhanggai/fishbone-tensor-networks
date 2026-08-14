@@ -84,18 +84,18 @@ class SystemBath:
         # builders take as `h_sys=` / `coupling=`
         self.h = self.system.h
         self.coupling = self.system.coupling
-        self.bath = bath
         # One authoritative binding.  ``Bath.coupling`` is accepted only as a
         # compatibility duplicate and must agree; every driver below reads this
         # object for channel topology and combined star couplings.
         self.coupled_bath = bind_bath(
             bath, self.coupling, validate_legacy=True)
+        self.bath = self.coupled_bath.bath
 
     # -- public API ----------------------------------------------------------
     def run(self, *, dt, t_max=None, n_steps=None, method=None,
             model=None, frame=None, geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial="up", krylov=25, **engine_kw):
+            initial="up", krylov=25, seed=None, **engine_kw):
         """Propagate and return a :class:`Result`.
 
         .. rubric:: Two spellings, one lookup
@@ -146,8 +146,9 @@ class SystemBath:
           via T-TEDOPA thermalization.
         * **multichannel** -- one bath through several couplings on shared modes.
           Selected by giving ``SystemBath(coupling=...)`` a *list* of coupling
-          operators, **not** by a ``method`` name.  ``Bath.coupling`` may contain
-          the same list for compatibility, but a conflicting duplicate is rejected.
+          operators, **not** by a ``method`` name.  The deprecated
+          ``Bath.coupling`` field may contain the same list for compatibility, but
+          emits a warning and a conflicting duplicate is rejected.
 
         For several system sites use :class:`~fishbonett.models.fishbone.Fishbone` (1D
         backbone) or :class:`~fishbonett.models.fishbone.TreeFishbone` (any tree).
@@ -221,7 +222,7 @@ class SystemBath:
                 f"{', '.join(alternatives)}")
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
-                     krylov=krylov, kw=engine_kw)
+                     krylov=krylov, seed=seed, kw=engine_kw)
         # Local import keeps the physical model independent of every concrete
         # frame and evolution engine until a run is actually compiled.
         from fishbonett.models.simulation import compile_plan

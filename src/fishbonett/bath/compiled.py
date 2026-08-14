@@ -13,10 +13,12 @@ from dataclasses import dataclass
 import numpy as np
 
 from fishbonett.bath.chain import get_bath_nn_paras, star_transform
+from fishbonett.bath.conventions import reorganization_energy
 from fishbonett.bath.legendre import get_vn_squared
 
 __all__ = [
-    "StarBath", "ChainBath", "compile_star", "compile_chain",
+    "StarBath", "ChainBath", "PolaronBath", "compile_star", "compile_chain",
+    "compile_polaron",
 ]
 
 
@@ -124,6 +126,18 @@ class ChainBath:
         return len(self.frequencies)
 
 
+@dataclass(frozen=True)
+class PolaronBath:
+    """Chain mapping of ``J(w)/w**2`` plus the physical reorganization shift."""
+
+    chain: ChainBath
+    reorganization_energy: float
+
+    def __post_init__(self):
+        object.__setattr__(self, "reorganization_energy",
+                           float(self.reorganization_energy))
+
+
 def _require_resolved(bath):
     if bath.domain is None or bath.n_modes is None:
         raise ValueError(
@@ -170,3 +184,27 @@ def compile_chain(bath):
         discretizer=bath.discretizer())
     coupling = np.asarray(coupling, float)
     return ChainBath(onsite, coupling[1:], coupling[0], bath.phys_dim)
+
+
+def compile_polaron(bath):
+    """Compile the reweighted bath required by the Lang--Firsov frame."""
+    _require_resolved(bath)
+    densities = bath.spectral_densities()
+    if len(densities) != 1:
+        raise ValueError("the polaron frame requires one bath channel")
+    density = densities[0]
+
+    def displaced_density(frequency):
+        if abs(frequency) < 1e-15:
+            return 0.0
+        return density(frequency) / frequency ** 2
+
+    onsite, coupling = get_bath_nn_paras(
+        displaced_density, bath.n_modes, list(bath.domain),
+        discretizer=bath.discretizer())
+    coupling = np.asarray(coupling, float)
+    chain = ChainBath(onsite, coupling[1:], coupling[0], bath.phys_dim)
+    return PolaronBath(
+        chain=chain,
+        reorganization_energy=reorganization_energy(density, bath.domain),
+    )

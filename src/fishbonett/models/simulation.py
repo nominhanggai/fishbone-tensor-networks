@@ -16,15 +16,19 @@ from typing import Callable, Mapping, Optional
 import numpy as np
 import scipy.linalg as _la
 
-from fishbonett.bath.coupled import bind_bath
 from fishbonett.evolve import modetree as _tree
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
 from fishbonett.frames import mpo as _frames_mpo
+from fishbonett.frames.capabilities import (
+    DisplacementFactory, MPOHamiltonian, StaticGateFactory,
+    StaticGraphHamiltonian, SwapGateFactory, require_capability,
+)
 from fishbonett.models.propagate import (
-    RunCtx, modetree_peak_bond, mps_peak_bond, propagate,
+    RunCtx, modetree_peak_bond, mps_peak_bond, propagate, tree_peak_bond,
 )
 from fishbonett.models.result import Result
+from fishbonett.randomized import random_seed
 
 __all__ = ["SimulationPlan", "PLAN_COMPILERS", "compile_plan"]
 
@@ -76,11 +80,12 @@ class SimulationPlan:
 
     def run(self):
         """Execute the prepared plan and return a uniform :class:`Result`."""
-        if self.execute is not None:
-            return self.execute()
-        return propagate(
-            self.spec, self.context, step=self.step, rdm=self.measure_rdm,
-            peak_bond=self.peak_bond, expect_from_rdm=_expect_from_rdm)
+        with random_seed(self.context.seed):
+            if self.execute is not None:
+                return self.execute()
+            return propagate(
+                self.spec, self.context, step=self.step, rdm=self.measure_rdm,
+                peak_bond=self.peak_bond, expect_from_rdm=_expect_from_rdm)
 
 
 def _expect_from_rdm(rdms, obs_ops: Mapping[str, np.ndarray]):
@@ -100,10 +105,10 @@ def _check_single_channel(model):
 
 def _undressed_mpo_frame(model, maker, bath, context, compiled):
     frame = maker(
-        bath.spectral_density(), bath.domain, n_chain=bath.n_modes,
+        n_chain=bath.n_modes,
         d=bath.phys_dim, hsys=model.h, cop=model.coupling,
         init=model.system.initial_vector(context.initial),
-        discretizer=bath.discretizer(), compiled=compiled)
+        compiled=compiled)
     hooks = dict(
         observe=lambda tensors: _mpo.measure_rdm(tensors[0]),
         prec=context.kw.get("prec", 1e-4),
@@ -117,36 +122,36 @@ def _polaron_builder(model, context):
     from fishbonett.frames.polaron import SystemBathPolaron
 
     _check_single_channel(model)
-    bath = model.bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(context.t_max)
+    bath = coupled.bath
     n_modes, d_sys = bath.n_modes, model.h.shape[0]
     phys_dims = [d_sys] + [bath.phys_dim] * n_modes
     builder = SystemBathPolaron(
         phys_dims, h_sys=model.h, coupling=model.coupling,
-        sd=bath.spectral_density(), domain=bath.domain,
-        discretizer=bath.discretizer()).build()
+        compiled_polaron=coupled.compiled_polaron()).build()
     return builder, bath, n_modes, phys_dims
 
 
-def _compile_mpo_frame(model, spec, context, bath):
+def _compile_mpo_frame(model, spec, context, bath, coupled):
     """Prepare the one MPO frame selected by ``spec.frame``.
 
     This is intentionally a frame compiler, not another method registry: several
     registry rows differing only in integrator share the same prepared frame.
     """
     if spec.frame == "schrodinger-chain":
-        compiled = bind_bath(bath, model.coupling).compiled_chain()
+        compiled = coupled.compiled_chain()
         return _undressed_mpo_frame(
             model, _frames_mpo.chain_mpo_frame, bath, context, compiled)
     if spec.frame == "schrodinger-star":
-        compiled = bind_bath(bath, model.coupling).compiled_star()
+        compiled = coupled.compiled_star()
         return _undressed_mpo_frame(
             model, _frames_mpo.static_star_mpo_frame, bath, context, compiled)
     if spec.frame == "interaction-chain":
-        compiled = bind_bath(bath, model.coupling).compiled_star()
+        compiled = coupled.compiled_star()
         return _undressed_mpo_frame(
             model, _frames_mpo.ip_chain_mpo_frame, bath, context, compiled)
     if spec.frame == "interaction-star":
-        compiled = bind_bath(bath, model.coupling).compiled_star()
+        compiled = coupled.compiled_star()
         return _undressed_mpo_frame(
             model, _frames_mpo.ip_star_mpo_frame, bath, context, compiled)
     if spec.frame == "polaron-chain":
@@ -175,14 +180,17 @@ def _compile_mpo_frame(model, spec, context, bath):
 
 def _compile_mpo_plan(model, spec, context):
     _check_single_channel(model)
-    bath = model.bath.resolved(context.t_max)
-    frame, hooks = _compile_mpo_frame(model, spec, context, bath)
+    coupled = model.coupled_bath.resolved(context.t_max)
+    bath = coupled.bath
+    frame, hooks = _compile_mpo_frame(model, spec, context, bath, coupled)
+    require_capability(frame, MPOHamiltonian, engine=spec.engine)
 
     def execute():
         times, rdms, max_bond = _mpo.run_mpo_frame(
             frame, dt=context.dt, nsteps=context.n_steps, sweep=spec.driver,
             D=context.bond_dim, chi_max=context.bond_dim,
             eps=context.trunc_eps, krylov=context.krylov,
+            seed=context.seed,
             Dplusmax=context.kw.get("Dplusmax", 4), **hooks)
         return Result(
             t=times, expect=_expect_from_rdm(rdms, context.obs_ops),
@@ -193,7 +201,8 @@ def _compile_mpo_plan(model, spec, context):
 
 def _compile_modetree_plan(model, spec, context):
     _check_single_channel(model)
-    bath = model.bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(context.t_max)
+    bath = coupled.bath
 
     def execute():
         max_bond = []
@@ -208,9 +217,9 @@ def _compile_modetree_plan(model, spec, context):
             n_chain=bath.n_modes, phys_dim=bath.phys_dim, dt=context.dt,
             nsteps=context.n_steps, D=context.bond_dim,
             discretizer=bath.discretizer(),
-            compiled=bind_bath(bath, model.coupling).compiled_star(),
-            observe=observe, **context.kw)
-        density, domain = bath.spectral_density(), bath.domain
+            compiled=coupled.compiled_star(),
+            observe=observe, seed=context.seed, **context.kw)
+        density = domain = None
         if spec.driver == "run_tree_tdvp":
             times, rdms = _tree.run_tree_mpo(
                 density, domain, sweep="tdvp1", **common)
@@ -231,44 +240,102 @@ def _compile_modetree_plan(model, spec, context):
     return SimulationPlan(spec, context, execute=execute)
 
 
-def _compile_multichannel_plan(model, spec, context):
-    def execute():
-        from fishbonett.models.fishbone import TreeFishbone
+def _compile_static_tree_plan(model, spec, context):
+    """Compile Schroedinger-picture TEBD for every site-tree topology.
 
+    ``TreeFishbone`` and its linear ``Fishbone`` specialization use this directly.
+    The one-site multichannel model is lowered to the same tree representation and
+    its leading site axis is removed again from the public result.
+    """
+    from fishbonett.models.fishbone import (
+        Fishbone, TreeFishbone, _parse_observable,
+    )
+    from fishbonett.states.tree import TreeTensorNetwork
+
+    single_system = not isinstance(model, (Fishbone, TreeFishbone))
+    if single_system:
         tree = TreeFishbone(
             sites=[model.h], edges=[], baths=[model.coupled_bath])
-        result = tree.run(
-            dt=context.dt, n_steps=context.n_steps,
-            bond_dim=context.bond_dim, trunc_eps=context.trunc_eps,
-            observables=context.obs_ops,
-            initial=[model.system.initial_vector(context.initial)])
-        expect = {name: values[:, 0]
-                  for name, values in result.expect.items()}
-        rdm = np.array([result.rdm[k, 0]
-                        for k in range(context.n_steps)])
+        initial = [model.system.initial_vector(context.initial)]
+    else:
+        tree = model._tree() if isinstance(model, Fishbone) else model
+        initial = context.initial
+
+    terms = tree.local_terms(context.t_max)
+    require_capability(terms, StaticGraphHamiltonian, engine=spec.engine)
+    site_gates, edge_gates = terms.gates(context.dt / 2.0)
+    parsed = [(name, _parse_observable(value))
+              for name, value in context.obs_ops.items()]
+
+    def execute():
+        state = TreeTensorNetwork(terms.dims, terms.edges, root=0)
+        for site in range(tree.ns):
+            state.set_physical(site, tree._initial_vec(initial, site))
+
+        expect = {
+            name: (np.full((context.n_steps, tree.ns), np.nan)
+                   if kind == "persite"
+                   else np.full(context.n_steps, np.nan))
+            for name, (kind, _operator, _sites) in parsed
+        }
+        rdms = np.empty((context.n_steps, tree.ns), dtype=object)
+        max_bond = np.empty(context.n_steps, dtype=int)
+        for step in range(context.n_steps):
+            state.step(
+                site_gates, edge_gates, context.bond_dim, context.trunc_eps)
+            for site in range(tree.ns):
+                rdms[step, site] = state.rdm(site)
+            for name, (kind, operator, sites) in parsed:
+                if kind == "persite":
+                    for site in range(tree.ns):
+                        if operator.shape == (tree.de[site], tree.de[site]):
+                            expect[name][step, site] = np.trace(
+                                rdms[step, site] @ operator).real
+                else:
+                    expect[name][step] = state.expectation(operator, sites)
+            max_bond[step] = tree_peak_bond(state)
+            state.move_oc_to(0)
+
+        if len(set(tree.de)) == 1:
+            rdm = np.array([
+                [rdms[step, site] for site in range(tree.ns)]
+                for step in range(context.n_steps)
+            ])
+        else:
+            rdm = rdms
+        result = Result(
+            t=np.arange(1, context.n_steps + 1) * context.dt,
+            expect=expect, rdm=rdm, max_bond=max_bond, method=spec.name,
+            meta={"n_sites": tree.ns},
+        )
+        if not single_system:
+            return result
         return Result(
-            t=result.t, expect=expect, rdm=rdm,
-            max_bond=result.max_bond, method=spec.name)
+            t=result.t,
+            expect={name: values[:, 0] for name, values in result.expect.items()},
+            rdm=result.rdm[:, 0], max_bond=result.max_bond,
+            method=spec.name,
+        )
 
     return SimulationPlan(spec, context, execute=execute)
 
 
-def _interaction_frame(model, bath):
+def _interaction_frame(model, coupled):
     from fishbonett.frames.interaction_picture import SystemBathIP
 
+    bath = coupled.bath
     phys_dims = [model.h.shape[0]] + [bath.phys_dim] * bath.n_modes
-    chain = bind_bath(bath, model.coupling).compiled_chain()
+    chain = coupled.compiled_chain()
     builder = SystemBathIP(
         phys_dims, h_sys=model.h, coupling=model.coupling,
         compiled_chain=chain).build()
     return builder, phys_dims
 
 
-def _multichannel_interaction_frame(model, bath):
+def _multichannel_interaction_frame(model, coupled):
     from fishbonett.frames.multichannel import SystemBathMultiChannel
 
-    coupled = bind_bath(
-        bath, model.coupling, validate_legacy=True)
+    bath = coupled.bath
     star = coupled.compiled_star()
     coupling_matrix = star.combine(coupled.operators)
     phys_dims = [model.h.shape[0]] + [star.phys_dim] * star.n_modes
@@ -281,13 +348,15 @@ def _multichannel_interaction_frame(model, bath):
 def _compile_swap_plan(model, spec, context):
     from fishbonett.states.mps import SystemBathMPS
 
-    bath = model.bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(context.t_max)
+    bath = coupled.bath
     if "multichannel" in spec.models:
-        builder, phys_dims = _multichannel_interaction_frame(model, bath)
+        builder, phys_dims = _multichannel_interaction_frame(model, coupled)
     else:
         _check_single_channel(model)
-        builder, phys_dims = _interaction_frame(model, bath)
+        builder, phys_dims = _interaction_frame(model, coupled)
     state = SystemBathMPS(phys_dims)
+    require_capability(builder, SwapGateFactory, engine=spec.engine)
     psi0 = model.system.initial_vector(context.initial)
     state.B[0][:] = 0.0
     for index, amplitude in enumerate(psi0):
@@ -309,8 +378,10 @@ def _compile_displacement_plan(model, spec, context):
     )
 
     _check_single_channel(model)
-    bath = model.bath.resolved(context.t_max)
-    builder, phys_dims = _interaction_frame(model, bath)
+    coupled = model.coupled_bath.resolved(context.t_max)
+    bath = coupled.bath
+    builder, phys_dims = _interaction_frame(model, coupled)
+    require_capability(builder, DisplacementFactory, engine=spec.engine)
     tensors = product_state(
         phys_dims, model.system.initial_vector(context.initial))
     u_half = _la.expm(-0.5j * context.dt * np.asarray(model.h, complex))
@@ -341,6 +412,7 @@ def _compile_polaron_plan(model, spec, context):
     from fishbonett.states.mps import SystemBathMPS
 
     builder, _bath, n_modes, phys_dims = _polaron_builder(model, context)
+    require_capability(builder, StaticGateFactory, engine=spec.engine)
     state = SystemBathMPS(phys_dims)
     psi0 = model.system.initial_vector(context.initial)
     state.split_truncate_theta(
@@ -363,7 +435,7 @@ PLAN_COMPILERS = {
     "swap-tebd": _compile_swap_plan,
     "displacement-mpo": _compile_displacement_plan,
     "polaron-tebd": _compile_polaron_plan,
-    "static-tree-tebd": _compile_multichannel_plan,
+    "static-tree-tebd": _compile_static_tree_plan,
 }
 
 

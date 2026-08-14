@@ -34,6 +34,33 @@ def test_compiled_representations_are_operator_free_and_immutable():
     assert not hasattr(chain, "operator")
 
 
+def test_bound_bath_caches_each_compiled_representation():
+    coupled = _bath().bind(sigma_z)
+
+    assert coupled.compiled_star() is coupled.compiled_star()
+    assert coupled.compiled_chain() is coupled.compiled_chain()
+    polaron = coupled.compiled_polaron()
+    assert polaron is coupled.compiled_polaron()
+    assert polaron.chain.n_modes == coupled.n_modes
+
+
+def test_automatic_resolution_is_cached_per_run_horizon():
+    bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=None, phys_dim=4)
+    coupled = bath.bind(sigma_z)
+
+    first = coupled.resolved(0.2)
+    assert first is coupled.resolved(0.2)
+    assert first is not coupled.resolved(0.3)
+
+
+def test_legacy_coupling_emits_a_migration_warning():
+    bath = Bath(J=_J, coupling=sigma_z, domain=(0.0, 40.0),
+                n_modes=3, phys_dim=4)
+    with pytest.warns(DeprecationWarning, match="Bath.coupling is deprecated"):
+        coupled = bath.bind()
+    np.testing.assert_array_equal(coupled.operator, sigma_z)
+
+
 def test_model_owned_multichannel_couplings_need_no_bath_duplicate():
     bath = _bath(J=[_J, _J])
     model = SystemBath(
