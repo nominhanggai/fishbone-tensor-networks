@@ -58,7 +58,9 @@ class SystemBathIP(SwapNetworkFrame):
     g : float, optional
         Frequency-axis rescaling passed to the recurrence coefficients.
     ncap : int, optional
-        Cap on the recurrence-coefficient recursion depth.
+        Accepted and ignored -- the chain mapping's accuracy is set by the number
+        of modes.  Kept because callers pass it; see
+        :func:`fishbonett.bath.chain.get_coupling`.
     discretizer : callable, optional
         Quadrature for the star discretization; ``None`` is Gauss-Legendre.
     """
