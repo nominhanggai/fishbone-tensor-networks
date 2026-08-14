@@ -29,6 +29,8 @@ implemented is selected per :meth:`update_bond` call:
 With ``eps_lbo=None`` and ``adaptive=False`` the update reduces exactly to the
 plain single-SVD scheme, so results are unchanged from the historical engines.
 """
+import warnings
+
 import numpy as np
 import scipy.linalg
 from fishbonett.contract import contract as einsum
@@ -217,7 +219,17 @@ class SystemBathMPS(TensorNetwork):
         (default), a *local-basis-optimization* pass when ``eps_lbo`` is given
         (which also compresses the local boson basis ``R``), or the adaptive
         bond-dimension search when ``adaptive`` is set.
+
+        ``gpu=True`` without CuPy installed falls back to the CPU path -- the
+        results are the same, only slower -- but says so once, because otherwise
+        the only symptom is a run that is unaccountably slow.
         """
+        if gpu and not _CUPY:
+            warnings.warn(
+                "gpu=True but CuPy is not importable; falling back to the CPU "
+                "path.  Install the extra with `pip install 'fishbonett[gpu]'` "
+                "for GPU truncation.",
+                RuntimeWarning, stacklevel=2)
         if gpu and _CUPY:
             self._split_gpu(theta, i, chi_max, eps, eps_lbo)
         elif eps_lbo is None and not adaptive:

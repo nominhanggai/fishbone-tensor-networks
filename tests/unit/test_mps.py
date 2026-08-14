@@ -1,5 +1,40 @@
 """Direct unit tests for the canonical TEBD engine (fishbonett.states.mps)."""
+import warnings
+
 import numpy as np
+import pytest
+
+
+def test_gpu_request_without_cupy_says_so_and_still_works():
+    """``gpu=True`` without CuPy silently ran on the CPU.
+
+    The fallback itself is right -- the results are identical, only slower -- but
+    silence means the only symptom is an unaccountably slow run.  Same class as the
+    VEGAS integrators: an optional extra whose absence changed behaviour without
+    saying anything.  It now warns once and still produces the same state.
+    """
+    from fishbonett.states import mps as mps_mod
+    from fishbonett.states.mps import SystemBathMPS
+
+    if mps_mod._CUPY:                      # pragma: no cover - needs a GPU box
+        pytest.skip("CuPy is installed; this checks the absent-backend path")
+
+    pd = [2, 4, 4]
+    theta = np.zeros((1, 2, 4, 4), dtype=complex)
+    theta[0, 0, 0, 0] = 1.0
+
+    cpu = SystemBathMPS(pd)
+    cpu.split_truncate_theta(theta.copy(), 0, 8, 1e-10)
+
+    asked = SystemBathMPS(pd)
+    with pytest.warns(RuntimeWarning, match=r"fishbonett\[gpu\]"):
+        asked.split_truncate_theta(theta.copy(), 0, 8, 1e-10, gpu=True)
+
+    # the warning is the only difference: the state is the same
+    for a, b in zip(cpu.B, asked.B):
+        assert np.array_equal(a, b)
+    for a, b in zip(cpu.S, asked.S):
+        assert np.array_equal(a, b)
 import pytest
 import scipy.linalg
 from fishbonett.contract import contract as einsum
