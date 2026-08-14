@@ -41,7 +41,7 @@ the bath.  This is exposed on the low-level state as
 
 All three forms work identically through the 1D
 {py:class}`~fishbonett.models.fishbone.Fishbone`, since it delegates to the same engine.
-A path is a loop-free graph like any other, so these methods are available on
+A 1D MPS has a loop-free tensor graph, so these methods are available on
 {py:class}`~fishbonett.states.mps.SystemBathMPS` too — its spanning "subtree" is
 just the stretch of chain between the outermost requested sites.
 

@@ -1,7 +1,7 @@
 # Schrödinger-star representation — MPO + TDVP
 
 `schrodinger-star-tdvp1` (fixed bond) and `schrodinger-star-tdvp2` (adaptive) run TDVP on a
-**static** star-geometry MPO — no chain mapping, every mode coupled directly to the
+**static** star-representation MPO — no chain mapping, every mode coupled directly to the
 system, and nothing rotated out.  Because $H$ is time-independent the MPO is built
 **once**, which makes these the most accurate methods in the package at a given
 `dt`: there is no per-step rebuild error at all.
@@ -62,7 +62,7 @@ representation it cuts the other way.
 
 In the interaction picture the residual entanglement is small enough that the star
 often wins.  Here it is not: nothing has been rotated out, so the state carries the
-full system–bath correlation *and* the star geometry gives no locality to help
+full system–bath correlation *and* the star interaction graph gives no locality to help
 represent it.  Expect the bond dimension to grow faster than for
 {doc}`/methods/schrodinger/chain` on the same problem.
 

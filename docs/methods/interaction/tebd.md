@@ -1,6 +1,6 @@
 # Interaction-chain — swap-network TEBD
 
-`method="interaction-chain-tebd"` propagates `interaction-chain` on a path MPS. The represented
+`method="interaction-chain-tebd"` propagates `interaction-chain` on a 1D MPS. The represented
 Hamiltonian couples the system to every chain mode, so a swap network moves the
 system site past the modes and back during each symmetric step.
 
@@ -21,7 +21,7 @@ $$
 
 The free bath is absent from $H_I(t)$, so there are no mode--mode terms. The
 Hamiltonian interaction graph is a star centered on the system even though the
-state tensors are stored on a path. That graph mismatch, rather than the
+state tensors form a 1D MPS. That graph mismatch, rather than the
 definition of the representation, is why this method uses swaps.
 
 ## Algorithm

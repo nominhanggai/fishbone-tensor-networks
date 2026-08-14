@@ -10,7 +10,7 @@ Two models share this one class:
 What used to be three further "models" here -- ``chain``, ``star`` and
 ``mode-tree`` -- were never topologies.  ``chain`` and ``star`` belong in the
 complete representation name (``schrodinger-chain``, ``interaction-star``, ...),
-and ``mode-tree`` is a state **geometry**.  See
+and ``mode-tree`` is a tensor-network **state geometry**. See
 :mod:`fishbonett.models.registry`, which is the authority on which combination
 exists and how it is dispatched.
 """
@@ -59,7 +59,7 @@ class SystemBath:
     :class:`~fishbonett.models.fishbone.TreeFishbone` (sites in any loop-free tree).
 
     This one class covers the ``system-bath`` and ``multichannel`` models.  The
-    Hamiltonian ``representation`` and the state's ``geometry`` are other axes of
+    Hamiltonian ``representation`` and the ``state_geometry`` are other axes of
     ``run``, not separate models.
 
     When the system has *distinct* internal degrees of freedom (e.g. a spin **and**
@@ -96,7 +96,7 @@ class SystemBath:
 
     # -- public API ----------------------------------------------------------
     def run(self, *, dt, t_max=None, n_steps=None, method=None,
-            model=None, representation=None, geometry=None, integrator=None,
+            model=None, representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial="up", krylov=25, seed=None, **engine_kw):
         """Propagate and return a :class:`Result`.
@@ -105,14 +105,15 @@ class SystemBath:
 
         A run is four independent choices, and they can be given **as themselves**::
 
-            sb.run(dt=..., t_max=..., representation="interaction-star", geometry="path",
+            sb.run(dt=..., t_max=..., representation="interaction-star",
+                   state_geometry="mps",
                    integrator="tdvp2")
 
         ``model`` is what is coupled to what, and ``representation`` is one complete
         choice for how ``H`` is written: ``"schrodinger-chain"``,
         ``"schrodinger-star"``, ``"interaction-chain"``, ``"interaction-star"``,
-        ``"polaron-chain"``, or ``"polaron-star"``.  ``geometry`` is the graph the
-        state lives on (``"path"``/``"binary-tree"``), and
+        ``"polaron-chain"``, or ``"polaron-star"``. ``state_geometry`` is the
+        tensor-network geometry (``"mps"``/``"binary-tree"``/``"tree"``), and
         ``integrator`` how a step is taken (``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
         ``"dtdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
         one combination fits; if several do, the error lists them.
@@ -127,7 +128,7 @@ class SystemBath:
 
             sb.run(dt=..., t_max=..., method="interaction-chain-tdvp2")
 
-        because ``"interaction-chain-tdvp2"`` fixes ``(interaction-chain, path,
+        because ``"interaction-chain-tdvp2"`` fixes ``(interaction-chain, mps,
         tdvp2)`` and this object supplies the ``system-bath`` model.  Every method
         name starts with its complete representation.  Give one spelling or the
         other, not both.
@@ -144,7 +145,7 @@ class SystemBath:
           MPO is built once and TDVP conserves energy, at the cost of the largest
           bond dimensions.  *interaction-chain*
           (``interaction-chain-tebd``, ``interaction-chain-trotter-mpo``,
-          ``interaction-chain-tdvp1/2`` on a path;
+          ``interaction-chain-tdvp1/2`` on a 1D MPS;
           ``interaction-chain-tree-tdvp1/2 | interaction-chain-tree-tebd`` on a
           balanced binary tree, which keeps the high-bond region ``O(log N)`` edges
           deep instead of ``O(N)``) -- low entanglement, gates rebuilt each step;
@@ -186,6 +187,10 @@ class SystemBath:
         two-level system (and nothing for a larger system -- pass ``observables``).
         ``result.rdm`` is the system reduced density matrix per step.
         """
+        if "geometry" in engine_kw:
+            raise TypeError(
+                "'geometry' is no longer a public run axis; use "
+                "state_geometry with 'mps', 'binary-tree', or 'tree'")
         stale_axes = [name for name in ("frame", "basis") if name in engine_kw]
         if stale_axes:
             joined = " and ".join(repr(name) for name in stale_axes)
@@ -201,8 +206,9 @@ class SystemBath:
         # a general system has no canonical observables, so it gets the RDM only
         obs_ops = observables if observables is not None else self.system.observables()
 
-        axis_kw = dict(model=model, representation=representation, geometry=geometry,
-                       integrator=integrator)
+        axis_kw = dict(
+            model=model, representation=representation,
+            state_geometry=state_geometry, integrator=integrator)
         axes = any(v is not None for v in axis_kw.values())
         multichannel = self.coupled_bath.is_multichannel
         if multichannel:
@@ -219,7 +225,7 @@ class SystemBath:
         if method is None and not axes:
             method = own[0] if multichannel else _DEFAULT_METHOD
         # One lookup, either spelling: the object selects the model and the
-        # registry says which representation/geometry/integrator combination and
+        # registry says which representation/state-geometry/integrator combination and
         # engine to use.  The planner then prepares the representation, state,
         # integrator and measurement policy.
         spec = registry.resolve(

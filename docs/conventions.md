@@ -2,7 +2,7 @@
 
 fishbonett uses natural units, $\hbar=1$, and evolves states with
 $U(t)=\exp(-iHt)$. Site 0 is the system; bath sites follow in the order defined
-by the selected representation and geometry.
+by the selected representation and tensor-network geometry.
 
 ## Spectral-density normalization
 

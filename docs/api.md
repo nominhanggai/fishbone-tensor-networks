@@ -3,7 +3,7 @@
 The high-level API separates four public choices:
 
 ```text
-model -> representation -> geometry -> integrator
+model -> representation -> state_geometry -> integrator
 ```
 
 ```python
@@ -11,7 +11,7 @@ result = sb.run(
     dt=0.02,
     t_max=2.0,
     representation="interaction-star",
-    geometry="path",
+    state_geometry="mps",
     integrator="tdvp2",
 )
 ```

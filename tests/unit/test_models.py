@@ -3,7 +3,7 @@
 The registry (:mod:`fishbonett.models.registry`) is the single source of truth for
 which methods exist.  These tests pin it to the *dispatch* so the two cannot
 drift: the previous hand-maintained tables drifted twice (the ``tree-*`` methods
-were labelled ``chain`` although their state is a tree, and the multichannel path
+were labelled ``chain`` although their state is a tree, and the multichannel route
 was labelled interaction picture although it builds a static Hamiltonian).
 """
 import re
@@ -61,9 +61,10 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
             assert mk in R.MODELS, f"{name} names unknown model {mk!r}"
             assert name in R.MODELS[mk].methods()
         assert spec.representation.count("-") == 1
-        assert spec.geometry in R.GEOMETRIES, f"{name} names unknown geometry"
-        geometry_tag = "" if spec.geometry == "path" else "tree-"
-        assert name == f"{spec.representation}-{geometry_tag}{spec.integrator}"
+        assert spec.state_geometry in R.STATE_GEOMETRIES, (
+            f"{name} names unknown state geometry")
+        state_geometry_tag = "" if spec.state_geometry == "mps" else "tree-"
+        assert name == f"{spec.representation}-{state_geometry_tag}{spec.integrator}"
         # every single-system engine must resolve to one plan compiler
         if set(spec.models) & {"system-bath", "multichannel"}:
             assert callable(PLAN_COMPILERS.get(spec.engine)), (
@@ -72,6 +73,13 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
     assert not hasattr(SB, "_DRIVERS")
     assert not hasattr(SB, "_MPO_REPRESENTATIONS")
     assert not hasattr(SB, "_SWAP_REPRESENTATIONS")
+
+
+def test_state_geometry_vocabulary_is_explicit():
+    assert set(R.STATE_GEOMETRIES) == {"mps", "binary-tree", "tree"}
+    assert "path" not in R.STATE_GEOMETRIES
+    assert "comb-tree" not in R.STATE_GEOMETRIES
+    assert all(not hasattr(spec, "geometry") for spec in R.METHODS.values())
 
 
 @pytest.mark.parametrize("old,new", sorted(R._RENAMED_METHODS.items()))
@@ -140,9 +148,9 @@ def test_method_representations_is_a_lossless_projection():
     """The projection records representation only; model ownership is separate."""
     assert R.METHOD_REPRESENTATIONS["interaction-chain-tree-tdvp2"] == "interaction-chain"
     assert R.METHOD_REPRESENTATIONS["interaction-chain-tdvp2"] == "interaction-chain"
-    # ...same representation, same model, same integrator -- separated only by geometry
-    assert R.METHODS["interaction-chain-tree-tdvp2"].geometry == "binary-tree"
-    assert R.METHODS["interaction-chain-tdvp2"].geometry == "path"
+    # ...same representation, same model, same integrator -- separated only by state geometry
+    assert R.METHODS["interaction-chain-tree-tdvp2"].state_geometry == "binary-tree"
+    assert R.METHODS["interaction-chain-tdvp2"].state_geometry == "mps"
 
     assert R.METHOD_REPRESENTATIONS["schrodinger-chain-tdvp2"] == "schrodinger-chain"
     assert R.METHOD_REPRESENTATIONS["schrodinger-star-tdvp2"] == "schrodinger-star"
@@ -152,14 +160,14 @@ def test_method_representations_is_a_lossless_projection():
     assert R.METHOD_REPRESENTATIONS["interaction-chain-trotter-mpo"] == "interaction-chain"
 
 
-def test_multichannel_default_path_is_schrodinger_not_interaction():
-    """F2: the multichannel model's *default* path routes through TreeFishbone,
+def test_multichannel_default_tree_is_schrodinger_not_interaction():
+    """F2: the multichannel model's default tree routes through TreeFishbone,
     whose shared-mode star puts the bath frequencies **on-site** -- a static
     Hamiltonian, i.e. the Schroedinger picture.  It was previously labelled
     interaction picture.  Assert the label against the built Hamiltonian so a
     future rewire cannot silently contradict it.
 
-    The model now has a genuine interaction-picture path too
+    The model now has a genuine interaction-picture MPS too
     (``interaction-chain-tebd``), which is a *different* method -- the point of this test
     is that the static one is not it."""
     representations = R.MODELS["multichannel"].representations
@@ -207,7 +215,7 @@ def test_each_model_runs_its_own_methods_and_reports_them(model_key):
             kw["bond_dim"] = 12
         if method == default:
             # the multichannel model is selected by its coupling list, so its Schrodinger
-            # path is what you get with no `method` at all
+            # default method is what you get with no `method` at all
             r = obj.run(**kw)
         else:
             r = obj.run(method=method, **kw)
@@ -336,12 +344,12 @@ def test_application_matches_what_the_drivers_actually_do():
         f"application='swap' says {sorted(declared)} but the drivers that swap are "
         f"{sorted(actual)}")
 
-    # a swap network is what a star *interaction graph* costs on a *path* state.
+    # a swap network is what a star interaction graph costs on a 1D MPS.
     # Deliberately keyed on `mode_decoupled`: `interaction-chain-tebd` still
     # swaps, because it is rotating H_B away that
     # spreads the coupling over every mode, not the choice of modes to write it in.
     assert all(R.REPRESENTATIONS[R.METHODS[n].representation].mode_decoupled
-               and R.METHODS[n].geometry == "path" for n in declared)
+               and R.METHODS[n].state_geometry == "mps" for n in declared)
     assert R.METHODS["interaction-chain-tebd"].representation == "interaction-chain"
 
     # and an application is realized *once*: the swap methods share one engine, and
@@ -358,7 +366,8 @@ def test_run_takes_the_axes_directly():
     run.  The axes are the structure; the name is the shorthand."""
     kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z}, trunc_eps=1e-7)
     by_axes = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
-        representation="interaction-chain", geometry="path", integrator="tdvp2", **kw)
+        representation="interaction-chain", state_geometry="mps",
+        integrator="tdvp2", **kw)
     by_name = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
         method="interaction-chain-tdvp2", **kw)
     assert by_axes.method == by_name.method == "interaction-chain-tdvp2"
@@ -368,7 +377,8 @@ def test_run_takes_the_axes_directly():
     # whether the representation dresses the state or not
     sb = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
     assert sb.run(representation="polaron-chain", integrator="tebd", **kw).method == "polaron-chain-tebd"
-    assert sb.run(representation="interaction-chain", geometry="path", integrator="tebd",
+    assert sb.run(representation="interaction-chain", state_geometry="mps",
+                  integrator="tebd",
                   **kw).method == "interaction-chain-tebd"
     # Partial names are intentionally not another public taxonomy.
     with pytest.raises(ValueError, match="no method"):
@@ -445,15 +455,16 @@ def test_axis_errors_name_what_separates_the_candidates():
     # A partial name is not a public representation.
     with pytest.raises(ValueError, match="no method"):
         sb().run(representation="schrodinger", **kw)
-    # ...and one representation spanning two geometries is too
+    # ...and one representation spanning two state geometries is too
     with pytest.raises(ValueError, match="ambiguous"):
         sb().run(representation="interaction-chain", integrator="tdvp2", **kw)
     # An exact representation still needs enough axes to choose its integrator.
     with pytest.raises(ValueError, match="ambiguous"):
         sb().run(representation="polaron-star", **kw)
-    # a chain representation on a binary tree: the one geometry constraint left
+    # a chain representation on a binary tree: the one state-geometry constraint left
     with pytest.raises(ValueError, match="no mode-mode terms"):
-        sb().run(representation="schrodinger-chain", geometry="binary-tree", **kw)
+        sb().run(representation="schrodinger-chain",
+                 state_geometry="binary-tree", **kw)
     # a name already fixes all four axes, so mixing spellings is a mistake
     with pytest.raises(ValueError, match="not both"):
         sb().run(method="interaction-chain-tebd", representation="polaron-chain", **kw)
@@ -461,6 +472,15 @@ def test_axis_errors_name_what_separates_the_candidates():
     for gone in ("basis", "frame", "layout"):
         with pytest.raises(TypeError, match="unknown axis"):
             R.resolve({"system-bath"}, **{gone: "star"})
+    with pytest.raises(TypeError, match="state_geometry"):
+        sb().run(geometry="path", **kw)
+    with pytest.raises(TypeError, match="state_geometry"):
+        R.resolve({"system-bath"}, geometry="path")
+    for old, new in (("path", "mps"), ("comb-tree", "tree")):
+        with pytest.raises(ValueError, match=f"state_geometry='{new}'"):
+            sb().run(state_geometry=old, **kw)
+        with pytest.raises(ValueError, match=f"state_geometry='{new}'"):
+            R.resolve({"system-bath"}, state_geometry=old)
 
 
 def test_the_old_model_names_say_what_they_became():
@@ -468,7 +488,7 @@ def test_the_old_model_names_say_what_they_became():
     model's name.  They are gone -- but the error has to teach the replacement,
     because they were the documented spelling."""
     for gone, hint in (("chain", "schrodinger-chain"), ("star", "schrodinger-star"),
-                       ("mode-tree", "geometry='binary-tree'")):
+                       ("mode-tree", "state_geometry='binary-tree'")):
         with pytest.raises(KeyError, match=re.escape(hint)):
             R.model(gone)
 
@@ -483,7 +503,8 @@ def test_every_method_is_reachable_by_its_axes():
         for name in R.methods_of(mk):
             spec = R.METHODS[name]
             axes = dict(model=mk, representation=spec.representation,
-                        geometry=spec.geometry, integrator=spec.integrator)
+                        state_geometry=spec.state_geometry,
+                        integrator=spec.integrator)
             got = R.resolve(set(R.MODELS), **axes)
             assert got.name == name, f"{axes} -> {got.name}"
             key = tuple(sorted(axes.items()))
@@ -493,7 +514,7 @@ def test_every_method_is_reachable_by_its_axes():
 
 @pytest.mark.parametrize("model_key", ["comb", "site-tree"])
 def test_multi_site_models_reject_a_single_system_method(model_key):
-    """Asking a multi-site model for a path method names its owning model,
+    """Asking a multi-site model for an MPS method names its owning model,
     rather than raising a bare TypeError as it did before."""
     obj, _ = _run_for(model_key)
     with pytest.raises(ValueError, match="belongs to system-bath"):
@@ -548,7 +569,7 @@ def test_one_engine_can_serve_two_representations():
     static = R.METHODS[R.SCHRODINGER_CHAIN_TREE_TEBD]
     mc = R.METHODS[R.SCHRODINGER_STAR_TREE_TEBD]
     assert static.engine == mc.engine == "static-tree-tebd"
-    assert static.geometry == mc.geometry == "comb-tree"
+    assert static.state_geometry == mc.state_geometry == "tree"
     assert (static.representation, mc.representation) == ("schrodinger-chain", "schrodinger-star")
     assert static.models == ("comb", "site-tree") and mc.models == ("multichannel",)
 

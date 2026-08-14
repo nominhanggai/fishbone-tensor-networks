@@ -46,7 +46,7 @@ def _bath():
 
 #: Old key -> new, for comparing a baseline captured before the taxonomy was
 #: re-axed.  ``chain``/``star`` were half of a *representation* and ``mode-tree`` a state
-#: *geometry*; all three are the one ``system-bath`` model.  The old
+#: tensor-network *state geometry*; all three are the one ``system-bath`` model. The old
 #: ``tree-tebd-static`` label on the multichannel model became
 #: ``schrodinger-star-tree-tebd``: same engine, but a
 #: different **representation** (schrodinger-star, where the multi-site models are
