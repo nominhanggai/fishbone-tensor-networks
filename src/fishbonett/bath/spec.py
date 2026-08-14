@@ -1,9 +1,10 @@
 """The :class:`Bath` specification -- what a bath *is*, before any propagation.
 
 A :class:`Bath` is a declarative description: a spectral density, a frequency
-window, how finely to discretize it, how big each mode's Fock space is, and which
-system operator(s) it couples to.  It does no tensor work itself; it is the input
-that :class:`fishbonett.models.system_bath.SystemBath` turns into chain parameters.
+window, how finely to discretize it, and how big each mode's Fock space is.  It
+does no tensor work itself.  :meth:`Bath.bind` associates it with model-owned
+system operators, and :mod:`fishbonett.bath.compiled` turns it into immutable star
+or chain coefficients before a frame sees it.
 
 It lives here rather than in :mod:`fishbonett.models` because it is bath
 physics, not simulation machinery: everything it knows about (thermalization,
@@ -26,7 +27,6 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.tedopa import make_tedopa_discretizer
 
 __all__ = ["Bath", "thermalize"]
@@ -83,13 +83,11 @@ class Bath:
         measure-adapted TEDOPA star (resolves IR-divergent / sharply peaked baths).
     extra_breaks, m_per : TEDOPA quadrature options.
     coupling : (d, d) array, or list of (d, d) arrays
-        System operator(s) this bath couples to.  A single operator is an ordinary
-        bath.  A **list** of operators makes this a *multichannel single bath*: the
-        one bath couples through every operator on shared modes (distinct from
-        several independent baths -- the channels cross-correlate).  For a
-        multichannel bath ``J`` is either one spectral density (shared) or a list of
-        the same length as ``coupling`` (one per channel), and the discretization
-        must be ``'legendre'`` (shared Gauss nodes).  Defaults to ``sigma_z``.
+        Compatibility field for the Fishbone API, where each bath historically
+        carried its edge operator.  New code should bind operators explicitly with
+        :meth:`Bath.bind`; ``SystemBath(coupling=...)`` is authoritative for the
+        single-system API.  A conflicting duplicate is rejected.  A list denotes
+        channels sharing one mode grid and therefore requires ``'legendre'``.
     """
     J: object
     domain: tuple = None
@@ -112,14 +110,27 @@ class Bath:
     def spectral_density(self):
         """The (thermalized, if applicable) spectral density this bath propagates
         with.  For a multichannel bath this is the *first* channel's density."""
-        J0 = self.J[0] if isinstance(self.J, (list, tuple)) else self.J
-        return self._thermalized(J0)
+        return self.spectral_densities()[0]
+
+    def spectral_densities(self):
+        """All thermalized channel densities, independent of system operators.
+
+        A scalar ``J`` is one density and a sequence is one density per channel.
+        Keeping this operation independent of ``coupling`` is the first half of
+        separating bath physics from the model that couples to it.
+        """
+        densities = self.J if isinstance(self.J, (list, tuple)) else (self.J,)
+        if not densities:
+            raise ValueError("Bath.J must contain at least one spectral density")
+        return tuple(self._thermalized(density) for density in densities)
 
     @property
     def is_multichannel(self):
-        """True when the bath couples through several operators (``coupling`` is a
-        list) -- a single bath with cross-correlated channels, distinct from
-        several independent baths."""
+        """Compatibility view of whether ``Bath.coupling`` contains a list.
+
+        Prefer ``bath.bind(operators).is_multichannel``; channel topology belongs
+        to the coupled model, not the environment specification alone.
+        """
         return isinstance(self.coupling, (list, tuple))
 
     def channels(self):
@@ -151,23 +162,20 @@ class Bath:
         Schroedinger frame and the interaction-picture model share one construction
         rather than each discretizing the channels themselves.
         """
-        if self.discretization != "legendre":
-            raise ValueError("a multichannel bath must use the 'legendre' "
-                             "discretization: its Gauss nodes are shared across "
-                             "channels, whereas measure-adapted TEDOPA nodes are not")
-        channels = self.channels()
-        freq, g = None, []
-        for Jc, _op in channels:
-            f, v_sq = get_vn_squared(Jc, self.n_modes, list(self.domain))
-            f = np.asarray(f, float)
-            g.append(np.sqrt(np.asarray(v_sq, float) / np.pi))
-            if freq is None:
-                freq = f
-            elif not np.allclose(freq, f):      # nodes are shared, so unreachable
-                raise ValueError("multichannel channels do not share the mode grid")
-        coup_mat = [sum(g[c][k] * channels[c][1] for c in range(len(channels)))
-                    for k in range(self.n_modes)]
-        return freq, coup_mat
+        from fishbonett.bath.coupled import bind_bath
+        return bind_bath(self).shared_mode_star()
+
+    def bind(self, coupling=None, *, default_operator=None,
+             validate_legacy=False):
+        """Bind this bath to model-owned coupling operator(s).
+
+        New code should keep the operator outside the bath specification and use
+        this explicit binding.  ``Bath.coupling`` remains accepted for the existing
+        Fishbone API and is checked when ``validate_legacy`` is requested.
+        """
+        from fishbonett.bath.coupled import bind_bath
+        return bind_bath(self, coupling, default_operator=default_operator,
+                         validate_legacy=validate_legacy)
 
     def discretizer(self):
         """The star-discretization callable this bath's ``discretization`` selects

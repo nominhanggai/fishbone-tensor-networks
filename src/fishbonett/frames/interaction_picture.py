@@ -65,8 +65,8 @@ class SystemBathIP(SwapNetworkFrame):
         Quadrature for the star discretization; ``None`` is Gauss-Legendre.
     """
 
-    def __init__(self, pd, *, h_sys, coupling, sd, domain, g=1.0, ncap=20000,
-                 discretizer=None):
+    def __init__(self, pd, *, h_sys, coupling, sd=None, domain=None, g=1.0,
+                 ncap=20000, discretizer=None, compiled_chain=None):
         self.pd_sys = pd[0]
         self.pd_boson = pd[1:]
         self.len_boson = len(self.pd_boson)
@@ -75,17 +75,23 @@ class SystemBathIP(SwapNetworkFrame):
                              "system dimension")
         self.h_sys = check_operator(h_sys, "h_sys", self.pd_sys)
         self.coupling = check_operator(coupling, "coupling", self.pd_sys)
+        if compiled_chain is None and (sd is None or domain is None):
+            raise ValueError(
+                "provide either compiled_chain or both sd and domain")
         self.sd = sd
-        self.domain = list(domain)
+        self.domain = None if domain is None else list(domain)
         self.g = g
         self.ncap = ncap
         self.discretizer = discretizer
+        self.compiled_chain = compiled_chain
         self.k_list = []
         self.w_list = []
         self.H = []
         self.coef= []
         self.freq = []
-        self.phase = lambda lam, t, delta: (np.exp(-1j*lam*(t+delta)) - np.exp(-1j*lam*t))/(-1j*lam)
+        self.phase = lambda lam, t, delta: (
+            np.exp(-1j * lam * (t + delta)) - np.exp(-1j * lam * t)
+        ) / (-1j * lam)
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
 
     def build_coupling(self):
@@ -98,6 +104,19 @@ class SystemBathIP(SwapNetworkFrame):
         :meth:`displacement_mpo` reports it; it is not part of the mapping.
         """
         n = len(self.pd_boson)
+        if self.compiled_chain is not None:
+            chain = self.compiled_chain
+            if chain.n_modes != n:
+                raise ValueError(
+                    f"compiled chain has {chain.n_modes} modes but pd describes {n}")
+            if any(d != chain.phys_dim for d in self.pd_boson):
+                raise ValueError(
+                    "compiled chain phys_dim does not match the boson dimensions")
+            self.w_list = chain.frequencies.copy()
+            self.k_list = np.concatenate((
+                [chain.system_coupling], chain.hoppings)).copy()
+            self.h_squared = None
+            return
         self.w_list, self.k_list = get_coupling(
             self.sd, n, self.domain, self.g, self.ncap,
             discretizer=self.discretizer)
@@ -219,5 +238,3 @@ class SystemBathIP(SwapNetworkFrame):
     # get_u comes from SwapNetworkFrame: this frame's job is get_h2, and what
     # happens to those Hamiltonians afterwards is the same for every swap-network
     # frame.
-
-

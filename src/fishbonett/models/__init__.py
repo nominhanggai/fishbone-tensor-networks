@@ -21,7 +21,7 @@ model             class                  what it is
 ``chain``, ``star`` and ``mode-tree`` used to be listed here as models.  They were
 not: the first two name a bath *basis* and the third a state *geometry*, and all
 three are the same one-system/one-bath problem.  ``multichannel`` is picked
-automatically from the bath's shape rather than by a method name.
+automatically from a list of model coupling operators rather than by a method name.
 
 :mod:`fishbonett.models.registry` is the authority: which frames each model has,
 which methods realize them, and -- for the combinations that are absent -- why.
@@ -36,6 +36,7 @@ print(d())"`` prints the whole thing.
 from fishbonett.models.result import Result
 from fishbonett.models.system_bath import SystemBath
 from fishbonett.models.fishbone import Fishbone, TreeFishbone
+from fishbonett.models.simulation import SimulationPlan, compile_plan
 from fishbonett.models.registry import (
     MODELS, FRAMES, Model, Frame, METHOD_FRAMES,
     models_of, frames_of, methods_of, all_methods, model,
@@ -45,6 +46,7 @@ from fishbonett.models.registry import (
 __all__ = [
     # model classes
     "SystemBath", "Fishbone", "TreeFishbone", "Result",
+    "SimulationPlan", "compile_plan",
     # the taxonomy
     "MODELS", "FRAMES", "Model", "Frame", "METHOD_FRAMES",
     "models_of", "frames_of", "methods_of", "all_methods", "model",

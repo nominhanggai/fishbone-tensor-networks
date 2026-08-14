@@ -46,15 +46,16 @@ each DOF on its own site with `TreeFishbone`.
 
 One bath coupled to the system through **several** operators (e.g. `sigma_z` *and*
 `sigma_x`) is distinct from two independent baths: the channels share the same
-modes and therefore **cross-correlate**.  Give the {py:class}`~fishbonett.bath.spec.Bath`
-a list of couplings and (optionally) a list of per-channel spectral densities:
+modes and therefore **cross-correlate**.  Give `SystemBath` a list of coupling
+operators and give the {py:class}`~fishbonett.bath.spec.Bath` either one shared
+spectral density or one density per channel:
 
 ```python
 from fishbonett.models import SystemBath
 
 mc = Bath(J=[lambda w: 0.2 * w * np.exp(-w / 5),   # sigma_z channel
              lambda w: 0.1 * w * np.exp(-w / 8)],  # sigma_x channel (different J)
-          coupling=[sigma_z, sigma_x], domain=(0, 40), n_modes=30, phys_dim=8)
+          domain=(0, 40), n_modes=30, phys_dim=8)
 
 res = SystemBath(h=sigma_x, coupling=[sigma_z, sigma_x], bath=mc).run(
         dt=0.02, t_max=2.0, bond_dim=100, observables={"sz": sigma_z})
@@ -69,11 +70,11 @@ M_k = \sum_c g_{c,k}\, O_c, \qquad g_{c,k} = \sqrt{J_c(\omega_k)\, w_k / \pi},
 $$
 
 so the channels genuinely cross-correlate rather than acting as independent baths.
-That star is {py:meth}`Bath.shared_mode_star
-<fishbonett.bath.spec.Bath.shared_mode_star>` — one construction, used by both the
-Schrödinger frame and the interaction-picture path, which is what makes the two
-frames comparable rather than merely similar.  Passing a multichannel `Bath` to
-`SystemBath` routes it through
+That star is compiled as {py:class}`~fishbonett.bath.compiled.StarBath` — one
+operator-free mode grid used by both the Schrödinger frame and the
+interaction-picture path.  The model binding then combines its scalar strengths
+with `[sigma_z, sigma_x]`.  Passing that list to `SystemBath(coupling=...)` routes
+it through
 {py:class}`~fishbonett.models.fishbone.TreeFishbone` so the spin stays on its own site.
 
 ```{note}

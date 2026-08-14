@@ -21,11 +21,11 @@ package does.
 
 ## How to read this
 
-The four sections are meant to be read in this order, though each stands alone:
+The main sections are meant to be read in this order, though each stands alone:
 
 1. **{doc}`getting_started`** — install, then a complete first simulation in a
    dozen lines. Start here.
-2. **{doc}`models/index`** — the six models: what you can express, from a single
+2. **{doc}`models/index`** — the four models: what you can express, from a single
    spin-boson system to arbitrary loop-free trees of sites and baths, plus how to
    define observables.  The model you pick decides which frames and propagators
    are available.
@@ -36,6 +36,8 @@ The four sections are meant to be read in this order, though each stands alone:
 4. **{doc}`methods/index`** — the propagation methods: for each model, the frame
    (interaction picture, polaron, Schrödinger) and the integrator (TEBD, exact
    MPO propagator, TDVP), with the theory behind each.
+5. **{doc}`architecture`** — the ownership and dependency boundaries used by the
+   implementation.
 
 {doc}`api` is the generated reference for every public module.
 
@@ -48,6 +50,7 @@ getting_started
 models/index
 bath
 methods/index
+architecture
 api
 ```
 

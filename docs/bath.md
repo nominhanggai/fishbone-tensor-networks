@@ -30,6 +30,20 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
 - **`temperature` / `beta`** — finite-temperature thermalization (below).
 - **`discretization`** — `"legendre"` (default) or `"tedopa"`.
 
+The bath does not need to own a system operator.  `SystemBath(coupling=...)` owns
+that part of the physical model.  For lower-level composition, bind it explicitly:
+
+```python
+coupled = bath.bind(sigma_z)
+star = coupled.compiled_star()     # StarBath: frequencies + scalar strengths
+chain = coupled.compiled_chain()   # ChainBath: onsite terms + hoppings + c0
+```
+
+The compiled objects are immutable and contain no system-space operator.  A
+`CoupledBath` combines them only when a frame needs the actual interaction.  The
+old `Bath(coupling=...)` spelling remains available for Fishbone inputs during the
+transition; if it duplicates `SystemBath(coupling=...)`, the values must agree.
+
 ## Automatic defaults
 
 `domain` and `n_modes` can both be left unspecified; they are then derived from

@@ -21,6 +21,7 @@ from dataclasses import replace
 import numpy as np
 
 from fishbonett.frames.schrodinger import terms as schrodinger_terms
+from fishbonett.bath.coupled import CoupledBath
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.states.tree import TreeTensorNetwork
@@ -268,6 +269,9 @@ class Fishbone:
             out = []
             for pos, b in enumerate(entry):
                 if b is None:
+                    continue
+                if isinstance(b, CoupledBath):
+                    out.append(b)
                     continue
                 if b.coupling is None:
                     b = replace(b, coupling=(sigma_z if pos == 0 else sigma_x))

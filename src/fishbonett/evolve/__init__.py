@@ -33,8 +33,9 @@ of *system sites* each with its own bath (Schroedinger, ``tree-tebd-static``).  
 
 .. rubric:: Layers
 
-Each module is layered primitive -> sweep -> driver, so you can enter at
-whichever level you need:
+The public ``tdvp`` and ``modetree`` modules are compatibility facades over
+private implementation modules split primitive -> sweep -> driver.  You can still
+enter through the established public functions at whichever level you need:
 
 *primitive*
     one bond or one site: :func:`~fishbonett.evolve.tebd.update_bond`,
@@ -50,6 +51,10 @@ whichever level you need:
 
 Every whole step here is **second order** (Strang): each takes half-step gates and
 applies them in palindromic order.
+
+The private split enforces dependency direction: kernels know only tensor algebra,
+sweeps depend on kernels, and whole-run drivers depend on both.  Neither kernels
+nor sweeps resolve a bath or import a Hamiltonian frame.
 
 :func:`run_mpo_frame` takes a :class:`~fishbonett.frames.mpo.MPOFrame` -- the
 Hamiltonian, already built -- plus a sweep name, and runs the whole simulation.  It

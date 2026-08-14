@@ -155,9 +155,10 @@ is whatever the code actually offers:
 
 ## Low-level engines
 
-For finer control the underlying engines are available directly.  Every frame
-builder takes its system, coupling, spectral density and domain **at
-construction**, then `build()` does the chain mapping:
+For finer control the underlying engines are available directly.  The high-level
+path first compiles `Bath` into immutable star or chain coefficients and gives
+those to the frame.  Legacy low-level builders also accept a spectral density and
+domain directly, as this polaron example does:
 
 ```python
 import numpy as np
