@@ -126,7 +126,7 @@ def test_method_frames_is_a_projection_not_an_identity():
     state geometry wearing a model's name; collapsing them means the pair is now a
     genuine projection, and the axes that separate the collisions are the two the
     taxonomy gained."""
-    sb = ("interaction-star", "system-bath")
+    sb = ("interaction-chain", "system-bath")
     assert R.METHOD_FRAMES["tree-tdvp2"] == sb
     assert R.METHOD_FRAMES["mpo-ip-tdvp2"] == sb
     # ...same frame, same model, same integrator -- separated only by geometry
@@ -138,8 +138,8 @@ def test_method_frames_is_a_projection_not_an_identity():
     assert R.METHOD_FRAMES["mpo-tdvp2"] == ("schrodinger-chain", "system-bath")
     assert R.METHOD_FRAMES["mpo-star-tdvp2"] == ("schrodinger-star", "system-bath")
     assert R.pictures_of("schrodinger") == ("schrodinger-chain", "schrodinger-star")
-    assert R.pictures_of("interaction") == ("interaction-star",)
-    assert R.pictures_of("polaron") == ("polaron-chain",)
+    assert R.pictures_of("interaction") == ("interaction-chain", "interaction-star")
+    assert R.pictures_of("polaron") == ("polaron-chain", "polaron-star")
 
     # polaron is its own frame, not a Schrodinger sub-case
     assert R.METHOD_FRAMES["polaron"] == ("polaron-chain", "system-bath")
@@ -329,10 +329,13 @@ def test_application_matches_what_the_drivers_actually_do():
         f"application='swap' says {sorted(declared)} but the drivers that swap are "
         f"{sorted(actual)}")
 
-    # a swap network is what a *star* basis costs on a *path* state -- which is now
-    # sayable directly, rather than being a property of a method's name
-    assert all(R.METHODS[n].basis == "star"
+    # a swap network is what a star *interaction graph* costs on a *path* state.
+    # Deliberately keyed on `diagonal_bath`, not on the basis: `tebd` is
+    # interaction-chain and still swaps, because it is rotating H_B away that
+    # spreads the coupling over every mode, not the choice of modes to write it in.
+    assert all(R.FRAMES[R.METHODS[n].frame].diagonal_bath
                and R.METHODS[n].geometry == "path" for n in declared)
+    assert R.METHODS["tebd"].basis == "chain"    # ...and one of them is a chain
 
     # and an application is realized *once*: the swap methods share one engine, and
     # differ only in which frame supplies H(t)
@@ -347,7 +350,7 @@ def test_run_takes_the_axes_directly():
     run.  The axes are the structure; the name is the shorthand."""
     kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z}, trunc_eps=1e-7)
     by_axes = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
-        frame="interaction-star", geometry="path", integrator="tdvp2", **kw)
+        frame="interaction-chain", geometry="path", integrator="tdvp2", **kw)
     by_name = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
         method="mpo-ip-tdvp2", **kw)
     assert by_axes.method == by_name.method == "mpo-ip-tdvp2"
@@ -357,37 +360,78 @@ def test_run_takes_the_axes_directly():
     # whether the frame dresses the state or not
     sb = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
     assert sb.run(frame="polaron-chain", integrator="tebd", **kw).method == "polaron"
-    assert sb.run(frame="interaction-star", geometry="path", integrator="tebd",
+    assert sb.run(frame="interaction-chain", geometry="path", integrator="tebd",
                   **kw).method == "tebd"
     # a bare *picture* works wherever it names exactly one frame
     assert sb.run(frame="polaron", integrator="tebd", **kw).method == "polaron"
 
 
-def test_impossible_frames_are_unnameable_not_merely_rejected():
-    """The two picture/basis pairs that cannot exist have no :data:`FRAMES` entry.
+def test_every_picture_times_basis_is_a_real_frame():
+    """All 3 x 2 of them.  None is impossible; what is absent is unimplemented.
 
-    That is the reason a frame carries its basis instead of the basis being its own
-    axis: with two axes you can *write* ``interaction`` + ``chain`` and need a
-    constraint engine to turn it away; with one you cannot write it at all.  What is
-    left is a lookup table of names, and ``NOT_FRAMES`` exists only to answer "why
-    isn't that one here?"."""
-    assert set(R.FRAMES) == {"schrodinger-chain", "schrodinger-star",
-                             "interaction-star", "polaron-chain"}
-    assert set(R.NOT_FRAMES) == {"interaction-chain", "polaron-star"}
-    assert not set(R.FRAMES) & set(R.NOT_FRAMES)
-    # every frame is a picture x basis pair, and the four that exist plus the two
-    # that cannot are the whole 3 x 2 grid
+    This replaces a test asserting the opposite -- that ``interaction-chain`` and
+    ``polaron-star`` could not exist.  Both can.  ``H_B`` in the chain basis is
+    tridiagonal rather than diagonal but still *quadratic*, so rotating it out is
+    well defined; and the textbook Lang-Firsov transform is *defined* per star mode.
+    Calling either impossible confused "costs too much on an MPS" with "cannot be
+    written down", which is exactly the distinction this registry exists to keep."""
     grid = {f"{p}-{b}" for p in ("schrodinger", "interaction", "polaron")
             for b in ("chain", "star")}
-    assert set(R.FRAMES) | set(R.NOT_FRAMES) == grid
+    assert set(R.FRAMES) == grid
+    for key, f in R.FRAMES.items():
+        assert key == f"{f.picture}-{f.basis}"
 
-    kw = dict(dt=0.02, n_steps=2, trunc_eps=1e-7)
-    sb = lambda: SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
-    # asking anyway gets the physics, not "unknown frame"
-    with pytest.raises(ValueError, match="diagonal only in the star basis"):
-        sb().run(frame="interaction-chain", **kw)
-    with pytest.raises(ValueError, match="localizes that on c0"):
-        sb().run(frame="polaron-star", **kw)
+    # five of the six are implemented somewhere; the sixth is a recorded gap, and
+    # its reason has to say "not implemented", not "impossible"
+    have = {s.frame for s in R.METHODS.values()}
+    assert grid - have == {"polaron-star"}
+    why = R.MODELS["system-bath"].gaps["polaron-star"]
+    assert "not implemented" in why
+
+
+def test_interaction_chain_is_what_the_ip_methods_actually_run():
+    """The implemented interaction-picture methods hold **chain** modes.
+
+    ``mode_couplings`` rotates the star phases back into the chain basis, so at
+    ``t = 0`` the coupling sits entirely on ``c0`` -- the Schroedinger chain
+    configuration -- and spreads outward with ``t``.  Star modes would give every
+    entry nonzero at ``t = 0``.  These were labelled ``interaction-star`` until this
+    was measured."""
+    from fishbonett.bath.chain import star_transform
+    freq, Vn, coefT = star_transform(_J, 6, (0.0, 40.0))
+
+    d0 = np.abs(coefT @ (Vn * np.exp(-1j * freq * 0.0)))
+    assert np.isclose(d0[0], np.linalg.norm(Vn))       # all of it on one site
+    assert np.allclose(d0[1:], 0.0)                    # ...and none anywhere else
+    assert (np.abs(Vn) > 1e-3).sum() > 1               # the star is *not* like that
+
+    d1 = np.abs(coefT @ (Vn * np.exp(-1j * freq * 0.5)))
+    assert (d1 > 1e-3).sum() > 1, "the coupling must spread as t grows"
+
+    for m in ("tebd", "trotter-mpo", "mpo-ip-tdvp1", "mpo-ip-tdvp2",
+              "tree-tdvp", "tree-tdvp2", "tree-tebd"):
+        assert R.METHODS[m].frame == "interaction-chain", m
+    # the genuine star interaction frames: the multichannel model, whose shared
+    # modes cannot be chain-mapped, and the explicit un-rotated pair
+    assert R.METHODS[R.MULTICHANNEL_IP].frame == "interaction-star"
+    assert R.METHODS["mpo-ip-star-tdvp2"].frame == "interaction-star"
+
+
+def test_the_two_interaction_bases_agree():
+    """`interaction-chain` and `interaction-star` are one orthogonal transform
+    apart, so they must land on the same trajectory.
+
+    The point of implementing the star one: it reaches the same answer through a
+    completely different coupling vector (``V_k e^{-i w_k t}`` rather than its
+    rotation back to the chain), so agreement checks the chain route rather than
+    restating it.  It is also what catches a wrong site-order convention."""
+    h, kw = 0.5 * sigma_x, dict(dt=0.02, n_steps=20, bond_dim=40,
+                                trunc_eps=1e-10, observables={"sz": sigma_z})
+    def run(m):
+        sb = SystemBath(h=h, coupling=sigma_z, bath=_bath_pos())
+        return np.asarray(sb.run(method=m, **kw).expect["sz"])
+    chain, star = run("mpo-ip-tdvp2"), run("mpo-ip-star-tdvp2")
+    assert np.abs(chain - star).max() < 1e-3, np.abs(chain - star).max()
 
 
 def test_axis_errors_name_what_separates_the_candidates():
@@ -399,7 +443,10 @@ def test_axis_errors_name_what_separates_the_candidates():
         sb().run(frame="schrodinger", **kw)
     # ...and one frame spanning two geometries is too
     with pytest.raises(ValueError, match="ambiguous"):
-        sb().run(frame="interaction-star", integrator="tdvp2", **kw)
+        sb().run(frame="interaction-chain", integrator="tdvp2", **kw)
+    # a frame nobody has wired quotes the gap rather than saying "unknown"
+    with pytest.raises(ValueError, match="not implemented"):
+        sb().run(frame="polaron-star", **kw)
     # a chain frame on a binary tree: the one geometry constraint left
     with pytest.raises(ValueError, match="no mode-mode terms"):
         sb().run(frame="schrodinger-chain", geometry="binary-tree", **kw)

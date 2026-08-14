@@ -126,24 +126,24 @@ A run is four independent choices:
 | axis | values | what it is |
 |---|---|---|
 | `model` | `system-bath`, `multichannel`, `comb`, `site-tree` | what is coupled to what |
-| `frame` | `schrodinger-chain`, `schrodinger-star`, `interaction-star`, `polaron-chain` | how `H` is written down |
+| `frame` | a picture × a basis — six of them, below | how `H` is written down |
 | `geometry` | `path`, `binary-tree`, `comb-tree` | the graph the state lives on |
 | `integrator` | `tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo` | how a step is taken |
 
 A **frame** is a picture *and* a mode basis, because both are choices about how `H`
-is written and neither is free of the other.  Naming them together is also what
-makes the impossible pairs *unnameable*:
+is written down. All $3\times2$ are real frames:
 
-- there is no **`interaction-chain`** — the interaction picture rotates out
-  $H_B=\sum_k\omega_k b_k^\dagger b_k$, which is diagonal only in the star basis, so
-  no chain survives it;
-- there is no **`polaron-star`** — the polaron displacement has to localize on
-  $c_0$, and a star has no such site.
+| picture | `chain` | `star` |
+|---|---|---|
+| **Schrödinger** | `schrodinger-chain` | `schrodinger-star` |
+| **interaction** | `interaction-chain` | `interaction-star` |
+| **polaron** | `polaron-chain` | `polaron-star` *(not implemented)* |
 
-That leaves four. The Schrödinger picture is the only one appearing twice, because
-it is the only one that rotates out nothing and so constrains the basis not at all.
-A bare picture works where it names one frame: `frame="polaron"` resolves,
-`frame="schrodinger"` names two and says so.
+The two bases are one orthogonal (Lanczos) transform apart, so they are the same
+physics at different cost — which is why the basis is a representation choice and
+not a model. A bare picture works where it names one frame:
+`frame="interaction-chain"` is explicit, and `frame="schrodinger"` names two and
+says so.
 
 Every model, the frames it admits, and the reason each absent combination is absent —
 generated from {py:mod}`fishbonett.models.registry` when these docs are built, so it

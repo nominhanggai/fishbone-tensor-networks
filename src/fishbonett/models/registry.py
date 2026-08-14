@@ -12,32 +12,33 @@ string called the "model"::
 
 .. rubric:: A frame is a picture *and* a mode basis
 
-Both halves are a choice of how to write ``H`` down, so they are one axis, and the
-frame names carry both.  Crucially this makes the impossible combinations
-**unnameable** rather than merely rejected -- there is no ``interaction-chain``
-frame to ask for:
+Both halves are a choice of how to write ``H`` down, so they are one axis and the
+frame names carry both.  All ``3 x 2`` combinations are real frames -- what is
+absent is *unimplemented*, recorded in :attr:`Model.gaps`, not impossible:
 
-* ``interaction-chain`` is not a frame.  The interaction picture rotates out
-  ``H_B = sum_k w_k b_k^dag b_k``, which is diagonal only in the star basis, so a
-  chain does not survive it.  The code has always said so:
-  :meth:`~fishbonett.frames.interaction_picture.SystemBathIP.build` chain-maps the
-  bath and then calls ``diag()`` to turn that chain straight back into its star.
-  It was built and discarded.
-* ``polaron-star`` is not a frame.  The polaron displacement acts on the collective
-  mode; the ``J/w^2`` chain mapping localizes it on ``c0``, and a star has no such
-  site.
+* ``interaction-chain`` **exists**, and is what this package actually runs for
+  ``tebd`` / ``trotter-mpo`` / ``mpo-ip-tdvp*`` / ``tree-*``.  ``H_B`` is
+  tridiagonal rather than diagonal in the chain basis, but still quadratic, so
+  rotating it out is well defined: each chain mode evolves into a superposition of
+  chain modes.  Measured, the coupling ``|d_n(t)|`` it feeds the propagator starts
+  as ``(|V|, 0, ..., 0)`` -- the system touching ``c0`` alone, which is the chain --
+  and spreads outward with ``t``.  Locality is what is lost, not existence.
+* ``polaron-star`` **exists** too: the textbook Lang-Firsov transform is *defined*
+  per star mode, ``prod_k D_k(g_k sigma_z / w_k)``.  It is the chain version that
+  needs the ``J/w^2`` trick.  It is simply not implemented, because displacing every
+  mode conditionally entangles the system with all of them at once.
 
-That leaves the four that exist.  ``schrodinger-chain`` and ``schrodinger-star`` are
-the same picture in two bases -- the only pair in the table differing by basis
-alone, because the Schroedinger picture is the only one that rotates out nothing and
-so constrains the basis not at all.
+``schrodinger-chain`` / ``schrodinger-star`` and ``interaction-chain`` /
+``interaction-star`` are each one picture in two bases.  The bases are related by an
+orthogonal (Lanczos) transform, so the physics is identical and only the MPS cost
+differs -- which is the whole reason the basis is a representation choice rather
+than a model.
 
 ``geometry`` stays a separate axis because it genuinely is one: ``mpo-ip-tdvp1`` and
-``tree-tdvp`` are the *same frame* -- they call the same
-:func:`~fishbonett.bath.chain.star_transform` -- laid on a path and on a balanced
-binary tree, which is why they produce identical numbers rather than merely close
-ones.  ``mode-tree`` used to be listed as a model for that difference; it was never
-a model.
+``tree-tdvp`` are the *same frame*, laid on a path and on a balanced binary tree,
+which is why they produce identical numbers rather than merely close ones.
+``mode-tree`` used to be listed as a model for that difference; it was never a
+model.
 
 :data:`METHODS` is therefore the single source of truth for both the taxonomy and
 the **dispatch**: each row carries its four axes plus the engine that realizes it,
@@ -59,7 +60,7 @@ from typing import Mapping, Tuple
 
 __all__ = ["Model", "Frame", "Method", "MODELS", "FRAMES", "METHODS",
            "GEOMETRIES", "APPLICATIONS", "FIXED_BOND_METHODS",
-           "NOT_FRAMES", "why_not", "models_of", "frames_of",
+           "why_not", "models_of", "frames_of",
            "methods_of", "all_methods", "model", "method_spec", "resolve",
            "combinations", "METHOD_FRAMES", "pictures_of",
            "methods_by_frame", "frame_label", "describe_taxonomy",
@@ -73,8 +74,9 @@ class Frame:
     """One way of writing the Hamiltonian down: a picture **and** a mode basis.
 
     Both are choices about how ``H`` is written rather than about what is being
-    modelled or how it is stepped, so they are one axis.  Keeping them one axis is
-    also what makes the impossible pairs unnameable -- see :data:`NOT_FRAMES`.
+    modelled or how it is stepped, so they are one axis.  All ``3 x 2`` of them are
+    real frames; which ones this package *implements* is a separate question, and
+    the answer lives in :attr:`Model.gaps`.
     """
     key: str
     label: str
@@ -82,9 +84,29 @@ class Frame:
     static: bool          # is H time-independent?  (decides TDVP applicability)
     #: which unitary is rotated out -- ``schrodinger`` / ``interaction`` / ``polaron``
     picture: str = ""
-    #: which modes H is written in -- ``chain`` (nearest-neighbour hoppings, local
-    #: for an MPS) or ``star`` (every mode on the system, no mode-mode terms)
+    #: which modes H is written in -- ``chain`` (Lanczos/TEDOPA, nearest-neighbour
+    #: hoppings) or ``star`` (the raw discretization, no mode-mode terms)
     basis: str = ""
+
+    @property
+    def diagonal_bath(self):
+        """Does the free bath contribute **no two-mode terms** in this frame?
+
+        The one predicate the taxonomy turns on, because it has *both* of the
+        consequences that matter, and they pull against each other -- **you cannot
+        have a local bath and a local coupling at once**:
+
+        * yes ⇒ nothing couples mode to mode, so the system couples to *every* mode
+          and the interaction graph is a star.  On a ``path`` state realized with
+          gates that costs a swap network (:attr:`Method.application`).
+        * no ⇒ the chain hoppings survive, which are nearest-neighbour on a path
+          (good) but long-range on a balanced binary tree (see ``_NO_MODE_MODE``).
+
+        Rotating out ``H_B`` removes the mode-mode terms whatever basis you write
+        them in -- which is why this keys on the *picture* as well as the basis, and
+        why ``interaction-chain`` swaps despite being a chain.
+        """
+        return self.picture == "interaction" or self.basis == "star"
 
 
 FRAMES = {
@@ -93,7 +115,8 @@ FRAMES = {
         "Nothing rotated out, bath chain-mapped.  H is time-independent and its MPO "
         "is built once, so TDVP conserves energy -- but the state carries the full "
         "system-bath correlation, giving the largest bond dimensions.  The chain's "
-        "nearest-neighbour hoppings are what an MPS is good at.",
+        "nearest-neighbour hoppings are what an MPS is good at, and the system "
+        "touches only c0.",
         static=True, picture="schrodinger", basis="chain"),
     "schrodinger-star": Frame(
         "schrodinger-star", "Schrodinger picture, star",
@@ -101,13 +124,29 @@ FRAMES = {
         "system.  No mode-mode terms, but no locality for the MPS to exploit "
         "either.  Static, so still one MPO built once.",
         static=True, picture="schrodinger", basis="star"),
+    "interaction-chain": Frame(
+        "interaction-chain", "interaction picture, chain",
+        "The free-bath evolution is rotated out, leaving only the coupling, and the "
+        "result is expressed back in the chain modes.  H_B is tridiagonal rather "
+        "than diagonal here, but still quadratic, so the rotation is well defined: "
+        "each chain mode evolves into a superposition of chain modes.  What is lost "
+        "is locality, not existence -- the coupling d_n(t) starts concentrated on c0 "
+        "at t=0 and spreads outward, so this is 'no longer a chain' in the only "
+        "sense that matters to an MPS.  Entanglement is much smaller than the "
+        "Schroedinger picture's, but H is time-dependent so gates/MPOs are rebuilt "
+        "every step.  All the coupling terms commute here, which is what makes the "
+        "exact conditional-displacement propagator possible.",
+        static=False, picture="interaction", basis="chain"),
     "interaction-star": Frame(
         "interaction-star", "interaction picture, star",
-        "The free-bath evolution is rotated out, leaving only the coupling.  "
-        "Entanglement is much smaller, but H is time-dependent so gates/MPOs are "
-        "rebuilt every step.  All the coupling terms commute here, which is what "
-        "makes the exact conditional-displacement propagator possible.  Only a "
-        "star: it is the star modes whose free evolution is being rotated out.",
+        "The same rotation as interaction-chain, left in the star modes instead of "
+        "being rotated back: the coupling of mode k is simply V_k e^{-i w_k t}.  "
+        "Reaches the same trajectory through a completely different coupling "
+        "vector, so it is an independent check on the chain route rather than a "
+        "restatement of it.  Which is cheaper is not settled -- the guess that the "
+        "chain wins (its coupling starts on c0 and spreads) is not what measuring "
+        "shows.  Also the only frame available to the multichannel model, whose "
+        "shared modes cannot be chain-mapped at all.",
         static=False, picture="interaction", basis="star"),
     "polaron-chain": Frame(
         "polaron-chain", "polaron frame, chain",
@@ -115,27 +154,18 @@ FRAMES = {
         "leaving a free chain plus a dressed tunneling term.  Static like the "
         "Schroedinger picture *and* low-entanglement like the interaction "
         "picture; needs int J/w^2 finite.  Populations are frame-invariant, "
-        "coherences must be un-dressed.  Only a chain: the displacement has to "
-        "localize on c0.",
+        "coherences must be un-dressed.  The J/w^2 reweighting is what localizes "
+        "the displacement on c0.",
         static=True, picture="polaron", basis="chain"),
-}
-
-
-#: The two picture/basis pairs that are **not** frames, and why.
-#:
-#: They have no entry in :data:`FRAMES`, so they cannot be asked for -- this is
-#: only here to answer "why not?" when somebody does.  Making them unnameable
-#: rather than nameable-and-rejected is the reason a frame carries its basis.
-NOT_FRAMES = {
-    "interaction-chain":
-        "the interaction picture rotates out H_B = sum_k w_k b_k^dag b_k, which is "
-        "diagonal only in the star basis, so no chain survives it.  (SystemBathIP "
-        "does chain-map the bath -- and then calls diag() to turn it straight back "
-        "into a star.)  Use 'interaction-star'.",
-    "polaron-star":
-        "the polaron displacement acts on the collective mode.  The J/w^2 chain "
-        "mapping localizes that on c0; a star has no such site, so the dressing "
-        "would entangle the system with every mode at once.  Use 'polaron-chain'.",
+    "polaron-star": Frame(
+        "polaron-star", "polaron frame, star",
+        "The textbook Lang-Firsov transform, which is *defined* per star mode: "
+        "prod_k D_k(g_k sigma_z / w_k).  Perfectly well defined -- it is the chain "
+        "version that needs the J/w^2 trick to localize onto a single site.  Not "
+        "implemented here because it is not useful on an MPS: displacing every mode "
+        "conditionally on the system entangles the system with all of them at once, "
+        "which is exactly what the chain version avoids.",
+        static=True, picture="polaron", basis="star"),
 }
 
 #: The graph the state's tensors live on.  Independent of the basis: the same star
@@ -150,12 +180,16 @@ GEOMETRIES = {
 }
 
 
-#: Why the binary tree needs the star basis.  Not an oversight: the tree is worth
-#: having *because* there are no mode-mode terms, so every mode hangs off the system
-#: independently and the only question is how deep the bonds are.
+#: Why the binary tree needs a frame with no mode-mode terms (:attr:`Frame.
+#: diagonal_bath`).  Not an oversight: the tree is worth having *because* nothing
+#: couples mode to mode, so every mode hangs off the system independently and the
+#: only question is how deep the bonds are.
+#:
+#: Note this is about the *frame*, not the basis -- ``interaction-chain`` qualifies
+#: (it rotates ``H_B`` away entirely) and is what the ``tree-*`` methods use.
 _NO_MODE_MODE = (
-    "the balanced binary tree pays off only when there are no mode-mode terms, "
-    "which is what the star basis gives.  A chain's nearest-neighbour hoppings are "
+    "the balanced binary tree pays off only when there are no mode-mode terms.  "
+    "This frame keeps the chain hoppings, which are nearest-neighbour on a path but "
     "long-range on that tree (only half of the chain-adjacent pairs are "
     "tree-adjacent; the rest span up to 2*log2(N) edges -- measured: 10 edges at "
     "N=32), so the MPO bond grows and the tree loses to the plain path.  Reordering "
@@ -245,10 +279,15 @@ class Method:
         make ``H`` non-local relative to the state -- the interaction picture couples
         every mode to the system, a star, while the state is a path -- and this
         records what pays for that.  See :data:`APPLICATIONS`.
+
+        Keys on :attr:`Frame.diagonal_bath`, **not** on the basis: ``tebd`` is
+        ``interaction-chain`` and still needs a swap network, because it is rotating
+        out ``H_B`` that spreads the coupling over every mode, not the choice of
+        modes to write it in.
         """
         if self.integrator != "tebd" or self.geometry == "binary-tree":
             return "operator"
-        if self.geometry == "path" and self.basis == "star":
+        if self.geometry == "path" and FRAMES[self.frame].diagonal_bath:
             return "swap"
         return "local"
 
@@ -311,19 +350,26 @@ METHODS = {s.name: s for s in [
        "tdvp1", fixed_bond=True),
     _m("mpo-star-tdvp2", "schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
     # -- system-bath, interaction picture, on a path --------------------------
-    _m("tebd", "interaction-star", _SB, "swap-tebd", integrator="tebd"),
-    _m("trotter-mpo", "interaction-star", _SB, "displacement-mpo",
+    # `interaction-chain`, not `-star`: `mode_couplings` rotates the star phases
+    # back into the chain modes, so d_n(0) = (|V|, 0, ..., 0) -- the system on c0
+    # alone -- and spreads outward with t.  Measured, not assumed.
+    _m("tebd", "interaction-chain", _SB, "swap-tebd", integrator="tebd"),
+    _m("trotter-mpo", "interaction-chain", _SB, "displacement-mpo",
        integrator="trotter-mpo"),
-    _m("mpo-ip-tdvp1", "interaction-star", _SB, "mpo-tdvp",
+    _m("mpo-ip-tdvp1", "interaction-chain", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
-    _m("mpo-ip-tdvp2", "interaction-star", _SB, "mpo-tdvp", "tdvp2"),
-    # -- ...and the same frame on a balanced binary tree ----------------------
-    _m("tree-tdvp", "interaction-star", _SB, "modetree",
+    _m("mpo-ip-tdvp2", "interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
+    # -- ...the same rotation left in the star modes --------------------------
+    _m("mpo-ip-star-tdvp1", "interaction-star", _SB, "mpo-tdvp",
+       "tdvp1", fixed_bond=True),
+    _m("mpo-ip-star-tdvp2", "interaction-star", _SB, "mpo-tdvp", "tdvp2"),
+    # -- ...and the chain frame on a balanced binary tree ---------------------
+    _m("tree-tdvp", "interaction-chain", _SB, "modetree",
        "run_tree_tdvp", fixed_bond=True, integrator="tdvp1",
        geometry="binary-tree"),
-    _m("tree-tdvp2", "interaction-star", _SB, "modetree",
+    _m("tree-tdvp2", "interaction-chain", _SB, "modetree",
        "run_tree_tdvp2", integrator="tdvp2", geometry="binary-tree"),
-    _m("tree-tebd", "interaction-star", _SB, "modetree",
+    _m("tree-tebd", "interaction-chain", _SB, "modetree",
        "run_tree_tebd", integrator="tebd", geometry="binary-tree"),
     # -- system-bath, polaron frame -------------------------------------------
     _m("polaron", "polaron-chain", _SB, "polaron-tebd", integrator="tebd"),
@@ -352,22 +398,35 @@ _MULTISITE = "not implemented for multi-site models."
 
 #: The multichannel model's baths cannot be chain-mapped at all: the channels share
 #: one set of modes, and a Lanczos chain exists per coupling operator, not per
-#: cross-correlated set of them.  So both chain frames are out for a reason that is
-#: about the *model*, not the picture.
+#: cross-correlated set of them.  So all three chain frames are out for a reason
+#: that is about the *model*, not the picture.
 _NO_CHAIN = ("the channels share one set of modes, so there is no chain mapping to "
              "make: Lanczos gives a chain per coupling operator, and these are "
              "cross-correlated.  The shared-mode star is the only representation.")
+
+#: Why ``polaron-star`` is unimplemented.  A real frame -- the textbook Lang-Firsov
+#: transform is written this way -- but not a useful one here, which is a different
+#: statement from the one this registry used to make about it.
+_POLARON_STAR = (
+    "possible, not implemented.  The Lang-Firsov displacement is defined per star "
+    "mode (prod_k D_k(g_k sigma_z / w_k)) -- it is the chain version that needs the "
+    "J/w^2 reweighting to localize on c0 -- so this is the *more* standard way to "
+    "write the transform, not a degenerate one.  Nobody has wired it; the guess "
+    "that dressing every mode would cost more than dressing c0 is untested, and "
+    "the same guess for interaction-star turned out not to hold.  Use "
+    "'polaron-chain'.")
 
 MODELS = {
     "system-bath": Model(
         key="system-bath", label="system-bath",
         blurb="One system site coupled to one bath through one coupling operator.  "
-              "The most developed model: all four frames, both single-system "
+              "The most developed model: five of the six frames, both single-system "
               "geometries and the whole integrator family.  What used to be three "
               "separate 'models' (chain, star, mode-tree) is this one model in the "
-              "schrodinger-chain, schrodinger-star and interaction-star frames, the "
+              "schrodinger-chain, schrodinger-star and interaction-chain frames, the "
               "last on two geometries.",
-        cls="SystemBath"),
+        cls="SystemBath",
+        gaps={"polaron-star": _POLARON_STAR}),
     "multichannel": Model(
         key="multichannel", label="multichannel system-bath",
         blurb="One system site, one bath, coupled through *several* operators "
@@ -375,7 +434,8 @@ MODELS = {
               "unlike independent baths.  Selected by giving the Bath a list of "
               "couplings, not by a method name.",
         cls="SystemBath",
-        gaps={"schrodinger-chain": _NO_CHAIN, "polaron-chain": _NO_CHAIN},
+        gaps={"schrodinger-chain": _NO_CHAIN, "interaction-chain": _NO_CHAIN,
+              "polaron-chain": _NO_CHAIN, "polaron-star": _POLARON_STAR},
         selected_by="bath"),
     "comb": Model(
         key="comb", label="fishbone / comb",
@@ -385,8 +445,10 @@ MODELS = {
         cls="Fishbone",
         gaps={
             "schrodinger-star": _MULTISITE,
+            "interaction-chain": _MULTISITE,
             "interaction-star": _MULTISITE,
             "polaron-chain": _MULTISITE,
+            "polaron-star": _MULTISITE,
         }),
     "site-tree": Model(
         key="site-tree", label="tree of sites",
@@ -397,8 +459,10 @@ MODELS = {
         cls="TreeFishbone",
         gaps={
             "schrodinger-star": _MULTISITE,
+            "interaction-chain": _MULTISITE,
             "interaction-star": _MULTISITE,
             "polaron-chain": _MULTISITE,
+            "polaron-star": _MULTISITE,
         }),
 }
 
@@ -407,16 +471,13 @@ MODELS = {
 def why_not(model_key, frame=None, *, geometry=None):
     """Why a combination is unavailable, or ``None`` if it exists.
 
-    Much smaller than it was, because most of what it used to explain is now
-    unsayable rather than sayable-and-wrong.  The picture/basis pairs that do not
-    exist are simply not in :data:`FRAMES` (see :data:`NOT_FRAMES`), so nobody can
-    ask for one and there is nothing to reject.  What is left is genuine per-model
-    work nobody has done, plus the one geometry constraint.
+    Every one of the six frames is a real frame, so nothing here says "impossible".
+    What it reports is per-model work nobody has done (:attr:`Model.gaps`, which
+    says *why* it would or would not pay), plus the one genuine constraint: a
+    balanced binary tree needs a frame with no mode-mode terms.
     """
-    if frame is not None and frame in NOT_FRAMES:
-        return NOT_FRAMES[frame]
     if geometry == "binary-tree" and frame is not None \
-            and FRAMES.get(frame) is not None and FRAMES[frame].basis == "chain":
+            and frame in FRAMES and not FRAMES[frame].diagonal_bath:
         return _NO_MODE_MODE
     if geometry is not None and model_key in ("comb", "site-tree") \
             and geometry != "comb-tree":
@@ -430,11 +491,12 @@ def why_not(model_key, frame=None, *, geometry=None):
 
 
 def pictures_of(picture):
-    """Every frame key with this picture -- ``"schrodinger"`` -> both bases.
+    """Every frame key with this picture -- always both bases, since all six exist.
 
-    Lets ``frame="polaron"`` still mean something: it names one picture, which here
-    picks out exactly one frame.  ``frame="schrodinger"`` picks out two and is
-    reported as ambiguous, which is the honest answer.
+    Lets ``frame="polaron"`` still mean something.  :func:`resolve` narrows the
+    result to frames that actually have methods, so a bare picture resolves whenever
+    only one of its two bases is implemented (``polaron`` -> ``polaron-chain``) and
+    is reported as ambiguous when both are (``schrodinger``, ``interaction``).
     """
     return tuple(k for k, f in FRAMES.items() if f.picture == picture)
 
@@ -624,10 +686,6 @@ def describe_taxonomy():
                              f"integrator={s.integrator}")
         for frame_key, why in m.gaps.items():
             lines.append(f"    {frame_key:<18} -- absent: {why}")
-    lines.append("")
-    lines.append("not frames (a picture and a basis that cannot go together):")
-    for frame_key, why in NOT_FRAMES.items():
-        lines.append(f"    {frame_key:<18} -- {why}")
     return "\n".join(lines)
 
 

@@ -24,28 +24,31 @@ the constraining:
   the exact conditional-displacement MPO ({doc}`/methods/interaction/trotter_mpo`)
   possible — the propagator factorizes without Trotter error.
 
-## The four frames
+## The six frames
 
 A frame is a **picture and a mode basis**. Both are choices about how $H$ is written
-down, and they are not free of each other — so they are one axis, and the two
-combinations that cannot exist simply have no name:
+down, so they are one axis. All $3\times2$ of them are real frames — the two bases
+are related by an orthogonal (Lanczos) transform, so the physics is identical and
+only the cost on an MPS differs:
 
 | picture | `chain` | `star` |
 |---|---|---|
 | **Schrödinger** | `schrodinger-chain` | `schrodinger-star` |
-| **interaction** | ✗ *not a frame* | `interaction-star` |
-| **polaron** | `polaron-chain` | ✗ *not a frame* |
+| **interaction** | `interaction-chain` | `interaction-star` |
+| **polaron** | `polaron-chain` | `polaron-star` *(not implemented)* |
 
-- **`interaction-chain` is not a frame.** The interaction picture rotates out
-  $H_B=\sum_k\omega_k b_k^\dagger b_k$, which is diagonal only in the star basis, so
-  no chain survives it. `SystemBathIP` does chain-map the bath — and then calls
-  `diag()` to turn it straight back into a star.
-- **`polaron-star` is not a frame.** The polaron displacement acts on the collective
-  mode; the $J/\omega^2$ chain mapping localizes it on $c_0$, and a star has no such
-  site.
+```{admonition} The interaction picture keeps the chain modes
+:class: note
+`interaction-chain` is what `tebd`, `trotter-mpo`, `mpo-ip-tdvp*` and the `tree-*`
+methods actually run. $H_B$ is *tridiagonal* rather than diagonal in the chain
+basis, but it is still quadratic, so rotating it out is perfectly well defined —
+each chain mode evolves into a superposition of chain modes.
 
-The Schrödinger picture is the only one appearing twice, because it is the only one
-that rotates out nothing and so constrains the basis not at all.
+What it costs is **locality, not existence**. The coupling it feeds the propagator
+starts as $(|V|,0,\dots,0)$ — the system touching $c_0$ alone, exactly the
+Schrödinger chain — and spreads outward as $t$ grows. That is the sense in which the
+chain "is no longer a chain" in this picture.
+```
 
 For the `system-bath` model — one system, one bath, one coupling operator:
 
@@ -53,14 +56,28 @@ For the `system-bath` model — one system, one bath, one coupling operator:
 |---|---|---|---|
 | `schrodinger-chain` | `path` | `mpo-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/chain` |
 | `schrodinger-star` | `path` | `mpo-star-tdvp1/tdvp2` | {doc}`schrodinger/star_mpo` |
-| `interaction-star` | `path` | `tebd`, `trotter-mpo`, `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
-| `interaction-star` | `binary-tree` | `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | {doc}`interaction/tree` |
+| `interaction-chain` | `path` | `tebd`, `trotter-mpo`, `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
+| `interaction-chain` | `binary-tree` | `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | {doc}`interaction/tree` |
+| `interaction-star` | `path` | `mpo-ip-star-tdvp1/tdvp2` | {doc}`interaction/star_mpo` |
 | `polaron-chain` | `path` | `polaron`, `polaron-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/polaron_chain` |
 
-The two `interaction-star` rows are the same frame on two state graphs — same
+The two `interaction-chain` rows are the same frame on two state graphs — same
 Hamiltonian, one laid on a line and one on a balanced binary tree — which is why
 `mpo-ip-tdvp2` and `tree-tdvp2` agree to machine precision rather than merely
-closely. That is why `geometry` stays an axis of its own while the basis does not.
+closely. That is why `geometry` is an axis of its own.
+
+`mpo-ip-star-tdvp*` is the same rotation left in the star modes, so each mode simply
+carries $V_k e^{-i\omega_k t}$. It reaches the same trajectory through a completely
+different coupling vector, which makes it a genuine independent check on the chain
+route rather than a restatement of it.
+
+Which of the two bases is *cheaper* is open, and the obvious guess is wrong. One
+expects the chain to win, since its coupling starts concentrated on $c_0$ and only
+spreads with $t$ while the star's is spread from the first step. Measured on an
+ohmic bath it goes the other way — at $N=20$, $t\le2$, equal `trunc_eps`, the peak
+bond is 19 for the chain and 14 for the star; at smaller sizes both converge by bond
+$\sim4$ and the difference disappears. Neither regime was pushed far enough to
+settle it.
 
 And the other three models, which fix the topology rather than the representation:
 
@@ -71,18 +88,18 @@ And the other three models, which fix the topology rather than the representatio
 
 Both of the multichannel model's frames are *star* frames: its channels share one
 set of modes, and Lanczos gives a chain per coupling operator, not per
-cross-correlated set of them. So there is no chain mapping to make — which is
-recorded as a gap rather than being derivable, because it is a fact about the model
-rather than about the picture.
+cross-correlated set of them, so there is no chain mapping to make.
 
-Ask for a frame that does not exist and the error gives the physics:
+Ask for a frame nobody has wired and the error says so, quoting the reason rather
+than pretending the combination is impossible:
 
 ```python
 sb.run(dt=..., t_max=..., frame="polaron-star")
-# ValueError: no method for frame='polaron-star': the polaron displacement acts
-# on the collective mode.  The J/w^2 chain mapping localizes that on c0; a star
-# has no such site, so the dressing would entangle the system with every mode at
-# once.  Use 'polaron-chain'.
+# ValueError: no method for frame='polaron-star': possible but not implemented,
+# and not expected to pay: the Lang-Firsov displacement is defined per star mode
+# (prod_k D_k(g_k sigma_z / w_k)), so dressing the state entangles the system with
+# every mode at once.  The J/w^2 chain mapping exists precisely to localize that
+# on c0 -- use 'polaron-chain'.
 ```
 
 ```{note}

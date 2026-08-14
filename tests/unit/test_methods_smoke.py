@@ -404,9 +404,12 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     shared = set(edges) & path_edges
     assert shared == {(0, 1)}, "only the nearest mode is adjacent to the system"
 
-    # and that mismatch is exactly what the registry derives: a star basis on a
-    # path geometry is what a swap network costs
-    assert R.METHODS["tebd"].basis == "star"
+    # and that mismatch is exactly what the registry derives: a star *interaction
+    # graph* on a path geometry is what a swap network costs.  Note the frame is
+    # `interaction-chain` -- the modes are chain modes; it is rotating H_B away that
+    # makes the coupling reach all of them, which is what `diagonal_bath` records.
+    assert R.METHODS["tebd"].frame == "interaction-chain"
+    assert R.FRAMES["interaction-chain"].diagonal_bath
     assert R.METHODS["tebd"].geometry == "path"
     assert R.METHODS["tebd"].application == "swap"
     assert R.APPLICATIONS["swap"].startswith("a star realized on a path")
