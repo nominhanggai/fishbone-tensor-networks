@@ -157,7 +157,11 @@ def test_multichannel_ip_matches_the_static_path_and_exact():
     kw = dict(dt=0.01, n_steps=20, bond_dim=80, trunc_eps=1e-12, observables=obs)
     r_static = model.run(**kw)
     r_ip = model.run(method="multichannel-ip", **kw)
-    assert r_static.method == "tree-tebd-static"
+    # the two differ by *frame* -- schrodinger-star vs interaction-star -- which is
+    # why the static one is `multichannel-static` and not the multi-site models'
+    # `tree-tebd-static`: same engine, but those chain-map their baths and this
+    # cannot (the channels share one set of modes).
+    assert r_static.method == "multichannel-static"
     assert r_ip.method == "multichannel-ip"
 
     # exact diagonalization of the same shared-mode star

@@ -24,53 +24,65 @@ the constraining:
   the exact conditional-displacement MPO ({doc}`/methods/interaction/trotter_mpo`)
   possible — the propagator factorizes without Trotter error.
 
-## Frame × basis × geometry
+## The four frames
 
-The **frame picks the basis**, and that one rule explains most of the table below.
-The interaction picture rotates out $H_B=\sum_k\omega_k b_k^\dagger b_k$, which is
-diagonal only in the **star** basis — so there is no such thing as a chain in the
-interaction picture. (`SystemBathIP` does chain-map the bath, and then immediately
-calls `diag()` to turn it back into a star.) The polaron frame is the mirror image:
-its displacement has to localize on $c_0$, which only a **chain** has. Only the
-Schrödinger picture rotates out nothing, and so is the only frame where the basis is
-a free choice.
+A frame is a **picture and a mode basis**. Both are choices about how $H$ is written
+down, and they are not free of each other — so they are one axis, and the two
+combinations that cannot exist simply have no name:
+
+| picture | `chain` | `star` |
+|---|---|---|
+| **Schrödinger** | `schrodinger-chain` | `schrodinger-star` |
+| **interaction** | ✗ *not a frame* | `interaction-star` |
+| **polaron** | `polaron-chain` | ✗ *not a frame* |
+
+- **`interaction-chain` is not a frame.** The interaction picture rotates out
+  $H_B=\sum_k\omega_k b_k^\dagger b_k$, which is diagonal only in the star basis, so
+  no chain survives it. `SystemBathIP` does chain-map the bath — and then calls
+  `diag()` to turn it straight back into a star.
+- **`polaron-star` is not a frame.** The polaron displacement acts on the collective
+  mode; the $J/\omega^2$ chain mapping localizes it on $c_0$, and a star has no such
+  site.
+
+The Schrödinger picture is the only one appearing twice, because it is the only one
+that rotates out nothing and so constrains the basis not at all.
 
 For the `system-bath` model — one system, one bath, one coupling operator:
 
-| frame | basis | geometry | methods | page |
-|---|---|---|---|---|
-| Schrödinger | `chain` | `path` | `mpo-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/chain` |
-| Schrödinger | `star` | `path` | `mpo-star-tdvp1/tdvp2` | {doc}`schrodinger/star_mpo` |
-| interaction | `star` *(forced)* | `path` | `tebd`, `trotter-mpo`, `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
-| interaction | `star` *(forced)* | `binary-tree` | `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | {doc}`interaction/tree` |
-| polaron | `chain` *(forced)* | `path` | `polaron`, `polaron-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/polaron_chain` |
+| frame | geometry | methods | page |
+|---|---|---|---|
+| `schrodinger-chain` | `path` | `mpo-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/chain` |
+| `schrodinger-star` | `path` | `mpo-star-tdvp1/tdvp2` | {doc}`schrodinger/star_mpo` |
+| `interaction-star` | `path` | `tebd`, `trotter-mpo`, `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
+| `interaction-star` | `binary-tree` | `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | {doc}`interaction/tree` |
+| `polaron-chain` | `path` | `polaron`, `polaron-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/polaron_chain` |
 
-The first two rows are the **only** pair in the whole taxonomy that differ by basis
-alone, because they sit in the only cell where the basis is free. The two
-interaction rows differ only by geometry — same Hamiltonian, one laid on a line and
-one on a balanced binary tree, which is why `mpo-ip-tdvp2` and `tree-tdvp2` agree to
-machine precision rather than merely closely.
+The two `interaction-star` rows are the same frame on two state graphs — same
+Hamiltonian, one laid on a line and one on a balanced binary tree — which is why
+`mpo-ip-tdvp2` and `tree-tdvp2` agree to machine precision rather than merely
+closely. That is why `geometry` stays an axis of its own while the basis does not.
 
 And the other three models, which fix the topology rather than the representation:
 
 | model | what it is | frames |
 |---|---|---|
-| **`multichannel`** several couplings on shared modes | {doc}`interaction/multichannel` | Schrödinger (`tree-tebd-static`), interaction (`multichannel-ip`) |
-| **`comb`** / **`site-tree`** several sites + baths | {doc}`/models/fishbone` | Schrödinger (`tree-tebd-static`) only |
+| **`multichannel`** several couplings on shared modes | {doc}`interaction/multichannel` | `schrodinger-star` (`multichannel-static`), `interaction-star` (`multichannel-ip`) |
+| **`comb`** / **`site-tree`** several sites + baths | {doc}`/models/fishbone` | `schrodinger-chain` (`tree-tebd-static`) only |
 
-Combinations that are absent are absent for one of three reasons, and
-{py:mod}`fishbonett.models.registry` distinguishes them rather than leaving a blank:
-a **constraint** (`basis="chain"` with `frame="interaction"` — impossible), a
-**clash** between two constraints (`multichannel` forces `star`, `polaron` forces
-`chain`, so that pair cannot exist), or plain **not implemented** (the interaction
-and polaron frames for the multi-site models). Ask for one and the error says which:
+Both of the multichannel model's frames are *star* frames: its channels share one
+set of modes, and Lanczos gives a chain per coupling operator, not per
+cross-correlated set of them. So there is no chain mapping to make — which is
+recorded as a gap rather than being derivable, because it is a fact about the model
+rather than about the picture.
+
+Ask for a frame that does not exist and the error gives the physics:
 
 ```python
-sb.run(dt=..., t_max=..., frame="polaron", basis="star")
-# ValueError: no method for frame='polaron', basis='star': the polaron
-# displacement acts on the collective mode.  The J/w^2 chain mapping localizes
-# that on c0; a star has no such site, so the dressing would entangle the system
-# with every mode at once.
+sb.run(dt=..., t_max=..., frame="polaron-star")
+# ValueError: no method for frame='polaron-star': the polaron displacement acts
+# on the collective mode.  The J/w^2 chain mapping localizes that on c0; a star
+# has no such site, so the dressing would entangle the system with every mode at
+# once.  Use 'polaron-chain'.
 ```
 
 ```{note}

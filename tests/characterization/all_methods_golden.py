@@ -44,13 +44,18 @@ def _bath():
     return Bath(J=_J, domain=(0.0, 40.0), n_modes=3, phys_dim=4)
 
 
-#: Old model key -> new, for comparing a baseline captured before the taxonomy was
-#: re-axed.  ``chain``/``star`` were a bath *basis* and ``mode-tree`` a state
-#: *geometry*; all three are the one ``system-bath`` model.  Method names did not
-#: change, and a method still fixes every axis, so the runs are the same runs and
-#: the numbers must be identical -- collapsing the key is all that is needed.
+#: Old key -> new, for comparing a baseline captured before the taxonomy was
+#: re-axed.  ``chain``/``star`` were half of a *frame* and ``mode-tree`` a state
+#: *geometry*; all three are the one ``system-bath`` model.  ``tree-tebd-static``
+#: on the multichannel model became ``multichannel-static``: same engine, but a
+#: different **frame** (schrodinger-star, where the multi-site models are
+#: schrodinger-chain), which one row could not carry.
+#:
+#: The runs are the same runs either way, so every number must still match
+#: exactly; only the labels moved.
 _RENAMED = {"chain": "system-bath", "star": "system-bath",
             "mode-tree": "system-bath"}
+_RENAMED_METHOD = {("multichannel", "tree-tebd-static"): "multichannel-static"}
 
 
 def _model_for(key):
@@ -92,7 +97,7 @@ def capture():
                 kw["bond_dim"] = 12
             key = (model_key, method)
             try:
-                if model_key == "multichannel" and method == R.STATIC_TREE_TEBD:
+                if model_key == "multichannel" and method == R.MULTICHANNEL_STATIC:
                     r = obj.run(**kw)            # selected by the bath, not by name
                 else:
                     r = obj.run(method=method, **kw)
@@ -125,9 +130,26 @@ def same(a, b, path=""):
     return bool(np.array_equal(aa, bb))
 
 
+def _relabel(ref):
+    """Apply :data:`_RENAMED` / :data:`_RENAMED_METHOD` to an old baseline.
+
+    Only labels are rewritten -- the recorded arrays are untouched -- so a pass
+    still means every number is bit-for-bit what it was, which is the whole point
+    of comparing against a pre-rename capture.
+    """
+    out = {}
+    for (mk, meth), v in ref.items():
+        new_meth = _RENAMED_METHOD.get((mk, meth), meth)
+        v = dict(v)
+        if v.get("method") == meth:
+            v["method"] = new_meth
+        out[(_RENAMED.get(mk, mk), new_meth)] = v
+    return out
+
+
 def check(ref):
     cur = capture()
-    ref = {(_RENAMED.get(m, m), meth): v for (m, meth), v in ref.items()}
+    ref = _relabel(ref)
     if set(ref) != set(cur):
         print("METHOD SET CHANGED")
         for k in sorted(set(ref) - set(cur)):

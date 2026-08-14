@@ -117,26 +117,33 @@ observables — and {doc}`bath` covers bath discretization and finite temperatur
 usually clearer and is what the taxonomy is actually made of:
 
 ```python
-res = sb.run(dt=0.02, t_max=2.0, frame="polaron",
+res = sb.run(dt=0.02, t_max=2.0, frame="polaron-chain",
              integrator="tebd")          # == method="polaron"
 ```
 
-A run is five independent choices:
+A run is four independent choices:
 
 | axis | values | what it is |
 |---|---|---|
 | `model` | `system-bath`, `multichannel`, `comb`, `site-tree` | what is coupled to what |
-| `frame` | `schrodinger`, `interaction`, `polaron` | which unitary is rotated out |
-| `basis` | `chain`, `star` | which bath mode basis `H` is written in |
+| `frame` | `schrodinger-chain`, `schrodinger-star`, `interaction-star`, `polaron-chain` | how `H` is written down |
 | `geometry` | `path`, `binary-tree`, `comb-tree` | the graph the state lives on |
 | `integrator` | `tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo` | how a step is taken |
 
-Most calls need two of them, because **the frame picks the basis**: the interaction
-picture forces `star` (it is the star modes whose free evolution it rotates out) and
-the polaron frame forces `chain` (its displacement has to localize on $c_0$).  Only
-the Schrödinger picture leaves the basis free.  Ask for a combination that does not
-exist and the error says why — the physics where a constraint rules it out, or that
-it is merely under-specified.
+A **frame** is a picture *and* a mode basis, because both are choices about how `H`
+is written and neither is free of the other.  Naming them together is also what
+makes the impossible pairs *unnameable*:
+
+- there is no **`interaction-chain`** — the interaction picture rotates out
+  $H_B=\sum_k\omega_k b_k^\dagger b_k$, which is diagonal only in the star basis, so
+  no chain survives it;
+- there is no **`polaron-star`** — the polaron displacement has to localize on
+  $c_0$, and a star has no such site.
+
+That leaves four. The Schrödinger picture is the only one appearing twice, because
+it is the only one that rotates out nothing and so constrains the basis not at all.
+A bare picture works where it names one frame: `frame="polaron"` resolves,
+`frame="schrodinger"` names two and says so.
 
 Every model, the frames it admits, and the reason each absent combination is absent —
 generated from {py:mod}`fishbonett.models.registry` when these docs are built, so it

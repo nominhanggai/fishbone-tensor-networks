@@ -1,9 +1,9 @@
 # Models
 
 A **model** is the physical setup: how many system sites there are and how they are
-wired to each other.  Only that.  How the *bath* is represented is two separate
-axes — the mode `basis` and the state `geometry` — because those are choices of
-representation rather than of physics ({doc}`../methods/index`).
+wired to each other.  Only that.  How the *bath* is represented lives elsewhere: its
+mode basis is half of the `frame` (`schrodinger-chain`, `interaction-star`, …) and
+the state's graph is the `geometry` axis ({doc}`../methods/index`).
 
 Four models, three classes:
 
@@ -16,16 +16,17 @@ Four models, three classes:
 
 ```{admonition} `chain`, `star` and `mode-tree` were never models
 :class: warning
-They used to be listed here as three of six models.  The first two name a bath
-**basis** and the third a state **geometry**, and all three are the same
-one-system/one-bath problem — so they are now axes of `run`, not rows in this table.
-`run(model="star")` raises, and says what to write instead.
+They used to be listed here as three of six models.  The first two are half of a
+**frame** — the mode basis, which travels with the picture, so the frames are
+`schrodinger-chain`, `schrodinger-star`, `interaction-star`, `polaron-chain` — and
+the third is a state **geometry**.  All three are the same one-system/one-bath
+problem.  `run(model="star")` raises, and says what to write instead.
 
-The tell was in the code all along: `model="chain"` with `frame="interaction"`
-chain-maps the bath and then throws the chain away, because the interaction picture
-needs the *star* modes.  And `mode-tree` shares its Hamiltonian with
-`mpo-ip-tdvp1` — same basis, same frame, different geometry — which is why the two
-agree to machine precision.
+The tell was in the code all along: `model="chain"` with the interaction picture
+chain-maps the bath and then throws the chain away, because that picture needs the
+*star* modes.  There is accordingly no `interaction-chain` frame at all.  And
+`mode-tree` shares its Hamiltonian with `mpo-ip-tdvp1` — same frame, different
+geometry — which is why the two agree to machine precision.
 ```
 
 ```{admonition} Two different trees
@@ -48,8 +49,8 @@ built, so it is whatever the code actually offers:
 ## Picking one
 
 - One system coupled to one bath → {py:class}`~fishbonett.models.system_bath.SystemBath`, and
-  let `method=` (or `frame=`/`basis=`/`geometry=`) choose how the bath is
-  represented.  Start with `tebd` or `tree-tdvp2`.  See {doc}`spin_boson`.
+  let `method=` (or `frame=`/`geometry=`) choose how the bath is represented.
+  Start with `tebd` or `tree-tdvp2`.  See {doc}`spin_boson`.
 - Several electronic sites, each with a bath → {py:class}`~fishbonett.models.fishbone.Fishbone`
   for a 1D chain of sites, {py:class}`~fishbonett.models.fishbone.TreeFishbone` for any
   other topology.  See {doc}`fishbone`.
