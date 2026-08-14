@@ -12,7 +12,8 @@ the propagation.  The state it evolves is
 :class:`fishbonett.states.tree.TreeTensorNetwork`, stepped by
 :mod:`fishbonett.evolve.sitetree`.
 
-Do not confuse the ``site-tree`` *model* with the ``binary-tree`` *geometry*, where
+Do not confuse the ``site-tree`` *model* with the ``binary-tree`` tensor-network
+*state geometry*, where
 a single system's bath modes are placed on a tree; see
 :mod:`fishbonett.models.registry`.
 """

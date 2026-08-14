@@ -3,14 +3,14 @@
 A method selects one point in four public axes:
 
 ```text
-model -> representation -> geometry -> integrator
+model -> representation -> state_geometry -> integrator
 ```
 
 Use `method="..."` as a shorthand, or pass the axes directly. Every call returns
 the same {py:class}`~fishbonett.models.result.Result` contract.
 
-Method names are representation-explicit. A path method is named
-`<representation>-<integrator>`; a non-path tensor tree inserts `tree`, as in
+Method names are representation-explicit. A 1D MPS method is named
+`<representation>-<integrator>`; a tree tensor-network method inserts `tree`, as in
 `interaction-chain-tree-tdvp2`. Thus `polaron-chain-tdvp2` states both the
 polaron-chain representation and the TDVP2 integrator.
 
@@ -69,15 +69,15 @@ same transformed Hamiltonian and both are implemented.
 
 ## System-bath methods
 
-| representation | geometry | methods | details |
+| representation | tensor-network geometry | methods | details |
 |---|---|---|---|
-| `schrodinger-chain` | path | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-dtdvp` | {doc}`schrodinger/chain` |
-| `schrodinger-star` | path | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2` | {doc}`schrodinger/star_mpo` |
-| `interaction-chain` | path | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
-| `interaction-chain` | binary tree | `interaction-chain-tree-tdvp1`, `interaction-chain-tree-tdvp2`, `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
-| `interaction-star` | path | `interaction-star-tdvp1`, `interaction-star-tdvp2` | {doc}`interaction/star_mpo` |
-| `polaron-chain` | path | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`schrodinger/polaron_chain` |
-| `polaron-star` | path | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`schrodinger/polaron_chain` |
+| `schrodinger-chain` | 1D MPS | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-dtdvp` | {doc}`schrodinger/chain` |
+| `schrodinger-star` | 1D MPS | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2` | {doc}`schrodinger/star_mpo` |
+| `interaction-chain` | 1D MPS | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
+| `interaction-chain` | binary tree tensor network | `interaction-chain-tree-tdvp1`, `interaction-chain-tree-tdvp2`, `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
+| `interaction-star` | 1D MPS | `interaction-star-tdvp1`, `interaction-star-tdvp2` | {doc}`interaction/star_mpo` |
+| `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`schrodinger/polaron_chain` |
+| `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`schrodinger/polaron_chain` |
 
 The two `interaction-chain` rows use the same Hamiltonian on different tensor
 graphs. The representation supplies the requested numerical product, while the
@@ -85,12 +85,13 @@ integrator determines how that product advances the tensor state.
 
 ## Other models
 
-| model | representation | method |
-|---|---|---|
-| `multichannel` | `schrodinger-star` | `schrodinger-star-tree-tebd` |
-| `multichannel` | `interaction-chain` | `interaction-chain-tebd` |
-| `multichannel` | `interaction-star` | `interaction-star-tebd` |
-| `comb`, `site-tree` | `schrodinger-chain` | `schrodinger-chain-tree-tebd` |
+| model | representation | tensor-network geometry | method |
+|---|---|---|---|
+| `multichannel` | `schrodinger-star` | star tensor network (`tree`) | `schrodinger-star-tree-tebd` |
+| `multichannel` | `interaction-chain` | 1D MPS (`mps`) | `interaction-chain-tebd` |
+| `multichannel` | `interaction-star` | 1D MPS (`mps`) | `interaction-star-tebd` |
+| `comb` | `schrodinger-chain` | comb tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
+| `site-tree` | `schrodinger-chain` | arbitrary tree tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
 
 For multichannel interaction propagation, `interaction-star-tebd` retains the
 shared star modes and `interaction-chain-tebd` applies a common orthogonal
@@ -117,7 +118,7 @@ result = model.run(
     dt=0.02,
     t_max=2.0,
     representation="interaction-chain",
-    geometry="path",
+    state_geometry="mps",
     integrator="tdvp2",
     bond_dim=100,
 )

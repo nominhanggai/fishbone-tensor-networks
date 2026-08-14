@@ -1,10 +1,10 @@
 """Models: the physical setups you can propagate, and what each one admits.
 
 A **model** says what is coupled to what -- how many system sites and how they are
-wired.  Only that: the complete Hamiltonian ``representation`` and the state
-``geometry`` are separate choices.  A run has four public axes:
+wired. Only that: the complete Hamiltonian ``representation`` and the tensor-network
+``state_geometry`` are separate choices. A run has four public axes:
 
-    model -> representation -> geometry -> integrator
+    model -> representation -> state_geometry -> integrator
 
 Four models, three classes:
 
@@ -19,7 +19,7 @@ model             class                  what it is
 
 ``chain``, ``star`` and ``mode-tree`` used to be listed here as models.  They were
 not: the first two belong inside a complete representation name and the third is
-a state geometry.  ``multichannel`` is picked
+a tensor-network state geometry. ``multichannel`` is picked
 automatically from a list of model coupling operators rather than by a method name.
 
 :mod:`fishbonett.models.registry` is the authority: which representations each model has,

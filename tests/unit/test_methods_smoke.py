@@ -366,13 +366,13 @@ def test_interaction_representations_materialize_swap_network_gates():
         assert "tebd_gates" in cls.__dict__
 
 
-def test_interaction_graph_is_a_star_while_the_state_is_a_path():
+def test_interaction_graph_is_a_star_while_the_state_is_an_mps():
     """Why the swap layout exists, asserted rather than described.
 
     The claim the whole model/representation/layout split rests on is that H's *interaction*
     graph and the state's *tensor-network* graph are different objects.  Here they
     demonstrably are: in the interaction picture every mode couples to the system
-    and to nothing else (a star), while the MPS holding the state is a path.  The
+    and to nothing else (a star), while the state is a 1D MPS. The
     swap network is what reconciles them -- which is why, and only why, these
     methods are marked ``layout="swap"``.
     """
@@ -401,7 +401,7 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     for (_h, d_boson, d_sys) in h2:
         assert (d_sys, d_boson) == (pd[0], pd[1])   # system x mode, never mode x mode
 
-    # the state is a path, so the two graphs genuinely differ
+    # the state is a 1D MPS, so the two graphs genuinely differ
     state = SystemBathMPS(pd)
     path_edges = {(i, i + 1) for i in range(n)}
     assert set(edges) != path_edges
@@ -410,14 +410,14 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     assert shared == {(0, 1)}, "only the nearest mode is adjacent to the system"
 
     # and that mismatch is exactly what the registry derives: a star *interaction
-    # graph* on a path geometry is what a swap network costs.  Note the representation is
+    # graph* on a 1D MPS is what a swap network costs. Note the representation is
     # `interaction-chain` -- the modes are chain modes; it is rotating H_B away that
     # makes the coupling reach all of them, which is what `mode_decoupled` records.
     assert R.METHODS["interaction-chain-tebd"].representation == "interaction-chain"
     assert R.REPRESENTATIONS["interaction-chain"].mode_decoupled
-    assert R.METHODS["interaction-chain-tebd"].geometry == "path"
+    assert R.METHODS["interaction-chain-tebd"].state_geometry == "mps"
     assert R.METHODS["interaction-chain-tebd"].application == "swap"
-    assert R.APPLICATIONS["swap"].startswith("a star realized on a path")
+    assert R.APPLICATIONS["swap"].startswith("a star realized on a 1D MPS")
 
 
 def test_schrodinger_representation_serves_every_topology():

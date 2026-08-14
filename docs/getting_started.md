@@ -57,7 +57,7 @@ result.max_bond          # peak bond dimension per step
 ```
 
 Every `method` name begins with its complete representation, followed by the
-integrator; non-path methods also include `tree`. Examples include
+integrator; tree tensor-network methods also include `tree`. Examples include
 `interaction-chain-tebd`, `interaction-chain-trotter-mpo`,
 `polaron-chain-tdvp2`, `schrodinger-chain-tdvp2`, and
 `interaction-chain-tree-tdvp2`. Every method uses the same `dt`/`t_max` and returns the same
@@ -82,7 +82,7 @@ The recommended workflow: pick `trunc_eps` for the accuracy you need, leave
 than you care about. (A few methods have a *fixed* bond dimension and therefore
 require an explicit `bond_dim` — see {doc}`methods/index`.)
 
-## The fishbone geometry
+## The fishbone tensor-network geometry
 
 A fishbone is a set of electronic sites, each coupled to one bath (a comb) or two
 baths — one on each side of the site (the fishbone).
@@ -128,8 +128,12 @@ A run is four independent choices:
 |---|---|---|
 | `model` | `system-bath`, `multichannel`, `comb`, `site-tree` | what is coupled to what |
 | `representation` | six exact names, below | how `H` is written down |
-| `geometry` | `path`, `binary-tree`, `comb-tree` | the graph the state lives on |
+| `state_geometry` | `mps`, `binary-tree`, `tree` | 1D MPS, binary tree tensor network, or general tree tensor network |
 | `integrator` | `tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo` | how a step is taken |
+
+The general `tree` state supports several model-specific tensor-network
+geometries: a comb for `Fishbone`, an arbitrary loop-free tree for
+`TreeFishbone`, and a star for the static multichannel model.
 
 A representation name is complete. There is no second public category to combine
 with it:
@@ -155,7 +159,7 @@ is whatever the code actually offers:
 ## Low-level engines
 
 For finer control the underlying layers are available directly. The high-level
-path compiles `Bath`, constructs a representation, asks it for the numerical
+high-level API compiles `Bath`, constructs a representation, asks it for the numerical
 product needed by the integrator, and then propagates:
 
 ```python

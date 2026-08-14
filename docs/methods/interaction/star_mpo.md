@@ -1,6 +1,6 @@
 # Interaction representations — MPO + TDVP
 
-The MPO/TDVP path supports both interaction representations:
+The 1D MPS with MPO/TDVP supports both interaction representations:
 
 | representation | methods |
 |---|---|

@@ -3,13 +3,14 @@
 The public decomposition is:
 
 ```text
-model -> representation -> state geometry -> integrator
+model -> representation -> tensor-network geometry -> integrator
 ```
 
 - A **model** defines the physical topology and system operators.
 - A **representation** defines the mathematical Hamiltonian and materializes its
   supported numerical products: a TDVP MPO, Trotter MPO, or TEBD gates.
-- A **state geometry** is the tensor graph: path, balanced mode tree, or comb.
+- A **tensor-network geometry** is the state ansatz: 1D MPS, binary tree tensor
+  network, or a general tree tensor network.
 - An **integrator** advances the represented operator and state.
 
 These are the four public selection axes.
@@ -30,7 +31,7 @@ representation                     bath discretization + transformation of H
 SimulationPlan                     prepared state + propagation + measurement
         |
         v
-tensor state + integrator          TEBD / TDVP on a path or tree
+tensor state + integrator          TEBD / TDVP on a 1D MPS or tree tensor network
         |
         v
 Result                             times, RDMs, expectations, bond diagnostics
@@ -102,14 +103,15 @@ representation.
 ## Dispatch boundary
 
 {py:data}`fishbonett.models.registry.METHODS` is the single table that maps a
-public method to its compatible models, representation, geometry, integrator and
+public method to its compatible models, representation, tensor-network geometry,
+integrator and
 internal engine key. {py:data}`fishbonett.models.simulation.PLAN_COMPILERS` maps
 only those engine keys to preparation code. Physical model classes do not maintain
 duplicate method tables.
 
 Public method names are derived from their registry row rather than maintained as
-an independent label: `<representation>-<integrator>` on a path, with `tree`
-inserted for non-path tensor geometries. This makes names such as
+an independent label: `<representation>-<integrator>` on a 1D MPS, with `tree`
+inserted for tree tensor-network geometries. This makes names such as
 `polaron-chain-tdvp2` and `interaction-chain-tree-tdvp2` self-describing and
 prevents the name from disagreeing with the represented Hamiltonian.
 

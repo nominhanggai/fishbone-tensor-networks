@@ -8,7 +8,7 @@ string called the "model"::
     representation  how H is written         schrodinger-chain | schrodinger-star
                                              | interaction-chain | interaction-star
                                              | polaron-chain | polaron-star
-    geometry  the graph the state lives on path | binary-tree | comb-tree
+    state_geometry  tensor-network state        mps | binary-tree | tree
     integrator  how a step is taken        tebd | tdvp1 | tdvp2 | dtdvp | trotter-mpo
 
 .. rubric:: Six complete representations
@@ -29,10 +29,10 @@ is recorded by :attr:`Model.gaps`.
 The star-to-chain transform relates each star/chain pair without creating another
 user-facing axis.  The physics is identical while tensor-network costs may differ.
 
-``geometry`` stays a separate axis because it genuinely is one:
+``state_geometry`` stays a separate axis because it genuinely is one:
 ``interaction-chain-tdvp1`` and ``interaction-chain-tree-tdvp1`` are the *same
-representation*, laid on a path and on a balanced binary tree, which is why they
-produce identical numbers rather than merely close ones.
+representation*, laid on a 1D MPS and on a binary tree tensor network, which is
+why they produce identical numbers rather than merely close ones.
 ``mode-tree`` used to be listed as a model for that difference; it was never a
 model.
 
@@ -56,7 +56,7 @@ from dataclasses import dataclass, field
 from typing import Mapping, Tuple
 
 __all__ = ["Model", "Representation", "Method", "MODELS", "REPRESENTATIONS", "METHODS",
-           "GEOMETRIES", "APPLICATIONS", "FIXED_BOND_METHODS",
+           "STATE_GEOMETRIES", "APPLICATIONS", "FIXED_BOND_METHODS",
            "why_not", "models_of", "representations_of",
            "methods_of", "all_methods", "model", "method_spec", "resolve",
            "combinations", "METHOD_REPRESENTATIONS",
@@ -136,17 +136,17 @@ REPRESENTATIONS = {
         static=True, mode_decoupled=True),
 }
 
-#: The graph the state's tensors live on.  Independent of the representation:
-#: the same interaction-chain Hamiltonian runs on a path
+#: The tensor-network geometry of the state. Independent of the representation:
+#: the same interaction-chain Hamiltonian runs on a 1D MPS
 #: (``interaction-chain-tdvp1``) and a balanced tree
 #: (``interaction-chain-tree-tdvp1``), which is why ``mode-tree`` was never a
 #: model.
-GEOMETRIES = {
-    "path": "an MPS: system at site 0, modes 1..N in a line.",
-    "binary-tree": "a balanced binary TTN with the system at the root, keeping the "
-                   "high-bond region O(log N) edges deep instead of O(N).",
-    "comb-tree": "a tree of system sites, each carrying its own bath chain(s) as a "
-                 "branch -- the comb / fishbone geometry.",
+STATE_GEOMETRIES = {
+    "mps": "a 1D MPS: system at site 0, modes 1..N in a line.",
+    "binary-tree": "a binary tree tensor network with the system at the root, "
+                   "keeping the high-bond region O(log N) edges deep instead of O(N).",
+    "tree": "a general tree tensor network whose model determines whether the "
+            "physical graph is a comb, star, or arbitrary loop-free tree.",
 }
 
 
@@ -162,18 +162,18 @@ GEOMETRIES = {
 _NO_MODE_MODE = (
     "the balanced binary tree pays off only when there are no mode-mode terms.  "
     "This representation keeps the chain hoppings, which are nearest-neighbour "
-    "on a path but "
+    "on a 1D MPS but "
     "long-range on that tree (only half of the chain-adjacent pairs are "
     "tree-adjacent; the rest span up to 2*log2(N) edges -- measured: 10 edges at "
-    "N=32), so the MPO bond grows and the tree loses to the plain path.  Reordering "
-    "the leaves to make the chain local just turns the tree back into a path.")
+    "N=32), so the MPO bond grows and the tree loses to the 1D MPS. Reordering "
+    "the leaves to make the chain local just turns the state back into an MPS.")
 
 
 # -- models ------------------------------------------------------------------
 @dataclass(frozen=True)
 class Model:
     """A physical setup -- **only** the topology, now that the mode structure lives in
-    the representation and the state graph in ``geometry``.
+    the representation and the tensor-network state graph in ``state_geometry``.
 
     ``gaps`` maps an absent representation key to the reason it is absent. All six
     names describe valid Hamiltonians; gaps record model-specific implementation
@@ -207,7 +207,7 @@ class Model:
 # -- methods: the one dispatch table -----------------------------------------
 @dataclass(frozen=True)
 class Method:
-    """One realizable representation/geometry/integrator combination.
+    """One realizable representation/state-geometry/integrator combination.
 
     This is the single source of truth for what exists and which engine realizes it.
     ``models`` lists the compatible physical models because one method can serve
@@ -226,12 +226,13 @@ class Method:
     #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
     fixed_bond: bool = False
     #: The integrator **axis** -- ``"tebd"``, ``"tdvp1"``, ``"tdvp2"``, ``"dtdvp"``,
-    #: ``"trotter-mpo"``.  Unique within a ``(model, representation, geometry)``, which is
+    #: ``"trotter-mpo"``. Unique within a
+    #: ``(model, representation, state_geometry)``, which is
     #: what lets ``run`` be called by the axes instead of by a name that mashes
     #: them together.
     integrator: str = ""
-    #: The state graph -- see :data:`GEOMETRIES`.
-    geometry: str = "path"
+    #: The tensor-network state graph -- see :data:`STATE_GEOMETRIES`.
+    state_geometry: str = "mps"
 
     @property
     def application(self):
@@ -239,7 +240,7 @@ class Method:
 
         Derived, not declared: it is a *consequence* of the other axes.  A representation can
         make ``H`` non-local relative to the state -- the interaction transformation couples
-        every mode to the system, a star, while the state is a path -- and this
+        every mode to the system, a star, while the state is a 1D MPS -- and this
         records what pays for that.  See :data:`APPLICATIONS`.
 
         Keys on :attr:`Representation.mode_decoupled`, **not** on the structure:
@@ -247,9 +248,10 @@ class Method:
         out ``H_B`` that spreads the coupling over every mode, not the choice of
         modes to write it in.
         """
-        if self.integrator != "tebd" or self.geometry == "binary-tree":
+        if self.integrator != "tebd" or self.state_geometry == "binary-tree":
             return "operator"
-        if self.geometry == "path" and REPRESENTATIONS[self.representation].mode_decoupled:
+        if (self.state_geometry == "mps"
+                and REPRESENTATIONS[self.representation].mode_decoupled):
             return "swap"
         return "local"
 
@@ -262,39 +264,39 @@ class Method:
 #: decides what it costs to apply them to a state whose graph is shaped differently.
 APPLICATIONS = {
     "local": "interaction edges are state edges -- gates apply in place",
-    "swap": "a star realized on a path: the system site is walked past every mode "
+    "swap": "a star realized on a 1D MPS: the system site is walked past every mode "
             "and back each step, so a step costs O(N) swaps on top of the gates",
-    "operator": "no gate layout -- a single low-bond operator (an MPO on a path, "
+    "operator": "no gate layout -- a single low-bond operator (an MPO on a 1D MPS, "
                 "a bond-K tree operator on a tree) carries the long-range terms "
                 "natively, so the interaction graph never has to match the state's",
 }
 
 
-def _canonical_method_name(representation, integrator, geometry="path"):
+def _canonical_method_name(representation, integrator, state_geometry="mps"):
     """Derive a method name from its representation and algorithm.
 
-    Path methods use ``<representation>-<integrator>``.  A non-path tensor tree
+    MPS methods use ``<representation>-<integrator>``. A tree tensor network
     inserts ``tree`` so methods that share a representation and integrator remain
     unambiguous.  Keeping this rule here prevents a registry label from drifting
     away from the tuple it denotes.
     """
-    geometry_tag = "" if geometry == "path" else "tree-"
-    return f"{representation}-{geometry_tag}{integrator}"
+    state_geometry_tag = "" if state_geometry == "mps" else "tree-"
+    return f"{representation}-{state_geometry_tag}{integrator}"
 
 
 def _m(representation, models, engine, driver="", fixed_bond=False,
-       integrator="", geometry="path"):
+       integrator="", state_geometry="mps"):
     integrator = integrator or driver
-    name = _canonical_method_name(representation, integrator, geometry)
+    name = _canonical_method_name(representation, integrator, state_geometry)
     return Method(name, representation, models, engine, driver, fixed_bond,
-                  integrator, geometry)
+                  integrator, state_geometry)
 
 
 # Public method constants for model defaults and programmatic callers.
 SCHRODINGER_CHAIN_TREE_TEBD = _canonical_method_name(
-    "schrodinger-chain", "tebd", "comb-tree")
+    "schrodinger-chain", "tebd", "tree")
 SCHRODINGER_STAR_TREE_TEBD = _canonical_method_name(
-    "schrodinger-star", "tebd", "comb-tree")
+    "schrodinger-star", "tebd", "tree")
 INTERACTION_CHAIN_TEBD = _canonical_method_name(
     "interaction-chain", "tebd")
 INTERACTION_STAR_TEBD = _canonical_method_name(
@@ -344,7 +346,7 @@ _METHOD_ROWS = [
     _m("schrodinger-star", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
     _m("schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
-    # -- system-bath, interaction transformation, on a path --------------------------
+    # -- system-bath, interaction transformation, on a 1D MPS -------------------------
     # `interaction-chain`, not `-star`: the star-to-chain transform rotates the phases
     # back into the chain modes, so d_n(0) = (|V|, 0, ..., 0) -- the system on c0
     # alone -- and spreads outward with t.  Measured, not assumed.
@@ -362,11 +364,11 @@ _METHOD_ROWS = [
     # -- ...and the chain representation on a balanced binary tree ---------------------
     _m("interaction-chain", _SB, "modetree",
        "run_tree_tdvp", integrator="tdvp1",
-       geometry="binary-tree"),
+       state_geometry="binary-tree"),
     _m("interaction-chain", _SB, "modetree",
-       "run_tree_tdvp2", integrator="tdvp2", geometry="binary-tree"),
+       "run_tree_tdvp2", integrator="tdvp2", state_geometry="binary-tree"),
     _m("interaction-chain", _SB, "modetree",
-       "run_tree_tebd", integrator="tebd", geometry="binary-tree"),
+       "run_tree_tebd", integrator="tebd", state_geometry="binary-tree"),
     # -- system-bath, polaron representation -------------------------------------------
     _m("polaron-chain", _SB, "polaron-tebd", integrator="tebd"),
     _m("polaron-chain", _SB, "mpo-tdvp",
@@ -381,9 +383,9 @@ _METHOD_ROWS = [
        "dtdvp", fixed_bond=True),
     # -- the static tree engine: one engine, two representations, three topologies -----
     _m("schrodinger-chain", ("comb", "site-tree"),
-       "static-tree-tebd", integrator="tebd", geometry="comb-tree"),
+       "static-tree-tebd", integrator="tebd", state_geometry="tree"),
     _m("schrodinger-star", ("multichannel",),
-       "static-tree-tebd", integrator="tebd", geometry="comb-tree"),
+       "static-tree-tebd", integrator="tebd", state_geometry="tree"),
     _m("interaction-star", ("multichannel",),
        "swap-tebd", integrator="tebd"),
 ]
@@ -456,8 +458,9 @@ MODELS = {
     "site-tree": Model(
         key="site-tree", label="tree of sites",
         blurb="Several system sites wired into any loop-free tree, each carrying "
-              "zero or more baths.  The most general geometry.  Distinct from a "
-              "``binary-tree`` geometry, where it is a *single* system's bath modes "
+              "zero or more baths. The most general tensor-network geometry. "
+              "Distinct from a ``binary-tree`` state geometry, where it is a "
+              "*single* system's bath modes "
               "that form the tree.",
         cls="TreeFishbone",
         gaps={
@@ -471,7 +474,7 @@ MODELS = {
 
 
 # -- constraints -------------------------------------------------------------
-def why_not(model_key, representation=None, *, geometry=None):
+def why_not(model_key, representation=None, *, state_geometry=None):
     """Why a combination is unavailable, or ``None`` if it exists.
 
     Every one of the six representations is a real representation, so nothing here says "impossible".
@@ -479,13 +482,14 @@ def why_not(model_key, representation=None, *, geometry=None):
     says *why* it would or would not pay), plus the one genuine constraint: a
     balanced binary tree needs a representation with no mode-mode terms.
     """
-    if geometry == "binary-tree" and representation is not None \
-            and representation in REPRESENTATIONS and not REPRESENTATIONS[representation].mode_decoupled:
+    if (state_geometry == "binary-tree" and representation is not None
+            and representation in REPRESENTATIONS
+            and not REPRESENTATIONS[representation].mode_decoupled):
         return _NO_MODE_MODE
-    if geometry is not None and model_key in ("comb", "site-tree") \
-            and geometry != "comb-tree":
+    if state_geometry is not None and model_key in ("comb", "site-tree") \
+            and state_geometry != "tree":
         return (f"{MODELS[model_key].label} puts each site's bath on its own "
-                f"branch, so its state graph is always 'comb-tree'.")
+                f"branch, so its state_geometry is always 'tree'.")
     if representation is not None:
         m = MODELS.get(model_key)
         if m is not None and representation not in m.representations:
@@ -502,30 +506,40 @@ def method_spec(name, model_key=None):
 
 
 def combinations(model_keys):
-    """``[(model, representation, geometry, integrator, method)]`` for these models."""
+    """Return ``(model, representation, state_geometry, integrator, method)`` rows."""
     keys = set(model_keys)
-    return [(mk, s.representation, s.geometry, s.integrator, s.name)
+    return [(mk, s.representation, s.state_geometry, s.integrator, s.name)
             for s in METHODS.values() for mk in s.models if mk in keys]
 
 
 #: The axes :func:`resolve` filters on, in the order they appear in a combination
 #: tuple.  Named once so the filter, the error message and the table agree.
-_AXES = ("model", "representation", "geometry", "integrator")
+_AXES = ("model", "representation", "state_geometry", "integrator")
 
 
 def resolve(model_keys, *, method=None, **axes):
     """The :class:`Method` selected by either spelling.
 
-    ``method=`` names a representation/geometry/integrator combination; the
+    ``method=`` names a representation/state-geometry/integrator combination; the
     physical object supplies the compatible model.  The four axes can also be
     given directly.  Method names begin with their exact representation, so
-    ``"interaction-chain-tdvp2"`` selects ``(interaction-chain, path, tdvp2)``
+    ``"interaction-chain-tdvp2"`` selects ``(interaction-chain, mps, tdvp2)``
     for a system-bath model.  This is one lookup either way, and mixing the two
     spellings is rejected rather than silently resolved.
 
     Representation names are explicit: use ``interaction-chain`` rather than a
     partial name such as ``interaction``.
     """
+    if "geometry" in axes:
+        raise TypeError(
+            "'geometry' is no longer a public axis; use state_geometry")
+    renamed_state_geometries = {"path": "mps", "comb-tree": "tree"}
+    state_geometry = axes.get("state_geometry")
+    if state_geometry in renamed_state_geometries:
+        replacement = renamed_state_geometries[state_geometry]
+        raise ValueError(
+            f"state_geometry={state_geometry!r} was renamed; use "
+            f"state_geometry={replacement!r}")
     unknown = set(axes) - set(_AXES)
     if unknown:
         raise TypeError(f"unknown axis {sorted(unknown)}; the axes are "
@@ -536,9 +550,10 @@ def resolve(model_keys, *, method=None, **axes):
         if not given:
             return method_spec(method)
         raise ValueError(
-            "give either method= or the axes (model / representation / geometry / "
-            "integrator), not both -- a method name already fixes the "
-            "representation, geometry and integrator, while the object selects "
+            "give either method= or the axes (model / representation / "
+            "state_geometry / integrator), not both -- a method name already "
+            "fixes the representation, state_geometry and integrator, while the "
+            "object selects "
             "a compatible model.")
 
     def matches(c):
@@ -553,8 +568,9 @@ def resolve(model_keys, *, method=None, **axes):
         # An unnameable representation or a recorded gap has a reason; say it rather than
         # printing the table and leaving the reader to spot what is missing.
         for mk in sorted(set(model_keys)):
-            why = why_not(given.get("model", mk), given.get("representation"),
-                          geometry=given.get("geometry"))
+            why = why_not(
+                given.get("model", mk), given.get("representation"),
+                state_geometry=given.get("state_geometry"))
             if why:
                 raise ValueError(f"no method for {asked}: {why}")
         raise ValueError(
@@ -587,8 +603,9 @@ def model(key):
             extra = (f"  ({key!r} is half of a *representation*, not a model -- the representations "
                      f"are {', '.join(k for k in REPRESENTATIONS if k.endswith(key))}.)")
         elif key == "mode-tree":
-            extra = ("  ('mode-tree' was a state *geometry*, not a model -- use "
-                     "model='system-bath', geometry='binary-tree'.)")
+            extra = ("  ('mode-tree' was a tensor-network state geometry, not a "
+                     "model -- use model='system-bath', "
+                     "state_geometry='binary-tree'.)")
         raise KeyError(f"unknown model {key!r}; available: "
                        f"{', '.join(sorted(MODELS))}.{extra}") from None
 
@@ -667,7 +684,7 @@ def describe_taxonomy():
                 s = METHODS[name]
                 lines.append(f"    {representation_key:<{representation_width}} "
                              f"{name:<{method_width}} "
-                             f"geometry={s.geometry:<11} "
+                             f"state_geometry={s.state_geometry:<11} "
                              f"integrator={s.integrator}")
         for representation_key, why in m.gaps.items():
             lines.append(

@@ -78,7 +78,7 @@ interior backbone site with two baths is a high-degree (degree-4) tree tensor, s
 its cost scales with the **square** of its bond dimensions.  Retaining singular
 values far below the physical entanglement — an over-tight `trunc_eps` — then
 inflates those bonds for no accuracy gain (e.g. a backbone bond of true rank 3 held
-at `1e-10` can carry 15 values and run ~30× slower).  This is the geometry where
+at `1e-10` can carry 15 values and run ~30× slower). This is the tensor-network geometry where
 the default `trunc_eps=1e-4` matters most: set it to the accuracy you actually
 need and let `result.max_bond` tell you what that costs.
 ```

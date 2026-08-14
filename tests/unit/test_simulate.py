@@ -142,7 +142,7 @@ def test_spinboson_multichannel_routes_to_star():
     assert np.allclose(r.expect["sz"], fbr.expect["sz"][:, 0])
 
 
-def test_multichannel_ip_matches_the_static_path_and_exact():
+def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
     """The two multichannel representations describe the same shared-mode star, so they must
     agree with each other and with exact diagonalization.  This is the check that
     the interaction-picture builder is wired up with the *same* temperature and

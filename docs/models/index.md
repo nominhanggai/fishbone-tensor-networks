@@ -1,8 +1,8 @@
 # Models
 
 A model defines the physical topology: what is coupled to what. How the
-Hamiltonian is written is selected separately by `representation`, and the tensor
-graph is selected by `geometry`.
+Hamiltonian is written is selected separately by `representation`, and the
+tensor-network geometry is selected by `state_geometry`.
 
 | model | class | physical setup |
 |---|---|---|
@@ -12,7 +12,8 @@ graph is selected by `geometry`.
 | `site-tree` | {py:class}`~fishbonett.models.fishbone.TreeFishbone` | several system sites on any loop-free graph, baths per site |
 
 `chain`, `star`, and `mode-tree` are not models. Chain and star occur only inside
-complete representation names; a balanced mode tree is a state geometry.
+complete representation names; a balanced mode tree is a binary tree tensor-network
+geometry.
 
 The registry records every implemented combination and explains unavailable
 ones:
