@@ -24,7 +24,7 @@ spin_vib = 0.4 * np.kron(sigma_z, b + b.T)         # coupling on the (spin, vib)
 
 fb = TreeFishbone(sites=[h_spin, h_vib], edges=[(0, 1, spin_vib)],
                   baths=[Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
-                              n_modes=20, phys_dim=8, coupling=sigma_z), None])
+                              n_modes=20, phys_dim=8).bind(sigma_z), None])
 res = fb.run(dt=0.02, t_max=1.0, bond_dim=80)
 res.rdm[0, 0]      # 2x2 reduced density matrix of the spin site
 res.rdm[0, 1]      # dv x dv reduced density matrix of the vibration site

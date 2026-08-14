@@ -22,6 +22,7 @@ from numpy import exp
 
 import fishbonett.bath.recurrence as rc
 from fishbonett.bath.chain import get_coupling
+from fishbonett.bath.conventions import integrated_free_phase
 from fishbonett.system import check_operator
 from fishbonett.contract import contract as einsum
 from fishbonett.frames.gates import SwapNetworkFrame
@@ -89,9 +90,7 @@ class SystemBathIP(SwapNetworkFrame):
         self.H = []
         self.coef= []
         self.freq = []
-        self.phase = lambda lam, t, delta: (
-            np.exp(-1j * lam * (t + delta)) - np.exp(-1j * lam * t)
-        ) / (-1j * lam)
+        self.phase = integrated_free_phase
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
 
     def build_coupling(self):

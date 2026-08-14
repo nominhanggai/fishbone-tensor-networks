@@ -33,6 +33,7 @@ import numpy as np
 import scipy.linalg as la
 
 from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.bath.conventions import reorganization_energy
 from fishbonett.system import check_operator
 from fishbonett.linalg import expm_gate
 from fishbonett.operators import annihilate
@@ -71,7 +72,8 @@ class SystemBathPolaron:
         Quadrature for the star discretization; ``None`` is Gauss-Legendre.
     """
 
-    def __init__(self, pd, *, h_sys, coupling, sd, domain, discretizer=None):
+    def __init__(self, pd, *, h_sys, coupling, sd=None, domain=None,
+                 discretizer=None, compiled_polaron=None):
         self.pd_sys = pd[0]
         self.pd_boson = list(pd[1:])
         self.len_boson = len(self.pd_boson)
@@ -80,9 +82,13 @@ class SystemBathPolaron:
                              "system dimension")
         self.h_sys = check_operator(h_sys, "h_sys", self.pd_sys)
         self.coupling = check_operator(coupling, "coupling", self.pd_sys)
+        if compiled_polaron is None and (sd is None or domain is None):
+            raise ValueError(
+                "provide either compiled_polaron or both sd and domain")
         self.sd = sd
-        self.domain = list(domain)
+        self.domain = None if domain is None else list(domain)
         self.discretizer = discretizer
+        self.compiled_polaron = compiled_polaron
         self.w_list = []
         self.k_list = []
         self.kappa0 = 0.0
@@ -92,23 +98,33 @@ class SystemBathPolaron:
         """Chain-map the polaron-adapted density ``J(w)/w^2`` and cache ``O``'s
         eigendecomposition and the reorganization energy.  Call before
         :meth:`gates`."""
-        sd_pol = lambda w: self.sd(w) / w ** 2
-        self.w_list, self.k_list = get_bath_nn_paras(
-            sd_pol, self.len_boson, self.domain, discretizer=self.discretizer)
+        if self.compiled_polaron is not None:
+            compiled = self.compiled_polaron
+            chain = compiled.chain
+            if chain.n_modes != self.len_boson:
+                raise ValueError(
+                    f"compiled polaron bath has {chain.n_modes} modes but pd "
+                    f"describes {self.len_boson}")
+            if any(d != chain.phys_dim for d in self.pd_boson):
+                raise ValueError(
+                    "compiled polaron phys_dim does not match boson dimensions")
+            self.w_list = chain.frequencies.copy()
+            self.k_list = np.concatenate(
+                ([chain.system_coupling], chain.hoppings)).copy()
+            self.e_reorg = compiled.reorganization_energy
+        else:
+            sd_pol = lambda w: self.sd(w) / w ** 2
+            self.w_list, self.k_list = get_bath_nn_paras(
+                sd_pol, self.len_boson, self.domain,
+                discretizer=self.discretizer)
+            self.e_reorg = self._reorg_energy()
         self.kappa0 = float(self.k_list[0])
-        self.e_reorg = self._reorg_energy()
         self._evals, self._evecs = la.eigh(self.coupling)
         return self
 
     def _reorg_energy(self):
         """``E_reorg = (1/pi) int_domain J(w)/w dw`` (the ``O^2`` on-site shift)."""
-        lo, hi = self.domain
-        w = np.linspace(lo, hi, 4001)
-        sd_vec = np.vectorize(self.sd)
-        mask = np.abs(w) > 1e-12
-        jw = np.zeros_like(w)
-        jw[mask] = sd_vec(w[mask]) / w[mask]
-        return float(np.trapezoid(jw, w) / np.pi)
+        return reorganization_energy(self.sd, self.domain)
 
     # -- static two-site gates; system at site 0, c0 at site 1, then c1, c2, ... ----
     def gates(self, dt):

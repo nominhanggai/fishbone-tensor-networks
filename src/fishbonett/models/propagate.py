@@ -37,6 +37,10 @@ class RunCtx:
         each model resolves it, since what "up" means depends on the model.
     krylov
         Krylov dimension for the TDVP exponentials.  Ignored by the TEBD drivers.
+    seed
+        Optional run-local random seed for randomized truncation and the tiny
+        subspace seeds needed by fixed-bond TDVP.  It never mutates NumPy's
+        process-global random state.
     kw
         Engine-specific extras passed through from ``run(**engine_kw)``.
     """
@@ -48,6 +52,7 @@ class RunCtx:
     obs_ops: Mapping[str, Any] = field(default_factory=dict)
     initial: Any = "up"
     krylov: int = 25
+    seed: Optional[int] = None
     kw: Mapping[str, Any] = field(default_factory=dict)
 
     @property

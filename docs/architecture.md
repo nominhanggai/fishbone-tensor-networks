@@ -11,7 +11,7 @@ Bath + System / site graph
 CoupledBath                         model owns the system operators
         |
         v
-StarBath / ChainBath                immutable, operator-free coefficients
+StarBath / ChainBath / PolaronBath  immutable, operator-free coefficients
         |
         v
 frame compiler                      LocalTerms, MPOFrame, gates, or factorized U
@@ -36,7 +36,10 @@ Result                              time, RDMs, expectations, bond diagnostics
   channels sharing one set of modes.
 - {py:class}`~fishbonett.bath.compiled.StarBath` and
   {py:class}`~fishbonett.bath.compiled.ChainBath` own finite numerical
-  coefficients. They are immutable and deliberately contain no system operator.
+  coefficients. {py:class}`~fishbonett.bath.compiled.PolaronBath` holds the
+  reweighted chain and reorganization shift required by the Lang--Firsov frame.
+  They are immutable and deliberately contain no system operator. A bound bath
+  caches each representation for reuse within a simulation setup.
 - A frame owns transformations of the Hamiltonian and lowers compiled bath data
   into the form its compatible integrator consumes.
 - {py:class}`~fishbonett.models.simulation.SimulationPlan` owns orchestration for
@@ -45,10 +48,10 @@ Result                              time, RDMs, expectations, bond diagnostics
 - An integrator advances tensors. High-level integrator paths consume compiled
   coefficients and do not decide how a spectral density is discretized.
 
-`Bath.coupling` remains a compatibility field for Fishbone inputs. In the
-single-system API, `SystemBath(coupling=...)` is authoritative; if both spellings
-are present they must agree. New lower-level composition should use
-`bath.bind(operator)` explicitly.
+`Bath.coupling` is deprecated. In the single-system API,
+`SystemBath(coupling=...)` is authoritative; Fishbone inputs should be explicit
+`bath.bind(operator)` objects. The compatibility spelling emits a
+`DeprecationWarning`, and conflicting duplicate values are rejected.
 
 ## Why frames do not have one output type
 
@@ -85,3 +88,14 @@ Kernel/core modules contain tensor algebra and topology only. Sweep modules own
 one symmetric traversal. Driver modules resolve compatibility inputs, prepare a
 run and collect its trajectory. Existing imports from `evolve.tdvp` and
 `evolve.modetree` continue to work.
+
+Frame outputs are checked structurally through the runtime protocols in
+{py:mod}`fishbonett.frames.capabilities`: MPO, static graph, static gates, swap
+gates, and conditional displacement. A plan therefore fails during compilation
+if an engine is paired with a frame that does not expose the required operations.
+
+All three high-level model classes execute through `SimulationPlan`. The
+single-system model and multi-site Fishbone models differ in their result
+collector, not in where orchestration lives. `run(seed=...)` scopes randomized
+linear algebra and fixed-bond padding to that one plan without changing NumPy's
+global generator.

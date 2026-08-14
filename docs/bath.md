@@ -41,8 +41,9 @@ chain = coupled.compiled_chain()   # ChainBath: onsite terms + hoppings + c0
 
 The compiled objects are immutable and contain no system-space operator.  A
 `CoupledBath` combines them only when a frame needs the actual interaction.  The
-old `Bath(coupling=...)` spelling remains available for Fishbone inputs during the
-transition; if it duplicates `SystemBath(coupling=...)`, the values must agree.
+old `Bath(coupling=...)` spelling emits `DeprecationWarning` and will be removed
+in a future major release. If it duplicates `SystemBath(coupling=...)`, the values
+must agree.
 
 ## Automatic defaults
 

@@ -96,7 +96,7 @@ from fishbonett.models import Fishbone
 
 def bath(op):                                        # one bath, coupling operator op
     return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
-                n_modes=20, phys_dim=10, coupling=op)
+                n_modes=20, phys_dim=10).bind(op)
 
 fb = Fishbone(sites=[0.5 * sigma_z + sigma_x] * 3,           # 3 electronic sites
               baths=[(bath(sigma_z), bath(sigma_x))] * 3,    # two baths per site

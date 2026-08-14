@@ -21,7 +21,7 @@ from fishbonett.operators import sigma_x, sigma_z
 
 def bath(op):
     return Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(0, 40),
-                n_modes=20, phys_dim=10, coupling=op)
+                n_modes=20, phys_dim=10).bind(op)
 
 C = 0.3 * np.kron(sigma_z, sigma_z)                 # electronic-electronic coupling
 fb = TreeFishbone(
@@ -58,9 +58,9 @@ res.expect["sz"]        # (n_steps, n_sites); [t, i] = <sz> on site i at step t
 res.rdm                 # (n_steps, n_sites, d, d)
 ```
 
-A `baths` entry may be a single `Bath` (one bath), a `(left, right)` pair (two
-baths per site — the fishbone), or `None`.  A left bath defaults to a `sigma_z`
-coupling and a right bath to `sigma_x` when the `Bath` sets none.
+A `baths` entry may be one `bath.bind(operator)` object, a `(left, right)` pair
+(two baths per site — the fishbone), or `None`. Bare baths retain the historical
+`sigma_z`/`sigma_x` positional defaults but are intended only for migration.
 
 ## Cost and truncation
 

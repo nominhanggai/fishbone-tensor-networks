@@ -30,7 +30,7 @@ def fishbone():
     J = lambda w: 0.2 * w * np.exp(-w / 5.0)
 
     def bath(op):
-        return Bath(J=J, domain=(0.0, 40.0), n_modes=4, phys_dim=5, coupling=op)
+        return Bath(J=J, domain=(0.0, 40.0), n_modes=4, phys_dim=5).bind(op)
 
     fb = Fishbone(
         sites=[0.5 * sigma_z + sigma_x] * 3,                 # 3 two-level sites

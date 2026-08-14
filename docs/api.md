@@ -121,6 +121,7 @@ the operator representation necessarily differs.
    fishbonett.frames.multichannel
    fishbonett.frames.coolingchain
    fishbonett.frames.mpo
+   fishbonett.frames.capabilities
 ```
 
 ## The bath: specification, discretization, chain mapping
@@ -143,6 +144,7 @@ model-owned system operators.  Compilation then produces immutable, operator-fre
    fishbonett.bath.lanczos
    fishbonett.bath.recurrence
    fishbonett.bath.auto
+   fishbonett.bath.conventions
 ```
 
 ## Operators, linear algebra and spectral densities
@@ -154,6 +156,7 @@ model-owned system operators.  Compilation then produces immutable, operator-fre
 
    fishbonett.operators
    fishbonett.linalg
+   fishbonett.randomized
    fishbonett.spectral_densities
 ```
 

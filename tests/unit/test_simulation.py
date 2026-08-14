@@ -7,6 +7,9 @@ import pytest
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models.result import Result
 from fishbonett.models.simulation import SimulationPlan
+from fishbonett.frames.capabilities import (
+    MPOHamiltonian, StaticGraphHamiltonian, require_capability,
+)
 
 
 def _spec():
@@ -70,3 +73,72 @@ def test_physical_model_does_not_import_frame_or_evolution_engines():
     assert not hasattr(SystemBath, "_DRIVERS")
     assert not hasattr(SystemBath, "_MPO_FRAMES")
     assert not hasattr(SystemBath, "_SWAP_FRAMES")
+
+
+def test_frame_capabilities_are_structural_and_checked_early():
+    from fishbonett.frames.mpo import MPOFrame
+    from fishbonett.frames.terms import LocalTerms
+
+    mpo = MPOFrame(
+        n_sites=1, phys_dim=2, system=(np.eye(2), np.eye(2), np.ones(2)),
+        mpo=lambda _t=None: [], static=True)
+    terms = LocalTerms(
+        dims=[2], edges=[], site=[np.zeros((2, 2))], bond={})
+    assert isinstance(mpo, MPOHamiltonian)
+    assert isinstance(terms, StaticGraphHamiltonian)
+    with pytest.raises(TypeError, match="requires frame capability MPOHamiltonian"):
+        require_capability(terms, MPOHamiltonian, engine="mpo-tdvp")
+
+
+def test_multisite_models_compile_through_simulation_plan(monkeypatch):
+    from fishbonett import Bath, Fishbone, TreeFishbone
+    from fishbonett.models import simulation
+    from fishbonett.operators import sigma_x, sigma_z
+
+    seen = []
+    real = simulation.compile_plan
+
+    def record(model, spec, context):
+        seen.append((type(model).__name__, spec.engine))
+        return real(model, spec, context)
+
+    monkeypatch.setattr(simulation, "compile_plan", record)
+    bath = Bath(
+        J=lambda w: 0.2 * w * np.exp(-w / 5.0),
+        domain=(0.0, 20.0), n_modes=2, phys_dim=3)
+    TreeFishbone(
+        sites=[sigma_x], edges=[], baths=[bath.bind(sigma_z)]).run(
+            dt=0.01, n_steps=1)
+    Fishbone(sites=[sigma_x], baths=[bath.bind(sigma_z)]).run(
+        dt=0.01, n_steps=1)
+
+    assert seen == [
+        ("TreeFishbone", "static-tree-tebd"),
+        ("Fishbone", "static-tree-tebd"),
+    ]
+
+
+def test_run_seed_is_reproducible_and_does_not_touch_global_rng():
+    from fishbonett import Bath, SystemBath
+    from fishbonett.operators import sigma_x, sigma_z
+
+    def run(seed):
+        model = SystemBath(
+            h=0.5 * sigma_x, coupling=sigma_z,
+            bath=Bath(
+                J=lambda w: 0.2 * w * np.exp(-w / 5.0),
+                domain=(0.0, 30.0), n_modes=3, phys_dim=4))
+        return model.run(
+            dt=0.05, n_steps=3, method="mpo-tdvp1", bond_dim=4,
+            observables={"sz": sigma_z}, seed=seed)
+
+    np.random.seed(123)
+    expected_global = np.random.random(3)
+    np.random.seed(123)
+    first = run(7)
+    second = run(7)
+    different = run(8)
+
+    np.testing.assert_array_equal(first.rdm, second.rdm)
+    assert not np.array_equal(first.rdm, different.rdm)
+    np.testing.assert_array_equal(np.random.random(3), expected_global)
