@@ -18,10 +18,10 @@ Two consequences shape the code below:
   free choice of orthogonal mode coordinates and :meth:`MultichannelInteractionRepresentation.build` takes a
   plain single-vector :func:`~fishbonett.bath.lanczos.lanczos` seeded by one
   channel.  See that method for why the seed does not change the physics.
-* finite temperature needs the negative half of the frequency axis, either by
-  mirroring the star explicitly (:meth:`MultichannelInteractionRepresentation.__init__`) or by
-  folding the weight into the spectral density beforehand
-  (:meth:`MultichannelInteractionRepresentation.from_signed_star`, what ``run`` uses).
+* finite temperature needs the negative half of the frequency axis. A normal
+  :class:`~fishbonett.bath.spec.Bath` folds that weight into its spectral density;
+  :meth:`MultichannelInteractionRepresentation.from_positive_star` retains the
+  specialized Kelvin/cm^-1 input used by older research scripts.
 
 Selected by the model coupling, not by a ``method`` name: give
 ``SystemBath(coupling=...)`` a list of operators.  See
@@ -30,9 +30,13 @@ Selected by the model coupling, not by a ``method`` name: give
 import numpy as np
 from numpy import exp
 
-from fishbonett.contract import contract as einsum
-from fishbonett.bath.lanczos import lanczos
+from fishbonett.bath._coefficients import (
+    combined_star_operators, require_resolved,
+)
 from fishbonett.bath.conventions import integrated_free_phase
+from fishbonett.bath.coupled import bind_bath
+from fishbonett.bath.lanczos import lanczos
+from fishbonett.contract import contract as einsum
 from fishbonett.linalg import kron
 from fishbonett.operators import temp_factor, annihilate
 from fishbonett.representations.interaction import _swap_gate_pairs
@@ -48,8 +52,28 @@ class MultichannelInteractionRepresentation:
 
     static = False
 
-    def __init__(self, pd, coup_mat, freq, temp, h_sys=None, H_add=None, *,
-                 representation="interaction-chain"):
+    def __init__(self, *, representation, h_sys, coupling, bath, H_add=None):
+        """Build from a resolved bath and its model coupling operators."""
+        bath = require_resolved(bath)
+        coupled = bind_bath(bath, coupling)
+        if not coupled.is_multichannel:
+            raise ValueError(
+                "MultichannelInteractionRepresentation requires multiple "
+                "coupling operators")
+        frequencies, coupling_matrices = combined_star_operators(
+            bath, coupled.operators)
+        dimensions = [np.asarray(h_sys).shape[0]] + [
+            bath.phys_dim] * bath.n_modes
+        self.bath = bath
+        self.temp = None
+        self._setup(
+            dimensions, coupling_matrices, frequencies, h_sys, H_add,
+            representation)
+
+    @classmethod
+    def from_positive_star(cls, pd, coup_mat, freq, temp, h_sys=None,
+                           H_add=None, *,
+                           representation="interaction-chain"):
         """Build from a **positive**-frequency star at temperature ``temp``.
 
         ``freq`` is mirrored to ``(-freq, freq)`` and each coupling matrix scaled by
@@ -76,13 +100,16 @@ class MultichannelInteractionRepresentation:
         H_add : list, optional
             Extra explicit ``(h_sys_op, h_bath_op, w)`` modes appended to the chain.
         """
-        freq = np.array(freq)
+        self = cls.__new__(cls)
+        self.bath = None
+        freq = np.asarray(freq, float)
         self.temp = temp
         signed = np.concatenate((-freq, freq))
         self._setup(pd,
                     [mat * np.sqrt(np.abs(temp_factor(temp, w)))
                      for mat, w in zip(np.concatenate((coup_mat, coup_mat)), signed)],
                     signed, h_sys, H_add, representation)
+        return self
 
     @classmethod
     def from_signed_star(cls, pd, coup_mat, freq, h_sys=None, H_add=None, *,
@@ -99,6 +126,7 @@ class MultichannelInteractionRepresentation:
         chain is a rotation of the star modes, so dropping sites drops bath.
         """
         self = cls.__new__(cls)
+        self.bath = None
         self.temp = None
         self._setup(
             pd, list(coup_mat), np.asarray(freq, float), h_sys, H_add,

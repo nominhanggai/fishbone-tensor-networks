@@ -3,11 +3,14 @@ diagonalization of the star Hamiltonian (interaction- and Schroedinger-picture
 <sigma_z> agree because sigma_z commutes with the bath)."""
 import numpy as np
 
-from fishbonett.evolve.modetree import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
+from fishbonett import Bath
+from fishbonett.bath.chain import star_transform
+from fishbonett.evolve.modetree import (run_tree_tdvp, run_tree_tdvp2,
                              run_tree_tebd, build_balanced_tree, build_tree_mpo,
                              tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
                              SZ, SX)
 from fishbonett.operators import annihilate, create
+from fishbonett.representations.interaction import InteractionRepresentation
 
 DOMAIN = (-25.0, 36.0)
 
@@ -31,7 +34,7 @@ def _embed(op, site, dims):
 
 
 def _exact_sz(n_chain, d, V, ts):
-    freq, Vn, _ = _star_transform(_Jb, n_chain, DOMAIN)
+    freq, Vn, _ = star_transform(_Jb, n_chain, DOMAIN)
     dims = [2] + [d] * n_chain
     H = _embed(V * SX, 0, dims)
     for k in range(n_chain):
@@ -44,6 +47,13 @@ def _exact_sz(n_chain, d, V, ts):
     szop = _embed(SZ, 0, dims)
     return np.array([(lambda p: (p.conj() @ (szop @ p)).real)
                      (Uv @ (np.exp(-1j * E * t) * coef)) for t in ts])
+
+
+def _representation(n_chain, d, V):
+    bath = Bath(J=_Jb, domain=DOMAIN, n_modes=n_chain, phys_dim=d)
+    return InteractionRepresentation(
+        representation="interaction-chain", h_sys=V * SX,
+        coupling=SZ, bath=bath).build()
 
 
 def test_tree_mpo_reproduces_direct_hamiltonian():
@@ -66,8 +76,8 @@ def test_tree_is_shallower_than_chain():
 
 def test_tree_tdvp_matches_exact():
     n_chain, d, V = 3, 5, 1.0
-    t, sz = run_tree_tdvp(_Jb, DOMAIN, V=V, n_chain=n_chain, phys_dim=d, dt=0.05,
-                          nsteps=12, D=30)
+    t, sz = run_tree_tdvp(
+        _representation(n_chain, d, V), dt=0.05, nsteps=12, D=30)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.isclose(sz[0], 0.995, atol=0.01)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3   # 2nd-order Trotter at dt=0.05
@@ -75,15 +85,17 @@ def test_tree_tdvp_matches_exact():
 
 def test_tree_tebd_matches_exact():
     n_chain, d, V = 3, 5, 1.0
-    t, sz = run_tree_tebd(_Jb, DOMAIN, V=V, n_chain=n_chain, phys_dim=d, dt=0.05,
-                          nsteps=12, D=30, trunc_eps=1e-12)
+    t, sz = run_tree_tebd(
+        _representation(n_chain, d, V), dt=0.05, nsteps=12, D=30,
+        trunc_eps=1e-12)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3
 
 
 def test_tree_tdvp2_matches_exact():
     n_chain, d, V = 3, 5, 1.0
-    t, sz = run_tree_tdvp2(_Jb, DOMAIN, V=V, n_chain=n_chain, phys_dim=d, dt=0.05,
-                           nsteps=12, D=40, trunc_eps=1e-13)
+    t, sz = run_tree_tdvp2(
+        _representation(n_chain, d, V), dt=0.05, nsteps=12, D=40,
+        trunc_eps=1e-13)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3    # 2nd-order Trotter

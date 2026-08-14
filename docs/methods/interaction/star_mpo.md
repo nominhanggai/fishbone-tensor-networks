@@ -73,7 +73,7 @@ rep = InteractionRepresentation(
     representation="interaction-star",
     h_sys=H,
     coupling=O,
-    compiled_star=compiled_star,
+    bath=bath,
 ).build()
 
 t, rdm, max_bond = run_mpo_hamiltonian(

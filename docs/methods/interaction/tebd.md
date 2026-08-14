@@ -50,7 +50,7 @@ rep = InteractionRepresentation(
     representation="interaction-chain",
     h_sys=H,
     coupling=O,
-    compiled_star=compiled_star,
+    bath=bath,
 ).build()
 forward, swapped = rep.tebd_gates(t=0.0, dt=0.01)
 ```

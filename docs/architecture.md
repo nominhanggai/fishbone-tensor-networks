@@ -23,10 +23,8 @@ Bath + System / site graph
 CoupledBath                         physical system--bath association
         |
         v
-StarBath / ChainBath / PolaronBath  immutable finite bath data
-        |
-        v
-representation                     transformation of H + numerical products
+representation                     bath discretization + transformation of H
+                                   + numerical products
         |
         v
 SimulationPlan                     prepared state + propagation + measurement
@@ -45,7 +43,7 @@ directly from the representation. The exploratory
 `SystemBathCoolingChain` predates this boundary and remains a stateful,
 low-level compatibility utility outside `method=` dispatch.
 
-## Bath compilation and the interaction representation
+## Bath discretization and the interaction representation
 
 The finite star is the starting point for the interaction construction:
 
@@ -76,15 +74,11 @@ star-to-chain transformation.
 - {py:class}`~fishbonett.bath.coupled.CoupledBath` binds that environment to one
   or more system-space operators. Multiple operators are channels sharing the
   same modes.
-- {py:class}`~fishbonett.bath.compiled.StarBath` and
-  {py:class}`~fishbonett.bath.compiled.ChainBath` own operator-free finite
-  coefficients. {py:class}`~fishbonett.bath.compiled.PolaronBath` contains both
-  star and chain data for the reweighted $J(\omega)/\omega^2$ measure plus the
-  reorganization energy.
-- `fishbonett.representations` owns Hamiltonian transformations, time-dependent
+- `fishbonett.representations` accepts a resolved `Bath` and owns its finite
+  star or chain coefficients, Hamiltonian transformations, time-dependent
   coefficients, transformed initial states, recovery of laboratory observables,
   and the `tdvp_mpo`, `trotter_mpo`, and `tebd_gates` products supported by each
-  representation.
+  representation. Private coefficient containers are not a public layer.
 - {py:class}`~fishbonett.models.simulation.SimulationPlan` owns orchestration for
   one resolved method.
 - `fishbonett.evolve` advances tensors and does not discretize a bath or select a

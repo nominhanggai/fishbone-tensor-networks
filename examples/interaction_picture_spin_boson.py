@@ -31,7 +31,7 @@ def main():
     n_boson = 2 * len(freq)
     pd = [2] + [10] * n_boson                          # system on site 0, then bath
 
-    eth = MultichannelInteractionRepresentation(
+    eth = MultichannelInteractionRepresentation.from_positive_star(
         pd, coup_mat=coup_mat, freq=freq, temp=100.0,
         h_sys=130.0 * sigma_x + np.diag([0.0, -200.0])).build(n=0)
     etn = SystemBathMPS(pd)

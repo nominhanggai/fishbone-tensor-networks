@@ -80,7 +80,7 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.evolve.modetree
 ```
 
-## Bath compilation
+## Bath discretization and mapping
 
 ```{eval-rst}
 .. autosummary::
@@ -89,7 +89,6 @@ Hamiltonian. They do not advance tensor-network states.
 
    fishbonett.bath.spec
    fishbonett.bath.coupled
-   fishbonett.bath.compiled
    fishbonett.bath.chain
    fishbonett.bath.legendre
    fishbonett.bath.tedopa

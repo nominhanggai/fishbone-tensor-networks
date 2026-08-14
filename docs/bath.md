@@ -30,20 +30,20 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
 - **`temperature` / `beta`** — finite-temperature thermalization (below).
 - **`discretization`** — `"legendre"` (default) or `"tedopa"`.
 
-The bath does not need to own a system operator.  `SystemBath(coupling=...)` owns
-that part of the physical model.  For lower-level composition, bind it explicitly:
+The bath does not need to own a system operator. `SystemBath(coupling=...)` owns
+that part of the physical model. For a multi-site model, bind the operator that
+connects a particular bath to its system site:
 
 ```python
 coupled = bath.bind(sigma_z)
-star = coupled.compiled_star()     # StarBath: frequencies + scalar strengths
-chain = coupled.compiled_chain()   # ChainBath: onsite terms + hoppings + c0
 ```
 
-The compiled objects are immutable and contain no system-space operator.  A
-`CoupledBath` combines them only when a representation needs the actual interaction.  The
-old `Bath(coupling=...)` spelling emits `DeprecationWarning` and will be removed
-in a future major release. If it duplicates `SystemBath(coupling=...)`, the values
-must agree.
+Representations receive `bath` directly and discretize it into their own finite
+star or chain coefficients. Those coefficients are private implementation data,
+not another public bath type. `CoupledBath` records only the physical association
+between a bath and one or more model operators. The old `Bath(coupling=...)`
+spelling emits `DeprecationWarning` and will be removed in a future major release.
+If it duplicates `SystemBath(coupling=...)`, the values must agree.
 
 ## Automatic defaults
 

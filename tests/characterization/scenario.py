@@ -35,8 +35,8 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
     ----------
     SystemBath : class
         Multichannel interaction-picture Hamiltonian builder, constructed as
-        ``SystemBath(pd, coup_mat=..., freq=..., temp=..., h_sys=...)`` with
-        ``.build(n=0)`` and exposing ``tebd_gates``.
+        ``SystemBath.from_positive_star(pd, coup_mat=..., freq=..., temp=...,
+        h_sys=...)`` with ``.build(n=0)`` and exposing ``tebd_gates``.
     Mps : class
         TEBD engine constructed as ``Mps(pd)`` exposing ``B``, ``U``,
         ``update_bond`` and ``get_theta1``.
@@ -50,8 +50,13 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
 
     buf = io.StringIO()
     with redirect_stdout(buf):          # the legacy engine is extremely chatty
-        eth = SystemBath(pd, coup_mat=coup_mat, freq=freq, temp=temp,
-                               h_sys=130.0 * sigma_x + np.diag([0.0, -200.0]))
+        eth = SystemBath.from_positive_star(
+            pd,
+            coup_mat=coup_mat,
+            freq=freq,
+            temp=temp,
+            h_sys=130.0 * sigma_x + np.diag([0.0, -200.0]),
+        )
         eth.build(n=0)
 
         etn = Mps(pd)

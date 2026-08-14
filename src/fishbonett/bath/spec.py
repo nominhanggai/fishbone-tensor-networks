@@ -2,14 +2,15 @@
 
 A :class:`Bath` is a declarative description: a spectral density, a frequency
 window, how finely to discretize it, and how big each mode's Fock space is.  It
-does no tensor work itself.  :meth:`Bath.bind` associates it with model-owned
-system operators, and :mod:`fishbonett.bath.compiled` turns it into immutable star
-or chain coefficients before a representation sees it.
+does no tensor work itself. :meth:`Bath.bind` associates it with model-owned
+system operators, while Hamiltonian representations discretize it into the
+finite star or chain coefficients they require.
 
 It lives here rather than in :mod:`fishbonett.models` because it is bath
 physics, not simulation machinery: everything it knows about (thermalization,
 the discretization scheme, the automatic domain and mode count) is the subject of
-this subpackage.
+this subpackage. Representations discretize a resolved specification into the
+finite coefficients required by their Hamiltonian.
 
 .. rubric:: What's here
 
@@ -147,24 +148,6 @@ class Bath:
                              "same length (one spectral density per channel)")
         return [(self._thermalized(Jc), np.asarray(op, complex))
                 for Jc, op in zip(Js, ops)]
-
-    def shared_mode_star(self):
-        """This multichannel bath as a star of shared modes: ``(freq, coup_mat)``.
-
-        Every channel is discretized on the **same** Gauss-Legendre nodes
-        ``omega_k``, which is what makes the channels cross-correlated rather than
-        independent baths.  Mode ``k`` then couples through the single combined
-        operator ``M_k = sum_c g_{c,k} O_c`` with
-        ``g_{c,k} = sqrt(J_c(omega_k) w_k / pi)``, so ``coup_mat[k]`` is one
-        ``(d, d)`` matrix and the star has one edge per mode.
-
-        This is a *view* of the bath, the star counterpart of the chain that
-        :func:`fishbonett.bath.chain.get_coupling` returns; it lives here so the
-        Schroedinger representation and the interaction-picture model share one construction
-        rather than each discretizing the channels themselves.
-        """
-        from fishbonett.bath.coupled import bind_bath
-        return bind_bath(self).shared_mode_star()
 
     def bind(self, coupling=None, *, default_operator=None,
              validate_legacy=False):

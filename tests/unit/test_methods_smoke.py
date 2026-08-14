@@ -218,12 +218,12 @@ def test_mps_and_tree_are_one_tensor_network():
     assert issubclass(TreeTensorNetwork, TensorNetwork)
 
     pd = [2] + [8] * 5
-    compiled = Bath(
+    bath = Bath(
         J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
-        n_modes=5, phys_dim=8).bind(sigma_z).compiled_polaron()
+        n_modes=5, phys_dim=8)
     builder = PolaronRepresentation(
         representation="polaron-chain", h_sys=0.5 * sigma_x,
-        coupling=sigma_z, compiled_polaron=compiled).build()
+        coupling=sigma_z, bath=bath).build()
     gates = builder.tebd_gates(0.01)
     st = SystemBathMPS(pd)
     for _ in range(3):
@@ -275,12 +275,12 @@ def test_mps_joint_rdm_matches_the_dense_state():
     from fishbonett.operators import sigma_x, sigma_z
 
     pd = [2, 3, 3, 3, 3]
-    compiled = Bath(
+    bath = Bath(
         J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
-        n_modes=4, phys_dim=3).bind(sigma_z).compiled_polaron()
+        n_modes=4, phys_dim=3)
     builder = PolaronRepresentation(
         representation="polaron-chain", h_sys=0.5 * sigma_x,
-        coupling=sigma_z, compiled_polaron=compiled).build()
+        coupling=sigma_z, bath=bath).build()
     gates = builder.tebd_gates(0.05)
     st = SystemBathMPS(pd)
     for _ in range(4):                     # entangle it; a product state proves nothing
@@ -387,12 +387,12 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
 
     n = 5
     pd = [2] + [4] * n
-    compiled = Bath(
+    bath = Bath(
         J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
-        n_modes=n, phys_dim=4).bind(sigma_z).compiled_star()
+        n_modes=n, phys_dim=4)
     builder = InteractionRepresentation(
         representation="interaction-chain", h_sys=0.5 * sigma_x,
-        coupling=sigma_z, compiled_star=compiled).build()
+        coupling=sigma_z, bath=bath).build()
 
     # one two-site term per star edge, each pairing a mode with the system
     h2 = builder.two_site_hamiltonians(0.0, 0.01)

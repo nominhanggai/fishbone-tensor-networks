@@ -27,6 +27,10 @@ from typing import Dict, List, Tuple
 import numpy as np
 from scipy.linalg import expm
 
+from fishbonett.bath._coefficients import (
+    chain_coefficients, combined_star_operators, require_resolved,
+    star_coefficients,
+)
 from fishbonett.bath.coupled import bind_bath
 from fishbonett.operators import annihilate, create, number, sigma_z
 from fishbonett.representations._mpo import identity_product, product_sum_mpo
@@ -86,7 +90,7 @@ class SchrodingerRepresentation:
     names = frozenset({"schrodinger-chain", "schrodinger-star"})
     static = True
 
-    def __init__(self, *, representation, h_sys, coupling, compiled_bath):
+    def __init__(self, *, representation, h_sys, coupling, bath):
         if representation not in self.names:
             raise ValueError(
                 "representation must be 'schrodinger-chain' or "
@@ -95,11 +99,11 @@ class SchrodingerRepresentation:
         self.h_sys = check_operator(h_sys, "h_sys")
         self.coupling = check_operator(
             coupling, "coupling", self.h_sys.shape[0])
-        self.compiled_bath = compiled_bath
-        if getattr(compiled_bath, "n_channels", 1) != 1:
+        self.bath = require_resolved(bath)
+        if len(self.bath.spectral_densities()) != 1:
             raise ValueError("a Schrödinger MPO requires one bath channel")
         self.pd_sys = self.h_sys.shape[0]
-        self.pd_boson = [compiled_bath.phys_dim] * compiled_bath.n_modes
+        self.pd_boson = [self.bath.phys_dim] * self.bath.n_modes
         self.dimensions = (self.pd_sys, *self.pd_boson)
         self._tdvp_mpo = None
 
@@ -111,19 +115,21 @@ class SchrodingerRepresentation:
         """Return the static Hamiltonian MPO consumed by TDVP."""
         if self._tdvp_mpo is None:
             if self.name == "schrodinger-chain":
+                coefficients = chain_coefficients(self.bath)
                 self._tdvp_mpo = _chain_mpo(
                     self.h_sys, self.coupling,
-                    self.compiled_bath.system_coupling,
-                    self.compiled_bath.frequencies,
-                    self.compiled_bath.hoppings,
-                    self.compiled_bath.phys_dim,
+                    coefficients.system_coupling,
+                    coefficients.frequencies,
+                    coefficients.hoppings,
+                    self.bath.phys_dim,
                 )
             else:
+                coefficients = star_coefficients(self.bath)
                 self._tdvp_mpo = _star_mpo(
                     self.h_sys, self.coupling,
-                    self.compiled_bath.frequencies,
-                    self.compiled_bath.couplings[0],
-                    self.compiled_bath.phys_dim,
+                    coefficients.frequencies,
+                    coefficients.couplings[0],
+                    self.bath.phys_dim,
                 )
         return self._tdvp_mpo
 
@@ -201,21 +207,22 @@ def chain_terms(bath, site, next_node, dims, edges, site_H, edge_H):
     the edges after it.  Returns the next free node id.
     """
     coupled = bind_bath(bath, default_operator=sigma_z)
-    compiled = coupled.compiled_chain()
-    d = compiled.phys_dim
+    coefficients = chain_coefficients(coupled.bath)
+    d = coupled.bath.phys_dim
     a, ad, x, numb = bath_ops(d)
-    w = compiled.frequencies
+    w = coefficients.frequencies
     cop = coupled.operator
     prev = site
     node = next_node
-    for m in range(compiled.n_modes):
+    for m in range(coefficients.n_modes):
         dims.append(d)
         site_H.append(w[m] * numb)
         edges.append((prev, node))
         if m == 0:
-            edge_H[(prev, node)] = compiled.system_coupling * np.kron(cop, x)
+            edge_H[(prev, node)] = (
+                coefficients.system_coupling * np.kron(cop, x))
         else:
-            edge_H[(prev, node)] = compiled.hoppings[m - 1] * (
+            edge_H[(prev, node)] = coefficients.hoppings[m - 1] * (
                 np.kron(ad, a) + np.kron(a, ad))
         prev = node
         node += 1
@@ -231,13 +238,14 @@ def star_terms(bath, site, next_node, dims, edges, site_H, edge_H):
     ``g_{c,k} = sqrt(J_c(omega_k) w_k / pi)``.  Returns the next free node id.
     """
     coupled = bind_bath(bath)
-    star = coupled.compiled_star()
-    coup_mat = star.combine(coupled.operators)
-    _a, _ad, x, numb = bath_ops(star.phys_dim)
+    frequencies, coup_mat = combined_star_operators(
+        coupled.bath, coupled.operators)
+    dimension = coupled.bath.phys_dim
+    _a, _ad, x, numb = bath_ops(dimension)
     node = next_node
-    for k in range(star.n_modes):
-        dims.append(star.phys_dim)
-        site_H.append(star.frequencies[k] * numb)
+    for k in range(len(frequencies)):
+        dims.append(dimension)
+        site_H.append(frequencies[k] * numb)
         edges.append((site, node))
         # (site op M_k) (x) (a + a^dag)
         edge_H[(site, node)] = np.kron(coup_mat[k], x)

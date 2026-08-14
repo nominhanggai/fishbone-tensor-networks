@@ -37,14 +37,14 @@ def test_interaction_representation_starts_from_a_finite_star():
 
     n_boson = 4
     coupling = np.diag([1.0, -1.0])
-    compiled = Bath(
+    bath = Bath(
         J=lambda w: 0.5 * w * np.exp(-w / 10.0),
         domain=(0.0, 50.0), n_modes=n_boson, phys_dim=6,
-    ).bind(coupling).compiled_star()
+    )
     eth = InteractionRepresentation(
         representation="interaction-chain",
         h_sys=10.0 * np.array([[0.0, 1.0], [1.0, 0.0]]),
-        coupling=coupling, compiled_star=compiled).build()
+        coupling=coupling, bath=bath).build()
 
     assert len(eth.frequencies) == n_boson
     assert len(eth.star_couplings) == n_boson
@@ -57,33 +57,29 @@ def test_interaction_representation_starts_from_a_finite_star():
     star = InteractionRepresentation(
         representation="interaction-star",
         h_sys=eth.h_sys, coupling=eth.coupling,
-        compiled_star=compiled).build()
+        bath=bath).build()
     np.testing.assert_allclose(
         eth.coefficients(0.37),
         eth.star_to_chain @ star.coefficients(0.37))
 
 
 def test_star_transform_has_one_implementation():
-    """The star->chain transform is bath machinery, and there is one of it.
+    """The star->chain transform is representation input, not evolution logic.
 
-    ``evolve.modetree`` once carried a byte-identical copy of the transform.  It
-    lives in ``bath``
-    now because that is what it is (the same star/Lanczos pair as
-    ``get_bath_nn_paras``, keeping the transform instead of discarding it), and
-    because importing it from there leaves ``evolve`` depending on no representation.
+    The balanced-tree driver consumes interval coefficients from a representation;
+    it neither discretizes the bath nor repeats the star-to-chain transform.
     """
     import ast
     import inspect
-    from fishbonett.bath.chain import star_transform
-    from fishbonett.evolve import modetree
+    from fishbonett.evolve import _modetree_driver as driver
 
-    assert modetree._star_transform is star_transform
-
-    # and the layering it was fixed under still holds
-    src = inspect.getsource(modetree)
+    assert next(iter(inspect.signature(driver.run_tree_mpo).parameters)) == (
+        "representation")
+    src = inspect.getsource(driver)
     assert not any(isinstance(n, ast.ImportFrom) and n.module
-                   and "representations" in n.module for n in ast.walk(ast.parse(src))), \
-        "evolve must not import representations -- a representation says what H is, evolve advances it"
+                   and n.module.startswith("fishbonett.bath")
+                   for n in ast.walk(ast.parse(src))), \
+        "evolution must not discretize a bath"
 
 
 def test_shared_mode_star_is_the_one_multichannel_discretization():
@@ -97,12 +93,18 @@ def test_shared_mode_star_is_the_one_multichannel_discretization():
     from fishbonett import Bath
     from fishbonett.bath.legendre import get_vn_squared
     from fishbonett.operators import sigma_x, sigma_z
+    from fishbonett.representations.multichannel import (
+        MultichannelInteractionRepresentation,
+    )
 
     Ja = lambda w: 0.2 * w * np.exp(-w / 5.0)
     Jb = lambda w: 0.1 * w * np.exp(-w / 5.0)
-    bath = Bath(J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3,
-                coupling=[sigma_z, sigma_x])
-    freq, coup_mat = bath.shared_mode_star()
+    bath = Bath(
+        J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3)
+    representation = MultichannelInteractionRepresentation(
+        representation="interaction-star", h_sys=0.5 * sigma_z,
+        coupling=[sigma_z, sigma_x], bath=bath).build()
+    freq, coup_mat = representation.freq, representation.coup_mat_np
 
     # the grid is the channels' shared Gauss-Legendre one
     wa, va = get_vn_squared(Ja, 4, [0.0, 30.0])
@@ -121,11 +123,16 @@ def test_shared_mode_star_is_the_one_multichannel_discretization():
     # and the representation reads exactly this, one edge per mode
     from fishbonett.representations.schrodinger import star_terms
     dims, edges, site_H, edge_H = [2], [], [0.5 * sigma_z], {}
-    assert star_terms(bath, 0, 1, dims, edges, site_H, edge_H) == 5
+    assert star_terms(
+        bath.bind([sigma_z, sigma_x]),
+        0, 1, dims, edges, site_H, edge_H) == 5
     assert edges == [(0, 1), (0, 2), (0, 3), (0, 4)]
 
     # measure-adapted nodes are per-density, so they cannot be shared
     with pytest.raises(ValueError, match="legendre"):
-        Bath(J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3,
-             coupling=[sigma_z, sigma_x],
-             discretization="tedopa").shared_mode_star()
+        MultichannelInteractionRepresentation(
+            representation="interaction-star", h_sys=0.5 * sigma_z,
+            coupling=[sigma_z, sigma_x],
+            bath=Bath(
+                J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3,
+                discretization="tedopa"))

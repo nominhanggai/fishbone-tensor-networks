@@ -170,11 +170,10 @@ bath = Bath(
     J=lambda w: 0.3 * w * np.exp(-w / 2.5),
     domain=(0.3, 12.0), n_modes=8, phys_dim=10,
 )
-compiled = bath.bind(sigma_z).compiled_polaron()
 representation = PolaronRepresentation(
     representation="polaron-chain",
     h_sys=0.5 * sigma_x, coupling=sigma_z,
-    compiled_polaron=compiled,
+    bath=bath,
 ).build()
 pd = list(representation.dimensions)        # system on site 0, then the bath chain
 
