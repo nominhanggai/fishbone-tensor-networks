@@ -5,7 +5,7 @@ on a graph**: one operator per node, one per edge.  Everything downstream consum
 only that:
 
 * Trotter gates are the exponential of each term (:meth:`LocalTerms.gates`);
-* an MPO is a finite-state machine over the same graph
+* an MPO is a compressed sum of operator products over the same graph
   (:mod:`fishbonett.frames.mpo`);
 * the state is a tensor network over the same graph
   (:mod:`fishbonett.states`).

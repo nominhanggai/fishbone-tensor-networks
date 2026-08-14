@@ -250,7 +250,7 @@ class Method:
     engine: str
     #: the entry point in :mod:`fishbonett.evolve`, where there is a single one
     driver: str = ""
-    #: 1-site TDVP cannot grow a bond and adaptive DTDVP needs a ceiling, so
+    #: 1-site TDVP cannot grow a bond and adaptive tangent expansion needs a ceiling, so
     #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
     fixed_bond: bool = False
     #: The integrator **axis** -- ``"tebd"``, ``"tdvp1"``, ``"tdvp2"``, ``"dtdvp"``,
@@ -365,7 +365,7 @@ METHODS = {s.name: s for s in [
     _m("mpo-ip-star-tdvp2", "interaction-star", _SB, "mpo-tdvp", "tdvp2"),
     # -- ...and the chain frame on a balanced binary tree ---------------------
     _m("tree-tdvp", "interaction-chain", _SB, "modetree",
-       "run_tree_tdvp", fixed_bond=True, integrator="tdvp1",
+       "run_tree_tdvp", integrator="tdvp1",
        geometry="binary-tree"),
     _m("tree-tdvp2", "interaction-chain", _SB, "modetree",
        "run_tree_tdvp2", integrator="tdvp2", geometry="binary-tree"),

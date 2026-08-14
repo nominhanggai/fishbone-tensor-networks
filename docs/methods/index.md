@@ -121,7 +121,7 @@ built **once** — TDVP with exact energy conservation and no per-step rebuild e
 |---------------------|----------------------------------|---------------------|------|
 | ``mpo-tdvp1``       | chain MPO, 1-site TDVP           | fixed               | {doc}`/methods/schrodinger/chain` |
 | ``mpo-tdvp2``       | chain MPO, 2-site TDVP           | SVD truncation      | {doc}`/methods/schrodinger/chain` |
-| ``mpo-dtdvp``       | chain MPO, bond-adaptive DTDVP   | precision threshold | {doc}`/methods/schrodinger/chain` |
+| ``mpo-dtdvp``       | chain MPO, adaptive tangent space | precision threshold | {doc}`/methods/schrodinger/chain` |
 | ``mpo-star-tdvp1``  | static **star** MPO, 1-site TDVP | fixed               | {doc}`/methods/schrodinger/star_mpo` |
 | ``mpo-star-tdvp2``  | static **star** MPO, 2-site TDVP | SVD truncation      | {doc}`/methods/schrodinger/star_mpo` |
 | ``tree-tebd-static``| tree TEBD, static gates          | SVD truncation      | {doc}`/methods/interaction/multichannel`, {doc}`/models/fishbone` |
@@ -145,8 +145,8 @@ propagator here rebuilds its gates or its MPO each step.
 | ``trotter-mpo``      | MPS, **exact** conditional-displacement MPO  | SVD truncation | {doc}`/methods/interaction/trotter_mpo` |
 | ``mpo-ip-tdvp1``     | star MPO, 1-site TDVP (rebuilt at midpoint)  | fixed          | {doc}`/methods/interaction/star_mpo` |
 | ``mpo-ip-tdvp2``     | star MPO, 2-site TDVP (rebuilt at midpoint)  | SVD truncation | {doc}`/methods/interaction/star_mpo` |
-| ``tree-tdvp``        | binary-tree TTN, 1-site TDVP                 | fixed          | {doc}`/methods/interaction/tree` |
-| ``tree-tdvp2``       | binary-tree TTN, 2-site TDVP                 | SVD truncation | {doc}`/methods/interaction/tree` |
+| ``tree-tdvp``        | legacy name for binary-tree TTNO propagation | SVD truncation | {doc}`/methods/interaction/tree` |
+| ``tree-tdvp2``       | legacy name for binary-tree TTNO propagation | SVD truncation | {doc}`/methods/interaction/tree` |
 | ``tree-tebd``        | binary-tree TTN, TEBD                        | SVD truncation | {doc}`/methods/interaction/tree` |
 | ``multichannel-ip``  | MPS, swap-network gates, matrix-valued coupling | SVD truncation | {doc}`/methods/interaction/multichannel` |
 
@@ -169,7 +169,7 @@ entanglement.
 | ``polaron``       | MPS chain, **static** Trotter gates    | SVD truncation      | {doc}`/methods/schrodinger/polaron_chain` |
 | ``polaron-tdvp1`` | polaron MPO, 1-site TDVP               | fixed               | {doc}`/methods/schrodinger/polaron_chain` |
 | ``polaron-tdvp2`` | polaron MPO, 2-site TDVP               | SVD truncation      | {doc}`/methods/schrodinger/polaron_chain` |
-| ``polaron-dtdvp`` | polaron MPO, bond-adaptive DTDVP       | precision threshold | {doc}`/methods/schrodinger/polaron_chain` |
+| ``polaron-dtdvp`` | polaron MPO, adaptive tangent space     | precision threshold | {doc}`/methods/schrodinger/polaron_chain` |
 
 The restriction is on the spectral density, not the temperature: the bath must
 have $\int J(\omega)/\omega^2\,d\omega$ finite (gapped or super-ohmic).  Finite

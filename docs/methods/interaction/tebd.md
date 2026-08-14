@@ -80,7 +80,7 @@ arbitrary initial state:
   `"ground"` (the ground state of `h`), or an explicit length-`d` state vector.
 
 `tebd` reaches these on a single MPS via leg swaps; the MPO and tree engines carry
-`h` and `O` as matrices in their finite-state-machine operators (their
+`h` and `O` as matrices in their product-sum operators (their
 interaction-picture gates diagonalize `O`).  Only a *multichannel* bath — one bath
 coupled through several operators at once — is handled elsewhere (it routes through
 the tree so the system stays on its own site; see

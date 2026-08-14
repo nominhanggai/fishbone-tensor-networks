@@ -164,7 +164,7 @@ class SystemBath:
         ``bond_dim`` is an *optional* safety cap; the default ``None`` means
         **unlimited**, i.e. the bond grows to whatever ``trunc_eps`` requires
         (``result.max_bond`` reports what was actually used).  Fixed-bond methods
-        (``mpo-tdvp1``, ``mpo-ip-tdvp1``, ``tree-tdvp``, ``polaron-tdvp1``,
+        (``mpo-tdvp1``, ``mpo-ip-tdvp1``, ``polaron-tdvp1``,
         ``mpo-dtdvp``) cannot grow their own bonds and therefore *require* an
         explicit cap.
 

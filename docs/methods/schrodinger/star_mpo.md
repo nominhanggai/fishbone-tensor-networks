@@ -23,7 +23,7 @@ once and reused for every step.
 
 ### The MPO needs a third channel
 
-Written as a finite-state machine over sites $[\,\text{system}, a_0, \dots,
+Written as a compressed product-sum MPO over sites $[\,\text{system}, a_0, \dots,
 a_{N-1}]$, the interaction-picture star MPO needs bond 2: one channel carrying $O$
 rightward to meet each mode's $(a_k+a_k^\dagger)$, and one carrying the finished
 terms.  Keeping the free bath adds terms that touch **no** system operator —

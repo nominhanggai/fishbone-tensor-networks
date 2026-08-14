@@ -6,16 +6,16 @@ which module you want: the **geometry** of the state, and the **integrator**.
 .. rubric:: Which module for which geometry
 
 Every propagator here is written for one geometry; none of them is generic.
-In particular :func:`run_tdvp1` and its siblings are **1D-chain only** -- they
-build a chain MPO over a linear MPS.  For a branching geometry use the tree
-module instead; the algorithm is the same idea, the contractions are not.
+In particular the projector-splitting sweeps are **1D-chain only**: they act on a
+linear MPS and MPO. For a branching geometry use the graph-generic tree-operator
+module instead.
 
 ====================  ==================================  =====================
 geometry              module                              integrators
 ====================  ==================================  =====================
 1D chain (MPS)        :mod:`~fishbonett.evolve.tebd`      TEBD (Trotter gates)
-1D chain (MPS + MPO)  :mod:`~fishbonett.evolve.tdvp`      TDVP 1/2-site, DTDVP
-binary tree of modes  :mod:`~fishbonett.evolve.modetree`  TDVP 1/2-site, TEBD
+1D chain (MPS + MPO)  :mod:`~fishbonett.evolve.tdvp`      TDVP 1/2-site, adaptive
+binary tree of modes  :mod:`~fishbonett.evolve.modetree`  TTNO + Schmidt truncation
 any tree (incl comb)  :mod:`~fishbonett.evolve.sitetree`  TEBD
 ====================  ==================================  =====================
 
@@ -33,16 +33,17 @@ of *system sites* each with its own bath (Schroedinger, ``tree-tebd-static``).  
 
 .. rubric:: Layers
 
-The public ``tdvp`` and ``modetree`` modules are compatibility facades over
-private implementation modules split primitive -> sweep -> driver.  You can still
-enter through the established public functions at whichever level you need:
+The public ``tdvp`` and ``modetree`` modules are facades over private
+implementation layers. You can enter through the documented public functions at
+the level you need:
 
 *primitive*
     one bond or one site: :func:`~fishbonett.evolve.tebd.update_bond`,
     :func:`~fishbonett.evolve.sitetree.apply_edge`, ``tdvp.applyH1``/``applyH0``.
-*sweep*
+*sweep / graph operation*
     one pass over the state: :func:`~fishbonett.evolve.tebd.sweep`,
-    ``tdvp.tdvp1sweep``, ``modetree.tdvp_sweep``.
+    ``tdvp.tdvp1sweep``, or ``modetree.apply_coupling`` followed by
+    ``modetree.truncate_from_root``.
 *whole step / driver*
     one symmetric time step, or a whole simulation:
     :func:`~fishbonett.evolve.tebd.symmetric_swap_step`,
