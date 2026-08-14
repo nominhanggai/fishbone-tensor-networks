@@ -44,9 +44,18 @@ def _bath():
     return Bath(J=_J, domain=(0.0, 40.0), n_modes=3, phys_dim=4)
 
 
+#: Old model key -> new, for comparing a baseline captured before the taxonomy was
+#: re-axed.  ``chain``/``star`` were a bath *basis* and ``mode-tree`` a state
+#: *geometry*; all three are the one ``system-bath`` model.  Method names did not
+#: change, and a method still fixes every axis, so the runs are the same runs and
+#: the numbers must be identical -- collapsing the key is all that is needed.
+_RENAMED = {"chain": "system-bath", "star": "system-bath",
+            "mode-tree": "system-bath"}
+
+
 def _model_for(key):
     h = 0.5 * sigma_x
-    if key in ("chain", "star", "mode-tree"):
+    if key == "system-bath":
         return SystemBath(h=h, coupling=sigma_z, bath=_bath())
     if key == "multichannel":
         mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
@@ -118,6 +127,7 @@ def same(a, b, path=""):
 
 def check(ref):
     cur = capture()
+    ref = {(_RENAMED.get(m, m), meth): v for (m, meth), v in ref.items()}
     if set(ref) != set(cur):
         print("METHOD SET CHANGED")
         for k in sorted(set(ref) - set(cur)):

@@ -1,17 +1,18 @@
 """The single-system models: one system site coupled to one bath.
 
-Four models share this one class, distinguished by how the bath is represented
-and selected through ``run(method=...)``:
+Two models share this one class:
 
-* ``chain`` -- modes chain-mapped into 1D (all three frames);
-* ``star`` -- no chain mapping (Schrodinger and interaction pictures);
-* ``mode-tree`` -- modes on a balanced binary tree (interaction picture);
+* ``system-bath`` -- one system, one bath, one coupling operator.  All three
+  frames, both bath bases and both single-system geometries;
 * ``multichannel`` -- several couplings on shared modes, selected automatically
   by giving the :class:`~fishbonett.bath.spec.Bath` a *list* of couplings
   (Schrodinger and interaction pictures).
 
-:mod:`fishbonett.models.registry` is the authority on which method belongs to
-which model and frame.
+What used to be three further "models" here -- ``chain``, ``star`` and
+``mode-tree`` -- were never topologies.  ``chain``/``star`` name the bath **basis**
+and ``mode-tree`` names the state **geometry**, both of which are now axes of their
+own; see :mod:`fishbonett.models.registry`, which is the authority on which
+combination exists and how it is dispatched.
 """
 import numpy as np
 import scipy.linalg as _la
@@ -61,9 +62,10 @@ class SystemBath:
     models :class:`~fishbonett.models.fishbone.Fishbone` (sites on a 1D backbone) or
     :class:`~fishbonett.models.fishbone.TreeFishbone` (sites in any loop-free tree).
 
-    This one class covers four models -- ``chain``, ``star``, ``mode-tree`` and
-    ``multichannel`` -- because they differ only in how the *bath* is represented,
-    which ``run(method=...)`` selects.
+    This one class covers the ``system-bath`` and ``multichannel`` models.  The
+    bath's *representation* -- its basis (``chain``/``star``) and the state's
+    geometry (``path``/``binary-tree``) -- are separate axes of ``run``, not
+    separate models.
 
     When the system has *distinct* internal degrees of freedom (e.g. a spin **and**
     a vibration), prefer to keep each on its own site with ``TreeFishbone`` (a spin
@@ -94,50 +96,56 @@ class SystemBath:
 
     # -- public API ----------------------------------------------------------
     def run(self, *, dt, t_max=None, n_steps=None, method=None,
-            model=None, frame=None, integrator=None,
+            model=None, frame=None, basis=None, geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial="up", krylov=25, **engine_kw):
         """Propagate and return a :class:`Result`.
 
         .. rubric:: Two spellings, one lookup
 
-        A run is three nested choices, and they can be given **as themselves**::
+        A run is five independent choices, and they can be given **as themselves**::
 
-            sb.run(dt=..., t_max=..., model="star", frame="interaction",
-                   integrator="tdvp2")
+            sb.run(dt=..., t_max=..., frame="interaction", integrator="tdvp2")
 
-        ``model`` is what is coupled to what, ``frame`` how ``H`` is written down,
+        ``model`` is what is coupled to what, ``frame`` which unitary is rotated out,
+        ``basis`` which bath mode basis ``H`` is written in (``"chain"``/``"star"``),
+        ``geometry`` the graph the state lives on (``"path"``/``"binary-tree"``), and
         ``integrator`` how a step is taken (``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
         ``"dtdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
         one combination fits; if several do, the error lists them.
+
+        Most calls need two axes, because **the frame picks the basis**: the
+        interaction picture forces ``star`` (it is the star modes whose free
+        evolution it rotates out) and the polaron frame forces ``chain`` (its
+        displacement has to localize on ``c0``).  Only the Schroedinger picture
+        leaves the basis free -- which is why ``mpo-tdvp2`` and ``mpo-star-tdvp2``
+        are the one pair differing by basis alone.  Ask for a combination a
+        constraint rules out and the error gives the physics, not just "unknown".
 
         The named combinations still work and are often shorter::
 
             sb.run(dt=..., t_max=..., method="mpo-ip-tdvp2")   # the same run
 
-        because ``"mpo-ip-tdvp2"`` *is* ``(star, interaction, tdvp2)``.  Give one
-        spelling or the other, not both.  ``describe_taxonomy()`` prints the table;
-        :mod:`fishbonett.models.registry` is its source.
+        because ``"mpo-ip-tdvp2"`` *is* ``(system-bath, interaction, star, path,
+        tdvp2)``.  Give one spelling or the other, not both.
+        ``describe_taxonomy()`` prints the table; :mod:`fishbonett.models.registry`
+        is its source.
 
-        The four single-system models live on this class, and each admits its own
-        frames:
+        Two models live on this class:
 
-        * **chain** -- 1 system + 1 bath, modes chain-mapped to 1D.  The only
-          model with all three frames.  *Schroedinger*: ``mpo-tdvp1 | mpo-tdvp2 |
-          mpo-dtdvp`` -- static, so the MPO is built once and TDVP conserves
-          energy, at the cost of the largest bond dimensions.  *interaction*:
-          ``tebd``, ``trotter-mpo`` -- low entanglement, gates rebuilt each step;
+        * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all three
+          frames.  *Schroedinger* (``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp`` on the
+          chain, ``mpo-star-tdvp1 | mpo-star-tdvp2`` on the star) -- static, so the
+          MPO is built once and TDVP conserves energy, at the cost of the largest
+          bond dimensions.  *interaction* (``tebd``, ``trotter-mpo``,
+          ``mpo-ip-tdvp1/2`` on a path; ``tree-tdvp | tree-tdvp2 | tree-tebd`` on a
+          balanced binary tree, which keeps the high-bond region ``O(log N)`` edges
+          deep instead of ``O(N)``) -- low entanglement, gates rebuilt each step;
           all coupling terms commute here, which is what makes ``trotter-mpo``'s
-          exact factorization possible.  *polaron*: ``polaron``,
-          ``polaron-tdvp1/tdvp2/dtdvp`` -- static *and* low-entanglement; needs
+          exact factorization possible.  *polaron* (``polaron``,
+          ``polaron-tdvp1/tdvp2/dtdvp``) -- static *and* low-entanglement; needs
           ``int J/w^2`` finite (gapped or super-ohmic).  Finite temperature works
           via T-TEDOPA thermalization.
-        * **star** -- no chain mapping; every mode couples straight to the system,
-          so there are no mode-mode terms but no locality either.
-          *interaction*: ``mpo-ip-tdvp1 | mpo-ip-tdvp2``.
-        * **mode-tree** -- the same chain-mapped modes placed on a balanced binary
-          tree, keeping the high-bond region ``O(log N)`` edges deep instead of
-          ``O(N)``.  *interaction*: ``tree-tdvp | tree-tdvp2 | tree-tebd``.
         * **multichannel** -- one bath through several couplings on shared modes.
           Selected by giving :class:`~fishbonett.bath.spec.Bath` a *list* of
           coupling operators, **not** by a ``method`` name; ``method`` is then
@@ -176,7 +184,9 @@ class SystemBath:
         # a general system has no canonical observables, so it gets the RDM only
         obs_ops = observables if observables is not None else self.system.observables()
 
-        axes = model is not None or frame is not None or integrator is not None
+        axis_kw = dict(model=model, frame=frame, basis=basis, geometry=geometry,
+                       integrator=integrator)
+        axes = any(v is not None for v in axis_kw.values())
         multichannel = getattr(self.bath, "is_multichannel", False)
         if multichannel:
             # This model is selected by the *bath's shape*, so `method` can only
@@ -191,15 +201,15 @@ class SystemBath:
                     f"(or drop the method argument for the default).  To use the "
                     f"single-channel models, pass a single coupling operator.")
         else:
-            mine = {"chain", "star", "mode-tree"}
+            mine = {"system-bath"}
         if method is None and not axes:
             method = own[0] if multichannel else _DEFAULT_METHOD
-        # one lookup, either spelling: the registry says which (model, frame,
-        # integrator) this is and which driver realizes it; the driver table says
-        # where that driver lives on this class.
+        # one lookup, either spelling: the registry says which combination of the
+        # five axes this is and which engine realizes it; the driver table says
+        # where that engine lives on this class.
         spec = registry.resolve(
             mine, method=None if method is None else method.lower().replace("_", "-"),
-            model=model, frame=frame, integrator=integrator)
+            **axis_kw)
         if not set(spec.models) & mine:
             raise unknown_method_error(spec.name)
         if bond_dim is None and spec.fixed_bond:
@@ -214,9 +224,13 @@ class SystemBath:
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
                      krylov=krylov, kw=engine_kw)
-        return getattr(self, self._DRIVERS[spec.integrator])(spec, ctx)
+        return getattr(self, self._DRIVERS[spec.engine])(spec, ctx)
 
-    #: ``registry.Method.integrator`` -> the driver on this class that realizes it.
+    #: ``registry.Method.engine`` -> the driver on this class that realizes it.
+    #: Keyed on the engine, not on the ``integrator`` axis: ``tdvp2`` is one
+    #: integrator but two engines reach it (the MPO sweep on a path, the mode-tree
+    #: sweep on a binary tree), and conversely one engine serves several
+    #: integrators.
     _DRIVERS = {
         "mpo-tdvp": "_run_mpo",
         "modetree": "_run_tree",
@@ -246,12 +260,17 @@ class SystemBath:
                 "Bath's shape and has its own propagators; see "
                 "fishbonett.models.registry.")
 
-    #: which MPO the *(frame, model)* pair implies, and how that frame needs to be
+    #: which MPO the *(frame, basis)* pair implies, and how that frame needs to be
     #: driven.  This is the whole point of the taxonomy: the frame decides what H
-    #: looks like, the model decides on what geometry, and the integrator
-    #: (``spec.driver``) is an independent choice.  Each returns
+    #: looks like, the basis decides which modes it is written in, and the
+    #: integrator (``spec.driver``) is an independent choice.  Each returns
     #: ``(MPOFrame, hooks)`` -- the hooks being whatever that frame does to the
     #: state on the way in and to the observable on the way out.
+    #:
+    #: Keyed on the *basis*, not the model, which is what it was always really
+    #: keyed on: the three builders in :mod:`fishbonett.frames.mpo` are named
+    #: ``chain_``/``static_star_``/``ip_star_``, and only the old taxonomy called
+    #: those names models.
     _MPO_FRAMES = {
         ("schrodinger", "chain"): "_chain_mpo_frame",
         ("schrodinger", "star"): "_static_star_mpo_frame",
@@ -318,7 +337,7 @@ class SystemBath:
         """
         self._check_system()
         b = self.bath.resolved(ctx.t_max)
-        make = getattr(self, self._MPO_FRAMES[(spec.frame, spec.models[0])])
+        make = getattr(self, self._MPO_FRAMES[(spec.frame, spec.basis_for())])
         frame, hooks = make(b, ctx)
         t, rdms, maxb = _mpo.run_mpo_frame(
             frame, dt=ctx.dt, nsteps=ctx.n_steps, sweep=spec.driver,
@@ -399,12 +418,12 @@ class SystemBath:
         """
         return self.system.initial_vector(initial)
 
-    #: The ``layout="swap"`` frames: which builder supplies ``H(t)`` for a given
-    #: *(frame, model)*.  Everything downstream of the builder is the layout's
-    #: business, not the frame's, which is why there is one driver below and not
-    #: one per frame.
+    #: The ``application="swap"`` frames: which builder supplies ``H(t)`` for a
+    #: given *(frame, model)*.  Everything downstream of the builder is the
+    #: application's business, not the frame's, which is why there is one driver
+    #: below and not one per frame.
     _SWAP_FRAMES = {
-        ("interaction", "chain"): "_ip_frame",
+        ("interaction", "system-bath"): "_ip_frame",
         ("interaction", "multichannel"): "_multichannel_swap_frame",
     }
 
@@ -443,15 +462,17 @@ class SystemBath:
             pd, coup_mat, freq, h_sys=self.h).build(n=0), pd
 
     def _run_swap_tebd(self, spec, ctx):
-        """TEBD under the ``swap`` layout -- one driver for every frame that needs it.
+        """TEBD under the ``swap`` application -- one driver for every frame that
+        needs it.
 
         The interaction picture couples *every* mode to the system, so its
         interaction graph is a **star** while the state is a **path**.  The swap
         network is what reconciles the two: each step walks the system site out past
         every mode and back, applying its gate on the way.  That is a property of
-        the *layout*, not of the frame -- so the frame only has to supply ``H(t)``,
-        and the two frames that need this (``tebd`` and ``multichannel-ip``, the two
-        rows marked ``layout="swap"``) share everything after the builder.
+        the *application*, not of the frame -- so the frame only has to supply
+        ``H(t)``, and the two methods that need this (``tebd`` and
+        ``multichannel-ip``, the two whose ``Method.application`` derives to
+        ``"swap"``) share everything after the builder.
 
         One symmetric (Strang) step per iteration, so each advances the user's
         physical ``dt`` -- matching the tree and MPO drivers.
