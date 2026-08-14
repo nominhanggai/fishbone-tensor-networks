@@ -205,6 +205,36 @@ def test_every_method_reports_max_bond(model_key):
         assert np.all(np.asarray(r.max_bond) >= 1), f"{model_key}/{method}"
 
 
+def test_result_shape_contract_matches_its_docstring():
+    """``models/result.py`` documents the two Result shapes; check both.
+
+    That docstring is a table of promises -- what ``expect``, ``rdm`` and ``meta``
+    hold for a single-system model versus a multi-site one -- and nothing was
+    checking any of it.  The shape is what downstream code indexes, so it is a real
+    interface, not a comment.
+    """
+    h, kw = 0.5 * sigma_x, dict(dt=0.02, n_steps=2, trunc_eps=1e-7,
+                                observables={"sz": sigma_z})
+
+    single = SystemBath(h=h, coupling=sigma_z, bath=_bath_pos()).run(
+        method="tebd", **kw)
+    assert single.meta == {}, "a single-system Result carries no n_sites"
+    assert np.shape(single.rdm) == (2, 2, 2), "(n_steps, d, d)"
+    assert np.shape(single.expect["sz"]) == (2,), "(n_steps,)"
+
+    for n_sites, obj in (
+        (1, TreeFishbone(sites=[h], edges=[], baths=[_bath_pos()])),
+        (2, Fishbone(sites=[h, h], baths=[_bath_pos(), None])),
+        (3, TreeFishbone(sites=[h, h, h], edges=[(0, 1), (1, 2)],
+                         baths=[_bath_pos(), None, None])),
+    ):
+        r = obj.run(**kw)
+        assert r.meta == {"n_sites": n_sites}, r.meta
+        assert np.shape(r.rdm) == (2, n_sites, 2, 2), "(n_steps, n_sites, d, d)"
+        # a bare per-site operator gives one column per site
+        assert np.shape(r.expect["sz"]) == (2, n_sites), "(n_steps, n_sites)"
+
+
 def test_every_method_agrees_on_the_same_physics():
     """The methods are each other's cross-check -- so check them against each other.
 
