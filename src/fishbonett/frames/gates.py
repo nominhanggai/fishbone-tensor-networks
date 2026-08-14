@@ -17,7 +17,43 @@ from copy import deepcopy as dcopy
 
 from fishbonett.linalg import expm_gate
 
-__all__ = ["swap_gate_pairs", "star_edges"]
+__all__ = ["swap_gate_pairs", "star_edges", "SwapNetworkFrame"]
+
+
+class SwapNetworkFrame:
+    """Mixin for a frame whose gates the swap network applies.
+
+    The contract is one method.  A frame supplies :meth:`get_h2` -- its two-site
+    Hamiltonians for an interval, in chain order -- and gets :meth:`get_u` for free.
+
+    That is the whole of what the two such frames share, and it is worth naming:
+    :class:`~fishbonett.frames.interaction_picture.SystemBathIP` and
+    :class:`~fishbonett.frames.multichannel.SystemBathMultiChannel` build ``h``
+    quite differently (a scalar ``d_n(t)`` times one coupling operator, versus a
+    matrix-valued coupling summed over channels), and identically thereafter.  They
+    had a copy each of the identical part.
+    """
+
+    def get_h2(self, t, delta, inc_sys=True):
+        """Two-site Hamiltonians over ``[t, t+delta]``, in chain order.
+
+        ``[(h, d_boson, d_sys), ...]``, one per mode, with the interval already
+        folded into ``h``.  This is the part each frame writes itself.
+        """
+        raise NotImplementedError
+
+    def get_u(self, t, dt, factor=1, inc_sys=True):
+        """Two-site Trotter gates over ``[t, t+dt]`` as ``(U1, U2)``.
+
+        Exponentiates each Hamiltonian from :meth:`get_h2` via
+        :func:`swap_gate_pairs`.  :func:`fishbonett.evolve.tebd.symmetric_swap_step`
+        calls this twice per step -- once per half-interval -- to stay second order.
+
+        Because these frames are time-dependent, the gates are valid only for the
+        interval they were built for and must be rebuilt each step.
+        """
+        self.H = self.get_h2(t, dt, inc_sys)
+        return swap_gate_pairs(self.H, factor)
 
 
 def star_edges(n_modes):

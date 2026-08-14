@@ -176,6 +176,25 @@ def test_mps_joint_rdm_matches_the_dense_state():
                       st.expectation(sigma_z, 0))
 
 
+def test_swap_network_frames_share_one_get_u():
+    """The two swap-network frames differ in ``get_h2`` and in nothing after it.
+
+    Found by an AST scan for duplicate function bodies, which is also how the
+    star->chain transform turned up.  Both frames had the same two-line ``get_u``;
+    it is the mixin's now, and the contract it states -- supply ``get_h2``, receive
+    swap-network gates -- is the whole of what they share.
+    """
+    from fishbonett.frames.gates import SwapNetworkFrame
+    from fishbonett.frames.interaction_picture import SystemBathIP
+    from fishbonett.frames.multichannel import SystemBathMultiChannel
+
+    for cls in (SystemBathIP, SystemBathMultiChannel):
+        assert issubclass(cls, SwapNetworkFrame)
+        assert cls.get_u is SwapNetworkFrame.get_u, f"{cls.__name__} re-declares get_u"
+        assert cls.get_h2 is not SwapNetworkFrame.get_h2, (
+            f"{cls.__name__} must supply its own get_h2 -- that is the contract")
+
+
 def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     """Why the swap layout exists, asserted rather than described.
 

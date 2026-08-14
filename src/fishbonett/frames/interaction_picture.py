@@ -24,12 +24,12 @@ import fishbonett.bath.recurrence as rc
 from fishbonett.bath.chain import get_coupling
 from fishbonett.system import check_operator
 from fishbonett.contract import contract as einsum
-from fishbonett.frames.gates import swap_gate_pairs
+from fishbonett.frames.gates import SwapNetworkFrame
 from fishbonett.linalg import kron
 from fishbonett.operators import annihilate
 
 
-class SystemBathIP:
+class SystemBathIP(SwapNetworkFrame):
     """Interaction-picture builder: arbitrary system + harmonic bath.
 
     Diagonalizes the chain-mapped bath into its star modes and absorbs their free
@@ -214,20 +214,8 @@ class SystemBathIP:
         self.freq, self.coef = self.diag()
         return self
 
-    def get_u(self, t, dt, factor=1, inc_sys=True):
-        """Two-site Trotter gates over ``[t, t+dt]`` as ``(U1, U2)``.
-
-        Exponentiates each two-site Hamiltonian from :meth:`get_h2` via
-        :func:`fishbonett.frames.gates.swap_gate_pairs`, which is shared with
-        :class:`~fishbonett.frames.multichannel.SystemBathMultiChannel` -- the two
-        frames differ in how ``h`` is built, not in how it is exponentiated.
-        :func:`fishbonett.evolve.tebd.symmetric_swap_step` calls this twice per step
-        (once per half-interval) to stay second order.
-
-        Because the frame is time-dependent, the gates are valid only for the
-        interval they were built for.
-        """
-        self.H = self.get_h2(t, dt, inc_sys)
-        return swap_gate_pairs(self.H, factor)
+    # get_u comes from SwapNetworkFrame: this frame's job is get_h2, and what
+    # happens to those Hamiltonians afterwards is the same for every swap-network
+    # frame.
 
 
