@@ -11,7 +11,13 @@ import numpy as np
 from fishbonett.evolve.modetree import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
                              run_tree_tebd, build_balanced_tree, build_tree_mpo,
                              tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
-                             anih, crea, SZ, SX)
+                             _resolve_sys, SZ, SX)
+# `anih`/`crea` were imported from modetree, which has never defined them -- this
+# benchmark has been failing at import since before the model/frame restructure.
+# The operators are annihilate/create in fishbonett.operators; the body below uses
+# both spellings, so bind both.
+from fishbonett.operators import annihilate, create
+anih, crea = annihilate, create
 
 
 def Jb(w):
@@ -51,18 +57,24 @@ def exact_sz(n_chain, d, V, ts):
 def main():
     print("=== tree-MPO vs direct star Hamiltonian ===")
     rng = np.random.default_rng(0)
+    V, eps = 0.7, 0.4
+    # build_tree_mpo used to take the two-level scalars (V, eps); it takes the
+    # system Hamiltonian and coupling *operators* since they were generalized to
+    # any dimension.  _resolve_sys builds exactly the pair those scalars meant,
+    # which keeps this comparison against _hamiltonian_direct honest.
+    Hs, O, _v, _ds = _resolve_sys(None, None, None, V, eps)
     for n in (1, 2, 3, 4, 5):
         dcoup = rng.standard_normal(n) + 1j * rng.standard_normal(n)
         nodes, root, _ = build_balanced_tree(n, 3)
-        build_tree_mpo(nodes, root, dcoup, 0.7, 0.4)
+        build_tree_mpo(nodes, root, dcoup, Hs, O)
         H = hamiltonian_from_mpo(nodes, root, n, 3)
         print(f"  n_modes={n}: max|H_mpo - H_direct|="
-              f"{np.abs(H - _hamiltonian_direct(dcoup, 0.7, 0.4, 3, n)).max():.1e}")
+              f"{np.abs(H - _hamiltonian_direct(dcoup, V, eps, 3, n)).max():.1e}")
 
     print("\n=== tree dynamics vs exact diagonalization ===")
     n_chain, d, V, dt, nsteps = 3, 6, 1.0, 0.05, 20
     t, sz_t1 = run_tree_tdvp(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
-                             dt=dt, nsteps=nsteps, D=40, krylov=25)
+                             dt=dt, nsteps=nsteps, D=40)
     _, sz_t2 = run_tree_tdvp2(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
                               dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-13)
     _, sz_te = run_tree_tebd(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,

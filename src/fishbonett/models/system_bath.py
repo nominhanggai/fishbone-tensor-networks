@@ -347,11 +347,15 @@ class SystemBath:
                       discretizer=b.discretizer(),
                       observe=observe, **ctx.kw)
         sd, dom = b.spectral_density(), b.domain
+        # `krylov` is not passed: the tree sweeps never took one.  Both wrappers
+        # accepted it and neither forwarded it to tdvp_sweep / tdvp2_sweep, so it
+        # was threaded through the hot path and dropped -- the same dead parameter
+        # as `mode` on get_u.
         if spec.driver == "run_tree_tdvp":
-            t, rdms = _tree.run_tree_tdvp(sd, dom, krylov=ctx.krylov, **common)
+            t, rdms = _tree.run_tree_mpo(sd, dom, sweep="tdvp1", **common)
         elif spec.driver == "run_tree_tdvp2":
-            t, rdms = _tree.run_tree_tdvp2(sd, dom, trunc_eps=ctx.trunc_eps,
-                                           krylov=ctx.krylov, **common)
+            t, rdms = _tree.run_tree_mpo(sd, dom, sweep="tdvp2",
+                                         trunc_eps=ctx.trunc_eps, **common)
         else:
             t, rdms = _tree.run_tree_tebd(sd, dom, trunc_eps=ctx.trunc_eps,
                                           **common)

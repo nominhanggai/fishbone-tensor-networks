@@ -67,7 +67,7 @@ def test_tree_is_shallower_than_chain():
 def test_tree_tdvp_matches_exact():
     n_chain, d, V = 3, 5, 1.0
     t, sz = run_tree_tdvp(_Jb, DOMAIN, V=V, n_chain=n_chain, phys_dim=d, dt=0.05,
-                          nsteps=12, D=30, krylov=25)
+                          nsteps=12, D=30)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.isclose(sz[0], 0.995, atol=0.01)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3   # 2nd-order Trotter at dt=0.05
