@@ -2,29 +2,32 @@
 
 Start from `from fishbonett import Bath, SystemBath, Truncation`.
 
-A calculation is three **nested** choices, one subpackage each: **model** (what is
-coupled to what — `models`), **frame** (how the Hamiltonian is written down —
-`frames`), and **integrator** (how a step is taken — `evolve`).  The model fixes
-the state geometry (`states`) and constrains the other two;
+A calculation is five **independent** choices: **model** (what is coupled to what —
+`models`), **frame** (which unitary is rotated out — `frames`), **basis** (which
+bath mode basis `H` is written in), **geometry** (the graph the state lives on —
+`states`), and **integrator** (how a step is taken — `evolve`).
 {py:mod}`fishbonett.models.registry` records which combinations exist and why the
 rest do not.
 
-You can say all three directly, which is usually clearer than remembering a name:
+You can say them directly, which is usually clearer than remembering a name:
 
 ```python
-sb.run(dt=0.02, t_max=2.0, model="star", frame="interaction", integrator="tdvp2")
+sb.run(dt=0.02, t_max=2.0, frame="interaction", geometry="path", integrator="tdvp2")
 sb.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp2")     # the same run, named
 ```
 
 `integrator` is `"tebd"`, `"tdvp1"`, `"tdvp2"`, `"dtdvp"` or `"trotter-mpo"`.  Omit
 an axis and it is inferred when only one combination fits; when several do, the
-error lists them.  `registry.describe_taxonomy()` prints the whole table.  `bath` turns a spectral density into the chain parameters every
+error lists them.  Most runs need two, because the frame constrains the basis —
+`interaction` forces `star`, `polaron` forces `chain`, and only `schrodinger` leaves
+it free.  `registry.describe_taxonomy()` prints the whole table.  `bath` turns a
+spectral density into the chain parameters every
 model starts from, and `linalg`/`operators` hold the shared numerics.  The system
 sits at **site 0** throughout, with the bath modes following, nearest first.
 
 ## Models — the physical setups
 
-The six models and the taxonomy that relates them to frames and propagators.  A
+The four models and the taxonomy that relates them to frames and propagators.  A
 model's two inputs are a `Bath` (the environment, below) and a
 {py:class}`~fishbonett.system.System` — any Hermitian `h`, any Hermitian coupling
 and an initial state, validated once so that no frame re-derives it.

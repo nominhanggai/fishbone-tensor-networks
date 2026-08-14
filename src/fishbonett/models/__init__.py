@@ -1,26 +1,26 @@
 """Models: the physical setups you can propagate, and what each one admits.
 
-A **model** says what is coupled to what -- how many system sites, how they are
-wired, how the bath is represented.  It is the outermost of three nested
-choices, and it constrains the other two:
+A **model** says what is coupled to what -- how many system sites and how they are
+wired.  Only that: how the *bath* is represented is two separate axes, the mode
+``basis`` and the state ``geometry``, because those are choices of representation
+rather than of physics.  A run is five of them:
 
-    model  ->  frame  ->  propagator
+    model -> frame -> basis -> geometry -> integrator
 
-Six models, two classes:
+Four models, three classes:
 
 ================  =====================  ==========================================
 model             class                  what it is
 ================  =====================  ==========================================
-``chain``         :class:`SystemBath`    1 system + 1 bath, modes chain-mapped to 1D
-``star``          :class:`SystemBath`    1 system + 1 bath, no chain mapping
-``mode-tree``     :class:`SystemBath`    1 system + 1 bath, modes on a binary tree
+``system-bath``   :class:`SystemBath`    1 system + 1 bath + 1 coupling operator
 ``multichannel``  :class:`SystemBath`    1 system + 1 bath, several shared couplings
 ``comb``          :class:`Fishbone`      N sites on a 1D backbone, baths per site
 ``site-tree``     :class:`TreeFishbone`  N sites in any loop-free tree, baths/site
 ================  =====================  ==========================================
 
-The first four are one class because they differ only in how the bath is
-represented, which ``run(method=...)`` selects.  ``multichannel`` is picked
+``chain``, ``star`` and ``mode-tree`` used to be listed here as models.  They were
+not: the first two name a bath *basis* and the third a state *geometry*, and all
+three are the same one-system/one-bath problem.  ``multichannel`` is picked
 automatically from the bath's shape rather than by a method name.
 
 :mod:`fishbonett.models.registry` is the authority: which frames each model has,

@@ -16,9 +16,8 @@ field                single-system models         multi-site models
 ``meta``             ``{}``                      ``{"n_sites": n}``
 ===================  ==========================  ==============================
 
-``chain``, ``star``, ``mode-tree`` and ``multichannel`` are single-system;
-``comb`` and ``site-tree`` are multi-site.  See
-:mod:`fishbonett.models.registry`.
+``system-bath`` and ``multichannel`` are single-system; ``comb`` and ``site-tree``
+are multi-site.  See :mod:`fishbonett.models.registry`.
 """
 from dataclasses import dataclass, field
 

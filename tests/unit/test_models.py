@@ -60,12 +60,13 @@ def test_registry_is_the_only_dispatch_table():
         for mk in spec.models:
             assert mk in R.MODELS, f"{name} names unknown model {mk!r}"
             assert name in R.MODELS[mk].methods()
-        # every integrator must resolve to a driver that exists
-        owners = set(spec.models)
-        if owners & {"chain", "star", "mode-tree", "multichannel"}:
-            attr = SB._DRIVERS[spec.integrator]
+        assert spec.basis_for() in R.BASES, f"{name} names unknown basis"
+        assert spec.geometry in R.GEOMETRIES, f"{name} names unknown geometry"
+        # every engine must resolve to a driver that exists
+        if set(spec.models) & {"system-bath", "multichannel"}:
+            attr = SB._DRIVERS[spec.engine]
             assert callable(getattr(SB, attr, None)), (
-                f"{name}: integrator {spec.integrator!r} -> missing {attr}")
+                f"{name}: engine {spec.engine!r} -> missing {attr}")
 
 
 def test_fixed_bond_methods_are_registry_data():
@@ -99,27 +100,49 @@ def test_every_gap_has_a_reason():
                 f"{key!r}/{frame!r} is listed both as available and as a gap")
 
 
-def test_frames_and_gaps_together_cover_every_frame():
-    """No model may leave a frame unmentioned: either it works, or there is a
-    recorded reason it does not."""
+def test_every_absent_frame_has_a_reason_available():
+    """No model may leave a frame unexplained: either it works, or asking why
+    produces an answer.
+
+    Deliberately *not* ``set(frames) | set(gaps) == set(FRAMES)``, which is what this
+    checked while every reason was hand-written.  Most are derived now -- the
+    (multichannel, polaron) cell exists in no ``gaps`` entry because two constraints
+    clash there -- so the invariant is that the reason is obtainable, not that
+    somebody typed it."""
     for key, m in R.MODELS.items():
-        mentioned = set(m.frames) | set(m.gaps)
-        assert mentioned == set(R.FRAMES), (
-            f"model {key!r} says nothing about "
-            f"{sorted(set(R.FRAMES) - mentioned)}")
+        for frame in R.FRAMES:
+            if frame in m.frames:
+                continue
+            why = R.why_not(key, frame)
+            assert why, f"model {key!r} cannot explain why it has no {frame!r} frame"
 
 
-def test_method_frames_is_derived_and_carries_the_two_corrections():
-    # a tree state is not a chain
-    assert R.METHOD_FRAMES["tree-tdvp"] == ("interaction", "mode-tree")
-    assert R.METHOD_FRAMES["tree-tebd"] == ("interaction", "mode-tree")
+def test_method_frames_is_a_projection_not_an_identity():
+    """``METHOD_FRAMES`` maps a method to ``(frame, model)`` -- which no longer
+    identifies it, and that is the point.
+
+    The old taxonomy gave these different *models* (``chain`` / ``star`` /
+    ``mode-tree``) so that the pair looked like a key.  Those were a bath basis and a
+    state geometry wearing a model's name; collapsing them means the pair is now a
+    genuine projection, and the axes that separate the collisions are the two the
+    taxonomy gained."""
+    sb = ("interaction", "system-bath")
+    assert R.METHOD_FRAMES["tree-tdvp2"] == sb
+    assert R.METHOD_FRAMES["mpo-ip-tdvp2"] == sb
+    # ...same frame, same model, same integrator -- separated only by geometry
+    assert R.METHODS["tree-tdvp2"].geometry == "binary-tree"
+    assert R.METHODS["mpo-ip-tdvp2"].geometry == "path"
+
+    schro = ("schrodinger", "system-bath")
+    assert R.METHOD_FRAMES["mpo-tdvp2"] == schro
+    assert R.METHOD_FRAMES["mpo-star-tdvp2"] == schro
+    # ...separated only by basis: the one pair in the table that is
+    assert R.METHODS["mpo-tdvp2"].basis_for() == "chain"
+    assert R.METHODS["mpo-star-tdvp2"].basis_for() == "star"
+
     # polaron is its own frame, not a Schrodinger sub-case
-    assert R.METHOD_FRAMES["polaron"] == ("polaron", "chain")
-    assert R.METHOD_FRAMES["polaron-tdvp1"] == ("polaron", "chain")
-    # unchanged
-    assert R.METHOD_FRAMES["mpo-tdvp1"] == ("schrodinger", "chain")
-    assert R.METHOD_FRAMES["mpo-ip-tdvp1"] == ("interaction", "star")
-    assert R.METHOD_FRAMES["trotter-mpo"] == ("interaction", "chain")
+    assert R.METHOD_FRAMES["polaron"] == ("polaron", "system-bath")
+    assert R.METHOD_FRAMES["trotter-mpo"] == sb
 
 
 def test_multichannel_default_path_is_schrodinger_not_interaction():
@@ -151,7 +174,7 @@ def test_multichannel_default_path_is_schrodinger_not_interaction():
 def _run_for(model_key):
     """A minimal runnable instance of each model, plus the method to use."""
     h = 0.5 * sigma_x
-    if model_key in ("chain", "star", "mode-tree"):
+    if model_key == "system-bath":
         return SystemBath(h=h, coupling=sigma_z, bath=_bath()), None
     if model_key == "multichannel":
         mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
@@ -238,14 +261,14 @@ def test_result_shape_contract_matches_its_docstring():
 def test_every_method_agrees_on_the_same_physics():
     """The methods are each other's cross-check -- so check them against each other.
 
-    ``chain``, ``star`` and ``mode-tree`` are three representations of one
-    system-plus-bath, and a one-site ``site-tree`` is a fourth; the frames on top of
-    them are exact rewritings, not approximations.  So every one of these must land
-    on the same trajectory to within its own Trotter and truncation error.
+    Every ``system-bath`` method is one system plus one bath written a different
+    way -- two bases, two geometries, three frames -- and a one-site ``site-tree``
+    is the same physics again on the general tree engine.  All of those rewritings
+    are exact, not approximations, so every one must land on the same trajectory to
+    within its own Trotter and truncation error.
 
     This is the broadest correctness statement the package can make about itself:
-    17 independent code paths -- three frames, two geometries, TEBD and TDVP and an
-    exact displacement MPO -- agreeing on one number.  A frame that dropped a term,
+    17 independent code paths agreeing on one number.  A frame that dropped a term,
     a geometry wired to the wrong bath, or a propagator applying gates in the wrong
     order would show up here as a gross disagreement rather than a subtle one.
     """
@@ -263,63 +286,65 @@ def test_every_method_agrees_on_the_same_physics():
         return sz.reshape(n_steps, -1)[:, 0] if sz.ndim > 1 else sz
 
     results = {}
-    for key in ("chain", "star", "mode-tree", "site-tree"):
+    for key in ("system-bath", "site-tree"):
         for m in R.methods_of(key):
             results[(key, m)] = run(key, m)
 
-    ref = results[("chain", "tebd")]
+    ref = results[("system-bath", "tebd")]
     for (key, m), sz in results.items():
         # mpo-dtdvp is bond-adaptive: its accuracy is set by `prec`, not by dt, so
         # it sits a decade or so off the rest.  Still far from a wrong answer.
         tol = 5e-3 if m == "mpo-dtdvp" else 1e-3
         assert np.abs(sz - ref).max() < tol, (
-            f"{key}/{m} disagrees with chain/tebd by "
+            f"{key}/{m} disagrees with system-bath/tebd by "
             f"{np.abs(sz - ref).max():.2e} on identical physics")
 
 
-def test_layout_matches_what_the_drivers_actually_do():
-    """``Method.layout`` records how H's *interaction* graph meets the state's.
+def test_application_matches_what_the_drivers_actually_do():
+    """``Method.application`` records how H's *interaction* graph meets the state's.
 
     The package had no name for this, which is why three methods each re-derived a
-    swap network and nothing said they did.  Pinned against the source so it stays a
-    fact rather than a label: exactly the methods marked ``"swap"`` must be the ones
-    whose driver calls ``symmetric_swap_step``.
+    swap network and nothing said they did.  It is now *derived* from the other axes
+    rather than stored, so this test is what keeps the derivation honest: exactly the
+    methods deriving ``"swap"`` must be the ones whose driver calls
+    ``symmetric_swap_step``.
     """
     import inspect
     from fishbonett.models.system_bath import SystemBath as SB
 
-    assert {s.layout for s in R.METHODS.values()} <= set(R.LAYOUTS)
+    assert {s.application for s in R.METHODS.values()} <= set(R.APPLICATIONS)
 
-    declared = {n for n, s in R.METHODS.items() if s.layout == "swap"}
+    declared = {n for n, s in R.METHODS.items() if s.application == "swap"}
     actual = set()
     for name, spec in R.METHODS.items():
-        attr = SB._DRIVERS.get(spec.integrator)
+        attr = SB._DRIVERS.get(spec.engine)
         if attr is None:
             continue
         if "symmetric_swap_step" in inspect.getsource(getattr(SB, attr)):
             actual.add(name)
     assert declared == actual, (
-        f"layout='swap' says {sorted(declared)} but the drivers that swap are "
+        f"application='swap' says {sorted(declared)} but the drivers that swap are "
         f"{sorted(actual)}")
 
-    # a swap network is what a *star* interaction costs on a *path* state, so it
-    # only ever shows up in the interaction picture
-    assert all(R.METHODS[n].frame == "interaction" for n in declared)
+    # a swap network is what a *star* basis costs on a *path* state -- which is now
+    # sayable directly, rather than being a property of a method's name
+    assert all(R.METHODS[n].basis_for() == "star"
+               and R.METHODS[n].geometry == "path" for n in declared)
 
-    # and a layout is realized *once*: the swap methods share one driver, and
+    # and an application is realized *once*: the swap methods share one engine, and
     # differ only in which frame supplies H(t)
-    assert len({R.METHODS[n].integrator for n in declared}) == 1, (
-        "the swap layout should have one driver, not one per frame")
+    assert len({R.METHODS[n].engine for n in declared}) == 1, (
+        "the swap application should have one driver, not one per frame")
     assert set(SB._SWAP_FRAMES) == {
         (R.METHODS[n].frame, R.METHODS[n].models[0]) for n in declared}
 
 
-def test_run_takes_the_three_axes_directly():
-    """A method name *is* a (model, frame, integrator) triple, so both spell the
-    same run.  The axes are the structure; the name is the shorthand."""
+def test_run_takes_the_axes_directly():
+    """A method name *is* a point in the five-axis space, so both spell the same
+    run.  The axes are the structure; the name is the shorthand."""
     kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z}, trunc_eps=1e-7)
     by_axes = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
-        model="star", frame="interaction", integrator="tdvp2", **kw)
+        frame="interaction", geometry="path", integrator="tdvp2", **kw)
     by_name = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
         method="mpo-ip-tdvp2", **kw)
     assert by_axes.method == by_name.method == "mpo-ip-tdvp2"
@@ -328,35 +353,74 @@ def test_run_takes_the_three_axes_directly():
     # the axis vocabulary is uniform across frames: "tebd" means the same word
     # whether the frame dresses the state or not
     sb = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
-    assert sb.run(model="chain", frame="polaron", integrator="tebd",
-                  **kw).method == "polaron"
-    assert sb.run(model="chain", frame="interaction", integrator="tebd",
+    assert sb.run(frame="polaron", integrator="tebd", **kw).method == "polaron"
+    assert sb.run(frame="interaction", geometry="path", integrator="tebd",
                   **kw).method == "tebd"
+    # the basis is *inferable* from the frame, so naming it changes nothing
+    assert sb.run(frame="polaron", basis="chain", integrator="tebd",
+                  **kw).method == "polaron"
 
 
-def test_axis_errors_name_what_is_available():
+def test_axis_errors_name_the_physics_not_just_the_table():
+    """The constraints are physical, so a rejected combination should say why.
+
+    These three used to be hand-written ``gaps`` prose attached to models that no
+    longer exist; they are derived from :func:`forced_basis` now, and the error is
+    where that derivation becomes visible."""
     kw = dict(dt=0.02, n_steps=2, trunc_eps=1e-7)
     sb = lambda: SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
 
-    # a recorded gap: star has no polaron frame
-    with pytest.raises(ValueError, match="no method for"):
-        sb().run(model="star", frame="polaron", **kw)
-    # under-specified: schrodinger exists on both chain and star
+    # the interaction picture has no chain: it rotates out H_B, diagonal only in
+    # the star basis
+    with pytest.raises(ValueError, match="diagonal only in the star basis"):
+        sb().run(frame="interaction", basis="chain", **kw)
+    # the polaron displacement has nowhere to localize in a star
+    with pytest.raises(ValueError, match="localizes that on c0"):
+        sb().run(frame="polaron", basis="star", **kw)
+    # a chain's hoppings are long-range on a balanced binary tree
+    with pytest.raises(ValueError, match="no mode-mode terms"):
+        sb().run(frame="schrodinger", basis="chain", geometry="binary-tree", **kw)
+
+    # under-specified: schrodinger exists in both bases
     with pytest.raises(ValueError, match="ambiguous"):
         sb().run(frame="schrodinger", **kw)
-    # a name already fixes all three axes, so mixing spellings is a mistake
+    # ...and the interaction picture in both geometries
+    with pytest.raises(ValueError, match="ambiguous"):
+        sb().run(frame="interaction", integrator="tdvp2", **kw)
+    # a name already fixes all five axes, so mixing spellings is a mistake
     with pytest.raises(ValueError, match="not both"):
         sb().run(method="tebd", frame="polaron", **kw)
+    # an axis that is not one
+    with pytest.raises(TypeError, match="unknown axis"):
+        R.resolve({"system-bath"}, layout="swap")
+
+
+def test_the_old_model_names_say_what_they_became():
+    """``chain``/``star``/``mode-tree`` were a basis and a geometry wearing a
+    model's name.  They are gone -- but the error has to teach the replacement,
+    because they were the documented spelling."""
+    for gone, axis in (("chain", "basis='chain'"), ("star", "basis='star'"),
+                       ("mode-tree", "geometry='binary-tree'")):
+        with pytest.raises(KeyError, match=re.escape(axis)):
+            R.model(gone)
 
 
 def test_every_method_is_reachable_by_its_axes():
-    """Whatever the registry declares must be selectable both ways."""
-    for mk in ("chain", "star", "mode-tree"):
+    """Whatever the registry declares must be selectable by its axes.
+
+    Every method must be pinned down by the five together -- if two rows shared all
+    five they would be the same run under two names."""
+    seen = {}
+    for mk in R.MODELS:
         for name in R.methods_of(mk):
             spec = R.METHODS[name]
-            got = R.resolve({"chain", "star", "mode-tree"}, model=mk,
-                            frame=spec.frame, integrator=spec.algo)
-            assert got.name == name, f"{mk}/{spec.frame}/{spec.algo} -> {got.name}"
+            axes = dict(model=mk, frame=spec.frame, basis=spec.basis_for(mk),
+                        geometry=spec.geometry, integrator=spec.integrator)
+            got = R.resolve(set(R.MODELS), **axes)
+            assert got.name == name, f"{axes} -> {got.name}"
+            key = tuple(sorted(axes.items()))
+            assert key not in seen, f"{name} and {seen[key]} share all five axes"
+            seen[key] = name
 
 
 @pytest.mark.parametrize("model_key", ["comb", "site-tree"])
@@ -364,7 +428,7 @@ def test_multi_site_models_reject_a_single_system_method(model_key):
     """Asking a multi-site model for `tebd` must name the model that owns it,
     rather than raising a bare TypeError as it did before."""
     obj, _ = _run_for(model_key)
-    with pytest.raises(ValueError, match="1D system-bath"):
+    with pytest.raises(ValueError, match="belongs to system-bath"):
         obj.run(dt=0.02, n_steps=1, method="tebd")
 
 
@@ -389,7 +453,7 @@ def test_multi_site_models_report_max_bond():
 
 # -- lookups ------------------------------------------------------------------
 def test_models_of_reports_every_owner():
-    assert R.models_of("tebd") == ("chain",)
+    assert R.models_of("tebd") == ("system-bath",)
     # the static tree engine genuinely serves three models
     assert set(R.models_of(R.STATIC_TREE_TEBD)) == {"comb", "multichannel",
                                                     "site-tree"}
@@ -399,9 +463,41 @@ def test_models_of_reports_every_owner():
 def test_methods_of_explains_a_gap_instead_of_a_bare_keyerror():
     """Asking for an absent frame must quote the registry's recorded reason, not
     raise a bare KeyError -- the reason text itself is free to be reworded."""
-    reason = R.MODELS["star"].gaps["polaron"]
+    reason = R.MODELS["comb"].gaps["polaron"]
     with pytest.raises(KeyError, match=re.escape(reason)):
-        R.methods_of("star", "polaron")
+        R.methods_of("comb", "polaron")
+
+
+def test_a_derived_impossibility_explains_itself_too():
+    """(multichannel, polaron) exists in no table and in no ``gaps`` entry: the
+    frame forces a chain basis, the model forces a star, and nothing satisfies
+    both.  That has to be sayable without anyone having written it down."""
+    why = R.why_not("multichannel", "polaron")
+    assert why and "basis='chain'" in why and "basis='star'" in why
+    with pytest.raises(KeyError, match="no basis left"):
+        R.methods_of("multichannel", "polaron")
+
+
+def test_declared_bases_agree_with_the_forced_ones():
+    """``Method.basis`` is written out only where it is a real choice; everywhere
+    else it comes from the rule.  If a row ever declares one that contradicts the
+    rule, the table and the physics have diverged."""
+    free = set()
+    for name, spec in R.METHODS.items():
+        for mk in spec.models:
+            need = R.forced_basis(spec.frame, mk)
+            if need is None:
+                free.add((spec.frame, mk))
+                assert spec.basis, (
+                    f"{name}: basis is free for ({spec.frame}, {mk}) so the row "
+                    f"must declare one")
+            else:
+                assert not spec.basis or spec.basis == need, (
+                    f"{name} declares basis={spec.basis!r} but ({spec.frame}, "
+                    f"{mk}) forces {need!r}")
+    # ...and there is exactly one such cell, which is why mpo-tdvp2 and
+    # mpo-star-tdvp2 are the only pair differing by basis alone
+    assert free == {("schrodinger", "system-bath")}
 
 
 def test_describe_taxonomy_mentions_every_model_and_method():

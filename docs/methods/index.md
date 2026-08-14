@@ -24,24 +24,53 @@ the constraining:
   the exact conditional-displacement MPO ({doc}`/methods/interaction/trotter_mpo`)
   possible — the propagator factorizes without Trotter error.
 
-## Model × frame
+## Frame × basis × geometry
 
-| model | Schrödinger ($H$ static) | interaction ($H(t)$) | polaron (static, low entanglement) |
-|---|---|---|---|
-| **`chain`** 1 system + 1 bath, 1D | {doc}`schrodinger/chain` — `mpo-tdvp1/tdvp2/dtdvp` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo` | {doc}`schrodinger/polaron_chain` — `polaron`, `polaron-tdvp1/tdvp2/dtdvp` |
-| **`star`** no chain mapping | {doc}`schrodinger/star_mpo` — `mpo-star-tdvp1/tdvp2` | {doc}`interaction/star_mpo` — `mpo-ip-tdvp1/tdvp2` | ✗ no site to localize the displacement on |
-| **`mode-tree`** modes on a binary tree | ✗ chain hoppings are long-range on the tree | {doc}`interaction/tree` — `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | ✗ same reason |
-| **`multichannel`** several couplings, shared modes | {doc}`interaction/multichannel` — `tree-tebd-static` | {doc}`interaction/multichannel` — `multichannel-ip` | ✗ same reason as `star` |
-| **`comb`** / **`site-tree`** several sites + baths | `tree-tebd-static` ({doc}`/models/fishbone`) | not implemented | not implemented |
+The **frame picks the basis**, and that one rule explains most of the table below.
+The interaction picture rotates out $H_B=\sum_k\omega_k b_k^\dagger b_k$, which is
+diagonal only in the **star** basis — so there is no such thing as a chain in the
+interaction picture. (`SystemBathIP` does chain-map the bath, and then immediately
+calls `diag()` to turn it back into a star.) The polaron frame is the mirror image:
+its displacement has to localize on $c_0$, which only a **chain** has. Only the
+Schrödinger picture rotates out nothing, and so is the only frame where the basis is
+a free choice.
 
-Reading it: the `chain` model is the developed one and the only one with all three
-frames.  The ✗ cells are **not** the same kind of blank as "not implemented" — they
-are cells where the combination has been considered and rejected, and
-{py:mod}`fishbonett.models.registry` records the reason for every one:
+For the `system-bath` model — one system, one bath, one coupling operator:
+
+| frame | basis | geometry | methods | page |
+|---|---|---|---|---|
+| Schrödinger | `chain` | `path` | `mpo-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/chain` |
+| Schrödinger | `star` | `path` | `mpo-star-tdvp1/tdvp2` | {doc}`schrodinger/star_mpo` |
+| interaction | `star` *(forced)* | `path` | `tebd`, `trotter-mpo`, `mpo-ip-tdvp1/tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
+| interaction | `star` *(forced)* | `binary-tree` | `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | {doc}`interaction/tree` |
+| polaron | `chain` *(forced)* | `path` | `polaron`, `polaron-tdvp1/tdvp2/dtdvp` | {doc}`schrodinger/polaron_chain` |
+
+The first two rows are the **only** pair in the whole taxonomy that differ by basis
+alone, because they sit in the only cell where the basis is free. The two
+interaction rows differ only by geometry — same Hamiltonian, one laid on a line and
+one on a balanced binary tree, which is why `mpo-ip-tdvp2` and `tree-tdvp2` agree to
+machine precision rather than merely closely.
+
+And the other three models, which fix the topology rather than the representation:
+
+| model | what it is | frames |
+|---|---|---|
+| **`multichannel`** several couplings on shared modes | {doc}`interaction/multichannel` | Schrödinger (`tree-tebd-static`), interaction (`multichannel-ip`) |
+| **`comb`** / **`site-tree`** several sites + baths | {doc}`/models/fishbone` | Schrödinger (`tree-tebd-static`) only |
+
+Combinations that are absent are absent for one of three reasons, and
+{py:mod}`fishbonett.models.registry` distinguishes them rather than leaving a blank:
+a **constraint** (`basis="chain"` with `frame="interaction"` — impossible), a
+**clash** between two constraints (`multichannel` forces `star`, `polaron` forces
+`chain`, so that pair cannot exist), or plain **not implemented** (the interaction
+and polaron frames for the multi-site models). Ask for one and the error says which:
 
 ```python
-from fishbonett.models.registry import describe_taxonomy
-print(describe_taxonomy())        # every model, frame, and gap with its reason
+sb.run(dt=..., t_max=..., frame="polaron", basis="star")
+# ValueError: no method for frame='polaron', basis='star': the polaron
+# displacement acts on the collective mode.  The J/w^2 chain mapping localizes
+# that on c0; a star has no such site, so the dressing would entangle the system
+# with every mode at once.
 ```
 
 ```{note}
@@ -54,7 +83,7 @@ list of couplings — so `method` only chooses between those two.)
 
 ## The frames in detail
 
-### Schrödinger picture — static $H$ (chain, star, multichannel)
+### Schrödinger picture — static $H$ (either basis)
 
 The bare Hamiltonian, nothing rotated out. $H$ is time-independent, so its MPO is
 built **once** — TDVP with exact energy conservation and no per-step rebuild error.
@@ -74,7 +103,7 @@ the three frames for a given accuracy.  In exchange it is the most accurate per
 step — the static star methods agree with exact diagonalization to $\sim10^{-10}$,
 better than any time-dependent frame can, because there is nothing to rebuild.
 
-### Interaction picture — time-dependent $H(t)$ (chain, star, mode-tree, multichannel)
+### Interaction picture — time-dependent $H(t)$ (star basis, forced)
 
 The free-bath evolution is rotated out, leaving only the system–bath coupling,
 $H_{sb}(t) = A_s \otimes \sum_n [d_n(t) b_n + \mathrm{h.c.}]$. Entanglement is now

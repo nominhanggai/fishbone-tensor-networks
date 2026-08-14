@@ -66,8 +66,8 @@ def star_edges(n_modes):
 
     The state, meanwhile, is a **path** ``0-1-2-...-N``.  Those are different graphs
     for ``N > 2``, and reconciling them is exactly what the swap network does and
-    what :data:`fishbonett.models.registry.LAYOUTS` calls ``"swap"``.  Returned as
-    data so that relationship can be asserted rather than only described.
+    what :data:`fishbonett.models.registry.APPLICATIONS` calls ``"swap"``.  Returned
+    as data so that relationship can be asserted rather than only described.
     """
     return [(0, k) for k in range(1, n_modes + 1)]
 

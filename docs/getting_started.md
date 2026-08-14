@@ -111,20 +111,32 @@ res.rdm                  # (n_steps, n_sites, d, d): reduced density matrix per 
 composite (spin + vibration) systems, multichannel baths and multi-site
 observables — and {doc}`bath` covers bath discretization and finite temperature.
 
-## Picking a method by its three axes
+## Picking a method by its axes
 
 `method=` names a combination; you can also give the combination itself, which is
 usually clearer and is what the taxonomy is actually made of:
 
 ```python
-res = sb.run(dt=0.02, t_max=2.0, model="chain", frame="polaron",
+res = sb.run(dt=0.02, t_max=2.0, frame="polaron",
              integrator="tebd")          # == method="polaron"
 ```
 
-**model** is what is coupled to what, **frame** is how `H` is written down
-(`schrodinger` / `interaction` / `polaron`), **integrator** is how a step is taken
-(`tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo`).  Ask for a combination that does
-not exist and the error says whether it is a recorded gap or just under-specified.
+A run is five independent choices:
+
+| axis | values | what it is |
+|---|---|---|
+| `model` | `system-bath`, `multichannel`, `comb`, `site-tree` | what is coupled to what |
+| `frame` | `schrodinger`, `interaction`, `polaron` | which unitary is rotated out |
+| `basis` | `chain`, `star` | which bath mode basis `H` is written in |
+| `geometry` | `path`, `binary-tree`, `comb-tree` | the graph the state lives on |
+| `integrator` | `tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo` | how a step is taken |
+
+Most calls need two of them, because **the frame picks the basis**: the interaction
+picture forces `star` (it is the star modes whose free evolution it rotates out) and
+the polaron frame forces `chain` (its displacement has to localize on $c_0$).  Only
+the Schrödinger picture leaves the basis free.  Ask for a combination that does not
+exist and the error says why — the physics where a constraint rules it out, or that
+it is merely under-specified.
 
 Every model, the frames it admits, and the reason each absent combination is absent —
 generated from {py:mod}`fishbonett.models.registry` when these docs are built, so it
