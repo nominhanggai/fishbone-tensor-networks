@@ -7,7 +7,7 @@ import pytest
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models.result import Result
 from fishbonett.models.simulation import SimulationPlan
-from fishbonett.frames.capabilities import (
+from fishbonett.encodings.capabilities import (
     MPOHamiltonian, StaticGraphHamiltonian, require_capability,
 )
 
@@ -63,30 +63,30 @@ def test_plan_requires_exactly_one_execution_form(kwargs):
         SimulationPlan(_spec(), RunCtx(dt=0.1, n_steps=1), **kwargs)
 
 
-def test_physical_model_does_not_import_frame_or_evolution_engines():
+def test_physical_model_does_not_import_representation_or_evolution_engines():
     import inspect
     from fishbonett.models.system_bath import SystemBath
 
     source = inspect.getsource(inspect.getmodule(SystemBath))
     assert "fishbonett.evolve" not in source
-    assert "fishbonett.frames" not in source
+    assert "fishbonett.representations" not in source
     assert not hasattr(SystemBath, "_DRIVERS")
-    assert not hasattr(SystemBath, "_MPO_FRAMES")
-    assert not hasattr(SystemBath, "_SWAP_FRAMES")
+    assert not hasattr(SystemBath, "_MPO_REPRESENTATIONS")
+    assert not hasattr(SystemBath, "_SWAP_REPRESENTATIONS")
 
 
-def test_frame_capabilities_are_structural_and_checked_early():
-    from fishbonett.frames.mpo import MPOFrame
-    from fishbonett.frames.terms import LocalTerms
+def test_representation_capabilities_are_structural_and_checked_early():
+    from fishbonett.encodings.mpo import MPOEncoding
+    from fishbonett.encodings.terms import LocalTerms
 
-    mpo = MPOFrame(
+    mpo = MPOEncoding(
         n_sites=1, phys_dim=2, system=(np.eye(2), np.eye(2), np.ones(2)),
         mpo=lambda _t=None: [], static=True)
     terms = LocalTerms(
         dims=[2], edges=[], site=[np.zeros((2, 2))], bond={})
     assert isinstance(mpo, MPOHamiltonian)
     assert isinstance(terms, StaticGraphHamiltonian)
-    with pytest.raises(TypeError, match="requires frame capability MPOHamiltonian"):
+    with pytest.raises(TypeError, match="requires encoding capability MPOHamiltonian"):
         require_capability(terms, MPOHamiltonian, engine="mpo-tdvp")
 
 

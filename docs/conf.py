@@ -11,7 +11,7 @@ import figures as _figures  # noqa: E402
 
 _figures.build_all()
 
-# The model/frame/propagator table is generated the same way and for the same
+# The model/representation/propagator table is generated the same way and for the same
 # reason: it is registry data, and a copy pasted into a page goes stale.  (One
 # already has -- the hand-written table in docs/models/index.md predates two
 # combinations the registry gained.)  getting_started.md literal-includes this.

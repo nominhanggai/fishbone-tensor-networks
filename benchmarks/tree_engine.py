@@ -13,7 +13,7 @@ from fishbonett.evolve.modetree import (_star_transform, run_tree_tdvp, run_tree
                              tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
                              _resolve_sys, SZ, SX)
 # `anih`/`crea` were imported from modetree, which has never defined them -- this
-# benchmark has been failing at import since before the model/frame restructure.
+# benchmark has been failing at import since before the model/representation restructure.
 # The operators are annihilate/create in fishbonett.operators; the body below uses
 # both spellings, so bind both.
 from fishbonett.operators import annihilate, create

@@ -6,7 +6,7 @@ it.  Together they are the two inputs every model takes.
 The package supports an **arbitrary** system throughout -- ``h`` may be any ``(d, d)``
 Hermitian matrix, not just a two-level spin, and ``coupling`` any ``(d, d)`` Hermitian
 operator, not just ``sigma_z``.  This class is where that promise is checked, once,
-so the frames and models do not each re-derive it.
+so the representations and models do not each re-derive it.
 
 .. rubric:: What's here
 
@@ -28,7 +28,7 @@ def check_operator(op, name, dim=None, hermitian=True):
 
     Raises :class:`ValueError` naming ``name`` when the operator is not square, not
     of dimension ``dim`` (when given), or not Hermitian (when required).  Used by
-    the frame builders, which take ``h_sys``/``coupling`` as loose arrays.
+    the representation builders, which take ``h_sys``/``coupling`` as loose arrays.
     """
     a = np.asarray(op, complex)
     if a.ndim != 2 or a.shape[0] != a.shape[1]:
@@ -52,7 +52,7 @@ class System:
         The Hermitian operator(s) through which the bath couples.  A *list* means a
         multichannel bath -- several operators sharing one set of modes, which is a
         different physical situation from several independent baths (see
-        :mod:`fishbonett.frames.multichannel`).
+        :mod:`fishbonett.representations.multichannel`).
     initial : str or (d,) array
         ``"up"`` / ``"down"`` (the first two basis states), ``"ground"`` (the ground
         state of ``h``), or an explicit state vector.  Normalized on use.

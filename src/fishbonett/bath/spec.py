@@ -4,7 +4,7 @@ A :class:`Bath` is a declarative description: a spectral density, a frequency
 window, how finely to discretize it, and how big each mode's Fock space is.  It
 does no tensor work itself.  :meth:`Bath.bind` associates it with model-owned
 system operators, and :mod:`fishbonett.bath.compiled` turns it into immutable star
-or chain coefficients before a frame sees it.
+or chain coefficients before a representation sees it.
 
 It lives here rather than in :mod:`fishbonett.models` because it is bath
 physics, not simulation machinery: everything it knows about (thermalization,
@@ -160,7 +160,7 @@ class Bath:
 
         This is a *view* of the bath, the star counterpart of the chain that
         :func:`fishbonett.bath.chain.get_coupling` returns; it lives here so the
-        Schroedinger frame and the interaction-picture model share one construction
+        Schroedinger representation and the interaction-picture model share one construction
         rather than each discretizing the channels themselves.
         """
         from fishbonett.bath.coupled import bind_bath

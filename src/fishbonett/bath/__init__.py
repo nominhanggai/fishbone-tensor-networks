@@ -1,20 +1,21 @@
 """Everything about the bath: what it is, how it is mapped, how it is discretized.
 
-A continuous spectral density becomes a finite set of modes, in either of two
-equivalent representations::
+A continuous spectral density becomes finite star data and, when requested, its
+star-to-chain transform::
 
     Bath(J=..., domain=..., n_modes=...)      # the specification (spec)
-        -> ChainBath(w_j, t_j, c0)            # immutable compiled representation
-        -> StarBath(freq_k, g_ck, transform)  # shared-grid star representation
+        -> StarBath(freq_k, g_ck, transform)  # finite independent modes
+        -> ChainBath(w_j, t_j, c0)            # nearest-neighbour transform
 
-The chain is the primary object -- TEDOPA maps the continuum straight onto it, with
-no discretization step in between (:mod:`~fishbonett.bath.chain`).  A *star* of
-independent modes is the same bath in the eigenbasis of that chain, which is what
-the interaction-picture engines need.  Equivalently, a star can be built directly
-as an ``n``-point quadrature of ``J``: against the uniform measure
+The package can obtain chain coefficients directly from orthogonal-polynomial
+recurrences, or obtain a finite star and tridiagonalize it. Conversely,
+diagonalizing a finite chain recovers equivalent star data. These are numerical
+routes to the same finite bath. A star can be built as an ``n``-point quadrature
+of ``J``: against the uniform measure
 (:func:`get_vn_squared`, ``discretization="legendre"``) or against ``J`` itself,
 matching TEDOPA exactly (:func:`make_tedopa_discretizer`,
-``discretization="tedopa"``).
+``discretization="tedopa"``). Interaction representations always consume the
+finite star first and only then optionally apply its star-to-chain transform.
 
 .. rubric:: What's here
 

@@ -1,11 +1,11 @@
 """Compiled finite representations of a continuous bosonic bath.
 
 ``Bath`` is user input: a spectral density plus resolution settings.  Tensor
-network frames should not repeatedly interpret that input themselves, so this
+network representations should not repeatedly interpret that input themselves, so this
 module owns the boundary where a resolved specification becomes numerical data.
 
-The compiled objects deliberately contain no system operator.  A bath basis and a
-system--bath coupling are different pieces of the physical problem; combining
+The compiled objects deliberately contain no system operator.  Bath coefficients
+and a system--bath coupling are different pieces of the physical problem; combining
 them is the responsibility of :class:`fishbonett.bath.coupled.CoupledBath`.
 """
 from dataclasses import dataclass
@@ -36,7 +36,7 @@ class StarBath:
     ``couplings`` has shape ``(n_channels, n_modes)``.  It contains scalar mode
     strengths only; :meth:`combine` binds those strengths to system operators.
     For a single channel, ``chain_transform`` is the orthogonal star-to-chain
-    transform used by interaction-picture chain frames.
+    transform used by the ``interaction-chain`` representation.
     """
 
     frequencies: np.ndarray
@@ -73,7 +73,7 @@ class StarBath:
         """Return one system-space coupling matrix per star mode.
 
         Mode ``k`` carries ``sum_c g[c,k] O[c]``.  Keeping this operation here
-        makes the shared-grid invariant explicit and gives every frame exactly the
+        makes the shared-grid invariant explicit and gives every representation exactly the
         same multichannel discretization.
         """
         ops = np.asarray(tuple(operators), complex)
@@ -85,22 +85,23 @@ class StarBath:
             raise ValueError("coupling operators must be square")
         return np.einsum("ck,cij->kij", self.couplings, ops)
 
-    def interaction_couplings(self, t, *, basis="star"):
+    def interaction_couplings(self, t, *, representation="interaction-star"):
         """Single-channel interaction-picture coefficients at time ``t``.
 
         The result is in natural mode order.  State-layout reversal, where needed,
-        belongs to the frame or geometry rather than the bath representation.
+        belongs to the representation or geometry rather than the bath compiler.
         """
         if self.n_channels != 1:
             raise ValueError("scalar interaction couplings require one channel")
         values = self.couplings[0] * np.exp(-1j * self.frequencies * t)
-        if basis == "star":
+        if representation == "interaction-star":
             return values
-        if basis == "chain":
+        if representation == "interaction-chain":
             if self.chain_transform is None:
                 raise ValueError("this star has no chain transform")
             return self.chain_transform @ values
-        raise ValueError("basis must be 'star' or 'chain'")
+        raise ValueError(
+            "representation must be 'interaction-star' or 'interaction-chain'")
 
 
 @dataclass(frozen=True)
@@ -128,8 +129,9 @@ class ChainBath:
 
 @dataclass(frozen=True)
 class PolaronBath:
-    """Chain mapping of ``J(w)/w**2`` plus the physical reorganization shift."""
+    """Finite star and chain data for the polaron representations."""
 
+    star: StarBath
     chain: ChainBath
     reorganization_energy: float
 
@@ -187,11 +189,11 @@ def compile_chain(bath):
 
 
 def compile_polaron(bath):
-    """Compile the reweighted bath required by the Lang--Firsov frame."""
+    """Compile the reweighted bath required by the Lang--Firsov representation."""
     _require_resolved(bath)
     densities = bath.spectral_densities()
     if len(densities) != 1:
-        raise ValueError("the polaron frame requires one bath channel")
+        raise ValueError("the polaron representation requires one bath channel")
     density = densities[0]
 
     def displaced_density(frequency):
@@ -199,12 +201,18 @@ def compile_polaron(bath):
             return 0.0
         return density(frequency) / frequency ** 2
 
-    onsite, coupling = get_bath_nn_paras(
+    frequencies, displacements, transform = star_transform(
         displaced_density, bath.n_modes, list(bath.domain),
-        discretizer=bath.discretizer())
-    coupling = np.asarray(coupling, float)
-    chain = ChainBath(onsite, coupling[1:], coupling[0], bath.phys_dim)
+        bath.discretizer())
+    displacements = np.asarray(displacements, float)
+    star = StarBath(
+        frequencies, displacements[None, :], bath.phys_dim, transform)
+    chain_matrix = transform @ np.diag(frequencies) @ transform.T
+    chain = ChainBath(
+        np.diagonal(chain_matrix), np.diagonal(chain_matrix, -1),
+        np.linalg.norm(displacements), bath.phys_dim)
     return PolaronBath(
+        star=star,
         chain=chain,
         reorganization_energy=reorganization_energy(density, bath.domain),
     )

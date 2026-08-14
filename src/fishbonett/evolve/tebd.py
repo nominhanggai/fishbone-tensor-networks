@@ -11,11 +11,11 @@ others carry their own bookkeeping for their own geometry:
 - :mod:`fishbonett.evolve.sitetree` -- any loop-free tree of *sites*, which the
   comb, site-tree and multichannel models all use (``tree-tebd-static``).
 
-Two sweep patterns here, selected by the frame:
+Two sweep patterns here, selected by the representation:
 
 - *swap network* (:func:`symmetric_swap_step`) — interaction picture, where every
   mode couples to the system.  ``swap=1`` walks the system along the chain.
-- *static* (:func:`symmetric_static_step`) — polaron frame.  Gates built once,
+- *static* (:func:`symmetric_static_step`) — polaron representation.  Gates built once,
   nearest-neighbour, no swapping.
 """
 from fishbonett.contract import contract as einsum
@@ -122,7 +122,7 @@ def symmetric_static_step(state, gates, n, chi_max, eps, **kw):
 
     ``gates`` are the half-step (``dt/2``) two-site gates, built once.  Sweeping
     up the chain and straight back down applies them in palindromic order, which
-    is what makes the step second order in ``dt``.  This is the polaron frame's
+    is what makes the step second order in ``dt``.  This is the polaron representation's
     step: no swapping, no per-step rebuild.
     """
     state.U = gates
@@ -130,11 +130,11 @@ def symmetric_static_step(state, gates, n, chi_max, eps, **kw):
     sweep(state, range(n - 1, -1, -1), chi_max, eps, swap=0, **kw)
 
 
-def symmetric_swap_step(state, builder, t0, dt, n, chi_max, eps, **kw):
+def symmetric_swap_step(state, gate_encoder, t0, dt, n, chi_max, eps, **kw):
     """One 2nd-order (Strang) swap-network step over ``[t0, t0+dt]``.
 
-    The interaction-picture step.  ``builder`` supplies time-dependent gates
-    through ``builder.get_u(t, half_dt)``, so gates are rebuilt twice per step --
+    The interaction step. ``gate_encoder`` supplies time-dependent gates through
+    ``gate_encoder.get_u(t, half_dt)``, so gates are rebuilt twice per step --
     once per half-interval.
 
     The ordering is palindromic: the first half-interval's gates sweep inward,
@@ -146,8 +146,8 @@ def symmetric_swap_step(state, builder, t0, dt, n, chi_max, eps, **kw):
     bond-0 updates must both take a ``U1``.
     """
     hdt = dt / 2.0
-    u_in, _ = builder.get_u(t0, hdt)
-    u_mid, u_out = builder.get_u(t0 + hdt, hdt)
+    u_in, _ = gate_encoder.get_u(t0, hdt)
+    u_mid, u_out = gate_encoder.get_u(t0 + hdt, hdt)
 
     state.U = u_in
     swap_out(state, n, chi_max, eps, **kw)

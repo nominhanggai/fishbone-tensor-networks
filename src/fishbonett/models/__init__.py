@@ -1,11 +1,10 @@
 """Models: the physical setups you can propagate, and what each one admits.
 
 A **model** says what is coupled to what -- how many system sites and how they are
-wired.  Only that: how the *bath* is represented is two separate axes, the mode
-``basis`` and the state ``geometry``, because those are choices of representation
-rather than of physics.  A run is five of them:
+wired.  Only that: the complete Hamiltonian ``representation`` and the state
+``geometry`` are separate choices.  A run has four public axes:
 
-    model -> frame -> basis -> geometry -> integrator
+    model -> representation -> geometry -> integrator
 
 Four models, three classes:
 
@@ -19,28 +18,28 @@ model             class                  what it is
 ================  =====================  ==========================================
 
 ``chain``, ``star`` and ``mode-tree`` used to be listed here as models.  They were
-not: the first two name a bath *basis* and the third a state *geometry*, and all
-three are the same one-system/one-bath problem.  ``multichannel`` is picked
+not: the first two belong inside a complete representation name and the third is
+a state geometry.  ``multichannel`` is picked
 automatically from a list of model coupling operators rather than by a method name.
 
-:mod:`fishbonett.models.registry` is the authority: which frames each model has,
+:mod:`fishbonett.models.registry` is the authority: which representations each model has,
 which methods realize them, and -- for the combinations that are absent -- why.
 ``python -c "from fishbonett.models.registry import describe_taxonomy as d;
 print(d())"`` prints the whole thing.
 
 .. note::
    ``fishbonett.models`` previously meant what is now
-   :mod:`fishbonett.frames` (the Hamiltonian builders).  In commits before that
-   rename, ``models/`` is the frames package, not this one.
+   :mod:`fishbonett.representations` (the Hamiltonian builders).  In commits before that
+   rename, ``models/`` is the representations package, not this one.
 """
 from fishbonett.models.result import Result
 from fishbonett.models.system_bath import SystemBath
 from fishbonett.models.fishbone import Fishbone, TreeFishbone
 from fishbonett.models.simulation import SimulationPlan, compile_plan
 from fishbonett.models.registry import (
-    MODELS, FRAMES, Model, Frame, METHOD_FRAMES,
-    models_of, frames_of, methods_of, all_methods, model,
-    methods_by_frame, frame_label, describe_taxonomy,
+    MODELS, REPRESENTATIONS, Model, Representation, METHOD_REPRESENTATIONS,
+    models_of, representations_of, methods_of, all_methods, model,
+    methods_by_representation, representation_label, describe_taxonomy,
 )
 
 __all__ = [
@@ -48,7 +47,7 @@ __all__ = [
     "SystemBath", "Fishbone", "TreeFishbone", "Result",
     "SimulationPlan", "compile_plan",
     # the taxonomy
-    "MODELS", "FRAMES", "Model", "Frame", "METHOD_FRAMES",
-    "models_of", "frames_of", "methods_of", "all_methods", "model",
-    "methods_by_frame", "frame_label", "describe_taxonomy",
+    "MODELS", "REPRESENTATIONS", "Model", "Representation", "METHOD_REPRESENTATIONS",
+    "models_of", "representations_of", "methods_of", "all_methods", "model",
+    "methods_by_representation", "representation_label", "describe_taxonomy",
 ]

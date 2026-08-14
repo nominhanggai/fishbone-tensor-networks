@@ -74,9 +74,9 @@ def star_transform(sd, n, domain, discretizer=None):
     deterministic, which matters because the interaction picture rebuilds its
     couplings ``d_j(t) = coefT @ (Vn * exp(-i freq t))`` from it every step.
 
-    It lives here rather than in a frame because it is bath machinery -- the same
+    It lives here rather than in a representation because it is bath machinery -- the same
     star/Lanczos pair as :func:`get_bath_nn_paras`, returning the transform matrix
-    instead of discarding it.  Two frames need it (the chain-geometry star MPO and
+    instead of discarding it.  Two representations need it (the chain-geometry star MPO and
     the mode-tree engine), and they had a copy each.
     """
     disc = discretizer if discretizer is not None else get_vn_squared

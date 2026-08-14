@@ -2,7 +2,7 @@
 
 fishbonett uses natural units, $\hbar=1$, and evolves states with
 $U(t)=\exp(-iHt)$. Site 0 is the system; bath sites follow in the order defined
-by the selected frame and geometry.
+by the selected representation and geometry.
 
 ## Spectral-density normalization
 
@@ -20,14 +20,16 @@ $$
 $$
 
 These factors live in {py:mod}`fishbonett.bath.conventions` and are checked by
-analytic reference-value tests. Frame builders should consume those helpers or a
+analytic reference-value tests. Representation builders should consume those helpers or a
 compiled bath instead of restating the convention.
 
-## Interaction picture
+## Interaction representations
 
-The free bath is rotated out. An annihilation term carries
-$g_k e^{-i\omega_k t}$, while its Hermitian conjugate carries the conjugate
-phase. A gate over $[t,t+\Delta t]$ uses
+The finite star is constructed first. Its free bath is then removed, so a star
+annihilation term carries $g_k e^{-i\omega_k t}$ while its Hermitian conjugate
+carries the conjugate phase. `interaction-chain` applies the star-to-chain
+transform to these time-dependent coefficients afterwards. A gate over
+$[t,t+\Delta t]$ uses
 
 $$
 \int_t^{t+\Delta t} e^{-i\omega s} ds
@@ -57,14 +59,14 @@ J(|\omega|)n_\beta,&\omega<0.
 \end{cases}
 $$
 
-Thus compiled star and chain data already include temperature; downstream frames
+Thus compiled star and chain data already include temperature; downstream representations
 must not apply a second thermofield factor.
 
 ## Validation layers
 
 - Unit tests check factors of $\pi$, the zero-frequency phase limit, Hermiticity,
   and immutable compiled data.
-- Small exact-diagonalization tests compare equivalent frames and integrators.
+- Small exact-diagonalization tests compare equivalent representations and integrators.
 - `tests/characterization/all_methods_golden.py` checks every registry method
   before and after a structural change.
 - `benchmarks/baseline_suite.py` records stable work metrics (Krylov calls and

@@ -2,15 +2,15 @@
 
 Two models share this one class:
 
-* ``system-bath`` -- one system, one bath, one coupling operator.  All implemented frames
+* ``system-bath`` -- one system, one bath, one coupling operator.  All implemented representations
   and both single-system geometries;
 * ``multichannel`` -- several couplings on shared modes, selected automatically
   by giving ``SystemBath(coupling=...)`` a *list* of operators.
 
 What used to be three further "models" here -- ``chain``, ``star`` and
-``mode-tree`` -- were never topologies.  ``chain``/``star`` are half of a **frame**
-(the mode basis, which goes with the picture: ``schrodinger-chain``,
-``interaction-star``, ...), and ``mode-tree`` is a state **geometry**.  See
+``mode-tree`` -- were never topologies.  ``chain`` and ``star`` belong in the
+complete representation name (``schrodinger-chain``, ``interaction-star``, ...),
+and ``mode-tree`` is a state **geometry**.  See
 :mod:`fishbonett.models.registry`, which is the authority on which combination
 exists and how it is dispatched.
 """
@@ -20,7 +20,7 @@ from fishbonett.bath.coupled import bind_bath
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models import registry
 from fishbonett.models.registry import (
-    FIXED_BOND_METHODS, METHOD_FRAMES, methods_of, unknown_method_error,
+    FIXED_BOND_METHODS, METHOD_REPRESENTATIONS, methods_of, unknown_method_error,
 )
 
 __all__ = ["SystemBath"]
@@ -32,14 +32,14 @@ _DEFAULT_METHOD = "tree-tdvp2"
 
 
 def _bond_growing_siblings(method):
-    """Methods in the same ``(frame, model)`` as ``method`` that grow their own
+    """Methods in the same ``(representation, model)`` as ``method`` that grow their own
     bond dimension -- what to suggest when a fixed-bond method is asked for
     ``bond_dim=None``."""
-    key = METHOD_FRAMES.get(method.lower().replace("_", "-"))
+    key = METHOD_REPRESENTATIONS.get(method.lower().replace("_", "-"))
     if key is None:
         return []
-    frame, model_key = key
-    return [n for n in methods_of(model_key, frame)
+    representation, model_key = key
+    return [n for n in methods_of(model_key, representation)
             if n not in FIXED_BOND_METHODS]
 
 
@@ -55,8 +55,7 @@ class SystemBath:
     :class:`~fishbonett.models.fishbone.TreeFishbone` (sites in any loop-free tree).
 
     This one class covers the ``system-bath`` and ``multichannel`` models.  The
-    bath's *representation* -- its mode basis, which travels with the picture as
-    part of the ``frame``, and the state's ``geometry`` -- are other axes of
+    Hamiltonian ``representation`` and the state's ``geometry`` are other axes of
     ``run``, not separate models.
 
     When the system has *distinct* internal degrees of freedom (e.g. a spin **and**
@@ -80,7 +79,7 @@ class SystemBath:
         # dimension, Hermitian -- and keeps a multichannel coupling as a *list*
         # rather than collapsing it into a 3-D array.
         self.system = System(h, coupling)
-        # mirrored as plain attributes: the validated forms, which the frame
+        # mirrored as plain attributes: the validated forms, which the representation
         # builders take as `h_sys=` / `coupling=`
         self.h = self.system.h
         self.coupling = self.system.coupling
@@ -93,7 +92,7 @@ class SystemBath:
 
     # -- public API ----------------------------------------------------------
     def run(self, *, dt, t_max=None, n_steps=None, method=None,
-            model=None, frame=None, geometry=None, integrator=None,
+            model=None, representation=None, geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial="up", krylov=25, seed=None, **engine_kw):
         """Propagate and return a :class:`Result`.
@@ -102,48 +101,50 @@ class SystemBath:
 
         A run is four independent choices, and they can be given **as themselves**::
 
-            sb.run(dt=..., t_max=..., frame="interaction-star", geometry="path",
+            sb.run(dt=..., t_max=..., representation="interaction-star", geometry="path",
                    integrator="tdvp2")
 
-        ``model`` is what is coupled to what, ``frame`` how ``H`` is written down --
-        a picture *and* a mode basis: ``"schrodinger-chain"``,
-        ``"schrodinger-star"``, ``"interaction-star"``, ``"polaron-chain"`` --
-        ``geometry`` the graph the state lives on (``"path"``/``"binary-tree"``), and
+        ``model`` is what is coupled to what, and ``representation`` is one complete
+        choice for how ``H`` is written: ``"schrodinger-chain"``,
+        ``"schrodinger-star"``, ``"interaction-chain"``, ``"interaction-star"``,
+        ``"polaron-chain"``, or ``"polaron-star"``.  ``geometry`` is the graph the
+        state lives on (``"path"``/``"binary-tree"``), and
         ``integrator`` how a step is taken (``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
         ``"dtdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
         one combination fits; if several do, the error lists them.
 
-        The frame carries the basis because the two are one choice, and because that
-        makes the impossible pairs **unnameable**: there is no ``interaction-chain``
-        (the interaction picture rotates out ``H_B``, diagonal only in the star
-        basis) and no ``polaron-star`` (the displacement has to localize on ``c0``).
-        A bare picture works where it is unambiguous -- ``frame="polaron"`` resolves,
-        ``frame="schrodinger"`` names two frames and says so.
+        Representation names are deliberately exact: partial names such as
+        ``representation="polaron"`` are rejected.  This keeps construction order
+        explicit.  For ``interaction-chain`` the discretized star bath is put in
+        the interaction picture with respect to its free Hamiltonian and the
+        resulting time-dependent coupling is then transformed star-to-chain.
 
         The named combinations still work and are often shorter::
 
             sb.run(dt=..., t_max=..., method="mpo-ip-tdvp2")   # the same run
 
-        because ``"mpo-ip-tdvp2"`` *is* ``(system-bath, interaction-star, path,
+        because ``"mpo-ip-tdvp2"`` *is* ``(system-bath, interaction-chain, path,
         tdvp2)``.  Give one spelling or the other, not both.
         ``describe_taxonomy()`` prints the table; :mod:`fishbonett.models.registry`
         is its source.
 
         Two models live on this class:
 
-        * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all four
-          frames.  *schrodinger-chain* (``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp``) and
+        * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all six
+          representations.  *schrodinger-chain* (``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp``) and
           *schrodinger-star* (``mpo-star-tdvp1 | mpo-star-tdvp2``) -- static, so the
           MPO is built once and TDVP conserves energy, at the cost of the largest
-          bond dimensions.  *interaction-star* (``tebd``, ``trotter-mpo``,
+          bond dimensions.  *interaction-chain* (``tebd``, ``trotter-mpo``,
           ``mpo-ip-tdvp1/2`` on a path; ``tree-tdvp | tree-tdvp2 | tree-tebd`` on a
           balanced binary tree, which keeps the high-bond region ``O(log N)`` edges
           deep instead of ``O(N)``) -- low entanglement, gates rebuilt each step;
           all coupling terms commute here, which is what makes ``trotter-mpo``'s
           exact factorization possible.  *polaron-chain* (``polaron``,
           ``polaron-tdvp1/tdvp2/dtdvp``) -- static *and* low-entanglement; needs
-          ``int J/w^2`` finite (gapped or super-ohmic).  Finite temperature works
-          via T-TEDOPA thermalization.
+          ``int J/w^2`` finite (gapped or super-ohmic).  The corresponding star
+          representations use ``mpo-ip-star-tdvp1/2`` and
+          ``polaron-star-tdvp1/2/dtdvp``.  Finite temperature works via T-TEDOPA
+          thermalization.
         * **multichannel** -- one bath through several couplings on shared modes.
           Selected by giving ``SystemBath(coupling=...)`` a *list* of coupling
           operators, **not** by a ``method`` name.  The deprecated
@@ -174,6 +175,12 @@ class SystemBath:
         two-level system (and nothing for a larger system -- pass ``observables``).
         ``result.rdm`` is the system reduced density matrix per step.
         """
+        stale_axes = [name for name in ("frame", "basis") if name in engine_kw]
+        if stale_axes:
+            joined = " and ".join(repr(name) for name in stale_axes)
+            raise TypeError(
+                f"{joined} is not a public run axis; use one exact "
+                "representation= value instead")
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
@@ -183,7 +190,7 @@ class SystemBath:
         # a general system has no canonical observables, so it gets the RDM only
         obs_ops = observables if observables is not None else self.system.observables()
 
-        axis_kw = dict(model=model, frame=frame, geometry=geometry,
+        axis_kw = dict(model=model, representation=representation, geometry=geometry,
                        integrator=integrator)
         axes = any(v is not None for v in axis_kw.values())
         multichannel = self.coupled_bath.is_multichannel
@@ -205,7 +212,7 @@ class SystemBath:
             method = own[0] if multichannel else _DEFAULT_METHOD
         # One lookup, either spelling: the registry says which combination of the
         # four axes this is and which engine realizes it.  The simulation planner
-        # then prepares the frame, state, integrator and measurement policy.
+        # then prepares the representation, state, integrator and measurement policy.
         spec = registry.resolve(
             mine, method=None if method is None else method.lower().replace("_", "-"),
             **axis_kw)
@@ -218,12 +225,12 @@ class SystemBath:
                 "it from a product state, so bond_dim must be given explicitly "
                 "(bond_dim=None means 'unlimited', which is only meaningful for "
                 "the truncation-driven methods).  To let trunc_eps choose the bond "
-                "instead, use a bond-growing method of the same frame: "
+                "instead, use a bond-growing method of the same representation: "
                 f"{', '.join(alternatives)}")
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
                      krylov=krylov, seed=seed, kw=engine_kw)
         # Local import keeps the physical model independent of every concrete
-        # frame and evolution engine until a run is actually compiled.
+        # representation and evolution engine until a run is actually compiled.
         from fishbonett.models.simulation import compile_plan
         return compile_plan(self, spec, ctx).run()

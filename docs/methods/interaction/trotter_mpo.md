@@ -1,4 +1,4 @@
-# Interaction picture · chain — conditional-displacement MPO
+# Interaction-chain representation — conditional-displacement MPO
 
 `method="trotter-mpo"` writes the full system–bath propagator as one exact,
 low-bond conditional-displacement MPO — no Trotter splitting between modes, no
@@ -19,9 +19,10 @@ is no inter-mode Trotter error to make in the first place.
 
 ### The interaction-picture coupling
 
-After the chain mapping and the star diagonalization ({doc}`/bath`), the
-interaction picture with respect to the *free bath* leaves a coupling that is a
-single product of a system operator and a bath operator,
+First discretize the bath as a finite star and take the interaction
+representation with respect to its free Hamiltonian. Then transform the
+time-dependent star coupling into chain modes. The result is a single product of
+a system operator and a bath operator,
 
 $$
 H_{sb}(t) = A_s \otimes B(t),
@@ -31,7 +32,7 @@ $$
 
 where $A_s$ is the (Hermitian) system coupling operator and the $d_n(t)$ are the
 time-integrated couplings computed by
-{py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.mode_couplings`
+{py:meth}`~fishbonett.representations.interaction.InteractionRepresentation.interval_coefficients`
 (they already contain $\int_t^{t+\Delta t}$, so no extra factor of $\Delta t$
 appears below).
 
@@ -112,7 +113,7 @@ $$
 $$
 
 **independent of the number of bath modes**. Built by
-{py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`.
+{py:meth}`~fishbonett.representations.interaction.InteractionRepresentation.displacement_mpo`.
 
 ### The full step
 
@@ -147,7 +148,7 @@ with exact diagonalization at the same rate (the swap network has a slightly
 smaller prefactor).
 
 ```{note}
-The bond dimension of the *state* is unchanged — this is the same frame and the
+The bond dimension of the *state* is unchanged — this is the same representation and the
 same physics as `tebd`, so it carries the same entanglement. `trotter-mpo` changes
 the cost of applying the propagator, not the cost of representing the state.  For a
 method that lowers the state entanglement itself, see {doc}`/methods/schrodinger/polaron_chain`.
@@ -163,7 +164,7 @@ Nothing above assumed a two-level system:
 - **A non-two-level system** — `h` may be any $(d,d)$ Hamiltonian.
 - **An arbitrary initial state** via `initial=`.
 - **Finite temperature** works exactly as for `tebd` (thermofield / signed
-  `domain`), since the frame is identical.
+  `domain`), since the representation is identical.
 
 ## Example
 
@@ -190,6 +191,6 @@ r.max_bond         # peak bond dimension of the state
 - Accepts the same truncation controls as every other method: `trunc_eps` sets the
   accuracy and `bond_dim` is an optional cap (default `None` = unlimited).
 - For the builder see
-  {py:meth}`~fishbonett.frames.interaction_picture.SystemBathIP.displacement_mpo`;
+  {py:meth}`~fishbonett.representations.interaction.InteractionRepresentation.displacement_mpo`;
   for the application/compression algorithm see
   {py:mod}`fishbonett.evolve.mpo_apply`.

@@ -5,38 +5,34 @@ are independent -- which they were not when three of them were mashed into one
 string called the "model"::
 
     model     what is coupled to what      system-bath | multichannel | comb | site-tree
-    frame     how H is written down        schrodinger-chain | schrodinger-star
-                                           | interaction-star | polaron-chain
+    representation  how H is written         schrodinger-chain | schrodinger-star
+                                             | interaction-chain | interaction-star
+                                             | polaron-chain | polaron-star
     geometry  the graph the state lives on path | binary-tree | comb-tree
     integrator  how a step is taken        tebd | tdvp1 | tdvp2 | dtdvp | trotter-mpo
 
-.. rubric:: A frame is a picture *and* a mode basis
+.. rubric:: Six complete representations
 
-Both halves are a choice of how to write ``H`` down, so they are one axis and the
-frame names carry both.  All ``3 x 2`` combinations are real frames -- what is
-absent is *unimplemented*, recorded in :attr:`Model.gaps`, not impossible:
+Each representation name is complete.  There is no secondary public taxonomy to
+combine with it.  All six describe valid Hamiltonians; availability for a model
+is recorded by :attr:`Model.gaps`.
 
 * ``interaction-chain`` **exists**, and is what this package actually runs for
   ``tebd`` / ``trotter-mpo`` / ``mpo-ip-tdvp*`` / ``tree-*``.  ``H_B`` is
-  tridiagonal rather than diagonal in the chain basis, but still quadratic, so
-  rotating it out is well defined: each chain mode evolves into a superposition of
-  chain modes.  Measured, the coupling ``|d_n(t)|`` it feeds the propagator starts
-  as ``(|V|, 0, ..., 0)`` -- the system touching ``c0`` alone, which is the chain --
-  and spreads outward with ``t``.  Locality is what is lost, not existence.
+  obtained by taking the interaction representation of the discretized star bath
+  and then applying its star-to-chain transformation.  Its coupling ``|d_n(t)|``
+  starts as ``(|V|, 0, ..., 0)`` and spreads outward with ``t``.
 * ``polaron-star`` **exists** too: the textbook Lang-Firsov transform is *defined*
   per star mode, ``prod_k D_k(g_k sigma_z / w_k)``.  It is the chain version that
-  needs the ``J/w^2`` trick.  It is simply not implemented, because displacing every
-  mode conditionally entangles the system with all of them at once.
+  uses the ``J/w^2`` transformation to localize that displacement on ``c0``.
 
-``schrodinger-chain`` / ``schrodinger-star`` and ``interaction-chain`` /
-``interaction-star`` are each one picture in two bases.  The bases are related by an
-orthogonal (Lanczos) transform, so the physics is identical and only the MPS cost
-differs -- which is the whole reason the basis is a representation choice rather
-than a model.
+The star-to-chain transform relates each star/chain pair without creating another
+user-facing axis.  The physics is identical while tensor-network costs may differ.
 
 ``geometry`` stays a separate axis because it genuinely is one: ``mpo-ip-tdvp1`` and
-``tree-tdvp`` are the *same frame*, laid on a path and on a balanced binary tree,
-which is why they produce identical numbers rather than merely close ones.
+``tree-tdvp`` are the *same representation*, laid on a path and on a balanced
+binary tree, which is why they produce identical numbers rather than merely
+close ones.
 ``mode-tree`` used to be listed as a model for that difference; it was never a
 model.
 
@@ -47,130 +43,101 @@ prepared plan; the physical model contains no private dispatch tables.
 
 .. note::
    The name ``fishbonett.models`` was used once before, for what is now
-   :mod:`fishbonett.frames`.  If you are reading commits from before that rename,
-   ``models/`` there means the Hamiltonian builders, not this.
+   :mod:`fishbonett.representations`.  If you are reading commits from before
+   that rename, ``models/`` there means the Hamiltonian builders, not this.
 
 Propagator-level gaps, finer than this table records: the Schroedinger chain could
 be driven by TEBD gates but is not (only MPO/TDVP is wired); the
 conditional-displacement MPO of ``trotter-mpo`` exists only in the interaction
-picture, because outside it the coupling does not commute with the free-bath term.
+representation, because outside it the coupling does not commute with the
+free-bath term.
 """
 from dataclasses import dataclass, field
 from typing import Mapping, Tuple
 
-__all__ = ["Model", "Frame", "Method", "MODELS", "FRAMES", "METHODS",
+__all__ = ["Model", "Representation", "Method", "MODELS", "REPRESENTATIONS", "METHODS",
            "GEOMETRIES", "APPLICATIONS", "FIXED_BOND_METHODS",
-           "why_not", "models_of", "frames_of",
+           "why_not", "models_of", "representations_of",
            "methods_of", "all_methods", "model", "method_spec", "resolve",
-           "combinations", "METHOD_FRAMES", "pictures_of",
-           "methods_by_frame", "frame_label", "describe_taxonomy",
+           "combinations", "METHOD_REPRESENTATIONS",
+           "methods_by_representation", "representation_label", "describe_taxonomy",
            "unknown_method_error", "STATIC_TREE_TEBD", "MULTICHANNEL_IP",
-           "MULTICHANNEL_STATIC"]
+           "MULTICHANNEL_IP_STAR", "MULTICHANNEL_STATIC"]
 
 
-# -- frames ------------------------------------------------------------------
+# -- representations ------------------------------------------------------------------
 @dataclass(frozen=True)
-class Frame:
-    """One way of writing the Hamiltonian down: a picture **and** a mode basis.
-
-    Both are choices about how ``H`` is written rather than about what is being
-    modelled or how it is stepped, so they are one axis.  All ``3 x 2`` of them are
-    real frames; which ones this package *implements* is a separate question, and
-    the answer lives in :attr:`Model.gaps`.
-    """
+class Representation:
+    """One complete mathematical representation of the Hamiltonian."""
     key: str
     label: str
     blurb: str
-    static: bool          # is H time-independent?  (decides TDVP applicability)
-    #: which unitary is rotated out -- ``schrodinger`` / ``interaction`` / ``polaron``
-    picture: str = ""
-    #: which modes H is written in -- ``chain`` (Lanczos/TEDOPA, nearest-neighbour
-    #: hoppings) or ``star`` (the raw discretization, no mode-mode terms)
-    basis: str = ""
-
-    @property
-    def diagonal_bath(self):
-        """Does the free bath contribute **no two-mode terms** in this frame?
-
-        The one predicate the taxonomy turns on, because it has *both* of the
-        consequences that matter, and they pull against each other -- **you cannot
-        have a local bath and a local coupling at once**:
-
-        * yes ⇒ nothing couples mode to mode, so the system couples to *every* mode
-          and the interaction graph is a star.  On a ``path`` state realized with
-          gates that costs a swap network (:attr:`Method.application`).
-        * no ⇒ the chain hoppings survive, which are nearest-neighbour on a path
-          (good) but long-range on a balanced binary tree (see ``_NO_MODE_MODE``).
-
-        Rotating out ``H_B`` removes the mode-mode terms whatever basis you write
-        them in -- which is why this keys on the *picture* as well as the basis, and
-        why ``interaction-chain`` swaps despite being a chain.
-        """
-        return self.picture == "interaction" or self.basis == "star"
+    static: bool
+    #: Whether the represented Hamiltonian contains no mode-mode terms.
+    mode_decoupled: bool
 
 
-FRAMES = {
-    "schrodinger-chain": Frame(
-        "schrodinger-chain", "Schrodinger picture, chain",
+REPRESENTATIONS = {
+    "schrodinger-chain": Representation(
+        "schrodinger-chain", "Schrodinger chain representation",
         "Nothing rotated out, bath chain-mapped.  H is time-independent and its MPO "
         "is built once, so TDVP conserves energy -- but the state carries the full "
         "system-bath correlation, giving the largest bond dimensions.  The chain's "
         "nearest-neighbour hoppings are what an MPS is good at, and the system "
         "touches only c0.",
-        static=True, picture="schrodinger", basis="chain"),
-    "schrodinger-star": Frame(
-        "schrodinger-star", "Schrodinger picture, star",
+        static=True, mode_decoupled=False),
+    "schrodinger-star": Representation(
+        "schrodinger-star", "Schrodinger star representation",
         "Nothing rotated out, no chain mapping: every mode couples straight to the "
         "system.  No mode-mode terms, but no locality for the MPS to exploit "
         "either.  Static, so still one MPO built once.",
-        static=True, picture="schrodinger", basis="star"),
-    "interaction-chain": Frame(
-        "interaction-chain", "interaction picture, chain",
-        "The free-bath evolution is rotated out, leaving only the coupling, and the "
-        "result is expressed back in the chain modes.  H_B is tridiagonal rather "
-        "than diagonal here, but still quadratic, so the rotation is well defined: "
-        "each chain mode evolves into a superposition of chain modes.  What is lost "
-        "is locality, not existence -- the coupling d_n(t) starts concentrated on c0 "
+        static=True, mode_decoupled=True),
+    "interaction-chain": Representation(
+        "interaction-chain", "interaction chain representation",
+        "A finite star is put in the interaction representation with respect to "
+        "its free Hamiltonian, then its time-dependent coupling is transformed "
+        "star-to-chain.  What is lost is locality, not existence -- the coupling "
+        "d_n(t) starts concentrated on c0 "
         "at t=0 and spreads outward, so this is 'no longer a chain' in the only "
         "sense that matters to an MPS.  Entanglement is much smaller than the "
-        "Schroedinger picture's, but H is time-dependent so gates/MPOs are rebuilt "
+        "Schrodinger representation's, but H is time-dependent, so gates/MPOs are "
+        "rebuilt "
         "every step.  All the coupling terms commute here, which is what makes the "
         "exact conditional-displacement propagator possible.",
-        static=False, picture="interaction", basis="chain"),
-    "interaction-star": Frame(
-        "interaction-star", "interaction picture, star",
+        static=False, mode_decoupled=True),
+    "interaction-star": Representation(
+        "interaction-star", "interaction star representation",
         "The same rotation as interaction-chain, left in the star modes instead of "
         "being rotated back: the coupling of mode k is simply V_k e^{-i w_k t}.  "
         "Reaches the same trajectory through a completely different coupling "
         "vector, so it is an independent check on the chain route rather than a "
         "restatement of it.  Which is cheaper is not settled -- the guess that the "
         "chain wins (its coupling starts on c0 and spreads) is not what measuring "
-        "shows.  Also the only frame available to the multichannel model, whose "
-        "shared modes cannot be chain-mapped at all.",
-        static=False, picture="interaction", basis="star"),
-    "polaron-chain": Frame(
-        "polaron-chain", "polaron frame, chain",
+        "shows.  The multichannel model exposes both forms by applying one common "
+        "orthogonal transform to its matrix-valued star couplings.",
+        static=False, mode_decoupled=True),
+    "polaron-chain": Representation(
+        "polaron-chain", "polaron chain representation",
         "The static part of the coupling is absorbed into a bath displacement, "
         "leaving a free chain plus a dressed tunneling term.  Static like the "
-        "Schroedinger picture *and* low-entanglement like the interaction "
-        "picture; needs int J/w^2 finite.  Populations are frame-invariant, "
+        "Schrodinger representation *and* low-entanglement like the interaction "
+        "representation; needs int J/w^2 finite.  Populations are "
+        "representation-invariant, "
         "coherences must be un-dressed.  The J/w^2 reweighting is what localizes "
         "the displacement on c0.",
-        static=True, picture="polaron", basis="chain"),
-    "polaron-star": Frame(
-        "polaron-star", "polaron frame, star",
+        static=True, mode_decoupled=False),
+    "polaron-star": Representation(
+        "polaron-star", "polaron star representation",
         "The textbook Lang-Firsov transform, which is *defined* per star mode: "
         "prod_k D_k(g_k sigma_z / w_k).  Perfectly well defined -- it is the chain "
-        "version that needs the J/w^2 trick to localize onto a single site.  Not "
-        "implemented here because it is not useful on an MPS: displacing every mode "
-        "conditionally on the system entangles the system with all of them at once, "
-        "which is exactly what the chain version avoids.",
-        static=True, picture="polaron", basis="star"),
+        "version that uses the J/w^2 transformation to localize the collective "
+        "displacement onto c0.",
+        static=True, mode_decoupled=True),
 }
 
-#: The graph the state's tensors live on.  Independent of the basis: the same star
-#: Hamiltonian runs on a path (``mpo-ip-tdvp1``) and on a balanced binary tree
-#: (``tree-tdvp``), which is the whole reason ``mode-tree`` was never a model.
+#: The graph the state's tensors live on.  Independent of the representation:
+#: the same interaction-chain Hamiltonian runs on a path (``mpo-ip-tdvp1``) and
+#: a balanced tree (``tree-tdvp``), which is why ``mode-tree`` was never a model.
 GEOMETRIES = {
     "path": "an MPS: system at site 0, modes 1..N in a line.",
     "binary-tree": "a balanced binary TTN with the system at the root, keeping the "
@@ -180,16 +147,19 @@ GEOMETRIES = {
 }
 
 
-#: Why the binary tree needs a frame with no mode-mode terms (:attr:`Frame.
-#: diagonal_bath`).  Not an oversight: the tree is worth having *because* nothing
+#: Why the binary tree needs a representation with no mode-mode terms
+#: (:attr:`Representation.mode_decoupled`).  Not an oversight: the tree is worth
+#: having *because* nothing
 #: couples mode to mode, so every mode hangs off the system independently and the
 #: only question is how deep the bonds are.
 #:
-#: Note this is about the *frame*, not the basis -- ``interaction-chain`` qualifies
-#: (it rotates ``H_B`` away entirely) and is what the ``tree-*`` methods use.
+#: Note this is about the *representation*, not the structure --
+#: ``interaction-chain`` qualifies (it rotates ``H_B`` away entirely) and is
+#: what the ``tree-*`` methods use.
 _NO_MODE_MODE = (
     "the balanced binary tree pays off only when there are no mode-mode terms.  "
-    "This frame keeps the chain hoppings, which are nearest-neighbour on a path but "
+    "This representation keeps the chain hoppings, which are nearest-neighbour "
+    "on a path but "
     "long-range on that tree (only half of the chain-adjacent pairs are "
     "tree-adjacent; the rest span up to 2*log2(N) edges -- measured: 10 edges at "
     "N=32), so the MPO bond grows and the tree loses to the plain path.  Reordering "
@@ -199,14 +169,12 @@ _NO_MODE_MODE = (
 # -- models ------------------------------------------------------------------
 @dataclass(frozen=True)
 class Model:
-    """A physical setup -- **only** the topology, now that the mode basis lives in
-    the frame and the state graph in ``geometry``.
+    """A physical setup -- **only** the topology, now that the mode structure lives in
+    the representation and the state graph in ``geometry``.
 
-    ``gaps`` maps an absent frame key to the reason it is absent.  The entries that
-    used to say "rejected because the polaron displacement has nowhere to localize"
-    are gone: there is no ``polaron-star`` frame to be absent from, so that whole
-    class of gap stopped existing rather than needing a reason (see
-    :data:`NOT_FRAMES`).  What is left is per-model work nobody has done.
+    ``gaps`` maps an absent representation key to the reason it is absent. All six
+    names describe valid Hamiltonians; gaps record model-specific implementation
+    work, not impossible combinations.
     """
     key: str
     label: str
@@ -218,19 +186,19 @@ class Model:
     selected_by: str = "method"
 
     @property
-    def frames(self):
-        """``{frame key: method names}``, in taxonomy order."""
+    def representations(self):
+        """``{representation key: method names}``, in taxonomy order."""
         out = {}
-        for frame_key in FRAMES:
+        for representation_key in REPRESENTATIONS:
             names = tuple(name for name, spec in METHODS.items()
-                          if spec.frame == frame_key and self.key in spec.models)
+                          if spec.representation == representation_key and self.key in spec.models)
             if names:
-                out[frame_key] = names
+                out[representation_key] = names
         return out
 
     def methods(self):
-        """Every method name this model offers, across all its frames."""
-        return tuple(m for fr in self.frames.values() for m in fr)
+        """Every method name this model offers, across all its representations."""
+        return tuple(m for fr in self.representations.values() for m in fr)
 
 
 # -- methods: the one dispatch table -----------------------------------------
@@ -243,7 +211,7 @@ class Method:
     static tree TEBD runs the comb and the site-tree.
     """
     name: str
-    frame: str
+    representation: str
     models: Tuple[str, ...]
     #: which plan-compiler group in :mod:`fishbonett.models.simulation` realizes
     #: it.  This is an implementation key, not an axis.
@@ -254,7 +222,7 @@ class Method:
     #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
     fixed_bond: bool = False
     #: The integrator **axis** -- ``"tebd"``, ``"tdvp1"``, ``"tdvp2"``, ``"dtdvp"``,
-    #: ``"trotter-mpo"``.  Unique within a ``(model, frame, geometry)``, which is
+    #: ``"trotter-mpo"``.  Unique within a ``(model, representation, geometry)``, which is
     #: what lets ``run`` be called by the axes instead of by a name that mashes
     #: them together.
     integrator: str = ""
@@ -262,32 +230,22 @@ class Method:
     geometry: str = "path"
 
     @property
-    def basis(self):
-        """The bath mode basis, which the frame carries."""
-        return FRAMES[self.frame].basis
-
-    @property
-    def picture(self):
-        """Which unitary is rotated out, which the frame carries."""
-        return FRAMES[self.frame].picture
-
-    @property
     def application(self):
         """How H's **interaction graph** is realized on the state's graph.
 
-        Derived, not declared: it is a *consequence* of the other axes.  A frame can
-        make ``H`` non-local relative to the state -- the interaction picture couples
+        Derived, not declared: it is a *consequence* of the other axes.  A representation can
+        make ``H`` non-local relative to the state -- the interaction transformation couples
         every mode to the system, a star, while the state is a path -- and this
         records what pays for that.  See :data:`APPLICATIONS`.
 
-        Keys on :attr:`Frame.diagonal_bath`, **not** on the basis: ``tebd`` is
+        Keys on :attr:`Representation.mode_decoupled`, **not** on the structure: ``tebd`` is
         ``interaction-chain`` and still needs a swap network, because it is rotating
         out ``H_B`` that spreads the coupling over every mode, not the choice of
         modes to write it in.
         """
         if self.integrator != "tebd" or self.geometry == "binary-tree":
             return "operator"
-        if self.geometry == "path" and FRAMES[self.frame].diagonal_bath:
+        if self.geometry == "path" and REPRESENTATIONS[self.representation].mode_decoupled:
             return "swap"
         return "local"
 
@@ -296,7 +254,7 @@ class Method:
 #:
 #: This is the axis the package had no name for, which is why three methods each
 #: re-derived a swap network and nothing recorded that they did.  It is not the same
-#: question as the frame: the *frame* decides which terms exist, the application
+#: question as the representation: the *representation* decides which terms exist, the application
 #: decides what it costs to apply them to a state whose graph is shaped differently.
 APPLICATIONS = {
     "local": "interaction edges are state edges -- gates apply in place",
@@ -308,39 +266,40 @@ APPLICATIONS = {
 }
 
 
-#: The one propagator the multi-site models have: Schroedinger-picture tree TEBD on
-#: their chain-mapped baths.  Named to distinguish it from the interaction-picture
+#: The one propagator the multi-site models have: Schroedinger-transformation tree TEBD on
+#: their chain-mapped baths.  Named to distinguish it from the interaction-transformation
 #: ``tree-tebd`` of the binary-tree geometry, a different engine on a different graph.
 STATIC_TREE_TEBD = "tree-tebd-static"
 
-#: The multichannel model's Schroedinger-picture propagator.  The *same engine* as
-#: :data:`STATIC_TREE_TEBD`, but a separate row because it is a different **frame**:
+#: The multichannel model's Schroedinger-transformation propagator.  The *same engine* as
+#: :data:`STATIC_TREE_TEBD`, but a separate row because it is a different **representation**:
 #: the shared-mode star cannot be chain-mapped, so this is ``schrodinger-star``
 #: where the multi-site models are ``schrodinger-chain``.  See
-#: ``frames/schrodinger.py``, which picks ``star_terms`` exactly when the bath is
+#: ``representations/schrodinger.py``, which picks ``star_terms`` exactly when the bath is
 #: multichannel -- the split was always in the code, just not in the table.
 MULTICHANNEL_STATIC = "multichannel-static"
 
-#: The multichannel model's interaction-picture propagator: a swap-network TEBD
+#: The multichannel model's interaction-transformation propagator: a swap-network TEBD
 #: sweep against the matrix-valued time-dependent coupling.  Named rather than
 #: shared with ``tebd`` because the builder is a different class (the coupling is
 #: a matrix per mode, not a scalar times one operator).
 MULTICHANNEL_IP = "multichannel-ip"
+MULTICHANNEL_IP_STAR = "multichannel-ip-star"
 
 
-def _m(name, frame, models, engine, driver="", fixed_bond=False, integrator="",
+def _m(name, representation, models, engine, driver="", fixed_bond=False, integrator="",
        geometry="path"):
-    return Method(name, frame, models, engine, driver, fixed_bond,
+    return Method(name, representation, models, engine, driver, fixed_bond,
                   integrator or driver, geometry)
 
 
 _SB = ("system-bath",)
 
-#: Every method, declared once.  Order matters: :attr:`Model.frames` reads method
-#: order off this table, and ``methods_of(model, frame)[0]`` is the default a
+#: Every method, declared once.  Order matters: :attr:`Model.representations` reads method
+#: order off this table, and ``methods_of(model, representation)[0]`` is the default a
 #: bath-selected model falls back to.
 METHODS = {s.name: s for s in [
-    # -- system-bath, Schroedinger picture: the one picture with both bases ----
+    # -- system-bath, static Schroedinger representations --------------------
     _m("mpo-tdvp1", "schrodinger-chain", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
     _m("mpo-tdvp2", "schrodinger-chain", _SB, "mpo-tdvp", "tdvp2"),
@@ -349,8 +308,8 @@ METHODS = {s.name: s for s in [
     _m("mpo-star-tdvp1", "schrodinger-star", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
     _m("mpo-star-tdvp2", "schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
-    # -- system-bath, interaction picture, on a path --------------------------
-    # `interaction-chain`, not `-star`: `mode_couplings` rotates the star phases
+    # -- system-bath, interaction transformation, on a path --------------------------
+    # `interaction-chain`, not `-star`: the star-to-chain transform rotates the phases
     # back into the chain modes, so d_n(0) = (|V|, 0, ..., 0) -- the system on c0
     # alone -- and spreads outward with t.  Measured, not assumed.
     _m("tebd", "interaction-chain", _SB, "swap-tebd", integrator="tebd"),
@@ -363,7 +322,7 @@ METHODS = {s.name: s for s in [
     _m("mpo-ip-star-tdvp1", "interaction-star", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
     _m("mpo-ip-star-tdvp2", "interaction-star", _SB, "mpo-tdvp", "tdvp2"),
-    # -- ...and the chain frame on a balanced binary tree ---------------------
+    # -- ...and the chain representation on a balanced binary tree ---------------------
     _m("tree-tdvp", "interaction-chain", _SB, "modetree",
        "run_tree_tdvp", integrator="tdvp1",
        geometry="binary-tree"),
@@ -371,19 +330,26 @@ METHODS = {s.name: s for s in [
        "run_tree_tdvp2", integrator="tdvp2", geometry="binary-tree"),
     _m("tree-tebd", "interaction-chain", _SB, "modetree",
        "run_tree_tebd", integrator="tebd", geometry="binary-tree"),
-    # -- system-bath, polaron frame -------------------------------------------
+    # -- system-bath, polaron representation -------------------------------------------
     _m("polaron", "polaron-chain", _SB, "polaron-tebd", integrator="tebd"),
     _m("polaron-tdvp1", "polaron-chain", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
     _m("polaron-tdvp2", "polaron-chain", _SB, "mpo-tdvp", "tdvp2"),
     _m("polaron-dtdvp", "polaron-chain", _SB, "mpo-tdvp",
        "dtdvp", fixed_bond=True),
-    # -- the static tree engine: one engine, two frames, three topologies -----
+    _m("polaron-star-tdvp1", "polaron-star", _SB, "mpo-tdvp",
+       "tdvp1", fixed_bond=True),
+    _m("polaron-star-tdvp2", "polaron-star", _SB, "mpo-tdvp", "tdvp2"),
+    _m("polaron-star-dtdvp", "polaron-star", _SB, "mpo-tdvp",
+       "dtdvp", fixed_bond=True),
+    # -- the static tree engine: one engine, two representations, three topologies -----
     _m(STATIC_TREE_TEBD, "schrodinger-chain", ("comb", "site-tree"),
        "static-tree-tebd", integrator="tebd", geometry="comb-tree"),
     _m(MULTICHANNEL_STATIC, "schrodinger-star", ("multichannel",),
        "static-tree-tebd", integrator="tebd", geometry="comb-tree"),
-    _m(MULTICHANNEL_IP, "interaction-star", ("multichannel",),
+    _m(MULTICHANNEL_IP, "interaction-chain", ("multichannel",),
+       "swap-tebd", integrator="tebd"),
+    _m(MULTICHANNEL_IP_STAR, "interaction-star", ("multichannel",),
        "swap-tebd", integrator="tebd"),
 ]}
 
@@ -392,41 +358,32 @@ METHODS = {s.name: s for s in [
 FIXED_BOND_METHODS = frozenset(n for n, s in METHODS.items() if s.fixed_bond)
 
 
-#: The multi-site models are wired for one frame only.  Their baths are chain-mapped
-#: per site, and nothing rotates a picture out per site.
+#: The multi-site models are wired for one representation only.  Their baths are chain-mapped
+#: per site, and nothing rotates a transformation out per site.
 _MULTISITE = "not implemented for multi-site models."
 
-#: The multichannel model's baths cannot be chain-mapped at all: the channels share
-#: one set of modes, and a Lanczos chain exists per coupling operator, not per
-#: cross-correlated set of them.  So all three chain frames are out for a reason
-#: that is about the *model*, not the picture.
-_NO_CHAIN = ("the channels share one set of modes, so there is no chain mapping to "
-             "make: Lanczos gives a chain per coupling operator, and these are "
-             "cross-correlated.  The shared-mode star is the only representation.")
+#: Static scalar-chain mappings do not directly preserve several cross-correlated
+#: coupling operators.  Interaction-chain is different: after rotating out the
+#: free bath, any orthogonal star-to-chain transform remains exact and retains the
+#: full matrix-valued coupling at every transformed mode.
+_NO_STATIC_CHAIN = (
+    "not implemented for cross-correlated shared channels: a scalar static chain "
+    "cannot localize several independent coupling operators at once.")
 
-#: Why ``polaron-star`` is unimplemented.  A real frame -- the textbook Lang-Firsov
-#: transform is written this way -- but not a useful one here, which is a different
-#: statement from the one this registry used to make about it.
-_POLARON_STAR = (
-    "possible, not implemented.  The Lang-Firsov displacement is defined per star "
-    "mode (prod_k D_k(g_k sigma_z / w_k)) -- it is the chain version that needs the "
-    "J/w^2 reweighting to localize on c0 -- so this is the *more* standard way to "
-    "write the transform, not a degenerate one.  Nobody has wired it; the guess "
-    "that dressing every mode would cost more than dressing c0 is untested, and "
-    "the same guess for interaction-star turned out not to hold.  Use "
-    "'polaron-chain'.")
+_NO_MULTICHANNEL_POLARON = (
+    "not implemented for several coupling operators: the current Lang-Firsov "
+    "representation requires one Hermitian generator.")
 
 MODELS = {
     "system-bath": Model(
         key="system-bath", label="system-bath",
         blurb="One system site coupled to one bath through one coupling operator.  "
-              "The most developed model: five of the six frames, both single-system "
+              "The most developed model: all six representations, both single-system "
               "geometries and the whole integrator family.  What used to be three "
               "separate 'models' (chain, star, mode-tree) is this one model in the "
-              "schrodinger-chain, schrodinger-star and interaction-chain frames, the "
+              "schrodinger-chain, schrodinger-star and interaction-chain representations, the "
               "last on two geometries.",
-        cls="SystemBath",
-        gaps={"polaron-star": _POLARON_STAR}),
+        cls="SystemBath"),
     "multichannel": Model(
         key="multichannel", label="multichannel system-bath",
         blurb="One system site, one bath, coupled through *several* operators "
@@ -434,8 +391,9 @@ MODELS = {
               "unlike independent baths.  Selected by giving SystemBath a list "
               "of coupling operators, not by a method name.",
         cls="SystemBath",
-        gaps={"schrodinger-chain": _NO_CHAIN, "interaction-chain": _NO_CHAIN,
-              "polaron-chain": _NO_CHAIN, "polaron-star": _POLARON_STAR},
+        gaps={"schrodinger-chain": _NO_STATIC_CHAIN,
+              "polaron-chain": _NO_MULTICHANNEL_POLARON,
+              "polaron-star": _NO_MULTICHANNEL_POLARON},
         selected_by="coupling"),
     "comb": Model(
         key="comb", label="fishbone / comb",
@@ -468,37 +426,26 @@ MODELS = {
 
 
 # -- constraints -------------------------------------------------------------
-def why_not(model_key, frame=None, *, geometry=None):
+def why_not(model_key, representation=None, *, geometry=None):
     """Why a combination is unavailable, or ``None`` if it exists.
 
-    Every one of the six frames is a real frame, so nothing here says "impossible".
+    Every one of the six representations is a real representation, so nothing here says "impossible".
     What it reports is per-model work nobody has done (:attr:`Model.gaps`, which
     says *why* it would or would not pay), plus the one genuine constraint: a
-    balanced binary tree needs a frame with no mode-mode terms.
+    balanced binary tree needs a representation with no mode-mode terms.
     """
-    if geometry == "binary-tree" and frame is not None \
-            and frame in FRAMES and not FRAMES[frame].diagonal_bath:
+    if geometry == "binary-tree" and representation is not None \
+            and representation in REPRESENTATIONS and not REPRESENTATIONS[representation].mode_decoupled:
         return _NO_MODE_MODE
     if geometry is not None and model_key in ("comb", "site-tree") \
             and geometry != "comb-tree":
         return (f"{MODELS[model_key].label} puts each site's bath on its own "
                 f"branch, so its state graph is always 'comb-tree'.")
-    if frame is not None:
+    if representation is not None:
         m = MODELS.get(model_key)
-        if m is not None and frame not in m.frames:
-            return m.gaps.get(frame)
+        if m is not None and representation not in m.representations:
+            return m.gaps.get(representation)
     return None
-
-
-def pictures_of(picture):
-    """Every frame key with this picture -- always both bases, since all six exist.
-
-    Lets ``frame="polaron"`` still mean something.  :func:`resolve` narrows the
-    result to frames that actually have methods, so a bare picture resolves whenever
-    only one of its two bases is implemented (``polaron`` -> ``polaron-chain``) and
-    is reported as ambiguous when both are (``schrodinger``, ``interaction``).
-    """
-    return tuple(k for k, f in FRAMES.items() if f.picture == picture)
 
 
 def method_spec(name, model_key=None):
@@ -510,27 +457,27 @@ def method_spec(name, model_key=None):
 
 
 def combinations(model_keys):
-    """``[(model, frame, geometry, integrator, method)]`` for these models."""
+    """``[(model, representation, geometry, integrator, method)]`` for these models."""
     keys = set(model_keys)
-    return [(mk, s.frame, s.geometry, s.integrator, s.name)
+    return [(mk, s.representation, s.geometry, s.integrator, s.name)
             for s in METHODS.values() for mk in s.models if mk in keys]
 
 
 #: The axes :func:`resolve` filters on, in the order they appear in a combination
 #: tuple.  Named once so the filter, the error message and the table agree.
-_AXES = ("model", "frame", "geometry", "integrator")
+_AXES = ("model", "representation", "geometry", "integrator")
 
 
 def resolve(model_keys, *, method=None, **axes):
     """The :class:`Method` selected by either spelling.
 
     ``method=`` names a combination; the four axes give it directly.  The axes are
-    the real structure -- ``"mpo-ip-tdvp2"`` *is* ``(system-bath, interaction-star,
+    the real structure -- ``"mpo-ip-tdvp2"`` *is* ``(system-bath, interaction-chain,
     path, tdvp2)`` -- so this is one lookup either way, and mixing the two spellings
     is rejected rather than silently resolved.
 
-    ``frame=`` also accepts a bare *picture*: ``"polaron"`` names one frame and
-    resolves, ``"schrodinger"`` names two and is reported as ambiguous.
+    Representation names are explicit: use ``interaction-chain`` rather than a
+    partial name such as ``interaction``.
     """
     unknown = set(axes) - set(_AXES)
     if unknown:
@@ -542,32 +489,22 @@ def resolve(model_keys, *, method=None, **axes):
         if not given:
             return method_spec(method)
         raise ValueError(
-            "give either method= or the axes (model / frame / geometry / "
+            "give either method= or the axes (model / representation / geometry / "
             "integrator), not both -- a method name already fixes all four.")
-
-    # a bare picture stands for its frames; if that is one frame it just resolves
-    frames = None
-    if "frame" in given and given["frame"] not in FRAMES:
-        by_picture = pictures_of(given["frame"])
-        if by_picture:
-            frames = set(by_picture)
 
     def matches(c):
         for k, v in given.items():
-            if k == "frame" and frames is not None:
-                if c[1] not in frames:
-                    return False
-            elif c[_AXES.index(k)] != v:
+            if c[_AXES.index(k)] != v:
                 return False
         return True
 
     hit = [c for c in avail if matches(c)]
     asked = ", ".join(f"{k}={given[k]!r}" for k in _AXES if k in given)
     if not hit:
-        # An unnameable frame or a recorded gap has a reason; say it rather than
+        # An unnameable representation or a recorded gap has a reason; say it rather than
         # printing the table and leaving the reader to spot what is missing.
         for mk in sorted(set(model_keys)):
-            why = why_not(given.get("model", mk), given.get("frame"),
+            why = why_not(given.get("model", mk), given.get("representation"),
                           geometry=given.get("geometry"))
             if why:
                 raise ValueError(f"no method for {asked}: {why}")
@@ -598,8 +535,8 @@ def model(key):
     except KeyError:
         extra = ""
         if key in ("chain", "star"):
-            extra = (f"  ({key!r} is half of a *frame*, not a model -- the frames "
-                     f"are {', '.join(k for k in FRAMES if k.endswith(key))}.)")
+            extra = (f"  ({key!r} is half of a *representation*, not a model -- the representations "
+                     f"are {', '.join(k for k in REPRESENTATIONS if k.endswith(key))}.)")
         elif key == "mode-tree":
             extra = ("  ('mode-tree' was a state *geometry*, not a model -- use "
                      "model='system-bath', geometry='binary-tree'.)")
@@ -617,24 +554,24 @@ def models_of(method):
     return tuple(k for k, m in sorted(MODELS.items()) if method in m.methods())
 
 
-def frames_of(model_key):
-    """Frame keys available for a model, in taxonomy order."""
+def representations_of(model_key):
+    """Representation keys available for a model, in taxonomy order."""
     m = model(model_key)
-    return tuple(k for k in FRAMES if k in m.frames)
+    return tuple(k for k in REPRESENTATIONS if k in m.representations)
 
 
-def methods_of(model_key, frame=None):
-    """Methods for a model, optionally narrowed to one frame."""
+def methods_of(model_key, representation=None):
+    """Methods for a model, optionally narrowed to one representation."""
     m = model(model_key)
-    if frame is None:
+    if representation is None:
         return m.methods()
-    if frame not in m.frames:
-        why = why_not(model_key, frame)
+    if representation not in m.representations:
+        why = why_not(model_key, representation)
         raise KeyError(
-            f"model {model_key!r} has no {frame!r} frame"
+            f"model {model_key!r} has no {representation!r} representation"
             + (f": {why}" if why else "")
-            + f"  (available: {', '.join(frames_of(model_key))})")
-    return tuple(m.frames[frame])
+            + f"  (available: {', '.join(representations_of(model_key))})")
+    return tuple(m.representations[representation])
 
 
 def all_methods():
@@ -642,33 +579,33 @@ def all_methods():
     return tuple(sorted({m for mo in MODELS.values() for m in mo.methods()}))
 
 
-#: Derived ``method -> (frame, model)``.  Kept because it is the natural key for
-#: "which siblings share this method's frame", but note it is a *projection*: two
-#: methods can share a ``(frame, model)`` and still differ in geometry
-#: (``mpo-ip-tdvp2`` vs ``tree-tdvp2``, both ``interaction-star``).  That is the
+#: Derived ``method -> (representation, model)``.  Kept because it is the natural key for
+#: "which siblings share this method's representation", but note it is a *projection*: two
+#: methods can share a ``(representation, model)`` and still differ in geometry
+#: (``mpo-ip-tdvp2`` vs ``tree-tdvp2``, both ``interaction-chain``).  That is the
 #: point -- those used to be called different "models".
-METHOD_FRAMES = {
-    method: (frame_key, model_key)
+METHOD_REPRESENTATIONS = {
+    method: (representation_key, model_key)
     for model_key, mo in MODELS.items()
-    for frame_key, methods in mo.frames.items()
+    for representation_key, methods in mo.representations.items()
     for method in methods
 }
 
 
-def methods_by_frame():
-    """``{(frame, model): [methods]}`` -- the taxonomy as a flat grouping."""
+def methods_by_representation():
+    """``{(representation, model): [methods]}`` -- the taxonomy as a flat grouping."""
     out = {}
-    for method, key in sorted(METHOD_FRAMES.items()):
+    for method, key in sorted(METHOD_REPRESENTATIONS.items()):
         out.setdefault(key, []).append(method)
     return out
 
 
-def frame_label(key):
-    """Human-readable name of a ``(frame, model)`` pair or a bare frame key."""
+def representation_label(key):
+    """Human-readable name of a ``(representation, model)`` pair or a bare representation key."""
     if isinstance(key, tuple):
-        frame_key, model_key = key
-        return f"{FRAMES[frame_key].label} / {MODELS[model_key].label}"
-    return FRAMES[key].label
+        representation_key, model_key = key
+        return f"{REPRESENTATIONS[representation_key].label} / {MODELS[model_key].label}"
+    return REPRESENTATIONS[key].label
 
 
 def describe_taxonomy():
@@ -679,14 +616,14 @@ def describe_taxonomy():
         picked = ("" if m.selected_by == "method" else
                   f"  (selected by {m.selected_by})")
         lines.append(f"{m.label}  [{key}] via {m.cls}{picked}")
-        for frame_key in frames_of(key):
-            for name in m.frames[frame_key]:
+        for representation_key in representations_of(key):
+            for name in m.representations[representation_key]:
                 s = METHODS[name]
-                lines.append(f"    {frame_key:<18} {name:<19} "
+                lines.append(f"    {representation_key:<18} {name:<19} "
                              f"geometry={s.geometry:<11} "
                              f"integrator={s.integrator}")
-        for frame_key, why in m.gaps.items():
-            lines.append(f"    {frame_key:<18} -- absent: {why}")
+        for representation_key, why in m.gaps.items():
+            lines.append(f"    {representation_key:<18} -- absent: {why}")
     return "\n".join(lines)
 
 

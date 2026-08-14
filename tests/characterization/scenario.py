@@ -26,7 +26,8 @@ def _discrete_bath():
     return freq, coup_mat
 
 
-def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
+def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, GateEncoder=None,
+                        lbo=False,
                         phys_dim=4, bond_dim=30, threshold=1e-8, dt=1e-3,
                         num_steps=4, temp=100.0, seed=1234):
     """Run the scenario and return a dict of physical observables.
@@ -36,7 +37,7 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
     SystemBath : class
         Multichannel interaction-picture Hamiltonian builder, constructed as
         ``SystemBath(pd, coup_mat=..., freq=..., temp=..., h_sys=...)`` with
-        ``.build(n=0)`` and ``.get_u(t, dt, factor=...)``.
+        ``.build(n=0)``. Current representations are adapted to gates separately.
     Mps : class
         TEBD engine constructed as ``Mps(pd)`` exposing ``B``, ``U``,
         ``update_bond`` and ``get_theta1``.
@@ -53,6 +54,7 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
         eth = SystemBath(pd, coup_mat=coup_mat, freq=freq, temp=temp,
                                h_sys=130.0 * sigma_x + np.diag([0.0, -200.0]))
         eth.build(n=0)
+        gate_source = eth if GateEncoder is None else GateEncoder(eth)
 
         etn = Mps(pd)
         etn.B[0][0, 1, 0] = 0.0
@@ -66,7 +68,7 @@ def run_multichannel_ic(SystemBath, Mps, sigma_x, sigma_z, num_op, *, lbo=False,
 
         spin_rho = []
         for tn in range(num_steps):
-            U1, U2 = eth.get_u(2 * tn * dt, 2 * dt, factor=2)
+            U1, U2 = gate_source.get_u(2 * tn * dt, 2 * dt, factor=2)
             etn.U = U1
             for j in range(n_boson - 1):
                 ub(j, 1)

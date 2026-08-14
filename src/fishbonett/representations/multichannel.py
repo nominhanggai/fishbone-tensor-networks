@@ -1,6 +1,6 @@
 """Multichannel interaction-picture builder: one bath, several coupling operators.
 
-The other frames assume the bath couples to the system through a *single*
+The other representations assume the bath couples to the system through a *single*
 operator.  Here several operators ``A_c`` share the **same** modes::
 
     H_sb = sum_k (sum_c A_c g_k^(c)) (b_k + b_k^dagger)
@@ -13,15 +13,15 @@ inter-site coupling are modulated by the *same* vibrations and by unrelated ones
 Two consequences shape the code below:
 
 * the coupling is **matrix-valued** -- each mode carries a matrix ``A(d_n(t))``
-  rather than a scalar times one operator.  In this frame that costs nothing:
+  rather than a scalar times one operator.  In this representation that costs nothing:
   there are no mode-mode terms to tridiagonalize, so the star-to-chain map is a
-  free choice of orthogonal basis and :meth:`SystemBathMultiChannel.build` takes a
+  free choice of orthogonal mode coordinates and :meth:`MultichannelInteractionRepresentation.build` takes a
   plain single-vector :func:`~fishbonett.bath.lanczos.lanczos` seeded by one
   channel.  See that method for why the seed does not change the physics.
 * finite temperature needs the negative half of the frequency axis, either by
-  mirroring the star explicitly (:meth:`SystemBathMultiChannel.__init__`) or by
+  mirroring the star explicitly (:meth:`MultichannelInteractionRepresentation.__init__`) or by
   folding the weight into the spectral density beforehand
-  (:meth:`SystemBathMultiChannel.from_signed_star`, what ``run`` uses).
+  (:meth:`MultichannelInteractionRepresentation.from_signed_star`, what ``run`` uses).
 
 Selected by the model coupling, not by a ``method`` name: give
 ``SystemBath(coupling=...)`` a list of operators.  See
@@ -33,7 +33,6 @@ from numpy import exp
 from fishbonett.contract import contract as einsum
 from fishbonett.bath.lanczos import lanczos
 from fishbonett.bath.conventions import integrated_free_phase
-from fishbonett.frames.gates import SwapNetworkFrame
 from fishbonett.linalg import kron
 from fishbonett.operators import temp_factor, annihilate
 
@@ -43,16 +42,17 @@ from fishbonett.operators import temp_factor, annihilate
 
 
 
-class SystemBathMultiChannel(SwapNetworkFrame):
-    """Multichannel interaction-picture builder: system + harmonic bath, >=2 channels.
+class MultichannelInteractionRepresentation:
+    """Multichannel ``interaction-star`` or ``interaction-chain`` Hamiltonian.
 
-    Generalizes :class:`~fishbonett.frames.interaction_picture.SystemBathIP` to a
+    Generalizes :class:`~fishbonett.representations.interaction.InteractionRepresentation` to a
     matrix-valued coupling -- several coupling channels ``A_k`` share one bath (any
     Hermitian system, not just a spin), with the finite-temperature thermofield
     doubling folded in via ``temp_factor``.
     """
 
-    def __init__(self, pd, coup_mat, freq, temp, h_sys=None, H_add=None):
+    def __init__(self, pd, coup_mat, freq, temp, h_sys=None, H_add=None, *,
+                 representation="interaction-chain"):
         """Build from a **positive**-frequency star at temperature ``temp``.
 
         ``freq`` is mirrored to ``(-freq, freq)`` and each coupling matrix scaled by
@@ -85,10 +85,11 @@ class SystemBathMultiChannel(SwapNetworkFrame):
         self._setup(pd,
                     [mat * np.sqrt(np.abs(temp_factor(temp, w)))
                      for mat, w in zip(np.concatenate((coup_mat, coup_mat)), signed)],
-                    signed, h_sys, H_add)
+                    signed, h_sys, H_add, representation)
 
     @classmethod
-    def from_signed_star(cls, pd, coup_mat, freq, h_sys=None, H_add=None):
+    def from_signed_star(cls, pd, coup_mat, freq, h_sys=None, H_add=None, *,
+                         representation="interaction-chain"):
         """Build from an already thermofield-doubled (**signed**) star.
 
         The T-TEDOPA route: temperature is folded into the *spectral density* on a
@@ -98,15 +99,22 @@ class SystemBathMultiChannel(SwapNetworkFrame):
         as given.  This is the convention the rest of the package uses, and it needs
         no temperature units, so it is what ``run(method="multichannel-ip")`` calls.
         ``len(pd) - 1`` must equal ``len(freq)``: in the interaction picture the
-        chain is a *basis rotation* of the star, so dropping sites drops bath.
+        chain is a rotation of the star modes, so dropping sites drops bath.
         """
         self = cls.__new__(cls)
         self.temp = None
-        self._setup(pd, list(coup_mat), np.asarray(freq, float), h_sys, H_add)
+        self._setup(
+            pd, list(coup_mat), np.asarray(freq, float), h_sys, H_add,
+            representation)
         return self
 
-    def _setup(self, pd, coup_mat, freq, h_sys, H_add):
+    def _setup(self, pd, coup_mat, freq, h_sys, H_add, representation):
         """Shared state for both constructors: ``freq``/``coup_mat`` are final."""
+        if representation not in {"interaction-star", "interaction-chain"}:
+            raise ValueError(
+                "representation must be 'interaction-star' or "
+                "'interaction-chain'")
+        self.name = representation
         self.H_add = [] if H_add is None else H_add
         self.pd_sys = pd[0]
         self.pd_boson = pd[1:]
@@ -125,21 +133,22 @@ class SystemBathMultiChannel(SwapNetworkFrame):
         self.coup_mat = list(coup_mat)
         self.size = self.coup_mat[0].shape[0]
         self.coup_mat_np = np.array(self.coup_mat)
-        #  ↑ A list of coupling matrices A_k. H_i = \sum_k A_k \otimes (a+a^\dagger)
+        # A list of coupling matrices A_k. H_i = \sum_k A_k \otimes (a+a^\dagger)
         self.H = []
         self.coef = []
         self.phase = integrated_free_phase
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
 
-    def get_h2(self, t, delta, inc_sys=True):
-        """Two-site coupling Hamiltonians over ``[t, t+delta]``, in chain order.
+    def two_site_hamiltonians(self, t, delta, include_system=True):
+        """Two-site coupling Hamiltonians over ``[t, t+delta]``.
 
-        Returns ``[(h, d_boson, d_sys), ...]``: for each chain mode, the
+        Returns ``[(h, d_boson, d_sys), ...]``: for each mode in the selected
+        star or chain order, the
         matrix-valued interaction-picture coupling summed over channels,
         ``kron(b, D_n) + kron(b^dag, D_n*)`` with ``D_n`` the channel-weighted
-        coupling matrix.  With ``inc_sys`` the system term ``delta * h_sys`` is
-        added to the site nearest the system.  Any extra explicit modes in
-        ``H_add`` are appended.
+        coupling matrix.  With ``include_system`` the system term
+        ``delta * h_sys`` is added to the site nearest the system.  Any extra
+        explicit modes in ``H_add`` are appended.
         """
         freq = self.freq
         coef = self.coef
@@ -158,7 +167,7 @@ class SystemBathMultiChannel(SwapNetworkFrame):
         d1 = self.pd_boson[0]
         d2 = self.pd_sys
         site = delta * kron(np.eye(d1), self.h_sys)
-        if inc_sys is True:
+        if include_system:
             h2[0] = (h2[0][0] + site, d1, d2)
         else:
             pass
@@ -171,22 +180,24 @@ class SystemBathMultiChannel(SwapNetworkFrame):
         return h2
 
     def build(self, n=0):
-        """Rotate the shared star into a chain basis, seeded by channel ``n``.
+        """Prepare the selected multichannel interaction representation.
 
         Lanczos-tridiagonalizes the star Hamiltonian ``diag(freq)`` with the seed
-        vector ``[A_k[n, n]]_k`` -- basis state ``n``'s coupling profile -- and
+        vector ``[A_k[n, n]]_k`` -- system eigenvector ``n``'s coupling profile -- and
         stores the star -> chain transform in ``self.coef`` and the chain
-        frequencies in ``self.chain_freq``.  Call before :meth:`get_u`.
+        frequencies in ``self.chain_freq``.  Call before passing the
+        representation to an encoder.
 
         **The seed does not change the physics.**  In the interaction picture there
         are no mode-mode terms: the bath enters only through the phases
-        ``e(w_k, t, dt)``, and :meth:`get_h2` reassembles site ``m``'s coupling as
+        ``e(w_k, t, dt)``, and :meth:`two_site_hamiltonians` reassembles site ``m``'s coupling as
         ``sum_k A_k Q[k, m] e(w_k, t, dt)``.  Substituting ``b_k = sum_m Q[k, m] c_m``
         into ``sum_k A_k e_k (x) (b_k + b_k^dag)`` reproduces that exactly for *any*
         orthogonal ``Q``, so the seed only decides how the bath is spread over the
         sites -- i.e. the entanglement and the Fock truncation per site, not the
-        answer.  What the seed must not be is **zero**: a coupling whose diagonal
-        vanishes in the working basis (e.g. channels ``sigma_x`` and ``sigma_y``
+        answer.  What the seed must not be is **zero**: a coupling set whose
+        matrices all have a zero diagonal in the chosen system coordinates (for
+        example, channels ``sigma_x`` and ``sigma_y``
         only) gives ``v0 = 0`` and a meaningless chain, so that is rejected.
 
         This also means ``len(pd) - 1`` must cover ``len(freq)``.  Keeping fewer
@@ -194,23 +205,24 @@ class SystemBathMultiChannel(SwapNetworkFrame):
         (where distant modes are weakly coupled through the hoppings) -- here it
         simply discards bath modes.
         """
-        # `diag(freq)` is real symmetric, so the Krylov basis is real: take the
+        if self.name == "interaction-star":
+            self.coef = np.eye(len(self.freq))
+            self.chain_freq = self.freq.copy()
+            return self
+
+        # `diag(freq)` is real symmetric, so the Krylov vectors are real: take the
         # real part of the seed explicitly rather than letting numpy discard the
         # imaginary one silently.  Only the seed's *direction* matters (see above),
-        # so this is a choice of basis, not an approximation.
+        # so this is a coordinate choice, not an approximation.
         v0 = np.real(np.array([mat[n, n] for mat in self.coup_mat_np]))
         if not np.any(np.abs(v0) > 1e-14):
             raise ValueError(
                 f"the Lanczos seed from channel n={n} is zero: every coupling "
                 f"matrix has a vanishing (real part of its) ({n}, {n}) element, so "
                 f"no chain can be built from it.  Pick an `n` for which the "
-                f"couplings have a nonzero diagonal, or work in a basis where they "
+                f"couplings have a nonzero diagonal, or rotate the system so they "
                 f"do.")
         chain_freq, Q = lanczos(np.diag(self.freq), v0)
         self.coef = Q
         self.chain_freq = np.diagonal(chain_freq)
         return self
-
-    # get_u comes from SwapNetworkFrame.  This frame is the interaction picture with
-    # a matrix-valued coupling, so get_h2 is the only part that differs from
-    # SystemBathIP -- which is exactly what the mixin's contract says.
