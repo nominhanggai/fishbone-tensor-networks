@@ -176,6 +176,49 @@ def test_mps_joint_rdm_matches_the_dense_state():
                       st.expectation(sigma_z, 0))
 
 
+def test_interaction_graph_is_a_star_while_the_state_is_a_path():
+    """Why the swap layout exists, asserted rather than described.
+
+    The claim the whole model/frame/layout split rests on is that H's *interaction*
+    graph and the state's *tensor-network* graph are different objects.  Here they
+    demonstrably are: in the interaction picture every mode couples to the system
+    and to nothing else (a star), while the MPS holding the state is a path.  The
+    swap network is what reconciles them -- which is why, and only why, these
+    methods are marked ``layout="swap"``.
+    """
+    import numpy as np
+    from fishbonett.frames.gates import star_edges
+    from fishbonett.frames.interaction_picture import SystemBathIP
+    from fishbonett.models import registry as R
+    from fishbonett.states.mps import SystemBathMPS
+    from fishbonett.operators import sigma_x, sigma_z
+
+    n = 5
+    pd = [2] + [4] * n
+    builder = SystemBathIP(pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+                           sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
+                           domain=(0.3, 12.0)).build()
+
+    # one two-site term per star edge, each pairing a mode with the system
+    h2 = builder.get_h2(0.0, 0.01)
+    edges = star_edges(n)
+    assert len(h2) == len(edges) == n
+    for (_h, d_boson, d_sys) in h2:
+        assert (d_sys, d_boson) == (pd[0], pd[1])   # system x mode, never mode x mode
+
+    # the state is a path, so the two graphs genuinely differ
+    state = SystemBathMPS(pd)
+    path_edges = {(i, i + 1) for i in range(n)}
+    assert set(edges) != path_edges
+    assert state.neighbours(3) == [2, 4]            # a path, not a star
+    shared = set(edges) & path_edges
+    assert shared == {(0, 1)}, "only the nearest mode is adjacent to the system"
+
+    # and that mismatch is exactly what the registry records
+    assert R.METHODS["tebd"].layout == "swap"
+    assert R.LAYOUTS["swap"].startswith("a star realized on a path")
+
+
 def test_schrodinger_frame_serves_every_topology():
     """The point of Stage 3: one frame implementation, any geometry.
 
