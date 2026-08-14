@@ -147,8 +147,10 @@ r_ip = model.run(dt=0.02, t_max=2.0, method="multichannel-ip",
   (`multichannel-static`) and `interaction-star` (`multichannel-ip`).  The channels
   share one set of modes, and Lanczos gives a chain per coupling operator, not per
   cross-correlated set of them, so there is no chain mapping to make.  That rules
-  out `schrodinger-chain` and `polaron-chain` here, and
-  `registry.why_not("multichannel", "polaron-chain")` says so.
+  out all three chain frames here, and
+  `registry.why_not("multichannel", "polaron-chain")` says so.  This is the one
+  model for which `interaction-star` is not a choice but the only option — for
+  `system-bath` it is `mpo-ip-star-tdvp*`, sitting alongside the chain route.
 - For the builder see {py:mod}`fishbonett.frames.multichannel`.
 - For several *independent* baths on one site (or on several sites), use
   {py:class}`~fishbonett.models.fishbone.TreeFishbone` with one `Bath` per bath instead —

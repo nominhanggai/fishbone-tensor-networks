@@ -17,10 +17,11 @@ sb.run(dt=0.02, t_max=2.0, frame="interaction-star", geometry="path",
 sb.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp2")     # the same run, named
 ```
 
-The four frames are `schrodinger-chain`, `schrodinger-star`, `interaction-star` and
-`polaron-chain`. There is no `interaction-chain` (the interaction picture rotates out
-$H_B$, diagonal only in the star basis) and no `polaron-star` (the displacement must
-localize on $c_0$) — they are not rejected, they have no name.
+A frame is a picture × a mode basis, so there are six: `schrodinger-chain`,
+`schrodinger-star`, `interaction-chain`, `interaction-star`, `polaron-chain` and
+`polaron-star` (the last unimplemented — possible, but it dresses every mode at
+once). The two bases are one orthogonal transform apart, so they are the same
+physics at different cost.
 `integrator` is `"tebd"`, `"tdvp1"`, `"tdvp2"`, `"dtdvp"` or `"trotter-mpo"`.  Omit
 an axis and it is inferred when only one combination fits; when several do, the
 error lists them.  `registry.describe_taxonomy()` prints the whole table.  `bath`

@@ -274,6 +274,7 @@ class SystemBath:
     _MPO_FRAMES = {
         "schrodinger-chain": "_chain_mpo_frame",
         "schrodinger-star": "_static_star_mpo_frame",
+        "interaction-chain": "_ip_chain_mpo_frame",
         "interaction-star": "_ip_star_mpo_frame",
         "polaron-chain": "_polaron_mpo_frame",
     }
@@ -294,6 +295,9 @@ class SystemBath:
 
     def _static_star_mpo_frame(self, b, ctx):
         return self._undressed_mpo_frame(_frames_mpo.static_star_mpo_frame, b, ctx)
+
+    def _ip_chain_mpo_frame(self, b, ctx):
+        return self._undressed_mpo_frame(_frames_mpo.ip_chain_mpo_frame, b, ctx)
 
     def _ip_star_mpo_frame(self, b, ctx):
         return self._undressed_mpo_frame(_frames_mpo.ip_star_mpo_frame, b, ctx)
@@ -423,7 +427,7 @@ class SystemBath:
     #: application's business, not the frame's, which is why there is one driver
     #: below and not one per frame.
     _SWAP_FRAMES = {
-        ("interaction-star", "system-bath"): "_ip_frame",
+        ("interaction-chain", "system-bath"): "_ip_frame",
         ("interaction-star", "multichannel"): "_multichannel_swap_frame",
     }
 

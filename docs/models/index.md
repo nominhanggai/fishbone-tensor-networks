@@ -17,16 +17,14 @@ Four models, three classes:
 ```{admonition} `chain`, `star` and `mode-tree` were never models
 :class: warning
 They used to be listed here as three of six models.  The first two are half of a
-**frame** — the mode basis, which travels with the picture, so the frames are
-`schrodinger-chain`, `schrodinger-star`, `interaction-star`, `polaron-chain` — and
-the third is a state **geometry**.  All three are the same one-system/one-bath
-problem.  `run(model="star")` raises, and says what to write instead.
+**frame** — the mode basis, which travels with the picture, giving the six frames
+`{schrodinger,interaction,polaron}-{chain,star}` — and the third is a state
+**geometry**.  All three are the same one-system/one-bath problem.
+`run(model="star")` raises, and says what to write instead.
 
-The tell was in the code all along: `model="chain"` with the interaction picture
-chain-maps the bath and then throws the chain away, because that picture needs the
-*star* modes.  There is accordingly no `interaction-chain` frame at all.  And
-`mode-tree` shares its Hamiltonian with `mpo-ip-tdvp1` — same frame, different
-geometry — which is why the two agree to machine precision.
+`mode-tree` in particular shares its Hamiltonian with `mpo-ip-tdvp1` — same frame
+(`interaction-chain`), different geometry — which is why the two agree to machine
+precision rather than merely closely.
 ```
 
 ```{admonition} Two different trees
