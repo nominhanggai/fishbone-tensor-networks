@@ -230,10 +230,11 @@ def test_composite_spin_vibration_system():
                   observables={"sz": coup}, initial="up")
     assert r.rdm.shape == (10, 2 * dv, 2 * dv)
 
-    builder = Builder([2 * dv] + [dph] * nm,
-                      representation="interaction-star",
-                      h_sys=h_sys, coupling=coup,
-                      sd=_J, domain=[0.0, 40.0]).build()
+    builder = Builder(
+        representation="interaction-star",
+        h_sys=h_sys, coupling=coup,
+        compiled_star=bath.bind(coup).compiled_star(),
+    ).build()
     freq = builder.frequencies
     j0 = builder.star_couplings
     dims = [2 * dv] + [dph] * nm
@@ -317,17 +318,19 @@ def test_swap_network_walks_the_system_out_from_site_0_and_back():
     else pins this, and the direction is exactly what the site-0 port had to change
     -- the old layout walked the system inward from the last site.
     """
+    from fishbonett import Bath
     from fishbonett.evolve import tebd
-    from fishbonett.encodings.gates import SwapGateEncoder
     from fishbonett.representations.interaction import InteractionRepresentation
     from fishbonett.states.mps import SystemBathMPS
 
     d_sys, d_bos, n = 2, 5, 4
     pd = [d_sys] + [d_bos] * n
-    builder = InteractionRepresentation(pd, representation="interaction-chain",
-                              h_sys=sigma_x, coupling=sigma_z, sd=_J,
-                              domain=[0.0, 40.0]).build()
-    gates = SwapGateEncoder(builder)
+    compiled = Bath(
+        J=_J, domain=(0.0, 40.0), n_modes=n,
+        phys_dim=d_bos).bind(sigma_z).compiled_star()
+    builder = InteractionRepresentation(
+        representation="interaction-chain", h_sys=sigma_x,
+        coupling=sigma_z, compiled_star=compiled).build()
 
     def sys_site(st):
         dims = [b.shape[1] for b in st.B]
@@ -335,21 +338,21 @@ def test_swap_network_walks_the_system_out_from_site_0_and_back():
         return dims.index(d_sys)
 
     state = SystemBathMPS(pd)
-    u1, _ = gates.get_u(0.0, 0.01)
+    u1, _ = builder.tebd_gates(0.0, 0.01)
     state.U = u1
     assert sys_site(state) == 0                       # system starts at site 0
     tebd.swap_out(state, n, 40, 1e-10)
     assert sys_site(state) == n - 1                   # ... walked to the far end
     tebd.update_bond(state, n - 1, 40, 1e-10, swap=0)
     assert sys_site(state) == n - 1                   # swap=0 does not move it
-    _, u2 = gates.get_u(0.005, 0.01)
+    _, u2 = builder.tebd_gates(0.005, 0.01)
     state.U = u2                                      # sites are now reversed
     tebd.swap_in(state, n, 40, 1e-10)
     assert sys_site(state) == 0                       # ... and back to site 0
 
     # the whole step must be layout-preserving, or step k+1 sees the wrong sites
     state2 = SystemBathMPS(pd)
-    tebd.symmetric_swap_step(state2, gates, 0.0, 0.01, n, 40, 1e-10)
+    tebd.symmetric_swap_step(state2, builder, 0.0, 0.01, n, 40, 1e-10)
     assert sys_site(state2) == 0
 
 
@@ -357,16 +360,19 @@ def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
     """The conditional-displacement propagator is a sum of one product operator per
     eigenvalue of the coupling ``O``, so the MPO bond is exactly that count -- 2 for
     sigma_z, 3 for a three-eigenvalue coupling -- independent of the chain length."""
+    from fishbonett import Bath
     from fishbonett.representations.interaction import InteractionRepresentation
-    from fishbonett.encodings.displacement import ConditionalDisplacementEncoder
 
     for O, expected in [(sigma_z, 2), (np.diag([1.0, 0.0, -1.0]).astype(complex), 3)]:
         ds = O.shape[0]
-        b = InteractionRepresentation([ds] + [6] * 5,
-                         representation="interaction-chain",
-                         h_sys=np.eye(ds), coupling=O,
-                         sd=_J, domain=[0.3, 12.0]).build()
-        W = ConditionalDisplacementEncoder(b).displacement_mpo(0.0, 0.05)
+        compiled = Bath(
+            J=_J, domain=(0.3, 12.0), n_modes=5,
+            phys_dim=6).bind(O).compiled_star()
+        b = InteractionRepresentation(
+            representation="interaction-chain",
+            h_sys=np.eye(ds), coupling=O,
+            compiled_star=compiled).build()
+        W = b.trotter_mpo(0.0, 0.05)
         assert len(W) == 6                       # system + 5 modes
         assert W[0].shape == (1, expected, ds, ds)
         assert all(w.shape[0] == expected for w in W[1:])
@@ -445,21 +451,22 @@ def test_free_chain_gates_put_each_frequency_on_its_own_mode():
     structural check catches it.
     """
     import scipy.linalg as sla
+    from fishbonett import Bath
     from fishbonett.representations.polaron import PolaronRepresentation
-    from fishbonett.encodings.polaron import PolaronGateEncoder
     from fishbonett.operators import annihilate
 
     nb, d, ds = 4, 5, 2
-    b = PolaronRepresentation([ds] + [d] * nb,
-                          representation="polaron-chain",
-                          h_sys=0.5 * sigma_x, coupling=sigma_z,
-                          sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
-                          domain=[0.3, 12.0]).build()
+    compiled = Bath(
+        J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
+        n_modes=nb, phys_dim=d).bind(sigma_z).compiled_polaron()
+    b = PolaronRepresentation(
+        representation="polaron-chain", h_sys=0.5 * sigma_x,
+        coupling=sigma_z, compiled_polaron=compiled).build()
 
     dt = 1e-5                       # small dt so i log(U)/dt recovers h faithfully
     a = annihilate(d)
     num, Id = a.conj().T @ a, np.eye(d)
-    gates = PolaronGateEncoder(b).gates(dt)
+    gates = b.tebd_gates(dt)
     for m in range(1, nb):          # bond 0 is the dressed bond, checked elsewhere
         want = (b.hoppings[m - 1] * (np.kron(a.conj().T, a) + np.kron(a, a.conj().T))
                 + b.frequencies[m] * np.kron(Id, num))     # w_m on c_m (right leg)

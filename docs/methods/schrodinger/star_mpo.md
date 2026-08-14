@@ -45,7 +45,7 @@ so the bond profile is $[1, 3, 3, \dots, 3, 1]$ — one larger than the
 interaction-picture star, and still independent of $N$.  The last mode closes to
 bond 1 and must emit **no** identity from `START` or `CARRY`, or the operator would
 contain a term with the coupling left dangling.  This is
-{py:func}`fishbonett.encodings.mpo.build_static_star_mpo`; it is exact (verified
+`SchrodingerRepresentation.tdvp_mpo`; it is exact (verified
 elementwise against the dense $H$, and Hermitian).
 
 ### Star or chain?
@@ -122,4 +122,4 @@ r2.max_bond
 - `h` and the coupling `O` are carried as matrices, so a general Hermitian system
   and coupling of any dimension work; see {doc}`/models/spin_boson`.
 - `polaron-star` is a separate static representation implemented through the
-  generic MPO/TDVP encoding; see {doc}`polaron_chain`.
+  generic TDVP MPO; see {doc}`polaron_chain`.

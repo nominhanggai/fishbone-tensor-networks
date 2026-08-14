@@ -2,15 +2,17 @@
 of a small spin-boson chain."""
 import numpy as np
 
+from fishbonett import Bath
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian, SX, SZ
-from fishbonett.encodings.mpo import chain_coeffs, encode_schrodinger_chain, encode_interaction_star
 from fishbonett.operators import annihilate, create, number
+from fishbonett.representations.interaction import InteractionRepresentation
+from fishbonett.representations.schrodinger import SchrodingerRepresentation
 
 DOMAIN = (-25.0, 36.0)
 
 # The seven run_* wrappers these tests used to call are gone: each was one
-# (MPO builder, sweep) pair with its own copy of the loop.  Building the MPO is a
-# encoding question (fishbonett.encodings.mpo), running the sweep an evolve one, so a test
+# (representation, sweep) pair with its own copy of the loop.  Materializing the
+# MPO is a representation question and running the sweep an evolution question, so a test
 # now names both.  The wrappers took a half-step and advanced 2*dt per step;
 # run_mpo_hamiltonian takes the step itself, hence dt=0.10 where they said dt=0.05.
 
@@ -34,7 +36,9 @@ def _embed(op, site, dims):
 
 
 def _exact_sz(n_chain, d, V, ts):
-    eps_c, t_c, c0 = chain_coeffs(_Jb, n_chain, DOMAIN)
+    chain = _coupled(n_chain, d).compiled_chain()
+    eps_c, t_c, c0 = (
+        chain.frequencies, chain.hoppings, chain.system_coupling)
     dims = [2] + [d] * n_chain
     b, bd, nb = annihilate(d), create(d), number(d)
     H = _embed(V * SX, 0, dims) + c0 * (_embed(SZ, 0, dims) @ _embed(b + bd, 1, dims))
@@ -53,7 +57,16 @@ def _exact_sz(n_chain, d, V, ts):
 
 
 def _chain(n_chain, d, V):
-    return encode_schrodinger_chain(_Jb, DOMAIN, n_chain=n_chain, d=d, V=V)
+    coupled = _coupled(n_chain, d)
+    return SchrodingerRepresentation(
+        representation="schrodinger-chain", h_sys=V * SX, coupling=SZ,
+        compiled_bath=coupled.compiled_chain())
+
+
+def _coupled(n_modes, phys_dim):
+    return Bath(
+        J=_Jb, domain=DOMAIN, n_modes=n_modes,
+        phys_dim=phys_dim).bind(SZ)
 
 
 def test_tdvp1_matches_exact_diagonalization():
@@ -78,13 +91,16 @@ def test_ip_mpo_matches_exact():
     """Interaction-picture star MPO (time-dependent, rebuilt each step) vs the same
     exact dynamics.  Looser tol: the IP midpoint rule is O(dt^2) in time."""
     n_chain, d, V = 3, 5, 1.0
-    encoding = encode_interaction_star(_Jb, DOMAIN, n_chain=n_chain, d=d, V=V)
-    assert not encoding.static, "the IP star MPO depends on t and must be rebuilt"
-    t, sz, _ = run_mpo_hamiltonian(encoding, dt=0.04, nsteps=15, sweep="tdvp1", D=40,
+    representation = InteractionRepresentation(
+        representation="interaction-star",
+        h_sys=V * SX, coupling=SZ,
+        compiled_star=_coupled(n_chain, d).compiled_star()).build()
+    assert not representation.static, "the interaction MPO must be rebuilt"
+    t, sz, _ = run_mpo_hamiltonian(representation, dt=0.04, nsteps=15, sweep="tdvp1", D=40,
                              krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3
-    t2, sz2, maxd = run_mpo_hamiltonian(encoding, dt=0.04, nsteps=15, sweep="tdvp2",
+    t2, sz2, maxd = run_mpo_hamiltonian(representation, dt=0.04, nsteps=15, sweep="tdvp2",
                                   chi_max=40, eps=1e-12, krylov=25)
     assert maxd[-1] > 1                                 # bonds grew
     assert np.max(np.abs(sz2 - sz_ex)) < 5e-3
@@ -126,20 +142,24 @@ def test_the_two_bonddims_are_not_interchangeable():
     assert bonddims(mid_phys) == [D, d, d]
 
 
-def test_one_loop_serves_every_mpo_encoding_and_sweep():
-    """MPO encoding and sweep are independent choices.
+def test_one_loop_serves_every_tdvp_mpo_and_sweep():
+    """Represented Hamiltonian and TDVP sweep are independent choices.
 
     Whichever MPO you hand it, and whichever sweep you name, it is the same loop --
     which is why there is no longer a function per combination.
     """
     n_chain, d, V = 3, 4, 1.0
-    encodings = {"chain": _chain(n_chain, d, V),
-              "ip-star": encode_interaction_star(_Jb, DOMAIN, n_chain=n_chain, d=d, V=V)}
-    for fname, encoding in encodings.items():
+    interaction = InteractionRepresentation(
+        representation="interaction-star",
+        h_sys=V * SX, coupling=SZ,
+        compiled_star=_coupled(n_chain, d).compiled_star()).build()
+    representations = {"chain": _chain(n_chain, d, V),
+                       "interaction-star": interaction}
+    for name, representation in representations.items():
         for sweep in ("tdvp1", "tdvp2", "dtdvp"):
-            t, sz, maxd = run_mpo_hamiltonian(encoding, dt=0.05, nsteps=2, sweep=sweep,
+            t, sz, maxd = run_mpo_hamiltonian(representation, dt=0.05, nsteps=2, sweep=sweep,
                                         D=20, chi_max=20, eps=1e-10, krylov=20)
-            assert t.shape == (2,) and sz.shape == (2,), (fname, sweep)
-            assert np.all(np.isfinite(sz)), (fname, sweep)
+            assert t.shape == (2,) and sz.shape == (2,), (name, sweep)
+            assert np.all(np.isfinite(sz)), (name, sweep)
             # every sweep reports the peak bond, including the fixed-bond one
-            assert maxd.shape == (2,) and np.all(maxd >= 1), (fname, sweep)
+            assert maxd.shape == (2,) and np.all(maxd >= 1), (name, sweep)

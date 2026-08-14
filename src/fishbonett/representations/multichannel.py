@@ -35,12 +35,7 @@ from fishbonett.bath.lanczos import lanczos
 from fishbonett.bath.conventions import integrated_free_phase
 from fishbonett.linalg import kron
 from fishbonett.operators import temp_factor, annihilate
-
-
-
-
-
-
+from fishbonett.representations.interaction import _swap_gate_pairs
 
 class MultichannelInteractionRepresentation:
     """Multichannel ``interaction-star`` or ``interaction-chain`` Hamiltonian.
@@ -50,6 +45,8 @@ class MultichannelInteractionRepresentation:
     Hermitian system, not just a spin), with the finite-temperature thermofield
     doubling folded in via ``temp_factor``.
     """
+
+    static = False
 
     def __init__(self, pd, coup_mat, freq, temp, h_sys=None, H_add=None, *,
                  representation="interaction-chain"):
@@ -139,6 +136,14 @@ class MultichannelInteractionRepresentation:
         self.phase = integrated_free_phase
         self.phase_func = lambda lam, t: np.exp(-1j * lam * (t))
 
+    @property
+    def dimensions(self):
+        return (self.pd_sys, *self.pd_boson)
+
+    @property
+    def n_sites(self):
+        return len(self.dimensions)
+
     def two_site_hamiltonians(self, t, delta, include_system=True):
         """Two-site coupling Hamiltonians over ``[t, t+delta]``.
 
@@ -179,14 +184,22 @@ class MultichannelInteractionRepresentation:
             h2.append((coup, db, ds))
         return h2
 
+    def tebd_gates(self, t, dt, factor=1, include_system=True):
+        """Return both leg orderings of the interval's swap-network gates."""
+        return _swap_gate_pairs(
+            self.two_site_hamiltonians(
+                t, dt, include_system=include_system),
+            factor,
+        )
+
     def build(self, n=0):
         """Prepare the selected multichannel interaction representation.
 
         Lanczos-tridiagonalizes the star Hamiltonian ``diag(freq)`` with the seed
         vector ``[A_k[n, n]]_k`` -- system eigenvector ``n``'s coupling profile -- and
         stores the star -> chain transform in ``self.coef`` and the chain
-        frequencies in ``self.chain_freq``.  Call before passing the
-        representation to an encoder.
+        frequencies in ``self.chain_freq``. Call this method before requesting
+        the representation's TEBD gates.
 
         **The seed does not change the physics.**  In the interaction picture there
         are no mode-mode terms: the bath enters only through the phases

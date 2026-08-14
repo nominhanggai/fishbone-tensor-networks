@@ -6,7 +6,7 @@
 Both are Schroedinger-picture, and the Hamiltonian itself is the representation's business,
 not the model's: :meth:`TreeFishbone.local_terms` asks
 :func:`fishbonett.representations.schrodinger.terms` to turn the sites and baths into a
-:class:`~fishbonett.encodings.terms.LocalTerms` graph -- bath frequencies on their own
+:class:`~fishbonett.representations.schrodinger.LocalTerms` graph -- bath frequencies on their own
 nodes, couplings on the edges -- and the model only decides the topology and drives
 the propagation.  The state it evolves is
 :class:`fishbonett.states.tree.TreeTensorNetwork`, stepped by
@@ -102,7 +102,7 @@ class TreeFishbone:
 
     def local_terms(self, t_max=None):
         """The static Hamiltonian as a
-        :class:`~fishbonett.encodings.terms.LocalTerms` graph.
+        :class:`~fishbonett.representations.schrodinger.LocalTerms` graph.
 
         Delegates to :func:`fishbonett.representations.schrodinger.terms` -- these models are
         Schroedinger-picture, and the representation owns how a bath becomes nodes and edges.
@@ -127,7 +127,7 @@ class TreeFishbone:
         :func:`fishbonett.evolve.tebd.symmetric_static_step`.
         """
         lt = self.local_terms(t_max)
-        site_gates, edge_gates = lt.gates(dt)
+        site_gates, edge_gates = lt.tebd_gates(dt)
         return lt.dims, lt.edges, site_gates, edge_gates
 
     def _initial_vec(self, initial, i):
@@ -260,7 +260,8 @@ class Fishbone:
                             baths=[self._site_baths(b) for b in self.baths])
 
     def local_terms(self, t_max=None):
-        """The static Hamiltonian as :class:`~fishbonett.encodings.terms.LocalTerms`.
+        """The static Hamiltonian as
+        :class:`~fishbonett.representations.schrodinger.LocalTerms`.
 
         Same as :meth:`fishbonett.models.fishbone.TreeFishbone.local_terms`, with the
         linear backbone expanded into the equivalent edge list.

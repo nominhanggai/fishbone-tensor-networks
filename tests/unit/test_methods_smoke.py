@@ -206,11 +206,11 @@ def test_mps_and_tree_are_one_tensor_network():
     and each container supplies ``tensor`` / ``set_tensor`` / ``neighbours``.
     """
     import numpy as np
+    from fishbonett import Bath
     from fishbonett.states.mps import SystemBathMPS
     from fishbonett.states.tree import TreeTensorNetwork
     from fishbonett.states.network import TensorNetwork
     from fishbonett.evolve import tebd
-    from fishbonett.encodings.polaron import PolaronGateEncoder
     from fishbonett.representations.polaron import PolaronRepresentation
     from fishbonett.operators import sigma_x, sigma_z
 
@@ -218,11 +218,13 @@ def test_mps_and_tree_are_one_tensor_network():
     assert issubclass(TreeTensorNetwork, TensorNetwork)
 
     pd = [2] + [8] * 5
-    builder = PolaronRepresentation(pd, representation="polaron-chain",
-                                h_sys=0.5 * sigma_x, coupling=sigma_z,
-                                sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
-                                domain=(0.3, 12.0)).build()
-    gates = PolaronGateEncoder(builder).gates(0.01)
+    compiled = Bath(
+        J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
+        n_modes=5, phys_dim=8).bind(sigma_z).compiled_polaron()
+    builder = PolaronRepresentation(
+        representation="polaron-chain", h_sys=0.5 * sigma_x,
+        coupling=sigma_z, compiled_polaron=compiled).build()
+    gates = builder.tebd_gates(0.01)
     st = SystemBathMPS(pd)
     for _ in range(3):
         tebd.symmetric_static_step(st, gates, len(pd) - 1, 40, 1e-9)
@@ -266,18 +268,20 @@ def test_mps_joint_rdm_matches_the_dense_state():
     node of the subtree and every node above it contributes its bare right-isometry.
     """
     import numpy as np
+    from fishbonett import Bath
     from fishbonett.states.mps import SystemBathMPS
     from fishbonett.evolve import tebd
-    from fishbonett.encodings.polaron import PolaronGateEncoder
     from fishbonett.representations.polaron import PolaronRepresentation
     from fishbonett.operators import sigma_x, sigma_z
 
     pd = [2, 3, 3, 3, 3]
-    builder = PolaronRepresentation(pd, representation="polaron-chain",
-                                h_sys=0.5 * sigma_x, coupling=sigma_z,
-                                sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
-                                domain=(0.3, 12.0)).build()
-    gates = PolaronGateEncoder(builder).gates(0.05)
+    compiled = Bath(
+        J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
+        n_modes=4, phys_dim=3).bind(sigma_z).compiled_polaron()
+    builder = PolaronRepresentation(
+        representation="polaron-chain", h_sys=0.5 * sigma_x,
+        coupling=sigma_z, compiled_polaron=compiled).build()
+    gates = builder.tebd_gates(0.05)
     st = SystemBathMPS(pd)
     for _ in range(4):                     # entangle it; a product state proves nothing
         tebd.symmetric_static_step(st, gates, len(pd) - 1, 40, 1e-12)
@@ -353,28 +357,13 @@ def test_gate_methods_are_second_order_in_dt(model_key, method):
         f"(|rho(2dt)-rho(dt)|={d1:.2e}, |rho(dt)-rho(dt/2)|={d2:.2e})")
 
 
-def test_swap_network_encoding_is_independent_of_the_representation():
-    """Representations provide Hamiltonian data; a separate adapter makes gates.
-
-    This boundary prevents a Hamiltonian representation from depending on TEBD.
-    The adapter contract is: supply ``two_site_hamiltonians`` and receive
-    swap-network gates.
-    """
-    from fishbonett.encodings.gates import SwapGateEncoder
+def test_interaction_representations_materialize_swap_network_gates():
+    """Both interaction representation classes own the same gate contract."""
     from fishbonett.representations.interaction import InteractionRepresentation
     from fishbonett.representations.multichannel import MultichannelInteractionRepresentation
 
     for cls in (InteractionRepresentation, MultichannelInteractionRepresentation):
-        assert not issubclass(cls, SwapGateEncoder)
-        assert "get_u" not in cls.__dict__
-
-    class Stub:
-        def two_site_hamiltonians(self, *_args, **_kwargs):
-            from scipy.sparse import csr_matrix
-            return [(csr_matrix(np.zeros((4, 4), complex)), 2, 2)]
-
-    first, second = SwapGateEncoder(Stub()).get_u(0.0, 0.1)
-    assert first[0].shape == second[0].shape == (2, 2, 2, 2)
+        assert "tebd_gates" in cls.__dict__
 
 
 def test_interaction_graph_is_a_star_while_the_state_is_a_path():
@@ -388,18 +377,22 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     methods are marked ``layout="swap"``.
     """
     import numpy as np
-    from fishbonett.encodings.gates import star_edges
-    from fishbonett.representations.interaction import InteractionRepresentation
+    from fishbonett import Bath
+    from fishbonett.representations.interaction import (
+        InteractionRepresentation, star_edges,
+    )
     from fishbonett.models import registry as R
     from fishbonett.states.mps import SystemBathMPS
     from fishbonett.operators import sigma_x, sigma_z
 
     n = 5
     pd = [2] + [4] * n
-    builder = InteractionRepresentation(pd, representation="interaction-chain",
-                           h_sys=0.5 * sigma_x, coupling=sigma_z,
-                           sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
-                           domain=(0.3, 12.0)).build()
+    compiled = Bath(
+        J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
+        n_modes=n, phys_dim=4).bind(sigma_z).compiled_star()
+    builder = InteractionRepresentation(
+        representation="interaction-chain", h_sys=0.5 * sigma_x,
+        coupling=sigma_z, compiled_star=compiled).build()
 
     # one two-site term per star edge, each pairing a mode with the system
     h2 = builder.two_site_hamiltonians(0.0, 0.01)
@@ -437,7 +430,7 @@ def test_schrodinger_representation_serves_every_topology():
     import numpy as np
     from fishbonett import Bath, Fishbone
     from fishbonett.models import TreeFishbone
-    from fishbonett.encodings.terms import LocalTerms
+    from fishbonett.representations.schrodinger import LocalTerms
     from fishbonett.operators import sigma_x, sigma_z
 
     J = lambda w: 0.2 * w * np.exp(-w / 5.0)
@@ -458,5 +451,5 @@ def test_schrodinger_representation_serves_every_topology():
 
     # a zero on-site term becomes None, not an identity gate, so the propagators
     # can skip it
-    site_gates, edge_gates = a.gates(0.01)
+    site_gates, edge_gates = a.tebd_gates(0.01)
     assert len(site_gates) == a.n_nodes and len(edge_gates) == len(a.edges)

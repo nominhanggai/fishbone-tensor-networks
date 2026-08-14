@@ -113,7 +113,7 @@ $$
 $$
 
 **independent of the number of bath modes**. Built by
-{py:meth}`~fishbonett.representations.interaction.InteractionRepresentation.displacement_mpo`.
+{py:meth}`~fishbonett.representations.interaction.InteractionRepresentation.trotter_mpo`.
 
 ### The full step
 
@@ -193,6 +193,6 @@ r.max_bond         # peak bond dimension of the state
 - Accepts the same truncation controls as every other method: `trunc_eps` sets the
   accuracy and `bond_dim` is an optional cap (default `None` = unlimited).
 - For the builder see
-  {py:meth}`~fishbonett.representations.interaction.InteractionRepresentation.displacement_mpo`;
+  {py:meth}`~fishbonett.representations.interaction.InteractionRepresentation.trotter_mpo`;
   for the application/compression algorithm see
   {py:mod}`fishbonett.evolve.mpo_apply`.

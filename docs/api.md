@@ -38,8 +38,9 @@ Each representation name is exact and complete:
 
 ## Representations
 
-Representations contain mathematical Hamiltonian data and transformations. They
-do not select a propagation algorithm.
+Representations contain mathematical Hamiltonian data and transformations and
+materialize the TDVP MPOs, Trotter MPOs, or TEBD gates supported by that
+Hamiltonian. They do not advance tensor-network states.
 
 ```{eval-rst}
 .. autosummary::
@@ -51,24 +52,6 @@ do not select a propagation algorithm.
    fishbonett.representations.polaron
    fishbonett.representations.multichannel
    fishbonett.representations.coolingchain
-```
-
-## Encodings
-
-Encodings adapt a Hamiltonian to local terms, gates, an MPO, or a factorized
-propagator.
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated
-   :recursive:
-
-   fishbonett.encodings.terms
-   fishbonett.encodings.gates
-   fishbonett.encodings.mpo
-   fishbonett.encodings.capabilities
-   fishbonett.encodings.displacement
-   fishbonett.encodings.polaron
 ```
 
 ## Tensor-network states

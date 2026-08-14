@@ -131,24 +131,24 @@ def symmetric_static_step(state, gates, n, chi_max, eps, **kw):
     sweep(state, range(n - 1, -1, -1), chi_max, eps, swap=0, **kw)
 
 
-def symmetric_swap_step(state, gate_encoder, t0, dt, n, chi_max, eps, **kw):
+def symmetric_swap_step(state, representation, t0, dt, n, chi_max, eps, **kw):
     """One 2nd-order (Strang) swap-network step over ``[t0, t0+dt]``.
 
-    The interaction step. ``gate_encoder`` supplies time-dependent gates through
-    ``gate_encoder.get_u(t, half_dt)``, so gates are rebuilt twice per step --
+    The interaction step. The representation supplies time-dependent gates
+    through ``tebd_gates(t, half_dt)``, so they are rebuilt twice per step --
     once per half-interval.
 
     The ordering is palindromic: the first half-interval's gates sweep inward,
     the second half-interval's sweep back out, and the two innermost (bond-0)
     applications straddle the midpoint, one from each half.  Reusing the *same*
     half-step gates for both would break time symmetry and drop the step to first
-    order in ``dt``.  ``get_u`` returns ``(U1, U2)`` where ``U2`` is the
+    order in ``dt``.  ``tebd_gates`` returns ``(U1, U2)`` where ``U2`` is the
     leg-transposed variant used by the swapped sweeps, so the two un-swapped
     bond-0 updates must both take a ``U1``.
     """
     hdt = dt / 2.0
-    u_in, _ = gate_encoder.get_u(t0, hdt)
-    u_mid, u_out = gate_encoder.get_u(t0 + hdt, hdt)
+    u_in, _ = representation.tebd_gates(t0, hdt)
+    u_mid, u_out = representation.tebd_gates(t0 + hdt, hdt)
 
     state.U = u_in
     swap_out(state, n, chi_max, eps, **kw)

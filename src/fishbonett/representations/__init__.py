@@ -6,10 +6,11 @@ The six single-bath representations are ``schrodinger-chain``,
 Hamiltonian and state are transformed and which bath operators appear in the
 result.  There is no second public category to combine with these names.
 
-The six public representation builders contain physics only.  They do not
-select TEBD, TDVP, an MPS, or a tree.  :mod:`fishbonett.encodings` converts a
-representation into local terms, gates, MPOs, TTNOs, or factorized propagators,
-and :mod:`fishbonett.evolve` advances the corresponding tensor-network state.
+The representation objects behind these six names own the represented
+Hamiltonian and materialize the numerical products supported by it: ``tdvp_mpo``,
+``trotter_mpo``, or ``tebd_gates``.  They do not advance an MPS or tree;
+:mod:`fishbonett.evolve` consumes those products and advances the corresponding
+tensor-network state.
 The exploratory ``coolingchain`` module is a legacy stateful utility outside
 the public method registry.
 

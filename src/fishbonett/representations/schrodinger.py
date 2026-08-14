@@ -6,32 +6,184 @@ them -- so ``H`` is time-independent and its gates and MPO are built **once**.  
 price is entanglement: nothing has been removed, so the state carries the full
 system-bath correlation and the bond dimensions are the largest of any representation.
 
-This module is the representation for *any* topology: one system site with a chain of modes,
-a comb, or an arbitrary loop-free tree of sites each with its own bath(s).  They
-differ only in the edge list, which is why :func:`terms` returns a
-:class:`~fishbonett.encodings.terms.LocalTerms` graph rather than anything
-geometry-specific.
+This module is the representation for *any* topology: one system site with a
+chain or star of modes, a comb, or an arbitrary loop-free tree of sites each
+with its own bath(s).  It directly materializes the represented Hamiltonian as
+an MPO for TDVP or as local terms and TEBD gates for a state tree.
 
 .. rubric:: What's here
 
-===================  ===========================================================
-:func:`terms`        a model's systems + baths -> static ``LocalTerms``
-:func:`chain_terms`  the nodes and edges one bath chain contributes
-:func:`star_terms`   the same for a shared-mode multichannel star
-===================  ===========================================================
+* :class:`SchrodingerRepresentation`: one system and bath as a TDVP MPO.
+* :func:`terms`: systems and baths as static :class:`LocalTerms`.
+* :func:`chain_terms`: nodes and edges contributed by one bath chain.
+* :func:`star_terms`: nodes and edges for a shared-mode multichannel star.
 
-The MPO form of this representation for the single-system models lives in
-:mod:`fishbonett.encodings.mpo` (``build_chain_mpo``, ``build_static_star_mpo``) and is
-driven by :mod:`fishbonett.evolve.tdvp`; the gate form is driven by
-:mod:`fishbonett.evolve.sitetree`.
+The representation never advances tensor states; :mod:`fishbonett.evolve`
+consumes the MPOs and gates built here.
 """
+from dataclasses import dataclass
+from typing import Dict, List, Tuple
+
 import numpy as np
+from scipy.linalg import expm
 
 from fishbonett.bath.coupled import bind_bath
-from fishbonett.encodings.terms import LocalTerms
-from fishbonett.operators import annihilate, sigma_z
+from fishbonett.operators import annihilate, create, number, sigma_z
+from fishbonett.representations._mpo import identity_product, product_sum_mpo
+from fishbonett.system import check_operator
 
-__all__ = ["terms", "chain_terms", "star_terms", "bath_ops"]
+__all__ = [
+    "SchrodingerRepresentation", "LocalTerms", "terms", "chain_terms",
+    "star_terms", "bath_ops",
+]
+
+
+@dataclass
+class LocalTerms:
+    """A static represented Hamiltonian with one term per node and edge."""
+
+    dims: List[int]
+    edges: List[Tuple[int, int]]
+    site: List[np.ndarray]
+    bond: Dict[Tuple[int, int], np.ndarray]
+
+    def __post_init__(self):
+        n_nodes = len(self.dims)
+        if len(self.edges) != n_nodes - 1:
+            raise ValueError(
+                f"edges must form a tree over {n_nodes} nodes (expected "
+                f"{n_nodes - 1} edges, got {len(self.edges)})")
+        if len(self.site) != n_nodes:
+            raise ValueError(
+                f"site has {len(self.site)} entries, expected {n_nodes}")
+
+    @property
+    def n_nodes(self):
+        return len(self.dims)
+
+    def tebd_gates(self, dt):
+        """Return node and edge gates for a symmetric static TEBD step."""
+        site_gates = [
+            expm(-1j * hamiltonian * dt) if np.any(hamiltonian) else None
+            for hamiltonian in self.site
+        ]
+        edge_gates = {}
+        for (left, right), hamiltonian in self.bond.items():
+            d_left, d_right = self.dims[left], self.dims[right]
+            edge_gates[(left, right)] = expm(
+                -1j * hamiltonian * dt).reshape(
+                    d_left, d_right, d_left, d_right)
+        return site_gates, edge_gates
+
+    def as_tuple(self):
+        """Return the historical ``(dims, edges, site, bond)`` tuple."""
+        return self.dims, self.edges, self.site, self.bond
+
+
+class SchrodingerRepresentation:
+    """Static single-system ``schrodinger-chain`` or ``-star`` Hamiltonian."""
+
+    names = frozenset({"schrodinger-chain", "schrodinger-star"})
+    static = True
+
+    def __init__(self, *, representation, h_sys, coupling, compiled_bath):
+        if representation not in self.names:
+            raise ValueError(
+                "representation must be 'schrodinger-chain' or "
+                "'schrodinger-star'")
+        self.name = representation
+        self.h_sys = check_operator(h_sys, "h_sys")
+        self.coupling = check_operator(
+            coupling, "coupling", self.h_sys.shape[0])
+        self.compiled_bath = compiled_bath
+        if getattr(compiled_bath, "n_channels", 1) != 1:
+            raise ValueError("a Schrödinger MPO requires one bath channel")
+        self.pd_sys = self.h_sys.shape[0]
+        self.pd_boson = [compiled_bath.phys_dim] * compiled_bath.n_modes
+        self.dimensions = (self.pd_sys, *self.pd_boson)
+        self._tdvp_mpo = None
+
+    @property
+    def n_sites(self):
+        return len(self.dimensions)
+
+    def tdvp_mpo(self, _time=None):
+        """Return the static Hamiltonian MPO consumed by TDVP."""
+        if self._tdvp_mpo is None:
+            if self.name == "schrodinger-chain":
+                self._tdvp_mpo = _chain_mpo(
+                    self.h_sys, self.coupling,
+                    self.compiled_bath.system_coupling,
+                    self.compiled_bath.frequencies,
+                    self.compiled_bath.hoppings,
+                    self.compiled_bath.phys_dim,
+                )
+            else:
+                self._tdvp_mpo = _star_mpo(
+                    self.h_sys, self.coupling,
+                    self.compiled_bath.frequencies,
+                    self.compiled_bath.couplings[0],
+                    self.compiled_bath.phys_dim,
+                )
+        return self._tdvp_mpo
+
+
+def _chain_mpo(h_sys, coupling, system_coupling, frequencies, hoppings,
+               dimension):
+    dimensions = [h_sys.shape[0]] + [dimension] * len(frequencies)
+    destroy, create_op, number_op = (
+        annihilate(dimension), create(dimension), number(dimension))
+    products, coefficients = [], []
+
+    row = identity_product(dimensions)
+    row[0] = h_sys
+    products.append(row)
+    coefficients.append(1.0)
+
+    row = identity_product(dimensions)
+    row[0] = coupling
+    row[1] = destroy + create_op
+    products.append(row)
+    coefficients.append(system_coupling)
+
+    for mode, frequency in enumerate(frequencies):
+        row = identity_product(dimensions)
+        row[mode + 1] = number_op
+        products.append(row)
+        coefficients.append(frequency)
+    for mode, hopping in enumerate(hoppings):
+        for left, right in ((create_op, destroy), (destroy, create_op)):
+            row = identity_product(dimensions)
+            row[mode + 1] = left
+            row[mode + 2] = right
+            products.append(row)
+            coefficients.append(hopping)
+    return product_sum_mpo(dimensions, products, coefficients)
+
+
+def _star_mpo(h_sys, coupling, frequencies, couplings, dimension):
+    dimensions = [h_sys.shape[0]] + [dimension] * len(frequencies)
+    destroy, create_op, number_op = (
+        annihilate(dimension), create(dimension), number(dimension))
+    products, coefficients = [], []
+
+    row = identity_product(dimensions)
+    row[0] = h_sys
+    products.append(row)
+    coefficients.append(1.0)
+    for mode, (frequency, strength) in enumerate(
+            zip(frequencies, couplings)):
+        row = identity_product(dimensions)
+        row[mode + 1] = number_op
+        products.append(row)
+        coefficients.append(frequency)
+
+        row = identity_product(dimensions)
+        row[0] = coupling
+        row[mode + 1] = strength * destroy + np.conj(strength) * create_op
+        products.append(row)
+        coefficients.append(1.0)
+    return product_sum_mpo(dimensions, products, coefficients)
 
 
 def bath_ops(d):

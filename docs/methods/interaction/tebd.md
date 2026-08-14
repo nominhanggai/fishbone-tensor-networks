@@ -22,12 +22,12 @@ $$
 The free bath is absent from $H_I(t)$, so there are no mode--mode terms. The
 Hamiltonian interaction graph is a star centered on the system even though the
 state tensors are stored on a path. That graph mismatch, rather than the
-definition of the representation, is why this encoding uses swaps.
+definition of the representation, is why this method uses swaps.
 
 ## Algorithm
 
-Each second-order step builds interval-integrated two-site Hamiltonians, encodes
-them as gates, sweeps the system outward, applies the far gate without a swap,
+Each second-order step builds interval-integrated two-site Hamiltonians,
+materializes their gates, sweeps the system outward, applies the far gate without a swap,
 and sweeps back with the reversed gate ordering. `trunc_eps` controls each bond
 split and `bond_dim` is an optional cap.
 
@@ -41,21 +41,19 @@ result = model.run(
 )
 ```
 
-At the low level, the representation and gate encoding remain distinct:
+At the low level, the representation materializes its own gates:
 
 ```python
-from fishbonett.encodings.gates import SwapGateEncoder
 from fishbonett.representations.interaction import InteractionRepresentation
 
 rep = InteractionRepresentation(
-    dimensions,
     representation="interaction-chain",
     h_sys=H,
     coupling=O,
     compiled_star=compiled_star,
 ).build()
-gates = SwapGateEncoder(rep)
+forward, swapped = rep.tebd_gates(t=0.0, dt=0.01)
 ```
 
-The same representation can instead be encoded as an MPO for TDVP or as an exact
-conditional-displacement propagator.
+The same representation supplies `tdvp_mpo(t)` for TDVP or
+`trotter_mpo(t, dt)` for the exact conditional-displacement step.

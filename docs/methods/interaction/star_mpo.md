@@ -42,7 +42,7 @@ available route to equivalent finite star data.
 - The `tdvp1` variants use one-site TDVP and require an explicit `bond_dim`.
 - The `tdvp2` variants use two-site TDVP and grow bonds according to
   `trunc_eps`, optionally capped by `bond_dim`.
-- Because $H_I(t)$ is time dependent, the encoded MPO and its environments are
+- Because $H_I(t)$ is time dependent, the MPO and its environments are
   refreshed every step.
 
 ## Example
@@ -63,26 +63,24 @@ The two trajectories should converge to the same laboratory observables. Their
 tensor-network cost can differ because their time-dependent coupling vectors are
 distributed differently.
 
-## Low-level separation
+## Low-level interface
 
 ```python
-from fishbonett.encodings.mpo import encode_interaction
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian
 from fishbonett.representations.interaction import InteractionRepresentation
 
 rep = InteractionRepresentation(
-    [2] + [20] * 40,
     representation="interaction-star",
     h_sys=H,
     coupling=O,
     compiled_star=compiled_star,
 ).build()
 
-mpo = encode_interaction(rep, initial_state)
 t, rdm, max_bond = run_mpo_hamiltonian(
-    mpo, dt=0.02, nsteps=100, sweep="tdvp2", D=100
+    rep, initial=initial_state,
+    dt=0.02, nsteps=100, sweep="tdvp2", D=100
 )
 ```
 
-The first object is the mathematical representation; the second is its MPO
-encoding; the last call chooses TDVP.
+The representation supplies `tdvp_mpo(t)` when the driver requests the
+time-dependent Hamiltonian; the last call chooses the TDVP sweep.
