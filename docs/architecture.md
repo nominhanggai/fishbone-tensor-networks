@@ -84,10 +84,11 @@ evolve.modetree facade   -> _modetree_driver -> _modetree_sweeps
                                               -> _modetree_core
 ```
 
-Kernel/core modules contain tensor algebra and topology only. Sweep modules own
-one symmetric traversal. Driver modules resolve compatibility inputs, prepare a
-run and collect its trajectory. Existing imports from `evolve.tdvp` and
-`evolve.modetree` continue to work.
+Kernel/core modules contain tensor algebra and topology only. The chain sweep
+module owns symmetric projector splitting; the mode-tree operation module owns
+TTNO application, canonicalization and edge truncation. Driver modules resolve
+compatibility inputs, prepare a run and collect its trajectory. The documented
+imports from `evolve.tdvp` and `evolve.modetree` remain stable.
 
 Frame outputs are checked structurally through the runtime protocols in
 {py:mod}`fishbonett.frames.capabilities`: MPO, static graph, static gates, swap

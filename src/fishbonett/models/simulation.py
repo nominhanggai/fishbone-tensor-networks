@@ -173,6 +173,11 @@ def _compile_mpo_frame(model, spec, context, bath, coupled):
             observe=lambda tensors: builder.undress_rdm_tdvp(
                 tensors[0], tensors[1]),
             prec=context.kw.get("prec", context.trunc_eps),
+            # Padding every bond to a large memory cap is especially wasteful in
+            # the displaced frame.  Six seed states converge the prepared
+            # coherent block; users can request a larger fixed manifold explicitly.
+            initial_bond=context.kw.get(
+                "initial_bond", min(context.bond_dim or 6, 6)),
         )
         return frame, hooks
     raise ValueError(f"engine 'mpo-tdvp' has no compiler for frame {spec.frame!r}")
