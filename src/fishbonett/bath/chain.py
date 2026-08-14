@@ -37,7 +37,7 @@ from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.lanczos import lanczos
 import fishbonett.bath.recurrence as rc
 
-__all__ = ["get_bath_nn_paras", "get_coupling"]
+__all__ = ["get_bath_nn_paras", "get_coupling", "star_transform"]
 
 
 def get_bath_nn_paras(sd, n, domain, discretizer=None):
@@ -64,6 +64,28 @@ def get_bath_nn_paras(sd, n, domain, discretizer=None):
     w_list = np.diagonal(tri_mat).copy()          # chain on-site energies
     k_list = np.array([k0] + list(np.diagonal(tri_mat, -1)))
     return w_list, k_list
+
+
+def star_transform(sd, n, domain, discretizer=None):
+    """``(freq, Vn, coefT)``: star frequencies, couplings ``sqrt(V^2/pi)`` and the
+    sign-fixed star->chain (Lanczos) transform ``P.T``.
+
+    The sign fixing (by each eigenvector's first component) makes the transform
+    deterministic, which matters because the interaction picture rebuilds its
+    couplings ``d_j(t) = coefT @ (Vn * exp(-i freq t))`` from it every step.
+
+    It lives here rather than in a frame because it is bath machinery -- the same
+    star/Lanczos pair as :func:`get_bath_nn_paras`, returning the transform matrix
+    instead of discarding it.  Two frames need it (the chain-geometry star MPO and
+    the mode-tree engine), and they had a copy each.
+    """
+    disc = discretizer if discretizer is not None else get_vn_squared
+    freq, v_sq = disc(sd, n, list(domain))
+    Vn = np.sqrt(v_sq / np.pi)
+    _, P = lanczos(np.diag(freq), Vn)
+    sign = np.sign(P[0, :])
+    P = P @ np.diag(sign)
+    return np.asarray(freq), np.asarray(Vn), np.ascontiguousarray(P.T)
 
 
 def get_coupling(sd, n, domain, g=1, ncap=20000, discretizer=None):
