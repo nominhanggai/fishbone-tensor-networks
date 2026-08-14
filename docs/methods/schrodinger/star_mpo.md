@@ -1,6 +1,6 @@
 # Schrödinger-star representation — MPO + TDVP
 
-`mpo-star-tdvp1` (fixed bond) and `mpo-star-tdvp2` (adaptive) run TDVP on a
+`schrodinger-star-tdvp1` (fixed bond) and `schrodinger-star-tdvp2` (adaptive) run TDVP on a
 **static** star-geometry MPO — no chain mapping, every mode coupled directly to the
 system, and nothing rotated out.  Because $H$ is time-independent the MPO is built
 **once**, which makes these the most accurate methods in the package at a given
@@ -73,10 +73,10 @@ diagonalization of the discretized star (3 modes, $d=5$, 10 steps of $dt=0.05$):
 
 | method | representation | max error vs exact |
 |---|---|---|
-| `mpo-star-tdvp2` | Schrödinger, static MPO | $7.3\times10^{-11}$ |
-| `mpo-star-tdvp1` | Schrödinger, static MPO | $1.1\times10^{-9}$ |
-| `mpo-tdvp1` | Schrödinger, chain MPO | $5.7\times10^{-8}$ |
-| `mpo-ip-tdvp1` | interaction, rebuilt MPO | $5.4\times10^{-4}$ |
+| `schrodinger-star-tdvp2` | Schrödinger, static MPO | $7.3\times10^{-11}$ |
+| `schrodinger-star-tdvp1` | Schrödinger, static MPO | $1.1\times10^{-9}$ |
+| `schrodinger-chain-tdvp1` | Schrödinger, chain MPO | $5.7\times10^{-8}$ |
+| `interaction-chain-tdvp1` | interaction, rebuilt MPO | $5.4\times10^{-4}$ |
 
 The ordering is the point: the two static-star methods are limited only by the TDVP
 sweep, the chain adds the tridiagonalization, and the interaction-picture star adds
@@ -84,10 +84,10 @@ the per-step midpoint rebuild.
 
 Two variants:
 
-- **`mpo-star-tdvp1`** — 1-site TDVP at a **fixed** bond dimension `bond_dim`
+- **`schrodinger-star-tdvp1`** — 1-site TDVP at a **fixed** bond dimension `bond_dim`
   (required — a 1-site sweep cannot grow a bond; see
   {doc}`/methods/schrodinger/chain`).
-- **`mpo-star-tdvp2`** — 2-site TDVP, **growing** the bond from the product state by
+- **`schrodinger-star-tdvp2`** — 2-site TDVP, **growing** the bond from the product state by
   SVD truncation (`trunc_eps`, optionally capped by `bond_dim`); `result.max_bond`
   reports the peak bond.
 
@@ -102,11 +102,11 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=20, phys_dim=12)
 model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
-r = model.run(dt=0.02, t_max=2.0, method="mpo-star-tdvp1", bond_dim=80,
+r = model.run(dt=0.02, t_max=2.0, method="schrodinger-star-tdvp1", bond_dim=80,
               observables={"sz": sigma_z})
 r.expect["sz"]
 
-r2 = model.run(dt=0.02, t_max=2.0, method="mpo-star-tdvp2", bond_dim=120,
+r2 = model.run(dt=0.02, t_max=2.0, method="schrodinger-star-tdvp2", bond_dim=120,
                trunc_eps=1e-4, observables={"sz": sigma_z})
 r2.max_bond
 ```

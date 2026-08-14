@@ -71,11 +71,11 @@ def test_model_owned_multichannel_couplings_need_no_bath_duplicate():
     assert star.couplings.shape == (2, 3)
     result = model.run(dt=0.02, n_steps=2, bond_dim=20,
                        observables={"sz": sigma_z})
-    assert result.method == "multichannel-static"
+    assert result.method == "schrodinger-star-tree-tebd"
     assert result.expect["sz"].shape == (2,)
-    result_ip = model.run(dt=0.02, n_steps=2, method="multichannel-ip",
+    result_ip = model.run(dt=0.02, n_steps=2, method="interaction-chain-tebd",
                           bond_dim=20, observables={"sz": sigma_z})
-    assert result_ip.method == "multichannel-ip"
+    assert result_ip.method == "interaction-chain-tebd"
     assert result_ip.expect["sz"].shape == (2,)
 
 

@@ -147,7 +147,7 @@ def test_two_sites_two_baths_fishbone():
 
 
 def test_tree_step_is_second_order_in_dt():
-    """``tree-tebd-static`` must be **second** order, like every other method.
+    """``schrodinger-chain-tree-tebd`` must be **second** order, like every other method.
 
     It was first order for a long time (measured 1.07): the step applied one full
     gate per edge in a single Euler tour.  Nothing caught that, because every other

@@ -26,7 +26,7 @@ loop. `opt_einsum` evaluates such a contraction as a sequence of pairwise
 `tensordot`/BLAS calls, whereas `numpy.einsum` — even with `optimize="greedy"`
 and a pre-computed path — still falls back to its unvectorized `c_einsum` C loop
 for the actual multi-operand contraction. On the tree engine the difference is
-about **100×** (measured: 0.51 s vs 55 s for the same `tree-tdvp2` step), so
+about **100×** (measured: 0.51 s vs 55 s for the same `interaction-chain-tree-tdvp2` step), so
 `opt_einsum` is a hard requirement rather than a convenience: `numpy`'s
 `optimize=` option chooses a good contraction *order* but cannot match the
 per-contraction throughput.
@@ -48,7 +48,7 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             discretization="tedopa")                # or the default "legendre"
 model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
-result = model.run(dt=0.05, t_max=4.0, method="tree-tdvp2", bond_dim=200,
+result = model.run(dt=0.05, t_max=4.0, method="interaction-chain-tree-tdvp2", bond_dim=200,
                    observables={"sz": sigma_z})
 
 result.t                 # time grid
@@ -56,10 +56,11 @@ result.expect["sz"]      # <sigma_z>(t)
 result.max_bond          # peak bond dimension per step
 ```
 
-`method` selects the engine — `"tebd"`, `"trotter-mpo"`, `"polaron"` (and its
-TDVP variants), `"mpo-tdvp1" | "mpo-tdvp2" | "mpo-dtdvp"`,
-`"mpo-ip-tdvp1" | "mpo-ip-tdvp2"`, or `"tree-tdvp" | "tree-tdvp2" | "tree-tebd"`.
-Every method uses the same `dt`/`t_max` and returns the same
+Every `method` name begins with its complete representation, followed by the
+integrator; non-path methods also include `tree`. Examples include
+`interaction-chain-tebd`, `interaction-chain-trotter-mpo`,
+`polaron-chain-tdvp2`, `schrodinger-chain-tdvp2`, and
+`interaction-chain-tree-tdvp2`. Every method uses the same `dt`/`t_max` and returns the same
 {py:class}`~fishbonett.models.result.Result`, so switching engines is a one-word change.
 See {doc}`methods/index` for the theory and an example behind each one.
 
@@ -118,7 +119,7 @@ usually clearer and is what the taxonomy is actually made of:
 
 ```python
 res = sb.run(dt=0.02, t_max=2.0, representation="polaron-chain",
-             integrator="tebd")          # == method="polaron"
+             integrator="tebd")          # == method="polaron-chain-tebd"
 ```
 
 A run is four independent choices:

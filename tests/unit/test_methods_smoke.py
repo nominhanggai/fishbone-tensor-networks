@@ -88,7 +88,7 @@ def test_polaron_builds_and_gives_normalized_rdm():
     bath = Bath(J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
                 n_modes=6, phys_dim=6)
     r = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
-        method="polaron", dt=0.05, n_steps=3, bond_dim=30)
+        method="polaron-chain-tebd", dt=0.05, n_steps=3, bond_dim=30)
     assert np.all(np.isfinite(r.rdm))
     assert np.allclose([np.trace(rho).real for rho in r.rdm], 1.0, atol=1e-6)
 
@@ -307,16 +307,16 @@ def test_mps_joint_rdm_matches_the_dense_state():
 
 
 @pytest.mark.parametrize("model_key,method", [
-    ("system-bath", "tebd"),
-    ("system-bath", "trotter-mpo"),
-    ("system-bath", "polaron"),
-    ("site-tree", "tree-tebd-static"),
-    ("system-bath", "tree-tebd"),
+    ("system-bath", "interaction-chain-tebd"),
+    ("system-bath", "interaction-chain-trotter-mpo"),
+    ("system-bath", "polaron-chain-tebd"),
+    ("site-tree", "schrodinger-chain-tree-tebd"),
+    ("system-bath", "interaction-chain-tree-tebd"),
 ])
 def test_gate_methods_are_second_order_in_dt(model_key, method):
     """``evolve``'s claim that every whole step is second order (Strang), measured.
 
-    This is the check that caught ``tree-tebd-static`` propagating at order 1.07
+    This is the check that caught ``schrodinger-chain-tree-tebd`` propagating at order 1.07
     while the docs claimed second order, so it is worth having as a test rather
     than as a one-off measurement.
 
@@ -420,10 +420,10 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     # graph* on a path geometry is what a swap network costs.  Note the representation is
     # `interaction-chain` -- the modes are chain modes; it is rotating H_B away that
     # makes the coupling reach all of them, which is what `mode_decoupled` records.
-    assert R.METHODS["tebd"].representation == "interaction-chain"
+    assert R.METHODS["interaction-chain-tebd"].representation == "interaction-chain"
     assert R.REPRESENTATIONS["interaction-chain"].mode_decoupled
-    assert R.METHODS["tebd"].geometry == "path"
-    assert R.METHODS["tebd"].application == "swap"
+    assert R.METHODS["interaction-chain-tebd"].geometry == "path"
+    assert R.METHODS["interaction-chain-tebd"].application == "swap"
     assert R.APPLICATIONS["swap"].startswith("a star realized on a path")
 
 

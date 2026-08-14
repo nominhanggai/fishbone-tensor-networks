@@ -113,10 +113,16 @@ an engine receives an incompatible encoding.
 ## Dispatch boundary
 
 {py:data}`fishbonett.models.registry.METHODS` is the single table that maps a
-public method to `(model, representation, geometry, integrator)` and an internal
-engine key. {py:data}`fishbonett.models.simulation.PLAN_COMPILERS` maps only those
-engine keys to preparation code. Physical model classes do not maintain duplicate
-method tables.
+public method to its compatible models, representation, geometry, integrator and
+internal engine key. {py:data}`fishbonett.models.simulation.PLAN_COMPILERS` maps
+only those engine keys to preparation code. Physical model classes do not maintain
+duplicate method tables.
+
+Public method names are derived from their registry row rather than maintained as
+an independent label: `<representation>-<integrator>` on a path, with `tree`
+inserted for non-path tensor geometries. This makes names such as
+`polaron-chain-tdvp2` and `interaction-chain-tree-tdvp2` self-describing and
+prevents the name from disagreeing with the represented Hamiltonian.
 
 All high-level model classes execute through `SimulationPlan`. `run(seed=...)`
 also scopes randomized linear algebra to that plan without changing NumPy's

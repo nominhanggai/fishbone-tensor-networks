@@ -18,7 +18,7 @@ combine with it.  All six describe valid Hamiltonians; availability for a model
 is recorded by :attr:`Model.gaps`.
 
 * ``interaction-chain`` **exists**, and is what this package actually runs for
-  ``tebd`` / ``trotter-mpo`` / ``mpo-ip-tdvp*`` / ``tree-*``.  ``H_B`` is
+  ``interaction-chain-*`` methods.  ``H_B`` is
   obtained by taking the interaction representation of the discretized star bath
   and then applying its star-to-chain transformation.  Its coupling ``|d_n(t)|``
   starts as ``(|V|, 0, ..., 0)`` and spreads outward with ``t``.
@@ -29,10 +29,10 @@ is recorded by :attr:`Model.gaps`.
 The star-to-chain transform relates each star/chain pair without creating another
 user-facing axis.  The physics is identical while tensor-network costs may differ.
 
-``geometry`` stays a separate axis because it genuinely is one: ``mpo-ip-tdvp1`` and
-``tree-tdvp`` are the *same representation*, laid on a path and on a balanced
-binary tree, which is why they produce identical numbers rather than merely
-close ones.
+``geometry`` stays a separate axis because it genuinely is one:
+``interaction-chain-tdvp1`` and ``interaction-chain-tree-tdvp1`` are the *same
+representation*, laid on a path and on a balanced binary tree, which is why they
+produce identical numbers rather than merely close ones.
 ``mode-tree`` used to be listed as a model for that difference; it was never a
 model.
 
@@ -48,9 +48,9 @@ prepared plan; the physical model contains no private dispatch tables.
 
 Propagator-level gaps, finer than this table records: the Schroedinger chain could
 be driven by TEBD gates but is not (only MPO/TDVP is wired); the
-conditional-displacement MPO of ``trotter-mpo`` exists only in the interaction
-representation, because outside it the coupling does not commute with the
-free-bath term.
+conditional-displacement MPO of ``interaction-chain-trotter-mpo`` exists only in
+the interaction representation, because outside it the coupling does not commute
+with the free-bath term.
 """
 from dataclasses import dataclass, field
 from typing import Mapping, Tuple
@@ -61,8 +61,9 @@ __all__ = ["Model", "Representation", "Method", "MODELS", "REPRESENTATIONS", "ME
            "methods_of", "all_methods", "model", "method_spec", "resolve",
            "combinations", "METHOD_REPRESENTATIONS",
            "methods_by_representation", "representation_label", "describe_taxonomy",
-           "unknown_method_error", "STATIC_TREE_TEBD", "MULTICHANNEL_IP",
-           "MULTICHANNEL_IP_STAR", "MULTICHANNEL_STATIC"]
+           "unknown_method_error", "SCHRODINGER_CHAIN_TREE_TEBD",
+           "SCHRODINGER_STAR_TREE_TEBD", "INTERACTION_CHAIN_TEBD",
+           "INTERACTION_STAR_TEBD"]
 
 
 # -- representations ------------------------------------------------------------------
@@ -136,8 +137,10 @@ REPRESENTATIONS = {
 }
 
 #: The graph the state's tensors live on.  Independent of the representation:
-#: the same interaction-chain Hamiltonian runs on a path (``mpo-ip-tdvp1``) and
-#: a balanced tree (``tree-tdvp``), which is why ``mode-tree`` was never a model.
+#: the same interaction-chain Hamiltonian runs on a path
+#: (``interaction-chain-tdvp1``) and a balanced tree
+#: (``interaction-chain-tree-tdvp1``), which is why ``mode-tree`` was never a
+#: model.
 GEOMETRIES = {
     "path": "an MPS: system at site 0, modes 1..N in a line.",
     "binary-tree": "a balanced binary TTN with the system at the root, keeping the "
@@ -204,11 +207,12 @@ class Model:
 # -- methods: the one dispatch table -----------------------------------------
 @dataclass(frozen=True)
 class Method:
-    """One realizable combination of the four axes.
+    """One realizable representation/geometry/integrator combination.
 
     This is the single source of truth for what exists and which engine realizes it.
-    ``models`` is a tuple because one engine can serve several topologies -- the
-    static tree TEBD runs the comb and the site-tree.
+    ``models`` lists the compatible physical models because one method can serve
+    several topologies -- static tree TEBD runs the comb and the site-tree, while
+    interaction-chain TEBD serves scalar and multichannel system-bath models.
     """
     name: str
     representation: str
@@ -238,8 +242,8 @@ class Method:
         every mode to the system, a star, while the state is a path -- and this
         records what pays for that.  See :data:`APPLICATIONS`.
 
-        Keys on :attr:`Representation.mode_decoupled`, **not** on the structure: ``tebd`` is
-        ``interaction-chain`` and still needs a swap network, because it is rotating
+        Keys on :attr:`Representation.mode_decoupled`, **not** on the structure:
+        ``interaction-chain-tebd`` still needs a swap network, because it is rotating
         out ``H_B`` that spreads the coupling over every mode, not the choice of
         modes to write it in.
         """
@@ -266,31 +270,63 @@ APPLICATIONS = {
 }
 
 
-#: The one propagator the multi-site models have: Schroedinger-transformation tree TEBD on
-#: their chain-mapped baths.  Named to distinguish it from the interaction-transformation
-#: ``tree-tebd`` of the binary-tree geometry, a different engine on a different graph.
-STATIC_TREE_TEBD = "tree-tebd-static"
+def _canonical_method_name(representation, integrator, geometry="path"):
+    """Derive a method name from its representation and algorithm.
 
-#: The multichannel model's Schroedinger-transformation propagator.  The *same engine* as
-#: :data:`STATIC_TREE_TEBD`, but a separate row because it is a different **representation**:
-#: the shared-mode star cannot be chain-mapped, so this is ``schrodinger-star``
-#: where the multi-site models are ``schrodinger-chain``.  See
-#: ``representations/schrodinger.py``, which picks ``star_terms`` exactly when the bath is
-#: multichannel -- the split was always in the code, just not in the table.
-MULTICHANNEL_STATIC = "multichannel-static"
-
-#: The multichannel model's interaction-transformation propagator: a swap-network TEBD
-#: sweep against the matrix-valued time-dependent coupling.  Named rather than
-#: shared with ``tebd`` because the builder is a different class (the coupling is
-#: a matrix per mode, not a scalar times one operator).
-MULTICHANNEL_IP = "multichannel-ip"
-MULTICHANNEL_IP_STAR = "multichannel-ip-star"
+    Path methods use ``<representation>-<integrator>``.  A non-path tensor tree
+    inserts ``tree`` so methods that share a representation and integrator remain
+    unambiguous.  Keeping this rule here prevents a registry label from drifting
+    away from the tuple it denotes.
+    """
+    geometry_tag = "" if geometry == "path" else "tree-"
+    return f"{representation}-{geometry_tag}{integrator}"
 
 
-def _m(name, representation, models, engine, driver="", fixed_bond=False, integrator="",
-       geometry="path"):
+def _m(representation, models, engine, driver="", fixed_bond=False,
+       integrator="", geometry="path"):
+    integrator = integrator or driver
+    name = _canonical_method_name(representation, integrator, geometry)
     return Method(name, representation, models, engine, driver, fixed_bond,
-                  integrator or driver, geometry)
+                  integrator, geometry)
+
+
+# Public method constants for model defaults and programmatic callers.
+SCHRODINGER_CHAIN_TREE_TEBD = _canonical_method_name(
+    "schrodinger-chain", "tebd", "comb-tree")
+SCHRODINGER_STAR_TREE_TEBD = _canonical_method_name(
+    "schrodinger-star", "tebd", "comb-tree")
+INTERACTION_CHAIN_TEBD = _canonical_method_name(
+    "interaction-chain", "tebd")
+INTERACTION_STAR_TEBD = _canonical_method_name(
+    "interaction-star", "tebd")
+
+
+# Removed spellings from before method names stated their full representation.
+# They are error-message hints only; they are deliberately not accepted aliases.
+_RENAMED_METHODS = {
+    "mpo-tdvp1": "schrodinger-chain-tdvp1",
+    "mpo-tdvp2": "schrodinger-chain-tdvp2",
+    "mpo-dtdvp": "schrodinger-chain-dtdvp",
+    "mpo-star-tdvp1": "schrodinger-star-tdvp1",
+    "mpo-star-tdvp2": "schrodinger-star-tdvp2",
+    "tebd": "interaction-chain-tebd",
+    "trotter-mpo": "interaction-chain-trotter-mpo",
+    "mpo-ip-tdvp1": "interaction-chain-tdvp1",
+    "mpo-ip-tdvp2": "interaction-chain-tdvp2",
+    "mpo-ip-star-tdvp1": "interaction-star-tdvp1",
+    "mpo-ip-star-tdvp2": "interaction-star-tdvp2",
+    "tree-tdvp": "interaction-chain-tree-tdvp1",
+    "tree-tdvp2": "interaction-chain-tree-tdvp2",
+    "tree-tebd": "interaction-chain-tree-tebd",
+    "polaron": "polaron-chain-tebd",
+    "polaron-tdvp1": "polaron-chain-tdvp1",
+    "polaron-tdvp2": "polaron-chain-tdvp2",
+    "polaron-dtdvp": "polaron-chain-dtdvp",
+    "tree-tebd-static": "schrodinger-chain-tree-tebd",
+    "multichannel-static": "schrodinger-star-tree-tebd",
+    "multichannel-ip": "interaction-chain-tebd",
+    "multichannel-ip-star": "interaction-star-tebd",
+}
 
 
 _SB = ("system-bath",)
@@ -298,60 +334,69 @@ _SB = ("system-bath",)
 #: Every method, declared once.  Order matters: :attr:`Model.representations` reads method
 #: order off this table, and ``methods_of(model, representation)[0]`` is the default a
 #: bath-selected model falls back to.
-METHODS = {s.name: s for s in [
+_METHOD_ROWS = [
     # -- system-bath, static Schroedinger representations --------------------
-    _m("mpo-tdvp1", "schrodinger-chain", _SB, "mpo-tdvp",
+    _m("schrodinger-chain", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
-    _m("mpo-tdvp2", "schrodinger-chain", _SB, "mpo-tdvp", "tdvp2"),
-    _m("mpo-dtdvp", "schrodinger-chain", _SB, "mpo-tdvp",
+    _m("schrodinger-chain", _SB, "mpo-tdvp", "tdvp2"),
+    _m("schrodinger-chain", _SB, "mpo-tdvp",
        "dtdvp", fixed_bond=True),
-    _m("mpo-star-tdvp1", "schrodinger-star", _SB, "mpo-tdvp",
+    _m("schrodinger-star", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
-    _m("mpo-star-tdvp2", "schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
+    _m("schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
     # -- system-bath, interaction transformation, on a path --------------------------
     # `interaction-chain`, not `-star`: the star-to-chain transform rotates the phases
     # back into the chain modes, so d_n(0) = (|V|, 0, ..., 0) -- the system on c0
     # alone -- and spreads outward with t.  Measured, not assumed.
-    _m("tebd", "interaction-chain", _SB, "swap-tebd", integrator="tebd"),
-    _m("trotter-mpo", "interaction-chain", _SB, "displacement-mpo",
+    _m("interaction-chain", ("system-bath", "multichannel"), "swap-tebd",
+       integrator="tebd"),
+    _m("interaction-chain", _SB, "displacement-mpo",
        integrator="trotter-mpo"),
-    _m("mpo-ip-tdvp1", "interaction-chain", _SB, "mpo-tdvp",
+    _m("interaction-chain", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
-    _m("mpo-ip-tdvp2", "interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
+    _m("interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
     # -- ...the same rotation left in the star modes --------------------------
-    _m("mpo-ip-star-tdvp1", "interaction-star", _SB, "mpo-tdvp",
+    _m("interaction-star", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
-    _m("mpo-ip-star-tdvp2", "interaction-star", _SB, "mpo-tdvp", "tdvp2"),
+    _m("interaction-star", _SB, "mpo-tdvp", "tdvp2"),
     # -- ...and the chain representation on a balanced binary tree ---------------------
-    _m("tree-tdvp", "interaction-chain", _SB, "modetree",
+    _m("interaction-chain", _SB, "modetree",
        "run_tree_tdvp", integrator="tdvp1",
        geometry="binary-tree"),
-    _m("tree-tdvp2", "interaction-chain", _SB, "modetree",
+    _m("interaction-chain", _SB, "modetree",
        "run_tree_tdvp2", integrator="tdvp2", geometry="binary-tree"),
-    _m("tree-tebd", "interaction-chain", _SB, "modetree",
+    _m("interaction-chain", _SB, "modetree",
        "run_tree_tebd", integrator="tebd", geometry="binary-tree"),
     # -- system-bath, polaron representation -------------------------------------------
-    _m("polaron", "polaron-chain", _SB, "polaron-tebd", integrator="tebd"),
-    _m("polaron-tdvp1", "polaron-chain", _SB, "mpo-tdvp",
+    _m("polaron-chain", _SB, "polaron-tebd", integrator="tebd"),
+    _m("polaron-chain", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
-    _m("polaron-tdvp2", "polaron-chain", _SB, "mpo-tdvp", "tdvp2"),
-    _m("polaron-dtdvp", "polaron-chain", _SB, "mpo-tdvp",
+    _m("polaron-chain", _SB, "mpo-tdvp", "tdvp2"),
+    _m("polaron-chain", _SB, "mpo-tdvp",
        "dtdvp", fixed_bond=True),
-    _m("polaron-star-tdvp1", "polaron-star", _SB, "mpo-tdvp",
+    _m("polaron-star", _SB, "mpo-tdvp",
        "tdvp1", fixed_bond=True),
-    _m("polaron-star-tdvp2", "polaron-star", _SB, "mpo-tdvp", "tdvp2"),
-    _m("polaron-star-dtdvp", "polaron-star", _SB, "mpo-tdvp",
+    _m("polaron-star", _SB, "mpo-tdvp", "tdvp2"),
+    _m("polaron-star", _SB, "mpo-tdvp",
        "dtdvp", fixed_bond=True),
     # -- the static tree engine: one engine, two representations, three topologies -----
-    _m(STATIC_TREE_TEBD, "schrodinger-chain", ("comb", "site-tree"),
+    _m("schrodinger-chain", ("comb", "site-tree"),
        "static-tree-tebd", integrator="tebd", geometry="comb-tree"),
-    _m(MULTICHANNEL_STATIC, "schrodinger-star", ("multichannel",),
+    _m("schrodinger-star", ("multichannel",),
        "static-tree-tebd", integrator="tebd", geometry="comb-tree"),
-    _m(MULTICHANNEL_IP, "interaction-chain", ("multichannel",),
+    _m("interaction-star", ("multichannel",),
        "swap-tebd", integrator="tebd"),
-    _m(MULTICHANNEL_IP_STAR, "interaction-star", ("multichannel",),
-       "swap-tebd", integrator="tebd"),
-]}
+]
+
+_method_names = [spec.name for spec in _METHOD_ROWS]
+_duplicate_method_names = {
+    name for name in _method_names if _method_names.count(name) > 1
+}
+if _duplicate_method_names:
+    raise RuntimeError(
+        "method rows have duplicate canonical names: "
+        + ", ".join(sorted(_duplicate_method_names)))
+METHODS = {spec.name: spec for spec in _METHOD_ROWS}
 
 #: Derived from :data:`METHODS` -- was a hand-maintained set in
 #: ``models/system_bath.py`` that the tests had to import privately.
@@ -471,10 +516,12 @@ _AXES = ("model", "representation", "geometry", "integrator")
 def resolve(model_keys, *, method=None, **axes):
     """The :class:`Method` selected by either spelling.
 
-    ``method=`` names a combination; the four axes give it directly.  The axes are
-    the real structure -- ``"mpo-ip-tdvp2"`` *is* ``(system-bath, interaction-chain,
-    path, tdvp2)`` -- so this is one lookup either way, and mixing the two spellings
-    is rejected rather than silently resolved.
+    ``method=`` names a representation/geometry/integrator combination; the
+    physical object supplies the compatible model.  The four axes can also be
+    given directly.  Method names begin with their exact representation, so
+    ``"interaction-chain-tdvp2"`` selects ``(interaction-chain, path, tdvp2)``
+    for a system-bath model.  This is one lookup either way, and mixing the two
+    spellings is rejected rather than silently resolved.
 
     Representation names are explicit: use ``interaction-chain`` rather than a
     partial name such as ``interaction``.
@@ -490,7 +537,9 @@ def resolve(model_keys, *, method=None, **axes):
             return method_spec(method)
         raise ValueError(
             "give either method= or the axes (model / representation / geometry / "
-            "integrator), not both -- a method name already fixes all four.")
+            "integrator), not both -- a method name already fixes the "
+            "representation, geometry and integrator, while the object selects "
+            "a compatible model.")
 
     def matches(c):
         for k, v in given.items():
@@ -547,11 +596,11 @@ def model(key):
 def models_of(method):
     """Every model key offering ``method``.
 
-    A tuple rather than a single key because the static tree engine
-    (``tree-tebd-static``) genuinely serves both multi-site models -- the same
-    propagator, different topologies.
+    A tuple rather than a single key because
+    ``schrodinger-chain-tree-tebd`` genuinely serves both multi-site models --
+    the same propagator, different topologies.
     """
-    return tuple(k for k, m in sorted(MODELS.items()) if method in m.methods())
+    return tuple(k for k, m in MODELS.items() if method in m.methods())
 
 
 def representations_of(model_key):
@@ -579,24 +628,19 @@ def all_methods():
     return tuple(sorted({m for mo in MODELS.values() for m in mo.methods()}))
 
 
-#: Derived ``method -> (representation, model)``.  Kept because it is the natural key for
-#: "which siblings share this method's representation", but note it is a *projection*: two
-#: methods can share a ``(representation, model)`` and still differ in geometry
-#: (``mpo-ip-tdvp2`` vs ``tree-tdvp2``, both ``interaction-chain``).  That is the
-#: point -- those used to be called different "models".
+#: Lossless ``method -> representation`` projection.  A method can serve more
+#: than one model; use :func:`models_of` for that independent relationship.
 METHOD_REPRESENTATIONS = {
-    method: (representation_key, model_key)
-    for model_key, mo in MODELS.items()
-    for representation_key, methods in mo.representations.items()
-    for method in methods
+    method: spec.representation for method, spec in METHODS.items()
 }
 
 
 def methods_by_representation():
     """``{(representation, model): [methods]}`` -- the taxonomy as a flat grouping."""
     out = {}
-    for method, key in sorted(METHOD_REPRESENTATIONS.items()):
-        out.setdefault(key, []).append(method)
+    for method, spec in sorted(METHODS.items()):
+        for model_key in spec.models:
+            out.setdefault((spec.representation, model_key), []).append(method)
     return out
 
 
@@ -612,6 +656,8 @@ def describe_taxonomy():
     """The whole taxonomy as readable text -- what ``run`` prints when asked for
     an unknown method, and what the docs table is generated from."""
     lines = []
+    representation_width = max(map(len, REPRESENTATIONS))
+    method_width = max(map(len, METHODS))
     for key, m in MODELS.items():
         picked = ("" if m.selected_by == "method" else
                   f"  (selected by {m.selected_by})")
@@ -619,11 +665,14 @@ def describe_taxonomy():
         for representation_key in representations_of(key):
             for name in m.representations[representation_key]:
                 s = METHODS[name]
-                lines.append(f"    {representation_key:<18} {name:<19} "
+                lines.append(f"    {representation_key:<{representation_width}} "
+                             f"{name:<{method_width}} "
                              f"geometry={s.geometry:<11} "
                              f"integrator={s.integrator}")
         for representation_key, why in m.gaps.items():
-            lines.append(f"    {representation_key:<18} -- absent: {why}")
+            lines.append(
+                f"    {representation_key:<{representation_width}} "
+                f"{'-- absent':<{method_width}} {why}")
     return "\n".join(lines)
 
 
@@ -634,6 +683,12 @@ def unknown_method_error(method, model_key=None):
     so explicitly -- the common mistake is asking a multi-site model for a
     single-system method.
     """
+    replacement = _RENAMED_METHODS.get(method)
+    if replacement is not None:
+        return ValueError(
+            f"method {method!r} was renamed to {replacement!r} so its exact "
+            "Hamiltonian representation is explicit")
+
     owners = models_of(method)
     if owners and model_key is not None and model_key not in owners:
         return ValueError(

@@ -7,9 +7,10 @@ and indexes gates by bond number, which is what ties it to a linear chain.  The
 others carry their own bookkeeping for their own geometry:
 
 - :func:`fishbonett.evolve.modetree.run_tree_tebd` -- a balanced binary tree of
-  *modes* (``tree-tebd``).
+  *modes* (``interaction-chain-tree-tebd``).
 - :mod:`fishbonett.evolve.sitetree` -- any loop-free tree of *sites*, which the
-  comb, site-tree and multichannel models all use (``tree-tebd-static``).
+  comb and site-tree models use with ``schrodinger-chain-tree-tebd``; the
+  multichannel model uses the same engine with ``schrodinger-star-tree-tebd``.
 
 Two sweep patterns here, selected by the representation:
 

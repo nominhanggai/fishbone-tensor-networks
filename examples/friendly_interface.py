@@ -19,7 +19,12 @@ def spin_boson():
                 domain=(-25.0, 36.0), temperature=1.0,
                 n_modes=6, phys_dim=6, discretization="tedopa")
     model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
-    for method in ("tebd", "mpo-tdvp1", "mpo-tdvp2", "tree-tebd"):
+    for method in (
+        "interaction-chain-tebd",
+        "schrodinger-chain-tdvp1",
+        "schrodinger-chain-tdvp2",
+        "interaction-chain-tree-tebd",
+    ):
         res = model.run(dt=0.05, t_max=0.5, method=method, bond_dim=30,
                         observables={"sz": sigma_z})
         print(f"  {method:11s} <sz>(t_end) = {res.expect['sz'][-1]:+.4f}")

@@ -20,7 +20,7 @@ from fishbonett.bath.coupled import bind_bath
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models import registry
 from fishbonett.models.registry import (
-    FIXED_BOND_METHODS, METHOD_REPRESENTATIONS, methods_of, unknown_method_error,
+    FIXED_BOND_METHODS, methods_of, unknown_method_error,
 )
 
 __all__ = ["SystemBath"]
@@ -28,19 +28,23 @@ __all__ = ["SystemBath"]
 #: ``run``'s default.  Used to tell "the user asked for a method" apart from
 #: "the user left it alone", which matters for the multichannel model where
 #: ``method`` has nothing to choose.
-_DEFAULT_METHOD = "tree-tdvp2"
+_DEFAULT_METHOD = "interaction-chain-tree-tdvp2"
 
 
 def _bond_growing_siblings(method):
     """Methods in the same ``(representation, model)`` as ``method`` that grow their own
     bond dimension -- what to suggest when a fixed-bond method is asked for
     ``bond_dim=None``."""
-    key = METHOD_REPRESENTATIONS.get(method.lower().replace("_", "-"))
-    if key is None:
+    spec = registry.METHODS.get(method.lower().replace("_", "-"))
+    if spec is None:
         return []
-    representation, model_key = key
-    return [n for n in methods_of(model_key, representation)
-            if n not in FIXED_BOND_METHODS]
+    siblings = {
+        name
+        for model_key in spec.models
+        for name in methods_of(model_key, spec.representation)
+        if name not in FIXED_BOND_METHODS
+    }
+    return sorted(siblings)
 
 
 class SystemBath:
@@ -121,28 +125,35 @@ class SystemBath:
 
         The named combinations still work and are often shorter::
 
-            sb.run(dt=..., t_max=..., method="mpo-ip-tdvp2")   # the same run
+            sb.run(dt=..., t_max=..., method="interaction-chain-tdvp2")
 
-        because ``"mpo-ip-tdvp2"`` *is* ``(system-bath, interaction-chain, path,
-        tdvp2)``.  Give one spelling or the other, not both.
+        because ``"interaction-chain-tdvp2"`` fixes ``(interaction-chain, path,
+        tdvp2)`` and this object supplies the ``system-bath`` model.  Every method
+        name starts with its complete representation.  Give one spelling or the
+        other, not both.
         ``describe_taxonomy()`` prints the table; :mod:`fishbonett.models.registry`
         is its source.
 
         Two models live on this class:
 
         * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all six
-          representations.  *schrodinger-chain* (``mpo-tdvp1 | mpo-tdvp2 | mpo-dtdvp``) and
-          *schrodinger-star* (``mpo-star-tdvp1 | mpo-star-tdvp2``) -- static, so the
+          representations.  *schrodinger-chain*
+          (``schrodinger-chain-tdvp1 | schrodinger-chain-tdvp2 |
+          schrodinger-chain-dtdvp``) and *schrodinger-star*
+          (``schrodinger-star-tdvp1 | schrodinger-star-tdvp2``) -- static, so the
           MPO is built once and TDVP conserves energy, at the cost of the largest
-          bond dimensions.  *interaction-chain* (``tebd``, ``trotter-mpo``,
-          ``mpo-ip-tdvp1/2`` on a path; ``tree-tdvp | tree-tdvp2 | tree-tebd`` on a
+          bond dimensions.  *interaction-chain*
+          (``interaction-chain-tebd``, ``interaction-chain-trotter-mpo``,
+          ``interaction-chain-tdvp1/2`` on a path;
+          ``interaction-chain-tree-tdvp1/2 | interaction-chain-tree-tebd`` on a
           balanced binary tree, which keeps the high-bond region ``O(log N)`` edges
           deep instead of ``O(N)``) -- low entanglement, gates rebuilt each step;
-          all coupling terms commute here, which is what makes ``trotter-mpo``'s
-          exact factorization possible.  *polaron-chain* (``polaron``,
-          ``polaron-tdvp1/tdvp2/dtdvp``) -- static *and* low-entanglement; needs
+          all coupling terms commute here, which is what makes
+          ``interaction-chain-trotter-mpo``'s exact factorization possible.
+          *polaron-chain* (``polaron-chain-tebd``,
+          ``polaron-chain-tdvp1/tdvp2/dtdvp``) -- static *and* low-entanglement; needs
           ``int J/w^2`` finite (gapped or super-ohmic).  The corresponding star
-          representations use ``mpo-ip-star-tdvp1/2`` and
+          representations use ``interaction-star-tdvp1/2`` and
           ``polaron-star-tdvp1/2/dtdvp``.  Finite temperature works via T-TEDOPA
           thermalization.
         * **multichannel** -- one bath through several couplings on shared modes.
@@ -165,9 +176,9 @@ class SystemBath:
         ``bond_dim`` is an *optional* safety cap; the default ``None`` means
         **unlimited**, i.e. the bond grows to whatever ``trunc_eps`` requires
         (``result.max_bond`` reports what was actually used).  Fixed-bond methods
-        (``mpo-tdvp1``, ``mpo-ip-tdvp1``, ``polaron-tdvp1``,
-        ``mpo-dtdvp``) cannot grow their own bonds and therefore *require* an
-        explicit cap.
+        (``schrodinger-chain-tdvp1``, ``interaction-chain-tdvp1``,
+        ``polaron-chain-tdvp1``, ``schrodinger-chain-dtdvp``) cannot grow their
+        own bonds and therefore *require* an explicit cap.
 
         ``observables`` maps a name to a ``(d, d)`` operator on the (single) system;
         ``result.expect[name]`` is then that expectation over time, shape
@@ -199,27 +210,26 @@ class SystemBath:
             # pick among its propagators -- say so rather than ignoring it.
             mine = {"multichannel"}
             own = methods_of("multichannel")
-            if method is not None and method.lower().replace("_", "-") not in own:
-                raise ValueError(
-                    f"this SystemBath has multiple coupling operators, which "
-                    f"selects the 'multichannel' model; it does not have "
-                    f"method={method!r}.  Its propagators are {', '.join(own)} "
-                    f"(or drop the method argument for the default).  To use the "
-                    f"single-channel models, pass a single coupling operator.")
+            if method is not None:
+                requested = method.lower().replace("_", "-")
+                if requested not in own:
+                    raise unknown_method_error(requested, "multichannel")
         else:
             mine = {"system-bath"}
         if method is None and not axes:
             method = own[0] if multichannel else _DEFAULT_METHOD
-        # One lookup, either spelling: the registry says which combination of the
-        # four axes this is and which engine realizes it.  The simulation planner
-        # then prepares the representation, state, integrator and measurement policy.
+        # One lookup, either spelling: the object selects the model and the
+        # registry says which representation/geometry/integrator combination and
+        # engine to use.  The planner then prepares the representation, state,
+        # integrator and measurement policy.
         spec = registry.resolve(
             mine, method=None if method is None else method.lower().replace("_", "-"),
             **axis_kw)
         if not set(spec.models) & mine:
             raise unknown_method_error(spec.name)
         if bond_dim is None and spec.fixed_bond:
-            alternatives = _bond_growing_siblings(spec.name) or ["tebd"]
+            alternatives = _bond_growing_siblings(spec.name) or [
+                "interaction-chain-tebd"]
             raise ValueError(
                 f"method {spec.name!r} has a fixed bond dimension and cannot grow "
                 "it from a product state, so bond_dim must be given explicitly "

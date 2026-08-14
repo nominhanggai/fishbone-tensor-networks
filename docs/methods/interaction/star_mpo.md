@@ -4,8 +4,8 @@ The MPO/TDVP path supports both interaction representations:
 
 | representation | methods |
 |---|---|
-| `interaction-chain` | `mpo-ip-tdvp1`, `mpo-ip-tdvp2` |
-| `interaction-star` | `mpo-ip-star-tdvp1`, `mpo-ip-star-tdvp2` |
+| `interaction-chain` | `interaction-chain-tdvp1`, `interaction-chain-tdvp2` |
+| `interaction-star` | `interaction-star-tdvp1`, `interaction-star-tdvp2` |
 
 Both use a time-dependent Hamiltonian MPO rebuilt at the step midpoint. The
 representation supplies coefficients; TDVP is a later, independent choice.
@@ -49,12 +49,12 @@ available route to equivalent finite star data.
 
 ```python
 chain = model.run(
-    dt=0.02, t_max=2.0, method="mpo-ip-tdvp2",
+    dt=0.02, t_max=2.0, method="interaction-chain-tdvp2",
     bond_dim=100, trunc_eps=1e-5,
 )
 
 star = model.run(
-    dt=0.02, t_max=2.0, method="mpo-ip-star-tdvp2",
+    dt=0.02, t_max=2.0, method="interaction-star-tdvp2",
     bond_dim=100, trunc_eps=1e-5,
 )
 ```

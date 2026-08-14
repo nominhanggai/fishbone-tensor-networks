@@ -9,6 +9,15 @@ model -> representation -> geometry -> integrator
 Use `method="..."` as a shorthand, or pass the axes directly. Every call returns
 the same {py:class}`~fishbonett.models.result.Result` contract.
 
+Method names are representation-explicit. A path method is named
+`<representation>-<integrator>`; a non-path tensor tree inserts `tree`, as in
+`interaction-chain-tree-tdvp2`. Thus `polaron-chain-tdvp2` states both the
+polaron-chain representation and the TDVP2 integrator.
+
+Older engine-first labels are rejected with a precise replacement rather than
+accepted as silent aliases. For example, `polaron-tdvp2` reports that its new name
+is `polaron-chain-tdvp2`.
+
 ## The six representations
 
 Each name below is complete. There is no second public category to combine with
@@ -62,12 +71,12 @@ same transformed Hamiltonian and both are implemented.
 
 | representation | geometry | methods | details |
 |---|---|---|---|
-| `schrodinger-chain` | path | `mpo-tdvp1`, `mpo-tdvp2`, `mpo-dtdvp` | {doc}`schrodinger/chain` |
-| `schrodinger-star` | path | `mpo-star-tdvp1`, `mpo-star-tdvp2` | {doc}`schrodinger/star_mpo` |
-| `interaction-chain` | path | `tebd`, `trotter-mpo`, `mpo-ip-tdvp1`, `mpo-ip-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
-| `interaction-chain` | binary tree | `tree-tdvp`, `tree-tdvp2`, `tree-tebd` | {doc}`interaction/tree` |
-| `interaction-star` | path | `mpo-ip-star-tdvp1`, `mpo-ip-star-tdvp2` | {doc}`interaction/star_mpo` |
-| `polaron-chain` | path | `polaron`, `polaron-tdvp1`, `polaron-tdvp2`, `polaron-dtdvp` | {doc}`schrodinger/polaron_chain` |
+| `schrodinger-chain` | path | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-dtdvp` | {doc}`schrodinger/chain` |
+| `schrodinger-star` | path | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2` | {doc}`schrodinger/star_mpo` |
+| `interaction-chain` | path | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
+| `interaction-chain` | binary tree | `interaction-chain-tree-tdvp1`, `interaction-chain-tree-tdvp2`, `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
+| `interaction-star` | path | `interaction-star-tdvp1`, `interaction-star-tdvp2` | {doc}`interaction/star_mpo` |
+| `polaron-chain` | path | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`schrodinger/polaron_chain` |
 | `polaron-star` | path | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`schrodinger/polaron_chain` |
 
 The two `interaction-chain` rows use the same Hamiltonian on different tensor
@@ -76,25 +85,28 @@ do that later.
 
 ## Other models
 
-| model | implemented representations |
-|---|---|
-| `multichannel` | `schrodinger-star`, `interaction-star`, `interaction-chain` |
-| `comb` | `schrodinger-chain` |
-| `site-tree` | `schrodinger-chain` |
+| model | representation | method |
+|---|---|---|
+| `multichannel` | `schrodinger-star` | `schrodinger-star-tree-tebd` |
+| `multichannel` | `interaction-chain` | `interaction-chain-tebd` |
+| `multichannel` | `interaction-star` | `interaction-star-tebd` |
+| `comb`, `site-tree` | `schrodinger-chain` | `schrodinger-chain-tree-tebd` |
 
-For multichannel interaction propagation, `multichannel-ip-star` retains the
-shared star modes and `multichannel-ip` applies a common orthogonal
+For multichannel interaction propagation, `interaction-star-tebd` retains the
+shared star modes and `interaction-chain-tebd` applies a common orthogonal
 star-to-chain transform to the matrix-valued mode couplings.
 
 ## Choosing an integrator
 
-- Start with a bond-growing method: `tree-tdvp2`, `tebd`, or a two-site TDVP
+- Start with a bond-growing method: `interaction-chain-tree-tdvp2`,
+  `interaction-chain-tebd`, or a two-site TDVP
   method.
 - One-site TDVP methods require an explicit `bond_dim`; they cannot grow a bond
   from a product state.
 - Time-dependent interaction representations rebuild their encoded operator at
   every step midpoint.
-- The conditional-displacement method `trotter-mpo` is available because the
+- The conditional-displacement method `interaction-chain-trotter-mpo` is
+  available because the
   mode coupling terms commute after the free bath has been removed.
 - Polaron methods require finite
   $\int J(\omega)/\omega^2\,d\omega$ and careful convergence in local Fock
@@ -112,7 +124,7 @@ result = model.run(
 
 # Equivalent shorthand:
 result = model.run(
-    dt=0.02, t_max=2.0, method="mpo-ip-tdvp2", bond_dim=100
+    dt=0.02, t_max=2.0, method="interaction-chain-tdvp2", bond_dim=100
 )
 ```
 

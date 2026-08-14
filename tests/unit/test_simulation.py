@@ -129,7 +129,7 @@ def test_run_seed_is_reproducible_and_does_not_touch_global_rng():
                 J=lambda w: 0.2 * w * np.exp(-w / 5.0),
                 domain=(0.0, 30.0), n_modes=3, phys_dim=4))
         return model.run(
-            dt=0.05, n_steps=3, method="mpo-tdvp1", bond_dim=4,
+            dt=0.05, n_steps=3, method="schrodinger-chain-tdvp1", bond_dim=4,
             observables={"sz": sigma_z}, seed=seed)
 
     np.random.seed(123)

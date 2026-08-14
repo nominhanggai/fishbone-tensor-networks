@@ -1,6 +1,6 @@
 # Interaction-chain — swap-network TEBD
 
-`method="tebd"` propagates `interaction-chain` on a path MPS. The represented
+`method="interaction-chain-tebd"` propagates `interaction-chain` on a path MPS. The represented
 Hamiltonian couples the system to every chain mode, so a swap network moves the
 system site past the modes and back during each symmetric step.
 
@@ -35,7 +35,7 @@ split and `bond_dim` is an optional cap.
 result = model.run(
     dt=0.02,
     t_max=2.0,
-    method="tebd",
+    method="interaction-chain-tebd",
     trunc_eps=1e-5,
     bond_dim=100,
 )

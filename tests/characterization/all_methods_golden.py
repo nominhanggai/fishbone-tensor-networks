@@ -46,8 +46,9 @@ def _bath():
 
 #: Old key -> new, for comparing a baseline captured before the taxonomy was
 #: re-axed.  ``chain``/``star`` were half of a *representation* and ``mode-tree`` a state
-#: *geometry*; all three are the one ``system-bath`` model.  ``tree-tebd-static``
-#: on the multichannel model became ``multichannel-static``: same engine, but a
+#: *geometry*; all three are the one ``system-bath`` model.  The old
+#: ``tree-tebd-static`` label on the multichannel model became
+#: ``schrodinger-star-tree-tebd``: same engine, but a
 #: different **representation** (schrodinger-star, where the multi-site models are
 #: schrodinger-chain), which one row could not carry.
 #:
@@ -55,7 +56,9 @@ def _bath():
 #: exactly; only the labels moved.
 _RENAMED = {"chain": "system-bath", "star": "system-bath",
             "mode-tree": "system-bath"}
-_RENAMED_METHOD = {("multichannel", "tree-tebd-static"): "multichannel-static"}
+_RENAMED_METHOD = {
+    ("multichannel", "tree-tebd-static"): "schrodinger-star-tree-tebd",
+}
 
 
 def _model_for(key):
@@ -97,7 +100,8 @@ def capture():
                 kw["bond_dim"] = 12
             key = (model_key, method)
             try:
-                if model_key == "multichannel" and method == R.MULTICHANNEL_STATIC:
+                if (model_key == "multichannel"
+                        and method == R.SCHRODINGER_STAR_TREE_TEBD):
                     r = obj.run(**kw)            # selected by the bath, not by name
                 else:
                     r = obj.run(method=method, **kw)
@@ -139,7 +143,8 @@ def _relabel(ref):
     """
     out = {}
     for (mk, meth), v in ref.items():
-        new_meth = _RENAMED_METHOD.get((mk, meth), meth)
+        new_meth = _RENAMED_METHOD.get(
+            (mk, meth), R._RENAMED_METHODS.get(meth, meth))
         v = dict(v)
         if v.get("method") == meth:
             v["method"] = new_meth

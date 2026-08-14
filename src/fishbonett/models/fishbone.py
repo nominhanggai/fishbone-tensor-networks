@@ -24,10 +24,11 @@ from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models.registry import (
-    STATIC_TREE_TEBD, method_spec, methods_of, unknown_method_error,
+    SCHRODINGER_CHAIN_TREE_TEBD, method_spec, methods_of,
+    unknown_method_error,
 )
 
-__all__ = ["TreeFishbone", "Fishbone", "STATIC_TREE_TEBD"]
+__all__ = ["TreeFishbone", "Fishbone", "SCHRODINGER_CHAIN_TREE_TEBD"]
 
 
 def _parse_observable(spec):
@@ -145,15 +146,16 @@ class TreeFishbone:
     #: The model this class realizes.  ``Fishbone`` overrides it with ``"comb"``.
     _MODEL = "site-tree"
 
-    def run(self, *, dt, t_max=None, n_steps=None, method=STATIC_TREE_TEBD,
+    def run(self, *, dt, t_max=None, n_steps=None,
+            method=SCHRODINGER_CHAIN_TREE_TEBD,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial="up", seed=None):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
         ``method`` exists for symmetry with
         :meth:`fishbonett.models.system_bath.SystemBath.run`; the multi-site models have a
-        single propagator, :data:`STATIC_TREE_TEBD` (Schroedinger-picture tree
-        TEBD), so it is the only accepted value.  Asking for a single-system
+        single propagator, :data:`SCHRODINGER_CHAIN_TREE_TEBD`, so it is the only
+        accepted value.  Asking for a single-system
         method here raises with a message saying which model owns it.  The
         representation gaps are recorded in :mod:`fishbonett.models.registry`.
 
@@ -269,7 +271,8 @@ class Fishbone:
         """``(dims, edges, site_H, edge_H)`` -- :meth:`local_terms` as a 4-tuple."""
         return self.local_terms(t_max).as_tuple()
 
-    def run(self, *, dt, t_max=None, n_steps=None, method=STATIC_TREE_TEBD,
+    def run(self, *, dt, t_max=None, n_steps=None,
+            method=SCHRODINGER_CHAIN_TREE_TEBD,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial="up", seed=None):
         """Propagate the 1D fishbone through the shared simulation planner. See

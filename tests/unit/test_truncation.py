@@ -67,7 +67,8 @@ def test_invalid_settings_raise():
 # -- wiring into run() -------------------------------------------------------
 def test_trunc_object_and_loose_keywords_agree():
     """``trunc=Truncation(...)`` must be exactly equivalent to the loose form."""
-    kw = dict(dt=0.05, n_steps=3, method="tebd", observables={"sz": sigma_z})
+    kw = dict(dt=0.05, n_steps=3, method="interaction-chain-tebd",
+              observables={"sz": sigma_z})
     a = _model().run(trunc=Truncation(eps=1e-5, max_bond=20), **kw)
     b = _model().run(trunc_eps=1e-5, bond_dim=20, **kw)
     np.testing.assert_allclose(a.expect["sz"], b.expect["sz"], rtol=0, atol=0)
@@ -75,14 +76,14 @@ def test_trunc_object_and_loose_keywords_agree():
 
 def test_run_rejects_both_forms_at_once():
     with pytest.raises(TypeError):
-        _model().run(dt=0.05, n_steps=1, method="tebd",
+        _model().run(dt=0.05, n_steps=1, method="interaction-chain-tebd",
                      trunc=Truncation(eps=1e-5), trunc_eps=1e-5)
 
 
 def test_unlimited_bond_grows_beyond_a_small_cap():
     """``bond_dim=None`` really is unlimited: the same run under a small cap must
     not exceed it, and the uncapped one must be free to go past it."""
-    kw = dict(dt=0.05, n_steps=6, method="tebd", trunc_eps=1e-8,
+    kw = dict(dt=0.05, n_steps=6, method="interaction-chain-tebd", trunc_eps=1e-8,
               observables={"sz": sigma_z})
     capped = _model().run(bond_dim=3, **kw)
     free = _model().run(bond_dim=None, **kw)
@@ -94,4 +95,4 @@ def test_fixed_bond_methods_require_an_explicit_cap():
     """1-site TDVP cannot grow a bond, so 'unlimited' is meaningless for it and
     must be rejected with a message naming a usable alternative."""
     with pytest.raises(ValueError, match="fixed bond dimension"):
-        _model().run(dt=0.05, n_steps=1, method="mpo-tdvp1", bond_dim=None)
+        _model().run(dt=0.05, n_steps=1, method="schrodinger-chain-tdvp1", bond_dim=None)

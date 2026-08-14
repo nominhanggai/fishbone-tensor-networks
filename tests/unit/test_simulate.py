@@ -68,14 +68,15 @@ def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
                      @ (ob @ (U @ (np.exp(-1j * E * t) * c))) for t in ts]).real
 
 
-@pytest.mark.parametrize("method,step", [("tebd", 2), ("trotter-mpo", 2),
-                                         ("mpo-tdvp1", 2),
-                                         ("mpo-tdvp2", 2), ("mpo-ip-tdvp1", 2),
-                                         ("mpo-ip-tdvp2", 2),
-                                         ("mpo-star-tdvp1", 2),
-                                         ("mpo-star-tdvp2", 2),
-                                         ("tree-tdvp", 1),
-                                         ("tree-tdvp2", 1), ("tree-tebd", 1)])
+@pytest.mark.parametrize("method,step", [("interaction-chain-tebd", 2),
+                                         ("interaction-chain-trotter-mpo", 2),
+                                         ("schrodinger-chain-tdvp1", 2),
+                                         ("schrodinger-chain-tdvp2", 2), ("interaction-chain-tdvp1", 2),
+                                         ("interaction-chain-tdvp2", 2),
+                                         ("schrodinger-star-tdvp1", 2),
+                                         ("schrodinger-star-tdvp2", 2),
+                                         ("interaction-chain-tree-tdvp1", 1),
+                                         ("interaction-chain-tree-tdvp2", 1), ("interaction-chain-tree-tebd", 1)])
 def test_method_matches_exact(method, step):
     model = _model()
     r = model.run(dt=0.05, n_steps=10, method=method, bond_dim=40, trunc_eps=1e-12,
@@ -87,7 +88,7 @@ def test_method_matches_exact(method, step):
 
 def test_result_carries_observables_and_rdm():
     model = _model()
-    r = model.run(dt=0.05, n_steps=8, method="tree-tdvp2", bond_dim=30,
+    r = model.run(dt=0.05, n_steps=8, method="interaction-chain-tree-tdvp2", bond_dim=30,
                   observables={"sz": sigma_z, "sx": sigma_x})
     assert set(r.expect) == {"sz", "sx"}
     assert r.rdm.shape == (8, 2, 2)
@@ -97,20 +98,21 @@ def test_result_carries_observables_and_rdm():
 
 def test_tedopa_discretization_runs():
     model = _model(discretization="tedopa")
-    r = model.run(dt=0.05, n_steps=6, method="tree-tdvp", bond_dim=30)
+    r = model.run(dt=0.05, n_steps=6, method="interaction-chain-tree-tdvp1", bond_dim=30)
     assert np.all(np.isfinite(r.expect["sz"]))
 
 
 def test_methods_share_time_grid_and_agree():
     """dt/t_max mean the same physical time for every method family."""
     model = _model()
-    methods = ["tebd", "trotter-mpo", "mpo-tdvp1", "mpo-tdvp2", "mpo-ip-tdvp1",
-               "mpo-ip-tdvp2", "mpo-star-tdvp1", "mpo-star-tdvp2",
-               "tree-tdvp", "tree-tdvp2", "tree-tebd"]
+    methods = ["interaction-chain-tebd", "interaction-chain-trotter-mpo",
+               "schrodinger-chain-tdvp1", "schrodinger-chain-tdvp2", "interaction-chain-tdvp1",
+               "interaction-chain-tdvp2", "schrodinger-star-tdvp1", "schrodinger-star-tdvp2",
+               "interaction-chain-tree-tdvp1", "interaction-chain-tree-tdvp2", "interaction-chain-tree-tebd"]
     results = {m: model.run(dt=0.05, t_max=0.5, method=m, bond_dim=40,
                             trunc_eps=1e-12, observables={"sz": sigma_z})
                for m in methods}
-    ref = results["tebd"]
+    ref = results["interaction-chain-tebd"]
     assert len(ref.t) == 10 and abs(ref.t[-1] - 0.5) < 1e-12
     for m, r in results.items():
         assert np.allclose(r.t, ref.t)                       # same time grid
@@ -156,13 +158,13 @@ def test_multichannel_ip_matches_the_static_path_and_exact():
     obs = {"sz": sigma_z, "sx": sigma_x}
     kw = dict(dt=0.01, n_steps=20, bond_dim=80, trunc_eps=1e-12, observables=obs)
     r_static = model.run(**kw)
-    r_ip = model.run(method="multichannel-ip", **kw)
+    r_ip = model.run(method="interaction-chain-tebd", **kw)
     # the two differ by *representation* -- schrodinger-star vs interaction-star -- which is
-    # why the static one is `multichannel-static` and not the multi-site models'
-    # `tree-tebd-static`: same engine, but those chain-map their baths and this
+    # why the static one is `schrodinger-star-tree-tebd` and not the multi-site models'
+    # `schrodinger-chain-tree-tebd`: same engine, but those chain-map their baths and this
     # cannot (the channels share one set of modes).
-    assert r_static.method == "multichannel-static"
-    assert r_ip.method == "multichannel-ip"
+    assert r_static.method == "schrodinger-star-tree-tebd"
+    assert r_ip.method == "interaction-chain-tebd"
 
     # exact diagonalization of the same shared-mode star
     freq, g = None, []
@@ -207,7 +209,7 @@ def test_multichannel_ip_rejects_a_zero_lanczos_seed():
               n_modes=3, phys_dim=4)
     m = SystemBath(h=0.5 * sigma_z, coupling=[sigma_x, sy], bath=mc)
     with pytest.raises(ValueError, match="seed"):
-        m.run(dt=0.01, n_steps=1, method="multichannel-ip", bond_dim=20)
+        m.run(dt=0.01, n_steps=1, method="interaction-chain-tebd", bond_dim=20)
 
 
 def test_composite_spin_vibration_system():
@@ -223,7 +225,8 @@ def test_composite_spin_vibration_system():
     coup = np.kron(sigma_z, Iv)
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=nm, phys_dim=dph)
     model = SystemBath(h=h_sys, coupling=coup, bath=bath)
-    r = model.run(dt=0.02, n_steps=10, method="tebd", bond_dim=40, trunc_eps=1e-12,
+    r = model.run(dt=0.02, n_steps=10, method="interaction-chain-tebd",
+                  bond_dim=40, trunc_eps=1e-12,
                   observables={"sz": coup}, initial="up")
     assert r.rdm.shape == (10, 2 * dv, 2 * dv)
 
@@ -256,8 +259,8 @@ def test_composite_spin_vibration_system():
     assert np.max(np.abs(r.expect["sz"] - sz_ex)) < 1e-3
 
 
-@pytest.mark.parametrize("method", ["mpo-tdvp1", "mpo-tdvp2", "mpo-ip-tdvp1",
-                                    "tree-tdvp", "tree-tebd"])
+@pytest.mark.parametrize("method", ["schrodinger-chain-tdvp1", "schrodinger-chain-tdvp2", "interaction-chain-tdvp1",
+                                    "interaction-chain-tree-tdvp1", "interaction-chain-tree-tebd"])
 def test_general_coupling_matches_exact(method):
     """The MPO/tree engines handle a non-sigma_z (sigma_x) coupling, validated vs
     exact diagonalization of the discretized star."""
@@ -271,8 +274,8 @@ def test_general_coupling_matches_exact(method):
     assert np.max(np.abs(r.expect["sz"] - ex)) < 3e-3
 
 
-@pytest.mark.parametrize("method", ["mpo-tdvp1", "mpo-tdvp2", "tree-tdvp",
-                                    "tree-tebd"])
+@pytest.mark.parametrize("method", ["schrodinger-chain-tdvp1", "schrodinger-chain-tdvp2", "interaction-chain-tree-tdvp1",
+                                    "interaction-chain-tree-tebd"])
 def test_multilevel_system_matches_exact(method):
     """The MPO/tree engines handle a three-level system, validated vs exact."""
     sd = lambda w: 0.15 * w * np.exp(-w / 6.0)
@@ -293,10 +296,10 @@ def test_mpo_rejects_non_hermitian_operators():
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=N, phys_dim=D)
     with pytest.raises(ValueError):                      # non-Hermitian coupling
         SystemBath(h=sigma_z, coupling=np.array([[0, 1], [0, 0]], complex),
-                  bath=bath).run(dt=0.05, n_steps=2, method="mpo-tdvp1")
+                  bath=bath).run(dt=0.05, n_steps=2, method="schrodinger-chain-tdvp1")
     with pytest.raises(ValueError):                      # coupling / h dim mismatch
         SystemBath(h=np.eye(3), coupling=sigma_z, bath=bath).run(
-            dt=0.05, n_steps=2, method="tree-tdvp")
+            dt=0.05, n_steps=2, method="interaction-chain-tree-tdvp1")
 
 
 # -- polaron representation -----------------------------------------------------------
@@ -371,18 +374,23 @@ def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
 
 
 def test_trotter_mpo_matches_tebd_general_coupling():
-    """Same representation as ``tebd``, so it must agree for a general (3-level) coupling."""
+    """The two interaction-chain methods agree for a general coupling."""
     O = np.diag([1.0, 0.0, -1.0]).astype(complex)
     h = np.zeros((3, 3), complex)
     h[0, 1] = h[1, 0] = h[1, 2] = h[2, 1] = 0.5
     bath = Bath(J=_J, domain=(0.3, 12.0), n_modes=10, phys_dim=8)
     model = SystemBath(h=h, coupling=O, bath=bath)
     kw = dict(dt=0.05, n_steps=20, bond_dim=40, trunc_eps=1e-4, observables={"O": O})
-    assert np.max(np.abs(model.run(method="trotter-mpo", **kw).expect["O"]
-                         - model.run(method="tebd", **kw).expect["O"])) < 5e-3
+    assert np.max(np.abs(
+        model.run(method="interaction-chain-trotter-mpo", **kw).expect["O"]
+        - model.run(method="interaction-chain-tebd", **kw).expect["O"]
+    )) < 5e-3
 
 
-POLARON_METHODS = ["polaron", "polaron-tdvp1", "polaron-tdvp2", "polaron-dtdvp"]
+POLARON_METHODS = [
+    "polaron-chain-tebd", "polaron-chain-tdvp1", "polaron-chain-tdvp2",
+    "polaron-chain-dtdvp",
+]
 
 
 @pytest.mark.parametrize("method", POLARON_METHODS)
@@ -395,7 +403,7 @@ def test_polaron_matches_ip_populations_and_coherence(method):
     kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4,
               observables={"sz": sigma_z, "sx": sigma_x})
     rp = model.run(method=method, **kw)
-    ri = model.run(method="tebd", **kw)
+    ri = model.run(method="interaction-chain-tebd", **kw)
     # The two representations describe the same physics, so they agree far better than the
     # O(dt^2) splitting bound: ~1e-5 on the population and ~1e-4 on the un-dressed
     # coherence.  Keep the tolerance tight -- a loose one here once hid a misplaced
@@ -404,7 +412,7 @@ def test_polaron_matches_ip_populations_and_coherence(method):
     assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 1e-3   # un-dressed
 
 
-@pytest.mark.parametrize("method", ["polaron", "polaron-dtdvp"])
+@pytest.mark.parametrize("method", ["polaron-chain-tebd", "polaron-chain-dtdvp"])
 def test_polaron_general_coupling_matches_ip(method):
     """The polaron representation handles a general (3-level, three-eigenvalue) coupling O."""
     O = np.diag([1.0, 0.0, -1.0]).astype(complex)
@@ -413,7 +421,7 @@ def test_polaron_general_coupling_matches_ip(method):
     model = SystemBath(h=h, coupling=O, bath=_polaron_bath(nm=10, d=8))
     kw = dict(dt=0.02, n_steps=25, bond_dim=16, trunc_eps=1e-4, observables={"O": O})
     rp = model.run(method=method, **kw)
-    ri = model.run(method="tebd", **kw)
+    ri = model.run(method="interaction-chain-tebd", **kw)
     assert np.max(np.abs(rp.expect["O"] - ri.expect["O"])) < 2e-2
 
 
@@ -421,7 +429,7 @@ def test_polaron_runs_at_finite_temperature():
     """The polaron representation handles finite T via T-TEDOPA thermalization."""
     bath = Bath(J=_J, domain=(-12.0, 12.0), temperature=1.0, n_modes=8, phys_dim=6)
     r = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
-            method="polaron", dt=0.05, n_steps=2, bond_dim=20)
+            method="polaron-chain-tebd", dt=0.05, n_steps=2, bond_dim=20)
     assert r.t.shape == (2,)
     assert np.allclose(np.trace(r.rdm[-1]), 1.0, atol=1e-6)
 
