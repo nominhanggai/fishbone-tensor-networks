@@ -45,15 +45,17 @@ and an initial state, validated once so that no frame re-derives it.
    fishbonett.models.system_bath
    fishbonett.models.fishbone
    fishbonett.system
+   fishbonett.models.simulation
    fishbonett.models.propagate
    fishbonett.models.result
 ```
 
-`propagate` is the driver layer: `RunCtx` (the run parameters that don't depend on
-which method was picked) and `propagate()` (the step/measure/collect loop every
-single-system method shares). What varies is passed in — the **integrator** supplies
-`step`, the **frame** supplies `rdm` (dressed frames undress their own observable),
-and the **state** supplies `peak_bond`.
+`simulation` is the orchestration boundary: it compiles a resolved registry row
+into a `SimulationPlan` containing the prepared frame, state, stepping and
+measurement policy. `propagate` owns the shared step/measure/collect loop. What
+varies is explicit — the **integrator** supplies `step`, the **frame** supplies the
+lab-frame RDM policy (dressed frames undress their own observable), and the
+**state** supplies `peak_bond`.
 
 ## Geometry: the state ansätze
 
@@ -78,6 +80,12 @@ hold tensors only; the models that drive them are above.
 
 ## Propagators
 
+The long-standing `tdvp` and `modetree` modules remain the public import paths,
+but each is now a small compatibility façade. Internally their implementations
+are split into tensor kernels/core topology, symmetric sweeps, and whole-run
+drivers. Dependencies point only upward through those layers; bath resolution is
+confined to drivers and model planning.
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
@@ -93,11 +101,12 @@ hold tensors only; the models that drive them are above.
 ## Frames
 
 One Hamiltonian, several representations — see {doc}`/methods/index` for which
-propagator suits which frame.  A frame's output is always
-{py:class}`~fishbonett.frames.terms.LocalTerms`: one operator per node and one per
-edge, static or a function of `t`.  That is the single interface between the physics
-and the numerics — it is what lets one propagator serve every geometry, since it
-describes the terms without saying what the graph looks like.
+propagator suits which frame.  Frames consume compiled bath coefficients and emit
+the operator form their compatible integrators require:
+{py:class}`~fishbonett.frames.terms.LocalTerms` for static tree TEBD, an
+{py:class}`~fishbonett.frames.mpo.MPOFrame` for TDVP, or a time-dependent gate or
+factorized-propagator builder.  The bath-compilation boundary is common even where
+the operator representation necessarily differs.
 
 ```{eval-rst}
 .. autosummary::
@@ -116,8 +125,9 @@ describes the terms without saying what the graph looks like.
 
 ## The bath: specification, discretization, chain mapping
 
-`Bath` (the specification) lives in {py:mod}`fishbonett.bath.spec`; the rest of
-the subpackage turns it into chain parameters, in that order.
+`Bath` is environment physics plus resolution settings.  `CoupledBath` binds it to
+model-owned system operators.  Compilation then produces immutable, operator-free
+`StarBath` or `ChainBath` coefficients before a frame builds gates or an MPO.
 
 ```{eval-rst}
 .. autosummary::
@@ -125,6 +135,8 @@ the subpackage turns it into chain parameters, in that order.
    :recursive:
 
    fishbonett.bath.spec
+   fishbonett.bath.coupled
+   fishbonett.bath.compiled
    fishbonett.bath.chain
    fishbonett.bath.legendre
    fishbonett.bath.tedopa
@@ -155,4 +167,3 @@ the subpackage turns it into chain parameters, in that order.
    fishbonett.rates
    fishbonett.diabatization
 ```
-

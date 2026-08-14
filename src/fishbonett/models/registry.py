@@ -40,10 +40,10 @@ which is why they produce identical numbers rather than merely close ones.
 ``mode-tree`` used to be listed as a model for that difference; it was never a
 model.
 
-:data:`METHODS` is therefore the single source of truth for both the taxonomy and
-the **dispatch**: each row carries its four axes plus the engine that realizes it,
-so ``run`` is a lookup rather than a chain of ``if``\\ s, and adding a combination
-is a row here rather than a branch there.
+:data:`METHODS` is therefore the single source of truth for the taxonomy and
+method selection: each row carries its four axes plus the engine that realizes it.
+After that lookup, :mod:`fishbonett.models.simulation` compiles the engine into one
+prepared plan; the physical model contains no private dispatch tables.
 
 .. note::
    The name ``fishbonett.models`` was used once before, for what is now
@@ -213,8 +213,8 @@ class Model:
     blurb: str
     cls: str                              # the class a user instantiates
     gaps: Mapping[str, str] = field(default_factory=dict)
-    #: ``"method"`` -- chosen by ``run(method=...)``; ``"bath"`` -- chosen
-    #: automatically from the bath's shape (the multichannel case).
+    #: ``"method"`` -- chosen by ``run(method=...)``; ``"coupling"`` -- chosen
+    #: automatically from a list of model coupling operators (multichannel).
     selected_by: str = "method"
 
     @property
@@ -238,15 +238,15 @@ class Model:
 class Method:
     """One realizable combination of the four axes.
 
-    This is the single source of truth: what exists **and** how it is dispatched.
+    This is the single source of truth for what exists and which engine realizes it.
     ``models`` is a tuple because one engine can serve several topologies -- the
     static tree TEBD runs the comb and the site-tree.
     """
     name: str
     frame: str
     models: Tuple[str, ...]
-    #: which driver group in the model layer realizes it (``_DRIVERS`` in
-    #: :mod:`fishbonett.models.system_bath` keys on this).  Not an axis.
+    #: which plan-compiler group in :mod:`fishbonett.models.simulation` realizes
+    #: it.  This is an implementation key, not an axis.
     engine: str
     #: the entry point in :mod:`fishbonett.evolve`, where there is a single one
     driver: str = ""
@@ -431,12 +431,12 @@ MODELS = {
         key="multichannel", label="multichannel system-bath",
         blurb="One system site, one bath, coupled through *several* operators "
               "that share the same modes -- so the channels are cross-correlated, "
-              "unlike independent baths.  Selected by giving the Bath a list of "
-              "couplings, not by a method name.",
+              "unlike independent baths.  Selected by giving SystemBath a list "
+              "of coupling operators, not by a method name.",
         cls="SystemBath",
         gaps={"schrodinger-chain": _NO_CHAIN, "interaction-chain": _NO_CHAIN,
               "polaron-chain": _NO_CHAIN, "polaron-star": _POLARON_STAR},
-        selected_by="bath"),
+        selected_by="coupling"),
     "comb": Model(
         key="comb", label="fishbone / comb",
         blurb="Several system sites on a 1D backbone, each carrying one or two "
@@ -676,7 +676,8 @@ def describe_taxonomy():
     an unknown method, and what the docs table is generated from."""
     lines = []
     for key, m in MODELS.items():
-        picked = "" if m.selected_by == "method" else "  (selected by the bath)"
+        picked = ("" if m.selected_by == "method" else
+                  f"  (selected by {m.selected_by})")
         lines.append(f"{m.label}  [{key}] via {m.cls}{picked}")
         for frame_key in frames_of(key):
             for name in m.frames[frame_key]:

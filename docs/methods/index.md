@@ -106,8 +106,8 @@ sb.run(dt=..., t_max=..., frame="polaron-star")
 The `multichannel` model's **default** path is Schrödinger, not interaction picture:
 with no `method` it routes through the tree engine, whose shared-mode star carries
 the bath frequencies on-site.  Its interaction-picture path is a separate method,
-`multichannel-ip`.  (The model itself is still selected by the *bath* — passing a
-list of couplings — so `method` only chooses between those two.)
+`multichannel-ip`.  (The model itself is selected by passing a list to
+`SystemBath(coupling=...)`, so `method` only chooses between those two.)
 ```
 
 ## The frames in detail
@@ -258,8 +258,9 @@ the propagator within it.
 - **Long chains where entanglement piles up in the middle?** The `tree-*`
   methods keep the high-bond region `O(log n)` edges deep instead of `O(n)`
   (see {doc}`/methods/interaction/tree`).
-- **Several coupling channels sharing one set of modes?** That is chosen by the
-  bath, not by `method` — see {doc}`/methods/interaction/multichannel`.
+- **Several coupling channels sharing one set of modes?** Pass the operator list as
+  `SystemBath(coupling=[...])`; it is model structure, not a `method` — see
+  {doc}`/methods/interaction/multichannel`.
 - **Non-`sigma_z` coupling, a non-two-level system, or a custom initial state?**
   Every engine supports these — a Hermitian `h` of any dimension, a Hermitian
   coupling `O`, and any `initial` state (see {doc}`../models/spin_boson`).

@@ -27,7 +27,7 @@ driven by :mod:`fishbonett.evolve.tdvp`; the gate form is driven by
 """
 import numpy as np
 
-from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.bath.coupled import bind_bath
 from fishbonett.frames.terms import LocalTerms
 from fishbonett.operators import annihilate, sigma_z
 
@@ -48,23 +48,23 @@ def chain_terms(bath, site, next_node, dims, edges, site_H, edge_H):
     ``k[0]`` sits on the ``(site, c_0)`` edge and the mode-mode hoppings ``k[m]`` on
     the edges after it.  Returns the next free node id.
     """
-    d = bath.phys_dim
+    coupled = bind_bath(bath, default_operator=sigma_z)
+    compiled = coupled.compiled_chain()
+    d = compiled.phys_dim
     a, ad, x, numb = bath_ops(d)
-    w, k = get_bath_nn_paras(bath.spectral_density(), bath.n_modes,
-                             list(bath.domain), discretizer=bath.discretizer())
-    w = np.asarray(w, float)
-    k = np.asarray(k, float)
-    cop = np.asarray(bath.coupling if bath.coupling is not None else sigma_z, complex)
+    w = compiled.frequencies
+    cop = coupled.operator
     prev = site
     node = next_node
-    for m in range(bath.n_modes):
+    for m in range(compiled.n_modes):
         dims.append(d)
         site_H.append(w[m] * numb)
         edges.append((prev, node))
         if m == 0:
-            edge_H[(prev, node)] = k[0] * np.kron(cop, x)
+            edge_H[(prev, node)] = compiled.system_coupling * np.kron(cop, x)
         else:
-            edge_H[(prev, node)] = k[m] * (np.kron(ad, a) + np.kron(a, ad))
+            edge_H[(prev, node)] = compiled.hoppings[m - 1] * (
+                np.kron(ad, a) + np.kron(a, ad))
         prev = node
         node += 1
     return node
@@ -78,12 +78,14 @@ def star_terms(bath, site, next_node, dims, edges, site_H, edge_H):
     through the combined operator ``M_k = sum_c g_{c,k} O_c`` with
     ``g_{c,k} = sqrt(J_c(omega_k) w_k / pi)``.  Returns the next free node id.
     """
-    _a, _ad, x, numb = bath_ops(bath.phys_dim)
-    freq, coup_mat = bath.shared_mode_star()
+    coupled = bind_bath(bath)
+    star = coupled.compiled_star()
+    coup_mat = star.combine(coupled.operators)
+    _a, _ad, x, numb = bath_ops(star.phys_dim)
     node = next_node
-    for k in range(bath.n_modes):
-        dims.append(bath.phys_dim)
-        site_H.append(freq[k] * numb)
+    for k in range(star.n_modes):
+        dims.append(star.phys_dim)
+        site_H.append(star.frequencies[k] * numb)
         edges.append((site, node))
         # (site op M_k) (x) (a + a^dag)
         edge_H[(site, node)] = np.kron(coup_mat[k], x)
@@ -118,7 +120,8 @@ def terms(sites, edges, baths, t_max=None):
     for i in range(ns):
         for bath in baths[i]:
             bath = bath.resolved(t_max)          # fill automatic domain / n_modes
-            build = (star_terms if getattr(bath, "is_multichannel", False)
+            coupled = bind_bath(bath, default_operator=sigma_z)
+            build = (star_terms if coupled.is_multichannel
                      else chain_terms)
-            node = build(bath, i, node, dims, edge_list, site_H, edge_H)
+            node = build(coupled, i, node, dims, edge_list, site_H, edge_H)
     return LocalTerms(dims=dims, edges=edge_list, site=site_H, bond=edge_H)

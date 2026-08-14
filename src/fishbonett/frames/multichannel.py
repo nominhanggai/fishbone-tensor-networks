@@ -23,8 +23,8 @@ Two consequences shape the code below:
   folding the weight into the spectral density beforehand
   (:meth:`SystemBathMultiChannel.from_signed_star`, what ``run`` uses).
 
-Selected by the *bath*, not by a ``method`` name: give
-:class:`~fishbonett.bath.spec.Bath` a list of ``coupling`` operators.  See
+Selected by the model coupling, not by a ``method`` name: give
+``SystemBath(coupling=...)`` a list of operators.  See
 :doc:`/methods/interaction/multichannel`.
 """
 import numpy as np
@@ -213,5 +213,4 @@ class SystemBathMultiChannel(SwapNetworkFrame):
     # get_u comes from SwapNetworkFrame.  This frame is the interaction picture with
     # a matrix-valued coupling, so get_h2 is the only part that differs from
     # SystemBathIP -- which is exactly what the mixin's contract says.
-
 

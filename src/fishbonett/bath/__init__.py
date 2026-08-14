@@ -4,8 +4,8 @@ A continuous spectral density becomes a finite set of modes, in either of two
 equivalent representations::
 
     Bath(J=..., domain=..., n_modes=...)      # the specification (spec)
-        -> chain (w_j, k_j)                   # TEDOPA: J as the OP weight function
-        -> star modes (freq_k, V_k)           # "starize": diagonalize the chain
+        -> ChainBath(w_j, t_j, c0)            # immutable compiled representation
+        -> StarBath(freq_k, g_ck, transform)  # shared-grid star representation
 
 The chain is the primary object -- TEDOPA maps the continuum straight onto it, with
 no discretization step in between (:mod:`~fishbonett.bath.chain`).  A *star* of
@@ -19,13 +19,17 @@ matching TEDOPA exactly (:func:`make_tedopa_discretizer`,
 .. rubric:: What's here
 
 =================================  =============================================
-:class:`Bath`                      the bath specification you pass to ``run``
+:class:`Bath`                      environment physics + resolution settings
+:class:`CoupledBath`               explicit model binding to system operator(s)
+:class:`ChainBath`                 compiled nearest-neighbour coefficients
+:class:`StarBath`                  compiled shared-grid oscillator coefficients
 :func:`thermalize`                 T-TEDOPA thermalized density from a ``T=0`` one
 :func:`get_bath_nn_paras`          spectral density -> chain ``(w_list, k_list)``
 :func:`get_coupling`               the same, via polynomial recurrences
 :func:`get_vn_squared`             Gauss-Legendre (uniform-measure) star
 :func:`make_tedopa_discretizer`    measure-adapted TEDOPA star (peaked/IR baths)
-:meth:`Bath.shared_mode_star`      multichannel star: one grid, combined ``M_k``
+:func:`compile_chain`              resolved specification -> ``ChainBath``
+:func:`compile_star`               resolved specification -> ``StarBath``
 :func:`lanczos`                    star -> chain tridiagonalization
 =================================  =============================================
 
@@ -35,6 +39,10 @@ Submodules: :mod:`~fishbonett.bath.spec`, :mod:`~fishbonett.bath.chain`,
 :mod:`~fishbonett.bath.auto` (automatic domain / mode count).
 """
 from fishbonett.bath.spec import Bath, thermalize
+from fishbonett.bath.coupled import CoupledBath, bind_bath
+from fishbonett.bath.compiled import (
+    StarBath, ChainBath, compile_star, compile_chain,
+)
 from fishbonett.bath.chain import get_bath_nn_paras, get_coupling
 from fishbonett.bath.legendre import get_vn_squared, get_legendre_recursion
 from fishbonett.bath.tedopa import (
@@ -44,7 +52,8 @@ from fishbonett.bath.lanczos import lanczos
 from fishbonett.bath.recurrence import recurrenceCoefficients
 
 __all__ = [
-    "Bath", "thermalize",
+    "Bath", "CoupledBath", "bind_bath", "thermalize",
+    "StarBath", "ChainBath", "compile_star", "compile_chain",
     "get_bath_nn_paras", "get_coupling",
     "get_vn_squared", "get_legendre_recursion",
     "get_vn_squared_tedopa", "make_tedopa_discretizer",

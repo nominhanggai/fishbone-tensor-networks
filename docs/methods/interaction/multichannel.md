@@ -1,7 +1,8 @@
 # Multichannel — one bath, several couplings
 
 `multichannel-ip` (interaction picture) and `tree-tebd-static` (Schrödinger
-picture, the default).  The model is selected by the **bath**, not by `method`:
+picture, the default).  The model is selected by a **list of coupling operators**,
+not by `method`:
 pass a *list* of `coupling` operators to
 {py:class}`~fishbonett.bath.spec.Bath` and the multichannel engine is used
 automatically; `method` then picks the frame.  Requires
@@ -126,8 +127,8 @@ from fishbonett.operators import sigma_x, sigma_z
 Jz = lambda w: 0.2 * w * np.exp(-w / 5)
 Jx = lambda w: 0.1 * w * np.exp(-w / 8)
 
-# one bath, two channels -> a list of J and a list of coupling operators
-bath = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x],
+# one bath, two channels -> a list of J; operators belong to the model
+bath = Bath(J=[Jz, Jx],
             domain=(0.0, 40.0), n_modes=20, phys_dim=8)
 
 model = SystemBath(h=0.3 * sigma_z + 0.8 * sigma_x,
@@ -140,8 +141,8 @@ r_ip = model.run(dt=0.02, t_max=2.0, method="multichannel-ip",
 
 ## Notes
 
-- Passing a *single* operator gives an ordinary bath; passing a *list* is what makes
-  it multichannel.  `method` selects the frame among the model's own propagators;
+- Passing a single `SystemBath.coupling` operator gives an ordinary model; passing
+  a list is what makes it multichannel.  `method` selects the frame among the model's own propagators;
   asking for another model's method (e.g. `tebd`) raises and says so.
 - Both of this model's frames are *star* frames — `schrodinger-star`
   (`multichannel-static`) and `interaction-star` (`multichannel-ip`).  The channels

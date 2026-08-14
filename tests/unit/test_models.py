@@ -41,17 +41,17 @@ def _bath_pos():
 
 
 # -- the taxonomy is self-consistent -----------------------------------------
-def test_registry_is_the_only_dispatch_table():
-    """There is one table, so there is no seam to drift.
+def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
+    """Taxonomy rows and engine implementations cannot drift.
 
     This used to compare ``registry`` against three dispatch dicts in
     ``models/system_bath.py`` that listed the same method names again -- a test
-    whose only job was to check two tables agreed.  ``METHODS`` is now the single
-    source: ``Model.frames`` is derived from it, and ``run`` dispatches on
-    ``Method.integrator``.  What is left to check is that every declared method is
-    actually reachable.
+    whose only job was to check duplicate tables agreed.  ``METHODS`` is the source
+    for method names and axes; ``PLAN_COMPILERS`` maps only its coarser engine keys
+    to implementations.  The physical model owns neither mapping.
     """
     from fishbonett.models.system_bath import SystemBath as SB
+    from fishbonett.models.simulation import PLAN_COMPILERS
 
     assert set(R.all_methods()) == set(R.METHODS)
     for name, spec in R.METHODS.items():
@@ -62,11 +62,14 @@ def test_registry_is_the_only_dispatch_table():
             assert name in R.MODELS[mk].methods()
         assert spec.basis in ("chain", "star"), f"{name} names unknown basis"
         assert spec.geometry in R.GEOMETRIES, f"{name} names unknown geometry"
-        # every engine must resolve to a driver that exists
+        # every single-system engine must resolve to one plan compiler
         if set(spec.models) & {"system-bath", "multichannel"}:
-            attr = SB._DRIVERS[spec.engine]
-            assert callable(getattr(SB, attr, None)), (
-                f"{name}: engine {spec.engine!r} -> missing {attr}")
+            assert callable(PLAN_COMPILERS.get(spec.engine)), (
+                f"{name}: engine {spec.engine!r} has no plan compiler")
+
+    assert not hasattr(SB, "_DRIVERS")
+    assert not hasattr(SB, "_MPO_FRAMES")
+    assert not hasattr(SB, "_SWAP_FRAMES")
 
 
 def test_fixed_bond_methods_are_registry_data():
@@ -180,7 +183,7 @@ def _run_for(model_key):
     if model_key == "system-bath":
         return SystemBath(h=h, coupling=sigma_z, bath=_bath()), None
     if model_key == "multichannel":
-        mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+        mc = Bath(J=[_J, _J], domain=(0.0, 40.0),
                   n_modes=3, phys_dim=4)
         return SystemBath(h=h, coupling=[sigma_z, sigma_x], bath=mc), None
     if model_key == "comb":
@@ -199,7 +202,7 @@ def test_each_model_runs_its_own_methods_and_reports_them(model_key):
         if method in _FIXED_BOND_METHODS:  # these require an explicit cap
             kw["bond_dim"] = 12
         if method == default:
-            # the multichannel model is selected by the bath, so its Schrodinger
+            # the multichannel model is selected by its coupling list, so its Schrodinger
             # path is what you get with no `method` at all
             r = obj.run(**kw)
         else:
@@ -313,17 +316,17 @@ def test_application_matches_what_the_drivers_actually_do():
     ``symmetric_swap_step``.
     """
     import inspect
-    from fishbonett.models.system_bath import SystemBath as SB
+    from fishbonett.models.simulation import PLAN_COMPILERS
 
     assert {s.application for s in R.METHODS.values()} <= set(R.APPLICATIONS)
 
     declared = {n for n, s in R.METHODS.items() if s.application == "swap"}
     actual = set()
     for name, spec in R.METHODS.items():
-        attr = SB._DRIVERS.get(spec.engine)
-        if attr is None:
+        compiler = PLAN_COMPILERS.get(spec.engine)
+        if compiler is None:
             continue
-        if "symmetric_swap_step" in inspect.getsource(getattr(SB, attr)):
+        if "symmetric_swap_step" in inspect.getsource(compiler):
             actual.add(name)
     assert declared == actual, (
         f"application='swap' says {sorted(declared)} but the drivers that swap are "
@@ -339,10 +342,11 @@ def test_application_matches_what_the_drivers_actually_do():
 
     # and an application is realized *once*: the swap methods share one engine, and
     # differ only in which frame supplies H(t)
-    assert len({R.METHODS[n].engine for n in declared}) == 1, (
+    swap_engines = {R.METHODS[n].engine for n in declared}
+    assert len(swap_engines) == 1, (
         "the swap application should have one driver, not one per frame")
-    assert set(SB._SWAP_FRAMES) == {
-        (R.METHODS[n].frame, R.METHODS[n].models[0]) for n in declared}
+    assert "symmetric_swap_step" in inspect.getsource(
+        PLAN_COMPILERS[next(iter(swap_engines))])
 
 
 def test_run_takes_the_axes_directly():
@@ -496,10 +500,10 @@ def test_multi_site_models_reject_a_single_system_method(model_key):
         obj.run(dt=0.02, n_steps=1, method="tebd")
 
 
-def test_multichannel_bath_rejects_another_models_method():
-    """The multichannel model is chosen by the bath's shape, so `method` can only
+def test_multichannel_model_rejects_another_models_method():
+    """The multichannel model is chosen by the coupling list, so `method` can only
     pick among *its* propagators -- say so instead of ignoring it."""
-    mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+    mc = Bath(J=[_J, _J], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
     m = SystemBath(h=0.5 * sigma_x, coupling=[sigma_z, sigma_x], bath=mc)
     with pytest.raises(ValueError, match="multichannel"):
