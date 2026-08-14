@@ -8,7 +8,9 @@ Run with:  python benchmarks/tree_engine.py
 """
 import numpy as np
 
-from fishbonett.evolve.modetree import (_star_transform, run_tree_tdvp, run_tree_tdvp2,
+from fishbonett import Bath
+from fishbonett.bath.chain import star_transform
+from fishbonett.evolve.modetree import (run_tree_tdvp, run_tree_tdvp2,
                              run_tree_tebd, build_balanced_tree, build_tree_mpo,
                              tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
                              _resolve_sys, SZ, SX)
@@ -17,6 +19,7 @@ from fishbonett.evolve.modetree import (_star_transform, run_tree_tdvp, run_tree
 # The operators are annihilate/create in fishbonett.operators; the body below uses
 # both spellings, so bind both.
 from fishbonett.operators import annihilate, create
+from fishbonett.representations.interaction import InteractionRepresentation
 anih, crea = annihilate, create
 
 
@@ -39,7 +42,7 @@ def embed(op, site, dims):
 
 
 def exact_sz(n_chain, d, V, ts):
-    freq, Vn, _ = _star_transform(Jb, n_chain, (-25.0, 36.0))
+    freq, Vn, _ = star_transform(Jb, n_chain, (-25.0, 36.0))
     dims = [2] + [d] * n_chain
     H = embed(V * SX, 0, dims)
     for k in range(n_chain):
@@ -73,12 +76,17 @@ def main():
 
     print("\n=== tree dynamics vs exact diagonalization ===")
     n_chain, d, V, dt, nsteps = 3, 6, 1.0, 0.05, 20
-    t, sz_t1 = run_tree_tdvp(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
-                             dt=dt, nsteps=nsteps, D=40)
-    _, sz_t2 = run_tree_tdvp2(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
-                              dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-13)
-    _, sz_te = run_tree_tebd(Jb, (-25.0, 36.0), V=V, n_chain=n_chain, phys_dim=d,
-                             dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-12)
+    bath = Bath(
+        J=Jb, domain=(-25.0, 36.0), n_modes=n_chain, phys_dim=d)
+    representation = InteractionRepresentation(
+        representation="interaction-chain", h_sys=V * SX,
+        coupling=SZ, bath=bath).build()
+    t, sz_t1 = run_tree_tdvp(
+        representation, dt=dt, nsteps=nsteps, D=40)
+    _, sz_t2 = run_tree_tdvp2(
+        representation, dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-13)
+    _, sz_te = run_tree_tebd(
+        representation, dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-12)
     sz_ex = exact_sz(n_chain, d, V, t)
     print(f"{'t':>6} {'exact':>10} {'TDVP(1s)':>10} {'TDVP(2s)':>10} {'TEBD':>10}")
     for i in range(0, nsteps, 4):

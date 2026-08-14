@@ -9,6 +9,7 @@ Run with:  python benchmarks/mpo_tdvp.py
 import numpy as np
 
 from fishbonett import Bath
+from fishbonett.bath.chain import get_bath_nn_paras
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian, SX, SZ
 from fishbonett.operators import annihilate, create, number
 from fishbonett.representations.schrodinger import SchrodingerRepresentation
@@ -35,9 +36,11 @@ def embed(op, site, dims):
 
 
 def exact_sz(n_chain, d, V, ts):
-    chain = compiled_chain(n_chain, d)
-    eps_c, t_c, c0 = (
-        chain.frequencies, chain.hoppings, chain.system_coupling)
+    bath = make_bath(n_chain, d)
+    eps_c, couplings = get_bath_nn_paras(
+        bath.spectral_density(), n_chain, list(bath.domain),
+        discretizer=bath.discretizer())
+    t_c, c0 = couplings[1:], couplings[0]
     dims = [2] + [d] * n_chain
     b, bd, nb = annihilate(d), create(d), number(d)
     H = embed(V * SX, 0, dims) + c0 * (embed(SZ, 0, dims) @ embed(b + bd, 1, dims))
@@ -55,9 +58,8 @@ def exact_sz(n_chain, d, V, ts):
                      @ (szop @ (Uv @ (np.exp(-1j * E * t) * coef))) for t in ts]).real
 
 
-def compiled_chain(n_modes, phys_dim):
-    bath = Bath(J=Jb, domain=DOMAIN, n_modes=n_modes, phys_dim=phys_dim)
-    return bath.bind(SZ).compiled_chain()
+def make_bath(n_modes, phys_dim):
+    return Bath(J=Jb, domain=DOMAIN, n_modes=n_modes, phys_dim=phys_dim)
 
 
 def main():
@@ -65,7 +67,7 @@ def main():
     # one representation-supplied MPO, three TDVP sweeps
     representation = SchrodingerRepresentation(
         representation="schrodinger-chain", h_sys=V * SX, coupling=SZ,
-        compiled_bath=compiled_chain(n_chain, d))
+        bath=make_bath(n_chain, d))
     t, sz1, _ = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp1",
                               D=40, krylov=25)
     _, sz2, md2 = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp2",

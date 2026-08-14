@@ -20,8 +20,8 @@ $$
 $$
 
 These factors live in {py:mod}`fishbonett.bath.conventions` and are checked by
-analytic reference-value tests. Representation builders should consume those helpers or a
-compiled bath instead of restating the convention.
+analytic reference-value tests. Representations consume those helpers instead of
+restating the convention.
 
 ## Interaction representations
 
@@ -59,13 +59,13 @@ J(|\omega|)n_\beta,&\omega<0.
 \end{cases}
 $$
 
-Thus compiled star and chain data already include temperature; downstream representations
+Thus finite star and chain coefficients already include temperature; representations
 must not apply a second thermofield factor.
 
 ## Validation layers
 
 - Unit tests check factors of $\pi$, the zero-frequency phase limit, Hermiticity,
-  and immutable compiled data.
+  and the `Bath`-to-representation boundary.
 - Small exact-diagonalization tests compare equivalent representations and integrators.
 - `tests/characterization/all_methods_golden.py` checks every registry method
   before and after a structural change.

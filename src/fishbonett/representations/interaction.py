@@ -20,6 +20,7 @@ tensor-network algorithms through :meth:`tdvp_mpo`, :meth:`trotter_mpo`, and
 import numpy as np
 import scipy.linalg as la
 
+from fishbonett.bath._coefficients import require_resolved, star_coefficients
 from fishbonett.bath.conventions import integrated_free_phase
 from fishbonett.linalg import expm_gate, kron
 from fishbonett.operators import annihilate, create
@@ -57,14 +58,15 @@ class InteractionRepresentation:
         Exactly ``"interaction-star"`` or ``"interaction-chain"``.
     h_sys, coupling
         Hermitian system Hamiltonian and coupling operator.
-    compiled_star
-        A finite star discretization and its optional star-to-chain transform.
+    bath
+        Resolved bath specification. The representation discretizes it into a
+        finite star and applies the star-to-chain transform when requested.
     """
 
     names = frozenset({"interaction-star", "interaction-chain"})
     static = False
 
-    def __init__(self, *, representation, h_sys, coupling, compiled_star):
+    def __init__(self, *, representation, h_sys, coupling, bath):
         if representation not in self.names:
             raise ValueError(
                 "representation must be 'interaction-star' or "
@@ -73,11 +75,11 @@ class InteractionRepresentation:
         self.h_sys = check_operator(h_sys, "h_sys")
         self.pd_sys = self.h_sys.shape[0]
         self.coupling = check_operator(coupling, "coupling", self.pd_sys)
-        self.pd_boson = [compiled_star.phys_dim] * compiled_star.n_modes
+        self.bath = require_resolved(bath)
+        self.pd_boson = [self.bath.phys_dim] * self.bath.n_modes
         self.len_boson = len(self.pd_boson)
         if not self.pd_boson:
-            raise ValueError("compiled_star must include at least one bath mode")
-        self.compiled_star = compiled_star
+            raise ValueError("bath must include at least one mode")
         self.frequencies = None
         self.star_couplings = None
         self.star_to_chain = None
@@ -92,15 +94,15 @@ class InteractionRepresentation:
 
     def build(self):
         """Prepare the finite star data and optional star-to-chain transform."""
-        star = self.compiled_star
+        star = star_coefficients(self.bath)
         if star.n_channels != 1:
             raise ValueError("an interaction representation requires one channel")
-        if self.name == "interaction-chain" and star.chain_transform is None:
+        if self.name == "interaction-chain" and star.transform is None:
             raise ValueError(
                 "interaction-chain requires a star-to-chain transform")
         self.frequencies = star.frequencies
         self.star_couplings = star.couplings[0]
-        self.star_to_chain = star.chain_transform
+        self.star_to_chain = star.transform
         return self
 
     def _express(self, star_values):

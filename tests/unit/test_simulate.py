@@ -3,9 +3,9 @@ import numpy as np
 import pytest
 
 from fishbonett import Bath, SystemBath, Result
-from fishbonett.bath.chain import get_vn_squared
+from fishbonett.bath.chain import get_vn_squared, star_transform
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.evolve.modetree import _star_transform, annihilate, create, SZ, SX
+from fishbonett.evolve.modetree import annihilate, create, SZ, SX
 
 N, D, V = 3, 5, 1.0
 
@@ -30,7 +30,7 @@ def _embed(op, s, dims):
 
 
 def _exact_sz(bath, ts):
-    freq, Vn, _ = _star_transform(bath.spectral_density(), N, (-25.0, 36.0))
+    freq, Vn, _ = star_transform(bath.spectral_density(), N, (-25.0, 36.0))
     dims = [2] + [D] * N
     H = _embed(V * SX, 0, dims)
     for k in range(N):
@@ -47,7 +47,7 @@ def _exact_sz(bath, ts):
 def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
     """Exact evolution of a *general* (ds-level) system coupled to the discretized
     star through operator ``O``; positive-domain (T=0) spectral density ``sd``."""
-    freq, Vn, _ = _star_transform(sd, nm, domain)
+    freq, Vn, _ = star_transform(sd, nm, domain)
     ds = h.shape[0]
     dims = [ds] + [dph] * nm
     a = annihilate(dph)
@@ -233,7 +233,7 @@ def test_composite_spin_vibration_system():
     builder = Builder(
         representation="interaction-star",
         h_sys=h_sys, coupling=coup,
-        compiled_star=bath.bind(coup).compiled_star(),
+        bath=bath,
     ).build()
     freq = builder.frequencies
     j0 = builder.star_couplings
@@ -325,12 +325,12 @@ def test_swap_network_walks_the_system_out_from_site_0_and_back():
 
     d_sys, d_bos, n = 2, 5, 4
     pd = [d_sys] + [d_bos] * n
-    compiled = Bath(
+    bath = Bath(
         J=_J, domain=(0.0, 40.0), n_modes=n,
-        phys_dim=d_bos).bind(sigma_z).compiled_star()
+        phys_dim=d_bos)
     builder = InteractionRepresentation(
         representation="interaction-chain", h_sys=sigma_x,
-        coupling=sigma_z, compiled_star=compiled).build()
+        coupling=sigma_z, bath=bath).build()
 
     def sys_site(st):
         dims = [b.shape[1] for b in st.B]
@@ -365,13 +365,13 @@ def test_trotter_mpo_bond_is_number_of_coupling_eigenvalues():
 
     for O, expected in [(sigma_z, 2), (np.diag([1.0, 0.0, -1.0]).astype(complex), 3)]:
         ds = O.shape[0]
-        compiled = Bath(
+        bath = Bath(
             J=_J, domain=(0.3, 12.0), n_modes=5,
-            phys_dim=6).bind(O).compiled_star()
+            phys_dim=6)
         b = InteractionRepresentation(
             representation="interaction-chain",
             h_sys=np.eye(ds), coupling=O,
-            compiled_star=compiled).build()
+            bath=bath).build()
         W = b.trotter_mpo(0.0, 0.05)
         assert len(W) == 6                       # system + 5 modes
         assert W[0].shape == (1, expected, ds, ds)
@@ -456,12 +456,12 @@ def test_free_chain_gates_put_each_frequency_on_its_own_mode():
     from fishbonett.operators import annihilate
 
     nb, d, ds = 4, 5, 2
-    compiled = Bath(
+    bath = Bath(
         J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
-        n_modes=nb, phys_dim=d).bind(sigma_z).compiled_polaron()
+        n_modes=nb, phys_dim=d)
     b = PolaronRepresentation(
         representation="polaron-chain", h_sys=0.5 * sigma_x,
-        coupling=sigma_z, compiled_polaron=compiled).build()
+        coupling=sigma_z, bath=bath).build()
 
     dt = 1e-5                       # small dt so i log(U)/dt recovers h faithfully
     a = annihilate(d)

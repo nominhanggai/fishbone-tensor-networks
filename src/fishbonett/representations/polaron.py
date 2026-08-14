@@ -12,6 +12,9 @@ transformed initial state, and recovery of laboratory observables.
 import numpy as np
 import scipy.linalg as la
 
+from fishbonett.bath._coefficients import require_resolved
+from fishbonett.bath.chain import star_transform
+from fishbonett.bath.conventions import reorganization_energy
 from fishbonett.linalg import expm_gate
 from fishbonett.operators import annihilate
 from fishbonett.representations._mpo import identity_product, product_sum_mpo
@@ -32,7 +35,7 @@ class PolaronRepresentation:
 
     names = frozenset({"polaron-star", "polaron-chain"})
 
-    def __init__(self, *, representation, h_sys, coupling, compiled_polaron):
+    def __init__(self, *, representation, h_sys, coupling, bath):
         if representation not in self.names:
             raise ValueError(
                 "representation must be 'polaron-star' or 'polaron-chain'")
@@ -40,12 +43,11 @@ class PolaronRepresentation:
         self.h_sys = check_operator(h_sys, "h_sys")
         self.pd_sys = self.h_sys.shape[0]
         self.coupling = check_operator(coupling, "coupling", self.pd_sys)
-        star = compiled_polaron.star
-        self.pd_boson = [star.phys_dim] * star.n_modes
+        self.bath = require_resolved(bath)
+        self.pd_boson = [self.bath.phys_dim] * self.bath.n_modes
         self.len_boson = len(self.pd_boson)
         if not self.pd_boson:
-            raise ValueError("compiled_polaron must include at least one bath mode")
-        self.compiled_polaron = compiled_polaron
+            raise ValueError("bath must include at least one mode")
         self.frequencies = None
         self.hoppings = None
         self.displacements = None
@@ -65,15 +67,26 @@ class PolaronRepresentation:
 
     def build(self):
         """Prepare finite coefficients and diagonalize the coupling operator."""
-        compiled = self.compiled_polaron
-        star = compiled.star
-        chain = compiled.chain
-        star_frequencies = star.frequencies
-        star_displacements = star.couplings[0]
-        chain_frequencies = chain.frequencies
-        chain_hoppings = chain.hoppings
-        chain_displacement = chain.system_coupling
-        reorganization = compiled.reorganization_energy
+        densities = self.bath.spectral_densities()
+        if len(densities) != 1:
+            raise ValueError("the polaron representation requires one channel")
+        density = densities[0]
+
+        def displaced_density(frequency):
+            if abs(frequency) < 1e-15:
+                return 0.0
+            return density(frequency) / frequency ** 2
+
+        star_frequencies, star_displacements, transform = star_transform(
+            displaced_density, self.bath.n_modes, list(self.bath.domain),
+            self.bath.discretizer())
+        star_frequencies = np.asarray(star_frequencies, float)
+        star_displacements = np.asarray(star_displacements, float)
+        chain_matrix = transform @ np.diag(star_frequencies) @ transform.T
+        chain_frequencies = np.diagonal(chain_matrix)
+        chain_hoppings = np.diagonal(chain_matrix, -1)
+        chain_displacement = np.linalg.norm(star_displacements)
+        reorganization = reorganization_energy(density, self.bath.domain)
 
         if self.name == "polaron-star":
             self.frequencies = np.asarray(star_frequencies, float)

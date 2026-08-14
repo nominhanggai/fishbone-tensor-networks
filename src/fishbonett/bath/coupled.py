@@ -10,10 +10,6 @@ import warnings
 
 import numpy as np
 
-from fishbonett.bath.compiled import (
-    StarBath, compile_chain, compile_polaron, compile_star,
-)
-
 __all__ = ["CoupledBath", "bind_bath"]
 
 
@@ -45,12 +41,6 @@ class CoupledBath:
 
     bath: object
     operators: tuple
-    _star_cache: object = field(default=None, init=False, repr=False,
-                                compare=False)
-    _chain_cache: object = field(default=None, init=False, repr=False,
-                                 compare=False)
-    _polaron_cache: object = field(default=None, init=False, repr=False,
-                                   compare=False)
     _resolved_cache: dict = field(default_factory=dict, init=False, repr=False,
                                   compare=False)
 
@@ -111,44 +101,6 @@ class CoupledBath:
             cached = replace(self, bath=bath)
             self._resolved_cache[key] = cached
         return cached
-
-    def compiled_star(self):
-        cached = self._star_cache
-        if cached is not None:
-            return cached
-        star = compile_star(self.bath)
-        # One spectral density may be shared by several system operators.  The
-        # Bath compiler sees one scalar profile; this model-level binding expands
-        # it into one identical profile per channel.
-        if star.n_channels == 1 and len(self.operators) > 1:
-            strengths = np.repeat(star.couplings, len(self.operators), axis=0)
-            star = StarBath(star.frequencies, strengths, star.phys_dim,
-                            star.chain_transform)
-        object.__setattr__(self, "_star_cache", star)
-        return star
-
-    def compiled_chain(self):
-        if self.is_multichannel:
-            raise ValueError("a multichannel shared bath cannot compile to one chain")
-        cached = self._chain_cache
-        if cached is None:
-            cached = compile_chain(self.bath)
-            object.__setattr__(self, "_chain_cache", cached)
-        return cached
-
-    def compiled_polaron(self):
-        """Return and cache the polaron-reweighted chain representation."""
-        if self.is_multichannel:
-            raise ValueError("a multichannel bath has no single polaron chain")
-        cached = self._polaron_cache
-        if cached is None:
-            cached = compile_polaron(self.bath)
-            object.__setattr__(self, "_polaron_cache", cached)
-        return cached
-
-    def shared_mode_star(self):
-        star = self.compiled_star()
-        return star.frequencies, star.combine(self.operators)
 
 
 def bind_bath(bath, coupling=None, *, default_operator=None,

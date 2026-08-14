@@ -115,12 +115,9 @@ def _schrodinger_representation(model, coupled, name):
     )
 
     _check_single_channel(model)
-    compiled = (coupled.compiled_chain()
-                if name == "schrodinger-chain"
-                else coupled.compiled_star())
     return SchrodingerRepresentation(
         representation=name, h_sys=model.h, coupling=model.coupling,
-        compiled_bath=compiled)
+        bath=coupled.bath)
 
 
 def _polaron_representation(model, context, name):
@@ -133,7 +130,7 @@ def _polaron_representation(model, context, name):
     phys_dims = [d_sys] + [bath.phys_dim] * n_modes
     representation = PolaronRepresentation(
         representation=name, h_sys=model.h, coupling=model.coupling,
-        compiled_polaron=coupled.compiled_polaron()).build()
+        bath=bath).build()
     return representation, bath, n_modes, phys_dims
 
 
@@ -194,7 +191,8 @@ def _compile_mpo_plan(model, spec, context):
 def _compile_modetree_plan(model, spec, context):
     _check_single_channel(model)
     coupled = model.coupled_bath.resolved(context.t_max)
-    bath = coupled.bath
+    representation, _phys_dims = _interaction_representation(
+        model, coupled, spec.representation)
 
     def execute():
         max_bond = []
@@ -204,24 +202,19 @@ def _compile_modetree_plan(model, spec, context):
             return _tree.measure_rdm_oc(nodes, root)
 
         common = dict(
-            hsys=model.h, cop=model.coupling,
             init=model.system.initial_vector(context.initial),
-            n_chain=bath.n_modes, phys_dim=bath.phys_dim, dt=context.dt,
-            nsteps=context.n_steps, D=context.bond_dim,
-            discretizer=bath.discretizer(),
-            compiled=coupled.compiled_star(),
+            dt=context.dt, nsteps=context.n_steps, D=context.bond_dim,
             observe=observe, seed=context.seed, **context.kw)
-        density = domain = None
         if spec.driver == "run_tree_tdvp":
             times, rdms = _tree.run_tree_mpo(
-                density, domain, sweep="tdvp1", **common)
+                representation, sweep="tdvp1", **common)
         elif spec.driver == "run_tree_tdvp2":
             times, rdms = _tree.run_tree_mpo(
-                density, domain, sweep="tdvp2",
+                representation, sweep="tdvp2",
                 trunc_eps=context.trunc_eps, **common)
         elif spec.driver == "run_tree_tebd":
             times, rdms = _tree.run_tree_tebd(
-                density, domain, trunc_eps=context.trunc_eps, **common)
+                representation, trunc_eps=context.trunc_eps, **common)
         else:
             raise ValueError(f"unknown mode-tree driver {spec.driver!r}")
         return Result(
@@ -319,7 +312,7 @@ def _interaction_representation(model, coupled, name):
     representation = InteractionRepresentation(
         representation=name, h_sys=model.h,
         coupling=model.coupling,
-        compiled_star=coupled.compiled_star()).build()
+        bath=bath).build()
     return representation, phys_dims
 
 
@@ -327,12 +320,10 @@ def _multichannel_interaction_representation(model, coupled, name):
     from fishbonett.representations.multichannel import MultichannelInteractionRepresentation
 
     bath = coupled.bath
-    star = coupled.compiled_star()
-    coupling_matrix = star.combine(coupled.operators)
-    phys_dims = [model.h.shape[0]] + [star.phys_dim] * star.n_modes
-    representation = MultichannelInteractionRepresentation.from_signed_star(
-        phys_dims, coupling_matrix, star.frequencies,
-        h_sys=model.h, representation=name).build(n=0)
+    phys_dims = [model.h.shape[0]] + [bath.phys_dim] * bath.n_modes
+    representation = MultichannelInteractionRepresentation(
+        representation=name, h_sys=model.h, coupling=coupled.operators,
+        bath=bath).build(n=0)
     return representation, phys_dims
 
 

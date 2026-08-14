@@ -3,6 +3,7 @@ of a small spin-boson chain."""
 import numpy as np
 
 from fishbonett import Bath
+from fishbonett.bath.chain import get_bath_nn_paras
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian, SX, SZ
 from fishbonett.operators import annihilate, create, number
 from fishbonett.representations.interaction import InteractionRepresentation
@@ -36,9 +37,11 @@ def _embed(op, site, dims):
 
 
 def _exact_sz(n_chain, d, V, ts):
-    chain = _coupled(n_chain, d).compiled_chain()
-    eps_c, t_c, c0 = (
-        chain.frequencies, chain.hoppings, chain.system_coupling)
+    bath = _bath(n_chain, d)
+    eps_c, couplings = get_bath_nn_paras(
+        bath.spectral_density(), n_chain, list(bath.domain),
+        discretizer=bath.discretizer())
+    t_c, c0 = couplings[1:], couplings[0]
     dims = [2] + [d] * n_chain
     b, bd, nb = annihilate(d), create(d), number(d)
     H = _embed(V * SX, 0, dims) + c0 * (_embed(SZ, 0, dims) @ _embed(b + bd, 1, dims))
@@ -57,16 +60,15 @@ def _exact_sz(n_chain, d, V, ts):
 
 
 def _chain(n_chain, d, V):
-    coupled = _coupled(n_chain, d)
     return SchrodingerRepresentation(
         representation="schrodinger-chain", h_sys=V * SX, coupling=SZ,
-        compiled_bath=coupled.compiled_chain())
+        bath=_bath(n_chain, d))
 
 
-def _coupled(n_modes, phys_dim):
+def _bath(n_modes, phys_dim):
     return Bath(
         J=_Jb, domain=DOMAIN, n_modes=n_modes,
-        phys_dim=phys_dim).bind(SZ)
+        phys_dim=phys_dim)
 
 
 def test_tdvp1_matches_exact_diagonalization():
@@ -94,7 +96,7 @@ def test_ip_mpo_matches_exact():
     representation = InteractionRepresentation(
         representation="interaction-star",
         h_sys=V * SX, coupling=SZ,
-        compiled_star=_coupled(n_chain, d).compiled_star()).build()
+        bath=_bath(n_chain, d)).build()
     assert not representation.static, "the interaction MPO must be rebuilt"
     t, sz, _ = run_mpo_hamiltonian(representation, dt=0.04, nsteps=15, sweep="tdvp1", D=40,
                              krylov=25)
@@ -152,7 +154,7 @@ def test_one_loop_serves_every_tdvp_mpo_and_sweep():
     interaction = InteractionRepresentation(
         representation="interaction-star",
         h_sys=V * SX, coupling=SZ,
-        compiled_star=_coupled(n_chain, d).compiled_star()).build()
+        bath=_bath(n_chain, d)).build()
     representations = {"chain": _chain(n_chain, d, V),
                        "interaction-star": interaction}
     for name, representation in representations.items():
