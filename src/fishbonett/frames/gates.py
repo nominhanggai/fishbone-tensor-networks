@@ -17,7 +17,23 @@ from copy import deepcopy as dcopy
 
 from fishbonett.linalg import expm_gate
 
-__all__ = ["swap_gate_pairs"]
+__all__ = ["swap_gate_pairs", "star_edges"]
+
+
+def star_edges(n_modes):
+    """The **interaction** graph these frames emit: a star centred on the system.
+
+    ``get_h2`` returns one two-site term per mode, and every one of them pairs that
+    mode with the *system* -- there are no mode-mode terms in the interaction
+    picture, because the free-bath evolution has been rotated into ``d_n(t)``.  So
+    the graph of H is ``0-1, 0-2, ..., 0-N``.
+
+    The state, meanwhile, is a **path** ``0-1-2-...-N``.  Those are different graphs
+    for ``N > 2``, and reconciling them is exactly what the swap network does and
+    what :data:`fishbonett.models.registry.LAYOUTS` calls ``"swap"``.  Returned as
+    data so that relationship can be asserted rather than only described.
+    """
+    return [(0, k) for k in range(1, n_modes + 1)]
 
 
 def swap_gate_pairs(h2, factor=1):
