@@ -14,7 +14,8 @@ import numpy as np
 
 from fishbonett.models.result import Result
 
-__all__ = ["RunCtx", "propagate", "mps_peak_bond", "tree_peak_bond"]
+__all__ = ["RunCtx", "propagate",
+           "mps_peak_bond", "tree_peak_bond", "modetree_peak_bond"]
 
 
 @dataclass

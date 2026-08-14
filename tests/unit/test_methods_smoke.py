@@ -41,6 +41,44 @@ def test_polaron_builds_and_gives_normalized_rdm():
     assert np.allclose([np.trace(rho).real for rho in r.rdm], 1.0, atol=1e-6)
 
 
+def test_every_module_all_is_accurate():
+    """``__all__`` must name things that exist, and not omit a module's own public
+    callables.
+
+    The first half is what breaks ``from x import *``; the second is how
+    ``modetree_peak_bond`` ended up exported by import but not by ``__all__``, next
+    to its two siblings that were.  Both are cheap to check and neither is visible
+    in a passing test suite otherwise.
+    """
+    import importlib
+    import pkgutil
+
+    import fishbonett
+
+    missing, undeclared = [], []
+    names = [m.name for m in pkgutil.walk_packages(fishbonett.__path__, "fishbonett.")
+             if not any(p.startswith("_") for p in m.name.split(".")[1:])]
+    for name in sorted(set(names + ["fishbonett"])):
+        if name == "fishbonett.rsvd_cupy":          # needs CuPy
+            continue
+        mod = importlib.import_module(name)
+        declared = getattr(mod, "__all__", None)
+        if declared is None:
+            continue
+        missing += [f"{name}.__all__ names {n!r}, which does not exist"
+                    for n in declared if not hasattr(mod, n)]
+        for n in dir(mod):
+            if n.startswith("_") or n in declared:
+                continue
+            obj = getattr(mod, n)
+            if getattr(obj, "__module__", None) == name and callable(obj):
+                undeclared.append(f"{name}.{n}")
+    assert not missing, "\n".join(missing)
+    assert not undeclared, (
+        "public callables defined in a module but left out of its __all__: "
+        + ", ".join(undeclared))
+
+
 def test_public_api_surface():
     import fishbonett as fb
     for name in ("SystemBathMPS", "TreeTensorNetwork", "SystemBath", "Fishbone",
