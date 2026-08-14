@@ -167,6 +167,24 @@ def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
     return -2 * c12 ** 2 * c23 ** 2 * integral
 
 
+def _require_vegas():
+    """Import ``vegas``, or explain which extra provides it.
+
+    It is imported inside the functions that need it, not at module scope, so the
+    rest of this module works without it.  The bare ``ModuleNotFoundError`` did not
+    mention that ``fishbonett[rates]`` exists for exactly this.
+    """
+    try:
+        import vegas
+    except ImportError as exc:                     # pragma: no cover - needs the extra absent
+        raise ImportError(
+            "the VEGAS Monte-Carlo rate integrators need the optional `vegas` "
+            "package: pip install 'fishbonett[rates]'.  The deterministic "
+            "`..._quad` variants in this module need no extra."
+        ) from exc
+    return vegas
+
+
 def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max,
                                       nitn=10, neval=1000):
     """:func:`fgr_rate3_correction_order2` by VEGAS Monte Carlo instead of ``nquad``.
@@ -226,7 +244,7 @@ def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max,
         * y[0] / t_max * y[0] * y[1] / t_max ** 2
     )
 
-    import vegas
+    vegas = _require_vegas()
     int_interval = [0, t_max]
     integ = vegas.Integrator([int_interval] * 3)
 
@@ -423,7 +441,7 @@ def fgr_rate3_correction_order_vegas(c_list, e_list, kbT, w, s_list, t_max, orde
             * t2y_jacobian(y, t_max)
         )
 
-    import vegas
+    vegas = _require_vegas()
 
     int_interval = [0, t_max]
     integrator = vegas.Integrator([int_interval] * (order + 1))
