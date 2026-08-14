@@ -52,6 +52,30 @@ def test_continuous_bath_driver_builds_with_the_default_quadrature():
     np.testing.assert_allclose(coef.T @ coef, np.eye(n_boson), atol=1e-10)
 
 
+def test_star_transform_has_one_implementation():
+    """The star->chain transform is bath machinery, and there is one of it.
+
+    ``evolve.modetree`` carried a byte-identical copy of what ``frames.mpo`` used --
+    the same pathology as the chain mapping in five copies.  It lives in ``bath``
+    now because that is what it is (the same star/Lanczos pair as
+    ``get_bath_nn_paras``, keeping the transform instead of discarding it), and
+    because importing it from there leaves ``evolve`` depending on no frame.
+    """
+    import ast
+    import inspect
+    from fishbonett.bath.chain import star_transform
+    from fishbonett.evolve import modetree
+    from fishbonett.frames import mpo
+
+    assert modetree._star_transform is star_transform is mpo.star_transform
+
+    # and the layering it was fixed under still holds
+    src = inspect.getsource(modetree)
+    assert not any(isinstance(n, ast.ImportFrom) and n.module
+                   and "frames" in n.module for n in ast.walk(ast.parse(src))), \
+        "evolve must not import frames -- a frame says what H is, evolve advances it"
+
+
 def test_shared_mode_star_is_the_one_multichannel_discretization():
     """One star construction, used by both multichannel paths.
 
