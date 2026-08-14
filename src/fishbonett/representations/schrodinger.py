@@ -1,15 +1,15 @@
-"""Schroedinger picture: nothing rotated out, ``H`` static and strictly local.
+"""Schrodinger representations: nothing rotated out, ``H`` static and local.
 
-The frame with no transformation.  The chain-mapped Hamiltonian is written down as
+The representation with no transformation.  The chain-mapped Hamiltonian is written down as
 it stands -- bath frequencies on their own sites, nearest-neighbour hoppings between
 them -- so ``H`` is time-independent and its gates and MPO are built **once**.  The
 price is entanglement: nothing has been removed, so the state carries the full
-system-bath correlation and the bond dimensions are the largest of any frame.
+system-bath correlation and the bond dimensions are the largest of any representation.
 
-This module is the frame for *any* topology: one system site with a chain of modes,
+This module is the representation for *any* topology: one system site with a chain of modes,
 a comb, or an arbitrary loop-free tree of sites each with its own bath(s).  They
 differ only in the edge list, which is why :func:`terms` returns a
-:class:`~fishbonett.frames.terms.LocalTerms` graph rather than anything
+:class:`~fishbonett.encodings.terms.LocalTerms` graph rather than anything
 geometry-specific.
 
 .. rubric:: What's here
@@ -20,15 +20,15 @@ geometry-specific.
 :func:`star_terms`   the same for a shared-mode multichannel star
 ===================  ===========================================================
 
-The MPO form of this frame for the single-system models lives in
-:mod:`fishbonett.frames.mpo` (``build_chain_mpo``, ``build_static_star_mpo``) and is
+The MPO form of this representation for the single-system models lives in
+:mod:`fishbonett.encodings.mpo` (``build_chain_mpo``, ``build_static_star_mpo``) and is
 driven by :mod:`fishbonett.evolve.tdvp`; the gate form is driven by
 :mod:`fishbonett.evolve.sitetree`.
 """
 import numpy as np
 
 from fishbonett.bath.coupled import bind_bath
-from fishbonett.frames.terms import LocalTerms
+from fishbonett.encodings.terms import LocalTerms
 from fishbonett.operators import annihilate, sigma_z
 
 __all__ = ["terms", "chain_terms", "star_terms", "bath_ops"]

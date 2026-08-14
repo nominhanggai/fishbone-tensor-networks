@@ -1,4 +1,4 @@
-"""Tests for the model taxonomy: model -> frame -> propagator.
+"""Tests for the model taxonomy: model -> representation -> propagator.
 
 The registry (:mod:`fishbonett.models.registry`) is the single source of truth for
 which methods exist.  These tests pin it to the *dispatch* so the two cannot
@@ -55,12 +55,12 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
 
     assert set(R.all_methods()) == set(R.METHODS)
     for name, spec in R.METHODS.items():
-        assert spec.frame in R.FRAMES, f"{name} names unknown frame {spec.frame!r}"
+        assert spec.representation in R.REPRESENTATIONS, f"{name} names unknown representation {spec.representation!r}"
         assert spec.models, f"{name} belongs to no model"
         for mk in spec.models:
             assert mk in R.MODELS, f"{name} names unknown model {mk!r}"
             assert name in R.MODELS[mk].methods()
-        assert spec.basis in ("chain", "star"), f"{name} names unknown basis"
+        assert spec.representation.count("-") == 1
         assert spec.geometry in R.GEOMETRIES, f"{name} names unknown geometry"
         # every single-system engine must resolve to one plan compiler
         if set(spec.models) & {"system-bath", "multichannel"}:
@@ -68,8 +68,8 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
                 f"{name}: engine {spec.engine!r} has no plan compiler")
 
     assert not hasattr(SB, "_DRIVERS")
-    assert not hasattr(SB, "_MPO_FRAMES")
-    assert not hasattr(SB, "_SWAP_FRAMES")
+    assert not hasattr(SB, "_MPO_REPRESENTATIONS")
+    assert not hasattr(SB, "_SWAP_REPRESENTATIONS")
 
 
 def test_fixed_bond_methods_are_registry_data():
@@ -83,70 +83,65 @@ def test_fixed_bond_methods_are_registry_data():
     assert "tebd" not in R.FIXED_BOND_METHODS
 
 
-def test_every_model_frame_pair_has_at_least_one_method():
+def test_every_model_representation_pair_has_at_least_one_method():
     for key, m in R.MODELS.items():
-        assert m.frames, f"model {key!r} declares no frames"
-        for frame, methods in m.frames.items():
-            assert frame in R.FRAMES, f"{key!r} names unknown frame {frame!r}"
-            assert methods, f"{key!r}/{frame!r} declares no methods"
+        assert m.representations, f"model {key!r} declares no representations"
+        for representation, methods in m.representations.items():
+            assert representation in R.REPRESENTATIONS, f"{key!r} names unknown representation {representation!r}"
+            assert methods, f"{key!r}/{representation!r} declares no methods"
 
 
 def test_every_gap_has_a_reason():
-    """An absent model/frame combination must say *why* -- impossible, unwise, or
+    """An absent model/representation combination must say *why* -- impossible, unwise, or
     merely unimplemented.  Silence is what made "is there a polaron tree?"
     unanswerable before."""
     for key, m in R.MODELS.items():
-        for frame, why in m.gaps.items():
-            assert frame in R.FRAMES, f"{key!r} gap names unknown frame {frame!r}"
-            assert why and why.strip(), f"{key!r}/{frame!r} gap has no reason"
-            assert frame not in m.frames, (
-                f"{key!r}/{frame!r} is listed both as available and as a gap")
+        for representation, why in m.gaps.items():
+            assert representation in R.REPRESENTATIONS, f"{key!r} gap names unknown representation {representation!r}"
+            assert why and why.strip(), f"{key!r}/{representation!r} gap has no reason"
+            assert representation not in m.representations, (
+                f"{key!r}/{representation!r} is listed both as available and as a gap")
 
 
-def test_every_absent_frame_has_a_reason_available():
-    """No model may leave a frame unexplained: either it works, or asking why
+def test_every_absent_representation_has_a_reason_available():
+    """No model may leave a representation unexplained: either it works, or asking why
     produces an answer.
 
-    Deliberately *not* ``set(frames) | set(gaps) == set(FRAMES)``, which is what this
+    Deliberately *not* ``set(representations) | set(gaps) == set(REPRESENTATIONS)``, which is what this
     checked while every reason was hand-written.  Most are derived now -- the
     (multichannel, polaron) cell exists in no ``gaps`` entry because two constraints
     clash there -- so the invariant is that the reason is obtainable, not that
     somebody typed it."""
     for key, m in R.MODELS.items():
-        for frame in R.FRAMES:
-            if frame in m.frames:
+        for representation in R.REPRESENTATIONS:
+            if representation in m.representations:
                 continue
-            why = R.why_not(key, frame)
-            assert why, f"model {key!r} cannot explain why it has no {frame!r} frame"
+            why = R.why_not(key, representation)
+            assert why, f"model {key!r} cannot explain why it has no {representation!r} representation"
 
 
-def test_method_frames_is_a_projection_not_an_identity():
-    """``METHOD_FRAMES`` maps a method to ``(frame, model)`` -- which no longer
+def test_method_representations_is_a_projection_not_an_identity():
+    """``METHOD_REPRESENTATIONS`` maps a method to ``(representation, model)`` -- which no longer
     identifies it, and that is the point.
 
     The old taxonomy gave these different *models* (``chain`` / ``star`` /
-    ``mode-tree``) so that the pair looked like a key.  Those were a bath basis and a
-    state geometry wearing a model's name; collapsing them means the pair is now a
+    ``mode-tree``) so that the pair looked like a key.  The first two are now part
+    of the complete representation name and the third is a state geometry; this means the pair is now a
     genuine projection, and the axes that separate the collisions are the two the
     taxonomy gained."""
     sb = ("interaction-chain", "system-bath")
-    assert R.METHOD_FRAMES["tree-tdvp2"] == sb
-    assert R.METHOD_FRAMES["mpo-ip-tdvp2"] == sb
-    # ...same frame, same model, same integrator -- separated only by geometry
+    assert R.METHOD_REPRESENTATIONS["tree-tdvp2"] == sb
+    assert R.METHOD_REPRESENTATIONS["mpo-ip-tdvp2"] == sb
+    # ...same representation, same model, same integrator -- separated only by geometry
     assert R.METHODS["tree-tdvp2"].geometry == "binary-tree"
     assert R.METHODS["mpo-ip-tdvp2"].geometry == "path"
 
-    # the Schrodinger picture is the only one with two frames, one per basis --
-    # nothing else rotates out anything, so nothing else leaves the basis open
-    assert R.METHOD_FRAMES["mpo-tdvp2"] == ("schrodinger-chain", "system-bath")
-    assert R.METHOD_FRAMES["mpo-star-tdvp2"] == ("schrodinger-star", "system-bath")
-    assert R.pictures_of("schrodinger") == ("schrodinger-chain", "schrodinger-star")
-    assert R.pictures_of("interaction") == ("interaction-chain", "interaction-star")
-    assert R.pictures_of("polaron") == ("polaron-chain", "polaron-star")
+    assert R.METHOD_REPRESENTATIONS["mpo-tdvp2"] == ("schrodinger-chain", "system-bath")
+    assert R.METHOD_REPRESENTATIONS["mpo-star-tdvp2"] == ("schrodinger-star", "system-bath")
 
-    # polaron is its own frame, not a Schrodinger sub-case
-    assert R.METHOD_FRAMES["polaron"] == ("polaron-chain", "system-bath")
-    assert R.METHOD_FRAMES["trotter-mpo"] == sb
+    # polaron is its own representation, not a Schrodinger sub-case
+    assert R.METHOD_REPRESENTATIONS["polaron"] == ("polaron-chain", "system-bath")
+    assert R.METHOD_REPRESENTATIONS["trotter-mpo"] == sb
 
 
 def test_multichannel_default_path_is_schrodinger_not_interaction():
@@ -159,12 +154,13 @@ def test_multichannel_default_path_is_schrodinger_not_interaction():
     The model now has a genuine interaction-picture path too
     (``multichannel-ip``), which is a *different* method -- the point of this test
     is that the static one is not it."""
-    frames = R.MODELS["multichannel"].frames
-    assert R.MULTICHANNEL_STATIC in frames["schrodinger-star"]
-    assert R.MULTICHANNEL_IP in frames["interaction-star"]
-    assert R.MULTICHANNEL_STATIC not in frames.get("interaction-star", ())
-    # both of its frames are star frames: the shared modes cannot be chain-mapped
-    assert all(R.FRAMES[f].basis == "star" for f in frames)
+    representations = R.MODELS["multichannel"].representations
+    assert R.MULTICHANNEL_STATIC in representations["schrodinger-star"]
+    assert R.MULTICHANNEL_IP in representations["interaction-chain"]
+    assert R.MULTICHANNEL_IP_STAR in representations["interaction-star"]
+    assert R.MULTICHANNEL_STATIC not in representations.get("interaction-star", ())
+    assert set(representations) == {
+        "schrodinger-star", "interaction-chain", "interaction-star"}
 
     mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
@@ -267,14 +263,14 @@ def test_result_shape_contract_matches_its_docstring():
 def test_every_method_agrees_on_the_same_physics():
     """The methods are each other's cross-check -- so check them against each other.
 
-    Every ``system-bath`` method is one system plus one bath written a different
-    way -- two bases, two geometries, three frames -- and a one-site ``site-tree``
+    Every ``system-bath`` method is one system plus one bath written in one of six
+    representations on two geometries, and a one-site ``site-tree``
     is the same physics again on the general tree engine.  All of those rewritings
     are exact, not approximations, so every one must land on the same trajectory to
     within its own Trotter and truncation error.
 
     This is the broadest correctness statement the package can make about itself:
-    17 independent code paths agreeing on one number.  A frame that dropped a term,
+    17 independent code paths agreeing on one number.  A representation that dropped a term,
     a geometry wired to the wrong bath, or a propagator applying gates in the wrong
     order would show up here as a gross disagreement rather than a subtle one.
     """
@@ -333,18 +329,18 @@ def test_application_matches_what_the_drivers_actually_do():
         f"{sorted(actual)}")
 
     # a swap network is what a star *interaction graph* costs on a *path* state.
-    # Deliberately keyed on `diagonal_bath`, not on the basis: `tebd` is
+    # Deliberately keyed on `mode_decoupled`: `tebd` is
     # interaction-chain and still swaps, because it is rotating H_B away that
     # spreads the coupling over every mode, not the choice of modes to write it in.
-    assert all(R.FRAMES[R.METHODS[n].frame].diagonal_bath
+    assert all(R.REPRESENTATIONS[R.METHODS[n].representation].mode_decoupled
                and R.METHODS[n].geometry == "path" for n in declared)
-    assert R.METHODS["tebd"].basis == "chain"    # ...and one of them is a chain
+    assert R.METHODS["tebd"].representation == "interaction-chain"
 
     # and an application is realized *once*: the swap methods share one engine, and
-    # differ only in which frame supplies H(t)
+    # differ only in which representation supplies H(t)
     swap_engines = {R.METHODS[n].engine for n in declared}
     assert len(swap_engines) == 1, (
-        "the swap application should have one driver, not one per frame")
+        "the swap application should have one driver, not one per representation")
     assert "symmetric_swap_step" in inspect.getsource(
         PLAN_COMPILERS[next(iter(swap_engines))])
 
@@ -354,49 +350,44 @@ def test_run_takes_the_axes_directly():
     run.  The axes are the structure; the name is the shorthand."""
     kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z}, trunc_eps=1e-7)
     by_axes = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
-        frame="interaction-chain", geometry="path", integrator="tdvp2", **kw)
+        representation="interaction-chain", geometry="path", integrator="tdvp2", **kw)
     by_name = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
         method="mpo-ip-tdvp2", **kw)
     assert by_axes.method == by_name.method == "mpo-ip-tdvp2"
     assert np.array_equal(by_axes.rdm, by_name.rdm)
 
-    # the axis vocabulary is uniform across frames: "tebd" means the same word
-    # whether the frame dresses the state or not
+    # the axis vocabulary is uniform across representations: "tebd" means the same word
+    # whether the representation dresses the state or not
     sb = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
-    assert sb.run(frame="polaron-chain", integrator="tebd", **kw).method == "polaron"
-    assert sb.run(frame="interaction-chain", geometry="path", integrator="tebd",
+    assert sb.run(representation="polaron-chain", integrator="tebd", **kw).method == "polaron"
+    assert sb.run(representation="interaction-chain", geometry="path", integrator="tebd",
                   **kw).method == "tebd"
-    # a bare *picture* works wherever it names exactly one frame
-    assert sb.run(frame="polaron", integrator="tebd", **kw).method == "polaron"
+    # Partial names are intentionally not another public taxonomy.
+    with pytest.raises(ValueError, match="no method"):
+        sb.run(representation="polaron", integrator="tebd", **kw)
 
 
-def test_every_picture_times_basis_is_a_real_frame():
-    """All 3 x 2 of them.  None is impossible; what is absent is unimplemented.
+def test_six_complete_representations_are_registered():
+    """All six names are complete public choices and all are implemented.
 
-    This replaces a test asserting the opposite -- that ``interaction-chain`` and
-    ``polaron-star`` could not exist.  Both can.  ``H_B`` in the chain basis is
-    tridiagonal rather than diagonal but still *quadratic*, so rotating it out is
-    well defined; and the textbook Lang-Firsov transform is *defined* per star mode.
-    Calling either impossible confused "costs too much on an MPS" with "cannot be
-    written down", which is exactly the distinction this registry exists to keep."""
+    In particular, ``interaction-chain`` means star discretization, free-star
+    interaction transformation, then star-to-chain transformation.  The
+    ``polaron-star`` representation retains the per-mode Lang--Firsov
+    displacements."""
     grid = {f"{p}-{b}" for p in ("schrodinger", "interaction", "polaron")
             for b in ("chain", "star")}
-    assert set(R.FRAMES) == grid
-    for key, f in R.FRAMES.items():
-        assert key == f"{f.picture}-{f.basis}"
-
-    # five of the six are implemented somewhere; the sixth is a recorded gap, and
-    # its reason has to say "not implemented", not "impossible"
-    have = {s.frame for s in R.METHODS.values()}
-    assert grid - have == {"polaron-star"}
-    why = R.MODELS["system-bath"].gaps["polaron-star"]
-    assert "not implemented" in why
+    assert set(R.REPRESENTATIONS) == grid
+    assert set(R.MODELS["system-bath"].representations) == grid
+    assert {s.representation for s in R.METHODS.values()} == grid
+    for item in R.REPRESENTATIONS.values():
+        assert not hasattr(item, "picture")
+        assert not hasattr(item, "basis")
 
 
 def test_interaction_chain_is_what_the_ip_methods_actually_run():
     """The implemented interaction-picture methods hold **chain** modes.
 
-    ``mode_couplings`` rotates the star phases back into the chain basis, so at
+    The star-to-chain transform rotates the star phases into chain modes, so at
     ``t = 0`` the coupling sits entirely on ``c0`` -- the Schroedinger chain
     configuration -- and spreads outward with ``t``.  Star modes would give every
     entry nonzero at ``t = 0``.  These were labelled ``interaction-star`` until this
@@ -414,14 +405,14 @@ def test_interaction_chain_is_what_the_ip_methods_actually_run():
 
     for m in ("tebd", "trotter-mpo", "mpo-ip-tdvp1", "mpo-ip-tdvp2",
               "tree-tdvp", "tree-tdvp2", "tree-tebd"):
-        assert R.METHODS[m].frame == "interaction-chain", m
-    # the genuine star interaction frames: the multichannel model, whose shared
-    # modes cannot be chain-mapped, and the explicit un-rotated pair
-    assert R.METHODS[R.MULTICHANNEL_IP].frame == "interaction-star"
-    assert R.METHODS["mpo-ip-star-tdvp2"].frame == "interaction-star"
+        assert R.METHODS[m].representation == "interaction-chain", m
+    # Multichannel exposes the same distinction explicitly.
+    assert R.METHODS[R.MULTICHANNEL_IP].representation == "interaction-chain"
+    assert R.METHODS[R.MULTICHANNEL_IP_STAR].representation == "interaction-star"
+    assert R.METHODS["mpo-ip-star-tdvp2"].representation == "interaction-star"
 
 
-def test_the_two_interaction_bases_agree():
+def test_the_two_interaction_representations_agree():
     """`interaction-chain` and `interaction-star` are one orthogonal transform
     apart, so they must land on the same trajectory.
 
@@ -442,29 +433,29 @@ def test_axis_errors_name_what_separates_the_candidates():
     kw = dict(dt=0.02, n_steps=2, trunc_eps=1e-7)
     sb = lambda: SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
 
-    # a bare picture naming two frames is ambiguous -- schrodinger is the only one
+    # A partial name is not a public representation.
+    with pytest.raises(ValueError, match="no method"):
+        sb().run(representation="schrodinger", **kw)
+    # ...and one representation spanning two geometries is too
     with pytest.raises(ValueError, match="ambiguous"):
-        sb().run(frame="schrodinger", **kw)
-    # ...and one frame spanning two geometries is too
+        sb().run(representation="interaction-chain", integrator="tdvp2", **kw)
+    # An exact representation still needs enough axes to choose its integrator.
     with pytest.raises(ValueError, match="ambiguous"):
-        sb().run(frame="interaction-chain", integrator="tdvp2", **kw)
-    # a frame nobody has wired quotes the gap rather than saying "unknown"
-    with pytest.raises(ValueError, match="not implemented"):
-        sb().run(frame="polaron-star", **kw)
-    # a chain frame on a binary tree: the one geometry constraint left
+        sb().run(representation="polaron-star", **kw)
+    # a chain representation on a binary tree: the one geometry constraint left
     with pytest.raises(ValueError, match="no mode-mode terms"):
-        sb().run(frame="schrodinger-chain", geometry="binary-tree", **kw)
+        sb().run(representation="schrodinger-chain", geometry="binary-tree", **kw)
     # a name already fixes all four axes, so mixing spellings is a mistake
     with pytest.raises(ValueError, match="not both"):
-        sb().run(method="tebd", frame="polaron-chain", **kw)
-    # an axis that is not one -- `basis` was one briefly and is not any more
-    for gone in ("basis", "layout"):
+        sb().run(method="tebd", representation="polaron-chain", **kw)
+    # Neither a deprecated decomposition nor an application detail is an axis.
+    for gone in ("basis", "frame", "layout"):
         with pytest.raises(TypeError, match="unknown axis"):
             R.resolve({"system-bath"}, **{gone: "star"})
 
 
 def test_the_old_model_names_say_what_they_became():
-    """``chain``/``star``/``mode-tree`` were half a frame and a geometry wearing a
+    """``chain``/``star``/``mode-tree`` were half a representation and a geometry wearing a
     model's name.  They are gone -- but the error has to teach the replacement,
     because they were the documented spelling."""
     for gone, hint in (("chain", "schrodinger-chain"), ("star", "schrodinger-star"),
@@ -482,7 +473,7 @@ def test_every_method_is_reachable_by_its_axes():
     for mk in R.MODELS:
         for name in R.methods_of(mk):
             spec = R.METHODS[name]
-            axes = dict(model=mk, frame=spec.frame,
+            axes = dict(model=mk, representation=spec.representation,
                         geometry=spec.geometry, integrator=spec.integrator)
             got = R.resolve(set(R.MODELS), **axes)
             assert got.name == name, f"{axes} -> {got.name}"
@@ -528,26 +519,26 @@ def test_models_of_reports_every_owner():
 
 
 def test_methods_of_explains_a_gap_instead_of_a_bare_keyerror():
-    """Asking for an absent frame must quote the registry's recorded reason, not
+    """Asking for an absent representation must quote the registry's recorded reason, not
     raise a bare KeyError -- the reason text itself is free to be reworded."""
     reason = R.MODELS["comb"].gaps["polaron-chain"]
     with pytest.raises(KeyError, match=re.escape(reason)):
         R.methods_of("comb", "polaron-chain")
 
 
-def test_one_engine_can_serve_two_frames():
+def test_one_engine_can_serve_two_representations():
     """``tree-tebd-static`` and ``multichannel-static`` are the same engine on the
-    same geometry, split because they are different **frames**.
+    same geometry, split because they are different **representations**.
 
-    ``frames/schrodinger.py`` picks ``star_terms`` exactly when the bath is
+    ``representations/schrodinger.py`` picks ``star_terms`` exactly when the bath is
     multichannel and chain terms otherwise, so the split was always in the code.
-    One row could not carry it once a frame names its basis, which is what forced
-    it into the table -- and the two now say plainly which representation each
+    One row could not carry both Hamiltonians, which is what forced it into the
+    table -- and the two now say plainly which representation each
     model's bath is in."""
     static, mc = R.METHODS[R.STATIC_TREE_TEBD], R.METHODS[R.MULTICHANNEL_STATIC]
     assert static.engine == mc.engine == "static-tree-tebd"
     assert static.geometry == mc.geometry == "comb-tree"
-    assert (static.frame, mc.frame) == ("schrodinger-chain", "schrodinger-star")
+    assert (static.representation, mc.representation) == ("schrodinger-chain", "schrodinger-star")
     assert static.models == ("comb", "site-tree") and mc.models == ("multichannel",)
 
 

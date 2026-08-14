@@ -7,7 +7,7 @@ The package uses ``hbar = 1`` and
 Consequently a quadrature node with weight ``q_k`` has
 ``g_k**2 = J(omega_k) q_k / pi`` and the reorganization energy is
 ``lambda = integral J(omega) / (pi * omega) d omega``.  Keeping the small
-numerical helpers here prevents frame implementations from silently choosing a
+numerical helpers here prevents representation implementations from silently choosing a
 different factor of ``pi`` or a different zero-frequency limit.
 """
 import numpy as np

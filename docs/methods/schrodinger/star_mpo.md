@@ -1,4 +1,4 @@
-# Schrödinger picture · star — MPO + TDVP
+# Schrödinger-star representation — MPO + TDVP
 
 `mpo-star-tdvp1` (fixed bond) and `mpo-star-tdvp2` (adaptive) run TDVP on a
 **static** star-geometry MPO — no chain mapping, every mode coupled directly to the
@@ -8,8 +8,7 @@ system, and nothing rotated out.  Because $H$ is time-independent the MPO is bui
 
 ## Theory
 
-Discretizing $J(\omega)$ on a Gauss grid gives a *star* Hamiltonian directly — no
-Lanczos tridiagonalization:
+A finite star discretization gives
 
 $$
 H = H_{\mathrm{sys}} + \sum_k \omega_k\, a_k^\dagger a_k
@@ -46,13 +45,13 @@ so the bond profile is $[1, 3, 3, \dots, 3, 1]$ — one larger than the
 interaction-picture star, and still independent of $N$.  The last mode closes to
 bond 1 and must emit **no** identity from `START` or `CARRY`, or the operator would
 contain a term with the coupling left dangling.  This is
-{py:func}`fishbonett.frames.mpo.build_static_star_mpo`; it is exact (verified
+{py:func}`fishbonett.encodings.mpo.build_static_star_mpo`; it is exact (verified
 elementwise against the dense $H$, and Hermitian).
 
 ### Star or chain?
 
 Same trade-off as in the interaction picture, and worth restating because in this
-frame it cuts the other way.
+representation it cuts the other way.
 
 - The **chain** gives the MPS locality to exploit: the system touches only $b_0$ and
   correlations spread outward at a finite speed.  The price is $N$ mode–mode
@@ -72,7 +71,7 @@ check: it shares no code path with the chain MPO beyond the TDVP sweep itself, s
 agreement between the two is a genuine cross-validation.  Measured against exact
 diagonalization of the discretized star (3 modes, $d=5$, 10 steps of $dt=0.05$):
 
-| method | frame | max error vs exact |
+| method | representation | max error vs exact |
 |---|---|---|
 | `mpo-star-tdvp2` | Schrödinger, static MPO | $7.3\times10^{-11}$ |
 | `mpo-star-tdvp1` | Schrödinger, static MPO | $1.1\times10^{-9}$ |
@@ -114,7 +113,7 @@ r2.max_bond
 
 ## Notes
 
-- Prefer {doc}`/methods/schrodinger/chain` for production runs in this frame — the
+- Prefer {doc}`/methods/schrodinger/chain` for production runs in this representation — the
   chain's locality usually beats the star's lack of mode–mode terms once nothing has
   been rotated out.  Reach for the static star when you want a reference answer or
   an independent check.
@@ -122,6 +121,5 @@ r2.max_bond
   the interaction-picture star cannot offer.
 - `h` and the coupling `O` are carried as matrices, so a general Hermitian system
   and coupling of any dimension work; see {doc}`/models/spin_boson`.
-- There is no polaron star: the polaron displacement acts on a collective mode
-  spread over every star mode at once, with no single site to localize it on.  See
-  {py:mod}`fishbonett.models.registry`.
+- `polaron-star` is a separate static representation implemented through the
+  generic MPO/TDVP encoding; see {doc}`polaron_chain`.

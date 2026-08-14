@@ -6,7 +6,7 @@ import pytest
 
 
 def test_chain_cooling_gives_normalized_rdm():
-    from fishbonett.frames.coolingchain import SystemBathCoolingChain
+    from fishbonett.representations.coolingchain import SystemBathCoolingChain
     from fishbonett.operators import sigma_x, sigma_z
 
     pd = [2, 6, 6, 6]
@@ -23,13 +23,13 @@ def test_chain_cooling_gives_normalized_rdm():
 
 
 def test_cooling_gauge_cancels_out_of_the_observable():
-    """The correctness criterion for the cooling-chain frame, which had none.
+    """The correctness criterion for the cooling-chain representation, which had none.
 
-    That frame carries finite temperature in a *non-unitary* ``betaOmega`` gauge
+    That representation carries finite temperature in a *non-unitary* ``betaOmega`` gauge
     rather than in extra modes, so the propagated state is not the physical one.
     Its docstring says observables must be read back through the heating operators
     ``exp(2 betaOmega n_i)`` and that "reading the RDM the ordinary way would give
-    the wrong answer".  Both halves of that are checkable, and the whole frame had
+    the wrong answer".  Both halves of that are checkable, and the whole representation had
     exactly one test, asserting only that a trace came out as 1.
 
     Three things, which together are what makes the scheme a gauge:
@@ -43,7 +43,7 @@ def test_cooling_gauge_cancels_out_of_the_observable():
     shifts the naive read by up to 4.5e-3.
     """
     import numpy as np
-    from fishbonett.frames.coolingchain import SystemBathCoolingChain
+    from fishbonett.representations.coolingchain import SystemBathCoolingChain
     from fishbonett.operators import sigma_x, sigma_z
 
     sd = lambda w: 0.5 * abs(w) * np.exp(-abs(w) / 10.0)
@@ -74,7 +74,7 @@ def test_cooling_gauge_cancels_out_of_the_observable():
         assert abs(np.trace(gauged).real - 1.0) < 1e-10
 
 
-@pytest.mark.parametrize("module,cls", [("frames.coolingchain", "SystemBathCoolingChain")])
+@pytest.mark.parametrize("module,cls", [("representations.coolingchain", "SystemBathCoolingChain")])
 def test_cooling_shares_the_canonical_engine(module, cls):
     mod = importlib.import_module(f"fishbonett.{module}")
     bases = [b.__name__ for b in getattr(mod, cls).__mro__]
@@ -188,9 +188,9 @@ def test_removed_comb_engine_is_gone():
     for mod in ("fishbonett.states.comb", "fishbonett.evolve.tebd_comb"):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(mod)
-    # frames.schrodinger exists again, but as the *frame* rather than a pair of
-    # (model, frame) builder classes -- it emits LocalTerms for any topology.
-    sch = importlib.import_module("fishbonett.frames.schrodinger")
+    # representations.schrodinger exists again, but as the *representation* rather than a pair of
+    # (model, representation) builder classes -- it emits LocalTerms for any topology.
+    sch = importlib.import_module("fishbonett.representations.schrodinger")
     assert hasattr(sch, "terms")
     for gone in ("FishBoneH", "SystemBathSchrodinger"):
         assert not hasattr(sch, gone), f"{gone} should not have come back"
@@ -210,19 +210,22 @@ def test_mps_and_tree_are_one_tensor_network():
     from fishbonett.states.tree import TreeTensorNetwork
     from fishbonett.states.network import TensorNetwork
     from fishbonett.evolve import tebd
-    from fishbonett.frames.polaron import SystemBathPolaron
+    from fishbonett.encodings.polaron import PolaronGateEncoder
+    from fishbonett.representations.polaron import PolaronRepresentation
     from fishbonett.operators import sigma_x, sigma_z
 
     assert issubclass(SystemBathMPS, TensorNetwork)
     assert issubclass(TreeTensorNetwork, TensorNetwork)
 
     pd = [2] + [8] * 5
-    builder = SystemBathPolaron(pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+    builder = PolaronRepresentation(pd, representation="polaron-chain",
+                                h_sys=0.5 * sigma_x, coupling=sigma_z,
                                 sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
                                 domain=(0.3, 12.0)).build()
+    gates = PolaronGateEncoder(builder).gates(0.01)
     st = SystemBathMPS(pd)
     for _ in range(3):
-        tebd.symmetric_static_step(st, builder.gates(0.01), len(pd) - 1, 40, 1e-9)
+        tebd.symmetric_static_step(st, gates, len(pd) - 1, 40, 1e-9)
 
     # the chain's topology is inferred, not special-cased
     assert st.neighbours(0) == [1]
@@ -265,16 +268,19 @@ def test_mps_joint_rdm_matches_the_dense_state():
     import numpy as np
     from fishbonett.states.mps import SystemBathMPS
     from fishbonett.evolve import tebd
-    from fishbonett.frames.polaron import SystemBathPolaron
+    from fishbonett.encodings.polaron import PolaronGateEncoder
+    from fishbonett.representations.polaron import PolaronRepresentation
     from fishbonett.operators import sigma_x, sigma_z
 
     pd = [2, 3, 3, 3, 3]
-    builder = SystemBathPolaron(pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+    builder = PolaronRepresentation(pd, representation="polaron-chain",
+                                h_sys=0.5 * sigma_x, coupling=sigma_z,
                                 sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
                                 domain=(0.3, 12.0)).build()
+    gates = PolaronGateEncoder(builder).gates(0.05)
     st = SystemBathMPS(pd)
     for _ in range(4):                     # entangle it; a product state proves nothing
-        tebd.symmetric_static_step(st, builder.gates(0.05), len(pd) - 1, 40, 1e-12)
+        tebd.symmetric_static_step(st, gates, len(pd) - 1, 40, 1e-12)
 
     # the dense wavefunction: psi = B_0 B_1 ... B_{n-1}, with each R put back
     psi = np.einsum('KI,aIb->aKb', st.R[0],
@@ -314,7 +320,7 @@ def test_gate_methods_are_second_order_in_dt(model_key, method):
     while the docs claimed second order, so it is worth having as a test rather
     than as a one-off measurement.
 
-    Only the *gate-based* methods are listed.  The static-frame TDVP ones are
+    Only the *gate-based* methods are listed.  The static-representation TDVP ones are
     second order too, but their error at a usable ``dt`` sits at 1e-8..1e-10 --
     below the Krylov and round-off floor -- so a Richardson ratio there measures
     noise, not the method.  Verified separately at larger ``dt``, where they come
@@ -347,29 +353,34 @@ def test_gate_methods_are_second_order_in_dt(model_key, method):
         f"(|rho(2dt)-rho(dt)|={d1:.2e}, |rho(dt)-rho(dt/2)|={d2:.2e})")
 
 
-def test_swap_network_frames_share_one_get_u():
-    """The two swap-network frames differ in ``get_h2`` and in nothing after it.
+def test_swap_network_encoding_is_independent_of_the_representation():
+    """Representations provide Hamiltonian data; a separate adapter makes gates.
 
-    Found by an AST scan for duplicate function bodies, which is also how the
-    star->chain transform turned up.  Both frames had the same two-line ``get_u``;
-    it is the mixin's now, and the contract it states -- supply ``get_h2``, receive
-    swap-network gates -- is the whole of what they share.
+    This boundary prevents a Hamiltonian representation from depending on TEBD.
+    The adapter contract is: supply ``two_site_hamiltonians`` and receive
+    swap-network gates.
     """
-    from fishbonett.frames.gates import SwapNetworkFrame
-    from fishbonett.frames.interaction_picture import SystemBathIP
-    from fishbonett.frames.multichannel import SystemBathMultiChannel
+    from fishbonett.encodings.gates import SwapGateEncoder
+    from fishbonett.representations.interaction import InteractionRepresentation
+    from fishbonett.representations.multichannel import MultichannelInteractionRepresentation
 
-    for cls in (SystemBathIP, SystemBathMultiChannel):
-        assert issubclass(cls, SwapNetworkFrame)
-        assert cls.get_u is SwapNetworkFrame.get_u, f"{cls.__name__} re-declares get_u"
-        assert cls.get_h2 is not SwapNetworkFrame.get_h2, (
-            f"{cls.__name__} must supply its own get_h2 -- that is the contract")
+    for cls in (InteractionRepresentation, MultichannelInteractionRepresentation):
+        assert not issubclass(cls, SwapGateEncoder)
+        assert "get_u" not in cls.__dict__
+
+    class Stub:
+        def two_site_hamiltonians(self, *_args, **_kwargs):
+            from scipy.sparse import csr_matrix
+            return [(csr_matrix(np.zeros((4, 4), complex)), 2, 2)]
+
+    first, second = SwapGateEncoder(Stub()).get_u(0.0, 0.1)
+    assert first[0].shape == second[0].shape == (2, 2, 2, 2)
 
 
 def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     """Why the swap layout exists, asserted rather than described.
 
-    The claim the whole model/frame/layout split rests on is that H's *interaction*
+    The claim the whole model/representation/layout split rests on is that H's *interaction*
     graph and the state's *tensor-network* graph are different objects.  Here they
     demonstrably are: in the interaction picture every mode couples to the system
     and to nothing else (a star), while the MPS holding the state is a path.  The
@@ -377,20 +388,21 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     methods are marked ``layout="swap"``.
     """
     import numpy as np
-    from fishbonett.frames.gates import star_edges
-    from fishbonett.frames.interaction_picture import SystemBathIP
+    from fishbonett.encodings.gates import star_edges
+    from fishbonett.representations.interaction import InteractionRepresentation
     from fishbonett.models import registry as R
     from fishbonett.states.mps import SystemBathMPS
     from fishbonett.operators import sigma_x, sigma_z
 
     n = 5
     pd = [2] + [4] * n
-    builder = SystemBathIP(pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+    builder = InteractionRepresentation(pd, representation="interaction-chain",
+                           h_sys=0.5 * sigma_x, coupling=sigma_z,
                            sd=lambda w: 0.3 * w * np.exp(-w / 2.5),
                            domain=(0.3, 12.0)).build()
 
     # one two-site term per star edge, each pairing a mode with the system
-    h2 = builder.get_h2(0.0, 0.01)
+    h2 = builder.two_site_hamiltonians(0.0, 0.01)
     edges = star_edges(n)
     assert len(h2) == len(edges) == n
     for (_h, d_boson, d_sys) in h2:
@@ -405,27 +417,27 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
     assert shared == {(0, 1)}, "only the nearest mode is adjacent to the system"
 
     # and that mismatch is exactly what the registry derives: a star *interaction
-    # graph* on a path geometry is what a swap network costs.  Note the frame is
+    # graph* on a path geometry is what a swap network costs.  Note the representation is
     # `interaction-chain` -- the modes are chain modes; it is rotating H_B away that
-    # makes the coupling reach all of them, which is what `diagonal_bath` records.
-    assert R.METHODS["tebd"].frame == "interaction-chain"
-    assert R.FRAMES["interaction-chain"].diagonal_bath
+    # makes the coupling reach all of them, which is what `mode_decoupled` records.
+    assert R.METHODS["tebd"].representation == "interaction-chain"
+    assert R.REPRESENTATIONS["interaction-chain"].mode_decoupled
     assert R.METHODS["tebd"].geometry == "path"
     assert R.METHODS["tebd"].application == "swap"
     assert R.APPLICATIONS["swap"].startswith("a star realized on a path")
 
 
-def test_schrodinger_frame_serves_every_topology():
-    """The point of Stage 3: one frame implementation, any geometry.
+def test_schrodinger_representation_serves_every_topology():
+    """The point of Stage 3: one representation implementation, any geometry.
 
     The multi-site models used to build their static Hamiltonian inline, bypassing
-    frames/ entirely, which is why the package could hold a `frames` directory that
+    representations/ entirely, which is why the package could hold a `representations` directory that
     half the models never touched.
     """
     import numpy as np
     from fishbonett import Bath, Fishbone
     from fishbonett.models import TreeFishbone
-    from fishbonett.frames.terms import LocalTerms
+    from fishbonett.encodings.terms import LocalTerms
     from fishbonett.operators import sigma_x, sigma_z
 
     J = lambda w: 0.2 * w * np.exp(-w / 5.0)

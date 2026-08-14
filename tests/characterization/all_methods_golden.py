@@ -1,6 +1,6 @@
 """Golden capture/check across **every** method in the registry.
 
-The gate for structural refactors of the model/frame/propagator layers: a
+The gate for structural refactors of the model/representation/propagator layers: a
 restructure must not move a number.  Runs each ``(model, method)`` pair the registry
 declares on a small fixed problem and records ``(t, rdm, expect, max_bond)``.
 
@@ -45,10 +45,10 @@ def _bath():
 
 
 #: Old key -> new, for comparing a baseline captured before the taxonomy was
-#: re-axed.  ``chain``/``star`` were half of a *frame* and ``mode-tree`` a state
+#: re-axed.  ``chain``/``star`` were half of a *representation* and ``mode-tree`` a state
 #: *geometry*; all three are the one ``system-bath`` model.  ``tree-tebd-static``
 #: on the multichannel model became ``multichannel-static``: same engine, but a
-#: different **frame** (schrodinger-star, where the multi-site models are
+#: different **representation** (schrodinger-star, where the multi-site models are
 #: schrodinger-chain), which one row could not carry.
 #:
 #: The runs are the same runs either way, so every number must still match

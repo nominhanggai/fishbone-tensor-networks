@@ -16,7 +16,7 @@ $$
 an arbitrary Hermitian system Hamiltonian $H_{\mathrm{sys}}$ coupled through an
 arbitrary Hermitian operator $O$ to a bath specified only by its spectral density
 $J(\omega)$ (and a temperature). Everything else — discretizing the bath, mapping
-it to a chain, choosing a frame, propagating, reading observables — is what this
+it to a chain, choosing a representation, propagating, reading observables — is what this
 package does.
 
 ## How to read this
@@ -27,7 +27,7 @@ The main sections are meant to be read in this order, though each stands alone:
    dozen lines. Start here.
 2. **{doc}`models/index`** — the four models: what you can express, from a single
    spin-boson system to arbitrary loop-free trees of sites and baths, plus how to
-   define observables.  The model you pick decides which frames and propagators
+   define observables.  The model you pick decides which representations and propagators
    are available.
 3. **{doc}`bath`** — how a continuous $J(\omega)$ becomes a finite chain of modes:
    discretization, the TEDOPA chain mapping, finite temperature (thermofield), and
@@ -35,9 +35,9 @@ The main sections are meant to be read in this order, though each stands alone:
    are faithful.
 4. **{doc}`conventions`** — units, spectral-density normalization, phase signs,
    temperature, and the reference checks that keep representations consistent.
-5. **{doc}`methods/index`** — the propagation methods: for each model, the frame
-   (interaction picture, polaron, Schrödinger) and the integrator (TEBD, exact
-   MPO propagator, TDVP), with the theory behind each.
+5. **{doc}`methods/index`** — the propagation methods: for each model, the exact
+   representation and the integrator (TEBD, exact MPO propagator, TDVP), with the
+   theory behind each.
 6. **{doc}`architecture`** — the ownership and dependency boundaries used by the
    implementation.
 7. **{doc}`licensing`** — the scope of the MIT license and third-party
@@ -67,10 +67,11 @@ api
   `run(dt=..., t_max=..., method=...)` call. Every method takes the same arguments
   and returns the same `Result`, so switching engines — or cross-validating one
   against another — is a one-word change.
-- **Many frames, one model.** The same physical model can be propagated in the
-  Schrödinger picture, the interaction picture, or the polaron frame; the frame is
-  what determines how much entanglement the state has to carry. Which frames a
-  model admits — and why the others are absent — is recorded in
+- **Many representations, one model.** The same physical model can use a
+  Schrödinger, interaction, or polaron representation, with star or chain included
+  in the complete representation name. The representation determines how much
+  entanglement the state has to carry. Which representations a model admits — and
+  why the others are absent — is recorded in
   {py:mod}`fishbonett.models.registry`.
 - **Sensible automation.** The bath `domain` and mode count can be derived from the
   spectral density and the propagation time; truncation is driven by an accuracy

@@ -1,7 +1,7 @@
 """Mixed-canonical tree tensor-network state.
 
 The *state* only: node tensors, their canonical form, and reduced density
-matrices.  It knows nothing about baths or frames -- the models that drive it live
+matrices.  It knows nothing about baths or representations -- the models that drive it live
 in :mod:`fishbonett.models.fishbone`, and the gate application and Trotter step in
 :mod:`fishbonett.evolve.sitetree` (the methods here are thin wrappers around it,
 as in :mod:`fishbonett.states.mps`).

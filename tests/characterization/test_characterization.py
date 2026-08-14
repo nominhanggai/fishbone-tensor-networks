@@ -27,8 +27,10 @@ def _load(name):
 def _run(name):
     from fishbonett.operators import sigma_x, sigma_z, number
     from fishbonett.states.mps import SystemBathMPS
-    from fishbonett.frames.multichannel import SystemBathMultiChannel as SystemBath
+    from fishbonett.encodings.gates import SwapGateEncoder
+    from fishbonett.representations.multichannel import MultichannelInteractionRepresentation as SystemBath
     return run_multichannel_ic(SystemBath, SystemBathMPS, sigma_x, sigma_z, number,
+                               GateEncoder=SwapGateEncoder,
                                lbo=(name == "lbo"))
 
 

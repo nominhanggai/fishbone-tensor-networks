@@ -1,6 +1,6 @@
 """The propagation call: what every ``run`` has in common.
 
-A ``run`` is one *(model, frame, integrator)* combination
+A ``run`` is one *(model, representation, integrator)* combination
 (:class:`fishbonett.models.registry.Method`) applied to one set of run
 parameters.  :class:`RunCtx` is that second half -- the arguments that are the
 same whichever combination was picked -- so a driver takes ``(spec, ctx)`` and
@@ -104,8 +104,8 @@ def propagate(spec, ctx, *, step, rdm, peak_bond, expect_from_rdm):
     ``step(k)``
         advance one ``dt``, from step index ``k``.  The **integrator**.
     ``rdm()``
-        the system reduced density matrix **in the lab frame** after that step.  The
-        **frame**, because a frame that dresses the state (polaron) has to undress
+        the system reduced density matrix **in the lab representation** after that step.  The
+        **representation**, because a representation that dresses the state (polaron) has to undress
         the observable, and one that does not simply reads it off.
     ``peak_bond()``
         the widest bond right now.  The **state**, hence

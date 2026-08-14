@@ -1,102 +1,123 @@
 # Architecture
 
-The package separates a simulation into a physical problem, compiled numerical
-representations, a Hamiltonian frame, a tensor-network state and an integrator.
-The dependency direction is one-way:
+The public decomposition is:
+
+```text
+model -> representation -> encoding -> state geometry -> integrator
+```
+
+- A **model** defines the physical topology and system operators.
+- A **representation** defines the mathematical Hamiltonian.
+- An **encoding** turns that Hamiltonian into local terms, gates, an MPO, or a
+  factorized propagator.
+- A **state geometry** is the tensor graph: path, balanced mode tree, or comb.
+- An **integrator** advances the encoded operator and state.
+
+Only `model`, `representation`, `geometry`, and `integrator` are public selection
+axes. Encoding is an implementation boundary chosen by the resolved method.
+
+## Dependency direction
 
 ```text
 Bath + System / site graph
         |
         v
-CoupledBath                         model owns the system operators
+CoupledBath                         physical system--bath association
         |
         v
-StarBath / ChainBath / PolaronBath  immutable, operator-free coefficients
+StarBath / ChainBath / PolaronBath  immutable finite bath data
         |
         v
-frame compiler                      LocalTerms, MPOFrame, gates, or factorized U
+representation                     mathematical transformation of H
         |
         v
-SimulationPlan                      prepared state + step/measure policies
+encoding                           LocalTerms / MPO / gates / factorized U
         |
         v
-integrator + tensor-network state   TEBD / TDVP on an MPS or tree
+SimulationPlan                     prepared state + propagation + measurement
         |
         v
-Result                              time, RDMs, expectations, bond diagnostics
+tensor state + integrator          TEBD / TDVP on a path or tree
+        |
+        v
+Result                             times, RDMs, expectations, bond diagnostics
 ```
+
+Dependencies point downward. In particular, the six public representation
+builders do not import TEBD, TDVP, MPO drivers, or tensor-network state classes.
+The adapters in `fishbonett.encodings` may consume representation data, and the
+planner may combine an encoding with an integrator. The exploratory
+`SystemBathCoolingChain` predates this boundary and remains a stateful,
+low-level compatibility utility outside `method=` dispatch.
+
+## Bath compilation and the interaction representation
+
+The finite star is the starting point for the interaction construction:
+
+1. discretize the continuous bath into independent star modes
+   $(\omega_k,g_k,a_k)$;
+2. take the interaction representation with respect to
+   $H_B=\sum_k\omega_k a_k^\dagger a_k$;
+3. retain $a_k$ for `interaction-star`, or apply the star-to-chain transform
+   $b_n=\sum_k U_{nk}a_k$ for `interaction-chain`.
+
+Thus
+
+$$
+c_k(t)=g_k e^{-i\omega_k t},\qquad
+d_n(t)=\sum_k U_{nk}g_k e^{-i\omega_k t}.
+$$
+
+Diagonalizing a finite chain is one numerical way to obtain equivalent finite
+star data. It is not the conceptual definition of `interaction-chain`; the
+defining order is star discretization, interaction transformation, then
+star-to-chain transformation.
 
 ## Ownership rules
 
 - {py:class}`~fishbonett.bath.spec.Bath` owns environment physics and numerical
-  resolution: spectral densities, temperature, domain, mode count and local Fock
-  dimension.
-- {py:class}`~fishbonett.bath.coupled.CoupledBath` owns the association between
-  that environment and one or more system-space operators. Multiple operators are
-  channels sharing one set of modes.
+  resolution: spectral densities, temperature, domain, mode count, and local
+  Fock dimension.
+- {py:class}`~fishbonett.bath.coupled.CoupledBath` binds that environment to one
+  or more system-space operators. Multiple operators are channels sharing the
+  same modes.
 - {py:class}`~fishbonett.bath.compiled.StarBath` and
-  {py:class}`~fishbonett.bath.compiled.ChainBath` own finite numerical
-  coefficients. {py:class}`~fishbonett.bath.compiled.PolaronBath` holds the
-  reweighted chain and reorganization shift required by the Lang--Firsov frame.
-  They are immutable and deliberately contain no system operator. A bound bath
-  caches each representation for reuse within a simulation setup.
-- A frame owns transformations of the Hamiltonian and lowers compiled bath data
-  into the form its compatible integrator consumes.
+  {py:class}`~fishbonett.bath.compiled.ChainBath` own operator-free finite
+  coefficients. {py:class}`~fishbonett.bath.compiled.PolaronBath` contains both
+  star and chain data for the reweighted $J(\omega)/\omega^2$ measure plus the
+  reorganization energy.
+- `fishbonett.representations` owns Hamiltonian transformations, time-dependent
+  coefficients, transformed initial states, and recovery of laboratory
+  observables.
+- `fishbonett.encodings` owns engine-facing forms: MPOs, local terms, swap gates,
+  static polaron gates, and conditional-displacement propagators.
 - {py:class}`~fishbonett.models.simulation.SimulationPlan` owns orchestration for
-  one resolved method: prepared state, frame-specific lab-frame measurement, and
-  either step policies or a native whole-run driver.
-- An integrator advances tensors. High-level integrator paths consume compiled
-  coefficients and do not decide how a spectral density is discretized.
+  one resolved method.
+- `fishbonett.evolve` advances tensors and does not discretize a bath or select a
+  representation.
 
-`Bath.coupling` is deprecated. In the single-system API,
-`SystemBath(coupling=...)` is authoritative; Fishbone inputs should be explicit
-`bath.bind(operator)` objects. The compatibility spelling emits a
-`DeprecationWarning`, and conflicting duplicate values are rejected.
+`Bath.coupling` remains a deprecated compatibility input. `SystemBath(coupling=...)`
+is authoritative, and multi-site models should receive `bath.bind(operator)`.
 
-## Why frames do not have one output type
+## Why encodings are separate
 
-Different representations expose different useful structure. A static local
-Hamiltonian naturally becomes {py:class}`~fishbonett.frames.terms.LocalTerms`; a
-TDVP path needs {py:class}`~fishbonett.frames.mpo.MPOFrame`; the interaction
-picture can expose time-dependent gates or an exact conditional-displacement
-propagator. Forcing all of these through one tensor container would hide useful
-capabilities. The stable boundary is therefore the compiled bath input, while the
-method registry records which frame output and integrator are compatible.
+One mathematical representation can support several propagation algorithms. For
+example, `interaction-chain` can be encoded as swap-network gates, a
+conditional-displacement MPO, a time-dependent Hamiltonian MPO, or a tree
+operator. None of those choices changes the represented Hamiltonian.
 
-## Compatibility boundary
+The separation is checked structurally through protocols in
+{py:mod}`fishbonett.encodings.capabilities`. A plan fails during compilation when
+an engine receives an incompatible encoding.
 
-The high-level `run()` interface uses this pipeline. Low-level builders that
-accept a spectral-density callable and a domain remain available for existing
-research scripts; they compile internally and are compatibility entry points, not
-the dependency direction for new high-level code.
+## Dispatch boundary
 
-{py:class}`~fishbonett.models.system_bath.SystemBath` now validates the physical
-problem and user-facing run choices, resolves one registry row and executes its
-compiled plan. Frame preparation, state construction, stepping and measurement
-live in :mod:`fishbonett.models.simulation`; the former `_DRIVERS`, `_MPO_FRAMES`
-and `_SWAP_FRAMES` maps no longer exist on the model.
+{py:data}`fishbonett.models.registry.METHODS` is the single table that maps a
+public method to `(model, representation, geometry, integrator)` and an internal
+engine key. {py:data}`fishbonett.models.simulation.PLAN_COMPILERS` maps only those
+engine keys to preparation code. Physical model classes do not maintain duplicate
+method tables.
 
-The two former numerical monoliths are split behind stable compatibility façades:
-
-```text
-evolve.tdvp facade       -> _tdvp_driver -> _tdvp_sweeps -> _tdvp_kernels
-evolve.modetree facade   -> _modetree_driver -> _modetree_sweeps
-                                              -> _modetree_core
-```
-
-Kernel/core modules contain tensor algebra and topology only. The chain sweep
-module owns symmetric projector splitting; the mode-tree operation module owns
-TTNO application, canonicalization and edge truncation. Driver modules resolve
-compatibility inputs, prepare a run and collect its trajectory. The documented
-imports from `evolve.tdvp` and `evolve.modetree` remain stable.
-
-Frame outputs are checked structurally through the runtime protocols in
-{py:mod}`fishbonett.frames.capabilities`: MPO, static graph, static gates, swap
-gates, and conditional displacement. A plan therefore fails during compilation
-if an engine is paired with a frame that does not expose the required operations.
-
-All three high-level model classes execute through `SimulationPlan`. The
-single-system model and multi-site Fishbone models differ in their result
-collector, not in where orchestration lives. `run(seed=...)` scopes randomized
-linear algebra and fixed-bond padding to that one plan without changing NumPy's
-global generator.
+All high-level model classes execute through `SimulationPlan`. `run(seed=...)`
+also scopes randomized linear algebra to that plan without changing NumPy's
+global random generator.

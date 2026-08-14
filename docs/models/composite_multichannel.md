@@ -71,7 +71,7 @@ $$
 
 so the channels genuinely cross-correlate rather than acting as independent baths.
 That star is compiled as {py:class}`~fishbonett.bath.compiled.StarBath` — one
-operator-free mode grid used by both the Schrödinger frame and the
+operator-free mode grid used by both the Schrödinger representation and the
 interaction-picture path.  The model binding then combines its scalar strengths
 with `[sigma_z, sigma_x]`.  Passing that list to `SystemBath(coupling=...)` routes
 it through

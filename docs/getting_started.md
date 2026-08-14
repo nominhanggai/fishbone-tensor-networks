@@ -117,7 +117,7 @@ observables — and {doc}`bath` covers bath discretization and finite temperatur
 usually clearer and is what the taxonomy is actually made of:
 
 ```python
-res = sb.run(dt=0.02, t_max=2.0, frame="polaron-chain",
+res = sb.run(dt=0.02, t_max=2.0, representation="polaron-chain",
              integrator="tebd")          # == method="polaron"
 ```
 
@@ -126,26 +126,24 @@ A run is four independent choices:
 | axis | values | what it is |
 |---|---|---|
 | `model` | `system-bath`, `multichannel`, `comb`, `site-tree` | what is coupled to what |
-| `frame` | a picture × a basis — six of them, below | how `H` is written down |
+| `representation` | six exact names, below | how `H` is written down |
 | `geometry` | `path`, `binary-tree`, `comb-tree` | the graph the state lives on |
 | `integrator` | `tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo` | how a step is taken |
 
-A **frame** is a picture *and* a mode basis, because both are choices about how `H`
-is written down. All $3\times2$ are real frames:
+A representation name is complete. There is no second public category to combine
+with it:
 
-| picture | `chain` | `star` |
+| transformation | chain representation | star representation |
 |---|---|---|
 | **Schrödinger** | `schrodinger-chain` | `schrodinger-star` |
 | **interaction** | `interaction-chain` | `interaction-star` |
-| **polaron** | `polaron-chain` | `polaron-star` *(not implemented)* |
+| **polaron** | `polaron-chain` | `polaron-star` |
 
-The two bases are one orthogonal (Lanczos) transform apart, so they are the same
-physics at different cost — which is why the basis is a representation choice and
-not a model. A bare picture works where it names one frame:
-`frame="interaction-chain"` is explicit, and `frame="schrodinger"` names two and
-says so.
+The star and chain forms are related by an orthogonal transform and describe the
+same finite bath at different tensor-network cost. Partial names such as
+`representation="schrodinger"` are rejected; use an exact name.
 
-Every model, the frames it admits, and the reason each absent combination is absent —
+Every model, the representations it admits, and the reason each absent combination is absent —
 generated from {py:mod}`fishbonett.models.registry` when these docs are built, so it
 is whatever the code actually offers:
 
@@ -155,41 +153,42 @@ is whatever the code actually offers:
 
 ## Low-level engines
 
-For finer control the underlying engines are available directly.  The high-level
-path first compiles `Bath` into immutable star or chain coefficients and gives
-those to the frame.  Legacy low-level builders also accept a spectral density and
-domain directly, as this polaron example does:
+For finer control the underlying layers are available directly. The high-level
+path compiles `Bath`, constructs a representation, encodes it for an engine, and
+then propagates. Legacy low-level constructors also accept a spectral density and
+domain directly:
 
 ```python
 import numpy as np
-from fishbonett.frames.polaron import SystemBathPolaron
+from fishbonett.representations.polaron import PolaronRepresentation
+from fishbonett.encodings.polaron import PolaronGateEncoder
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.evolve import tebd
 from fishbonett.operators import sigma_x, sigma_z
 
 pd = [2] + [10] * 8                        # system on site 0, then the bath chain
-builder = SystemBathPolaron(
-    pd, h_sys=0.5 * sigma_x, coupling=sigma_z,
+builder = PolaronRepresentation(
+    pd, representation="polaron-chain",
+    h_sys=0.5 * sigma_x, coupling=sigma_z,
     sd=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0)).build()
 
 state = SystemBathMPS(pd)
-gates = builder.gates(0.02 / 2)            # static frame: gates built once...
+gates = PolaronGateEncoder(builder).gates(0.02 / 2)
 tebd.symmetric_static_step(state, gates, len(pd) - 1, chi_max=60, eps=1e-4)
 rho = state.rdm(0)                         # inherited from TensorNetwork
 ```
 
 `symmetric_static_step` applies each gate twice, so it takes **half**-step gates —
-the convention every second-order step here uses.  The same construction applies to
-{py:class}`~fishbonett.frames.interaction_picture.SystemBathIP` (whose gates are
-time-dependent, so they are rebuilt each step by
-{py:func}`~fishbonett.evolve.tebd.symmetric_swap_step`) and to
-{py:class}`~fishbonett.frames.multichannel.SystemBathMultiChannel`.  For a
+the convention every second-order step here uses. The interaction and
+multichannel representations can instead be adapted with
+{py:class}`~fishbonett.encodings.gates.SwapGateEncoder`; their time-dependent
+gates are rebuilt each step. For a
 multi-site model the state is a {py:class}`~fishbonett.states.tree.TreeTensorNetwork` driven
 by {py:mod}`fishbonett.evolve.sitetree` instead.
 
 The high-level interface above is a thin wrapper over exactly this loop, and
 additionally resolves the automatic `domain` / `n_modes`, prepares the initial
-state, and — in time-dependent frames — rebuilds the gates each step.
+state, and — in time-dependent representations — rebuilds the gates each step.
 
 See the [`examples/`](https://github.com/nominhanggai/fishbone-tensor-networks/tree/main/examples)
 directory for runnable scripts — start with `friendly_interface.py`, which also

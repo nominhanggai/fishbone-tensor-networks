@@ -3,10 +3,10 @@
 * ``site-tree`` (:class:`TreeFishbone`) -- sites wired into any loop-free tree;
 * ``comb`` (:class:`Fishbone`) -- the same with a linear backbone, the fishbone.
 
-Both are Schroedinger-picture, and the Hamiltonian itself is the frame's business,
+Both are Schroedinger-picture, and the Hamiltonian itself is the representation's business,
 not the model's: :meth:`TreeFishbone.local_terms` asks
-:func:`fishbonett.frames.schrodinger.terms` to turn the sites and baths into a
-:class:`~fishbonett.frames.terms.LocalTerms` graph -- bath frequencies on their own
+:func:`fishbonett.representations.schrodinger.terms` to turn the sites and baths into a
+:class:`~fishbonett.encodings.terms.LocalTerms` graph -- bath frequencies on their own
 nodes, couplings on the edges -- and the model only decides the topology and drives
 the propagation.  The state it evolves is
 :class:`fishbonett.states.tree.TreeTensorNetwork`, stepped by
@@ -18,7 +18,7 @@ a single system's bath modes are placed on a tree; see
 """
 import numpy as np
 
-from fishbonett.frames.schrodinger import terms as schrodinger_terms
+from fishbonett.representations.schrodinger import terms as schrodinger_terms
 from fishbonett.bath.coupled import CoupledBath, bind_bath
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
@@ -101,10 +101,10 @@ class TreeFishbone:
 
     def local_terms(self, t_max=None):
         """The static Hamiltonian as a
-        :class:`~fishbonett.frames.terms.LocalTerms` graph.
+        :class:`~fishbonett.encodings.terms.LocalTerms` graph.
 
-        Delegates to :func:`fishbonett.frames.schrodinger.terms` -- these models are
-        Schroedinger-picture, and the frame owns how a bath becomes nodes and edges.
+        Delegates to :func:`fishbonett.representations.schrodinger.terms` -- these models are
+        Schroedinger-picture, and the representation owns how a bath becomes nodes and edges.
         ``t_max`` sizes any bath whose ``n_modes`` is automatic.
         """
         return schrodinger_terms(self.sites, self.edges, self.baths, t_max)
@@ -155,7 +155,7 @@ class TreeFishbone:
         single propagator, :data:`STATIC_TREE_TEBD` (Schroedinger-picture tree
         TEBD), so it is the only accepted value.  Asking for a single-system
         method here raises with a message saying which model owns it.  The
-        frame gaps are recorded in :mod:`fishbonett.models.registry`.
+        representation gaps are recorded in :mod:`fishbonett.models.registry`.
 
         The step is second order in ``dt``
         (:func:`fishbonett.evolve.sitetree.symmetric_tree_step`), so halving ``dt``
@@ -258,7 +258,7 @@ class Fishbone:
                             baths=[self._site_baths(b) for b in self.baths])
 
     def local_terms(self, t_max=None):
-        """The static Hamiltonian as :class:`~fishbonett.frames.terms.LocalTerms`.
+        """The static Hamiltonian as :class:`~fishbonett.encodings.terms.LocalTerms`.
 
         Same as :meth:`fishbonett.models.fishbone.TreeFishbone.local_terms`, with the
         linear backbone expanded into the equivalent edge list.

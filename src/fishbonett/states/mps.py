@@ -63,7 +63,7 @@ class SystemBathMPS(TensorNetwork):
     bare ``TreeTensorNetwork``:
 
     * **leg order.**  Storage is ``(vL, p, vR)`` -- physical in the middle -- which
-      the whole 1D TEBD/TDVP stack and every frame's gate layout assume.  The base
+      the whole 1D TEBD/TDVP stack and every representation's gate layout assume.  The base
       wants ``(bonds..., phys)``, so :meth:`tensor` and :meth:`set_tensor` permute
       between the two.  That permutation is the entire difference; see
       :mod:`fishbonett.states`.

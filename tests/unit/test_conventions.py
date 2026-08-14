@@ -1,4 +1,4 @@
-"""Scientific sign/normalization conventions shared by every frame."""
+"""Scientific sign/normalization conventions shared by every representation."""
 import numpy as np
 
 from fishbonett import Bath

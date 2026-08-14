@@ -40,7 +40,7 @@ chain = coupled.compiled_chain()   # ChainBath: onsite terms + hoppings + c0
 ```
 
 The compiled objects are immutable and contain no system-space operator.  A
-`CoupledBath` combines them only when a frame needs the actual interaction.  The
+`CoupledBath` combines them only when a representation needs the actual interaction.  The
 old `Bath(coupling=...)` spelling emits `DeprecationWarning` and will be removed
 in a future major release. If it duplicates `SystemBath(coupling=...)`, the values
 must agree.
@@ -190,24 +190,25 @@ correlation function (lines); the inset shows the same separation between the
 faithful automatic choice and the degraded discretizations.
 ```
 
-## TEDOPA: the chain mapping, and the star it implies
+## Finite star data and star-to-chain mapping
 
-`fishbonett` uses the TEDOPA construction (Chin *et al.* 2010; Prior *et al.*
-2010).  TEDOPA is a **chain mapping**, and it is the spectral density itself that
-drives it: $J$ is used as the *weight function* of a family of orthogonal
-polynomials, and the chain parameters are read straight off that family's
-three-term recurrence,
+`fishbonett` supports two equivalent computational routes to a finite harmonic
+bath. A quadrature produces independent star modes directly. Alternatively,
+orthogonal-polynomial recurrences produce chain coefficients, and diagonalizing
+that finite chain recovers independent modes. The numerical route does not define
+the Hamiltonian representation selected later.
+
+In the recurrence route, $J$ is the weight function and the chain parameters are
+read from the three-term recurrence,
 
 $$
 \omega\,p_n(\omega) = t_{n+1}\,p_{n+1}(\omega) + \epsilon_n\,p_n(\omega)
                       + t_n\,p_{n-1}(\omega),
 $$
 
-so the recurrence coefficients $(\epsilon_n, t_n)$ *are* the chain's on-site
-energies and hoppings, with $c_0=\sqrt{\int J}$ the system–bath coupling.  Nothing
-is discretized first — the map goes from the continuum straight to the chain.  This
-is {py:func}`fishbonett.bath.chain.get_bath_nn_paras`, built on the recurrence
-coefficients in {py:mod}`fishbonett.bath.recurrence`.
+so $(\epsilon_n,t_n)$ are the chain on-site energies and hoppings. This is
+{py:func}`fishbonett.bath.chain.get_bath_nn_paras`, built on
+{py:mod}`fishbonett.bath.recurrence`.
 
 ```python
 from fishbonett.bath.chain import get_bath_nn_paras
@@ -215,22 +216,22 @@ from fishbonett.bath.chain import get_bath_nn_paras
 eps_i, t_i = get_bath_nn_paras(bath.spectral_density(), n=40, domain=(-25, 36))
 ```
 
-A **star** of independent modes is the same object seen in a different basis:
-diagonalizing the (tridiagonal) chain Hamiltonian "starizes" it, giving mode
-frequencies $\omega_k$ (the eigenvalues) and couplings $g_k$ (the first components
-of the eigenvectors, times $c_0$).  Truncating the chain to $n$ sites and starizing
-is therefore equivalent to an $n$-point quadrature of $J$ — which is why a
-discretization can stand in for the chain mapping, and why the two routes below
-give the same physics.
+A finite chain can be diagonalized to obtain frequencies $\omega_k$, couplings
+$g_k$, and an orthogonal transform. This is a way to generate a finite star
+discretization. The interaction construction then starts from that star:
 
-The chain form is what the MPS/MPO/tree engines evolve; the star form is what the
-interaction-picture engines use directly, since it is the star modes whose free
-evolution $e^{-i\omega_k t}$ is rotated out.  The whole mapping is pure
-NumPy/SciPy — there is no external Fortran (ORTHPOL) dependency.
+1. absorb the free-star evolution into $g_ke^{-i\omega_kt}$;
+2. keep those modes for `interaction-star`, or apply the inverse transform
+   star-to-chain for `interaction-chain`.
+
+Consequently, chain diagonalization is not the definition of
+`interaction-chain`. It is one way to prepare the finite star from which the
+interaction representation is built. The whole mapping is implemented in
+NumPy/SciPy without an external ORTHPOL dependency.
 
 ## `legendre` vs `tedopa`
 
-Because the quadrature and the chain mapping are two views of one construction,
+Because quadrature and chain mapping are two numerical views of one finite bath,
 `fishbonett` lets you pick which measure the $n$ modes are placed against.
 
 The default `"legendre"` puts them at the Gauss–Legendre nodes of the *uniform*

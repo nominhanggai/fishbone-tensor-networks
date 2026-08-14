@@ -9,7 +9,7 @@ Run with:  python examples/cooling_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.frames.coolingchain import SystemBathCoolingChain
+from fishbonett.representations.coolingchain import SystemBathCoolingChain
 from fishbonett.operators import sigma_x, sigma_z, temp_factor
 from fishbonett.spectral_densities import drude
 

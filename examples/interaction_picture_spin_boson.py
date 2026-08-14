@@ -3,19 +3,20 @@
 Propagates the population <sigma_z>(t) of a two-level system linearly coupled to a
 discrete set of harmonic modes, in the interaction picture with respect to the
 *free bath*.  Two coupling channels share the same modes, so the noise they impose
-is cross-correlated (see :mod:`fishbonett.frames.multichannel`).
+is cross-correlated (see :mod:`fishbonett.representations.multichannel`).
 
 This is the **low-level** route, and the reason to reach for it is the bath: the
 modes are given explicitly rather than sampled from a continuous ``J(omega)``.  For
 a continuous spectral density use the high-level interface instead --
 ``SystemBath(...).run(method="multichannel-ip")``, which builds the same
-frame from a :class:`~fishbonett.bath.spec.Bath`.
+representation from a :class:`~fishbonett.bath.spec.Bath`.
 
 Run with:  python examples/interaction_picture_spin_boson.py
 """
 import numpy as np
 
-from fishbonett.frames.multichannel import SystemBathMultiChannel
+from fishbonett.representations.multichannel import MultichannelInteractionRepresentation
+from fishbonett.encodings.gates import SwapGateEncoder
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.evolve import tebd
 from fishbonett.operators import sigma_x, sigma_z
@@ -31,9 +32,10 @@ def main():
     n_boson = 2 * len(freq)
     pd = [2] + [10] * n_boson                          # system on site 0, then bath
 
-    eth = SystemBathMultiChannel(
+    eth = MultichannelInteractionRepresentation(
         pd, coup_mat=coup_mat, freq=freq, temp=100.0,
         h_sys=130.0 * sigma_x + np.diag([0.0, -200.0])).build(n=0)
+    gates = SwapGateEncoder(eth)
 
     etn = SystemBathMPS(pd)
     etn.B[0][:] = 0.0
@@ -44,7 +46,7 @@ def main():
     for tn in range(n_steps):
         # One symmetric swap-network step: the system is walked along the chain so
         # that every mode gets its turn adjacent to it, then walked back.
-        tebd.symmetric_swap_step(etn, eth, tn * dt, dt, n_boson, chi, eps)
+        tebd.symmetric_swap_step(etn, gates, tn * dt, dt, n_boson, chi, eps)
         theta = etn.get_theta1(0)
         rho = np.einsum('LiR,LjR->ij', theta, theta.conj())
         pops.append(np.einsum('ij,ji', rho, sigma_z).real / np.trace(rho).real)

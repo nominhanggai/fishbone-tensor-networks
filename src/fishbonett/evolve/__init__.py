@@ -48,21 +48,21 @@ the level you need:
     one symmetric time step, or a whole simulation:
     :func:`~fishbonett.evolve.tebd.symmetric_swap_step`,
     :func:`~fishbonett.evolve.sitetree.symmetric_tree_step`,
-    :func:`run_mpo_frame`, ...
+    :func:`run_mpo_hamiltonian`, ...
 
 Every whole step here is **second order** (Strang): each takes half-step gates and
 applies them in palindromic order.
 
 The private split enforces dependency direction: kernels know only tensor algebra,
 sweeps depend on kernels, and whole-run drivers depend on both.  Neither kernels
-nor sweeps resolve a bath or import a Hamiltonian frame.
+nor sweeps resolve a bath or import a Hamiltonian representation.
 
-:func:`run_mpo_frame` takes a :class:`~fishbonett.frames.mpo.MPOFrame` -- the
+:func:`run_mpo_hamiltonian` takes a :class:`~fishbonett.encodings.mpo.MPOEncoding` -- the
 Hamiltonian, already built -- plus a sweep name, and runs the whole simulation.  It
 replaced seven ``run_*`` functions (``run_tdvp1``, ``run_star_tdvp2``,
 ``run_ip_tdvp1``, ...), one per *(MPO builder, sweep)* pair, which each built their
-own Hamiltonian and repeated the same loop.  Building a Hamiltonian is a frame
-question, so nothing here imports :mod:`fishbonett.frames` any more.
+own Hamiltonian and repeated the same loop. Building the engine-facing operator
+is an encoding question, so nothing here imports :mod:`fishbonett.representations`.
 
 For ordinary use go through
 :meth:`fishbonett.models.system_bath.SystemBath.run`, which handles bath
@@ -73,7 +73,7 @@ from fishbonett.evolve.tebd import (
     update_bond, sweep, swap_in, swap_out,
     symmetric_swap_step, symmetric_static_step,
 )
-from fishbonett.evolve.tdvp import run_mpo_frame
+from fishbonett.evolve.tdvp import run_mpo_hamiltonian
 from fishbonett.evolve.modetree import (
     run_tree_tdvp, run_tree_tdvp2, run_tree_tebd,
 )
@@ -85,8 +85,8 @@ __all__ = [
     "symmetric_swap_step", "symmetric_static_step",
     # MPO application (1D chain)
     "apply_mpo", "compress",
-    # TDVP driver (1D chain): one loop, any frame, any sweep
-    "run_mpo_frame",
+    # TDVP driver (1D chain): one loop, any representation, any sweep
+    "run_mpo_hamiltonian",
     # tree drivers
     "run_tree_tdvp", "run_tree_tdvp2", "run_tree_tebd",
 ]

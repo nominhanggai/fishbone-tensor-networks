@@ -1,12 +1,12 @@
 """``LocalTerms`` -- the interface between the physics and the numerics.
 
-Every frame's job is to turn a model plus its discretized baths into **local terms
-on a graph**: one operator per node, one per edge.  Everything downstream consumes
-only that:
+This encoding turns a static model plus its discretized baths into **local terms
+on a graph**: one operator per node and one per edge. Compatible downstream
+algorithms consume only that:
 
 * Trotter gates are the exponential of each term (:meth:`LocalTerms.gates`);
 * an MPO is a compressed sum of operator products over the same graph
-  (:mod:`fishbonett.frames.mpo`);
+  (:mod:`fishbonett.encodings.mpo`);
 * the state is a tensor network over the same graph
   (:mod:`fishbonett.states`).
 
@@ -15,18 +15,18 @@ chain, a comb or an arbitrary tree -- they differ only in the edge list.  The
 geometry is *in the data*, not in the code.
 
 .. note::
-   Not every frame fits this container, and that is deliberate rather than an
+   Not every representation fits this container, and that is deliberate rather than an
    oversight.  The interaction picture has **no** on-site bath terms at all and a
    *time-dependent* coupling, so its "terms" are a function of ``t`` rebuilt every
-   step; the polaron frame folds the coupling into a displacement on one bond.
+   step; the polaron representation folds the coupling into a displacement on one bond.
    ``LocalTerms`` is the shape of a **static** Hamiltonian, which is why the
    Schroedinger picture is what it serves.
 
-   The time-dependent frames emit a plain list of two-site Hamiltonians instead and
-   compile it with :func:`fishbonett.frames.gates.swap_gate_pairs` -- the same split
+   The time-dependent representations emit a plain list of two-site Hamiltonians instead and
+   compile it with :func:`fishbonett.encodings.gates.swap_gate_pairs` -- the same split
    of "what the terms are" from "how they become gates", one layer down.  See
-   :class:`fishbonett.frames.interaction_picture.SystemBathIP` and
-   :class:`fishbonett.frames.polaron.SystemBathPolaron`.
+   :class:`fishbonett.representations.interaction.InteractionRepresentation` and
+   :class:`fishbonett.representations.polaron.PolaronRepresentation`.
 """
 from dataclasses import dataclass, field
 from typing import Dict, List, Sequence, Tuple

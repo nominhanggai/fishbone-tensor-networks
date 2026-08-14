@@ -1,122 +1,88 @@
-# Interaction picture · star — MPO + TDVP
+# Interaction representations — MPO + TDVP
 
-`mpo-ip-tdvp1` (fixed bond) and `mpo-ip-tdvp2` (adaptive) run TDVP on a star-geometry
-MPO — no chain mapping, every mode coupled directly to the system.  The MPO is
-rebuilt at each step's midpoint (so no energy conservation, unlike the static
-Schrödinger frame).  Less entanglement than a chain, but no locality for the MPS.
+The MPO/TDVP path supports both interaction representations:
 
-These methods evolve the bath in its **star** geometry — every discretized mode
-coupled directly to the spin, with no chain mapping — in the interaction picture,
-using a time-dependent MPO integrated by TDVP.
+| representation | methods |
+|---|---|
+| `interaction-chain` | `mpo-ip-tdvp1`, `mpo-ip-tdvp2` |
+| `interaction-star` | `mpo-ip-star-tdvp1`, `mpo-ip-star-tdvp2` |
 
-## Theory
+Both use a time-dependent Hamiltonian MPO rebuilt at the step midpoint. The
+representation supplies coefficients; TDVP is a later, independent choice.
 
-Discretizing $J(\omega)$ on a Gauss grid gives a *star* Hamiltonian
+## Construction
 
-$$
-H = \tfrac{\epsilon}{2}\sigma_z + V\sigma_x
-    + \sum_j \omega_j\, a_j^\dagger a_j
-    + \sigma_z \sum_j g_j\,(a_j + a_j^\dagger),
-$$
-
-with mode frequencies $\omega_j$ and couplings $g_j$ read straight off the
-discretization (no Lanczos tridiagonalization).  Moving to the interaction
-picture with respect to the free bath $\sum_j \omega_j a_j^\dagger a_j$ removes
-the on-site frequencies and the inter-mode structure entirely: what remains is a
-spin coupled to each mode through a **time-dependent** coupling
+Discretize the bath into star modes:
 
 $$
-d_j(t) = \sum_k (\text{star}\!\to\!\text{normal})_{jk}\; g_k\, e^{-i\omega_k t},
+H=H_S+\sum_k\omega_k a_k^\dagger a_k
+ +O\otimes\sum_k g_k(a_k+a_k^\dagger).
 $$
 
-so at any instant the Hamiltonian is just
-$\tfrac{\epsilon}{2}\sigma_z + V\sigma_x + \sigma_z\sum_j d_j(t)(a_j + a_j^\dagger)$.
-This is a **bond-2 star MPO** (the spin threads a single rank-2 string to all
-modes); it is rebuilt at each step's **midpoint** $t_{\mathrm{mid}}$ and the state
-is advanced with a TDVP sweep.  Because there is no free bath evolution left to
-resolve, the accumulated entanglement is small.
+Taking the interaction representation with respect to the free star bath gives
 
-```{note}
-That bond-2 structure is the same fact exploited by {doc}`/methods/interaction/trotter_mpo`: because the
-coupling is a single product $\sigma_z \otimes \sum_j d_j (a_j + a_j^\dagger)$ and
-all its mode terms commute, the operator connecting the system to *every* mode
-needs only a rank-2 string — one channel per eigenvalue of the coupling operator.
-Here it is used to write the **Hamiltonian** as an MPO for TDVP; there it is used
-to write the **propagator** as an MPO for a Trotter step.
-```
+$$
+H_I(t)=H_S+O\otimes\sum_k
+\left[g_ke^{-i\omega_kt}a_k+g_ke^{i\omega_kt}a_k^\dagger\right].
+$$
 
-### Star or chain?
+This is `interaction-star`. Applying the star-to-chain transform
+$b_n=\sum_kU_{nk}a_k$ afterwards gives `interaction-chain` with
 
-The star and the chain describe the same bath — the chain is just the Lanczos
-tridiagonalization of the star — but they distribute *entanglement* very
-differently, and that is the whole basis for choosing between them.
+$$
+d_n(t)=\sum_kU_{nk}g_ke^{-i\omega_kt}.
+$$
 
-- In the **chain**, the system touches only mode $b_0$, and correlations propagate
-  outward at a finite speed (a light cone). This locality is what makes an MPS
-  ordering natural: a cut far down the chain has seen little of the dynamics.
-- In the **star**, every mode couples to the system directly. There is no notion of
-  distance between modes, so an MPS ordering of the star has no locality to exploit
-  — a single cut must carry the correlations between the system and *all* modes on
-  the far side at once.
+The chain version therefore does not mean that a chain Hamiltonian must first be
+diagonalized as a conceptual step. Finite-chain diagonalization is merely one
+available route to equivalent finite star data.
 
-This is why TEDOPA chain-maps in the first place, and why the star geometry here is
-paired with a small fixed/adaptive bond and an interaction picture that keeps the
-accumulated correlation small: the star pays off when the residual entanglement is
-low enough that the *absence* of the chain's mode–mode terms (and their Trotter
-error) is the dominant saving.
+## Integrators
 
-Two variants:
-
-- **`mpo-ip-tdvp1`** — 1-site TDVP at a **fixed** bond dimension `bond_dim`
-  (required — a 1-site sweep cannot grow a bond; see {doc}`/methods/schrodinger/chain`).
-- **`mpo-ip-tdvp2`** — 2-site TDVP, **growing** the bond from the product state
-  by SVD truncation (`trunc_eps`, optionally capped by `bond_dim`);
-  `result.max_bond` reports the peak bond.
-
-The star MPO engine shares {py:mod}`fishbonett.evolve.tdvp` with the
-Schrödinger-picture chain methods (re-exported as {py:mod}`fishbonett.evolve.tdvp`).
+- The `tdvp1` variants use one-site TDVP and require an explicit `bond_dim`.
+- The `tdvp2` variants use two-site TDVP and grow bonds according to
+  `trunc_eps`, optionally capped by `bond_dim`.
+- Because $H_I(t)$ is time dependent, the encoded MPO and its environments are
+  refreshed every step.
 
 ## Example
 
 ```python
-import numpy as np
-from fishbonett import Bath, SystemBath
-from fishbonett.operators import sigma_x, sigma_z
+chain = model.run(
+    dt=0.02, t_max=2.0, method="mpo-ip-tdvp2",
+    bond_dim=100, trunc_eps=1e-5,
+)
 
-bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
-            temperature=1.0, n_modes=40, phys_dim=20)
-model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
-
-r = model.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp1", bond_dim=80,
-              observables={"sz": sigma_z})
-r.expect["sz"]
-
-r2 = model.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp2", bond_dim=120,
-               trunc_eps=1e-4, observables={"sz": sigma_z})
-r2.max_bond
+star = model.run(
+    dt=0.02, t_max=2.0, method="mpo-ip-star-tdvp2",
+    bond_dim=100, trunc_eps=1e-5,
+)
 ```
 
-## Low-level driver
+The two trajectories should converge to the same laboratory observables. Their
+tensor-network cost can differ because their time-dependent coupling vectors are
+distributed differently.
 
-Same driver as the Schrödinger chain — only the frame differs, and it reports
-`static=False` so the driver knows to rebuild the MPO each step and discard the
-environments with it:
+## Low-level separation
 
 ```python
-from fishbonett.frames.mpo import ip_star_mpo_frame
-from fishbonett.evolve.tdvp import run_mpo_frame
+from fishbonett.encodings.mpo import encode_interaction
+from fishbonett.evolve.tdvp import run_mpo_hamiltonian
+from fishbonett.representations.interaction import InteractionRepresentation
 
-frame = ip_star_mpo_frame(bath.spectral_density(), (-25, 36), V=1.0,
-                          n_chain=40, d=20)
-assert not frame.static                      # H depends on t in this frame
-t, sz, maxd = run_mpo_frame(frame, dt=0.05, nsteps=80, sweep="tdvp1", D=100)
+rep = InteractionRepresentation(
+    [2] + [20] * 40,
+    representation="interaction-star",
+    h_sys=H,
+    coupling=O,
+    compiled_star=compiled_star,
+).build()
+
+mpo = encode_interaction(rep, initial_state)
+t, rdm, max_bond = run_mpo_hamiltonian(
+    mpo, dt=0.02, nsteps=100, sweep="tdvp2", D=100
+)
 ```
 
-## Notes
-
-- Because the MPO is rebuilt every step, these methods have a slightly higher
-  per-step overhead than the fixed chain MPO, but often reach a given accuracy at
-  a **smaller bond dimension** thanks to the interaction picture.
-- `h` and the coupling `O` are carried as matrices, so a general Hermitian system
-  and coupling of any dimension work (the illustration uses `sigma_z`); see
-  {doc}`/models/spin_boson`.
+The first object is the mathematical representation; the second is its MPO
+encoding; the last call chooses TDVP.

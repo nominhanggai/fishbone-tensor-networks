@@ -1,4 +1,4 @@
-"""Cooling-chain frame: a finite-temperature bath as a *gauged* zero-temperature one.
+"""Cooling-chain representation: a finite-temperature bath as a *gauged* zero-temperature one.
 
 An alternative to thermofield doubling for finite temperature.  Instead of
 mirroring the spectral density onto a signed frequency axis (what
@@ -14,10 +14,10 @@ physical one: observables must be read through the matching heating operators
 does (renormalizing as it contracts).  Reading the RDM the ordinary way would give
 the wrong answer.
 
-Unlike the other frames this class *is* the state -- it subclasses
+Unlike the other representations this class *is* the state -- it subclasses
 :class:`~fishbonett.states.mps.SystemBathMPS` rather than building gates for a
 separate state object.  It is exploratory rather than part of the ``method=``
-dispatch; see :class:`~fishbonett.frames.interaction_picture.SystemBathIP` for
+dispatch; see :class:`~fishbonett.representations.interaction.InteractionRepresentation` for
 the maintained finite-temperature route.
 """
 import numpy as np
@@ -38,7 +38,7 @@ class SystemBathCoolingChain(SystemBathMPS):
     Extends the 1D :class:`~fishbonett.states.mps.SystemBathMPS` engine with a
     ``betaOmega`` cooling gauge: each bath mode carries a heating operator so the
     chain is progressively cooled, and :meth:`get_rdm` reads the system reduced
-    density matrix through those operators.  Everything the frame needs is given at
+    density matrix through those operators.  Everything the representation needs is given at
     construction; :meth:`build` then does the chain mapping.
 
     Parameters
@@ -52,7 +52,7 @@ class SystemBathCoolingChain(SystemBathMPS):
         The Hermitian system-bath coupling.
     sd : callable
         Spectral density ``J(w)``.  Pass the **bare** ``T = 0`` density: the gauge,
-        not the density, is what carries the thermal weight in this frame.
+        not the density, is what carries the thermal weight in this representation.
     domain : (float, float)
         Frequency window to chain-map over.
     betaOmega : float, optional
@@ -65,7 +65,7 @@ class SystemBathCoolingChain(SystemBathMPS):
         :func:`fishbonett.bath.chain.get_coupling`.
     discretizer : callable, optional
         Quadrature for the star discretization; ``None`` is Gauss-Legendre.  This
-        frame could not accept one until the chain mapping was shared with
+        representation could not accept one until the chain mapping was shared with
         :func:`fishbonett.bath.chain.get_coupling` -- its private copy had dropped
         the argument.
     """
@@ -114,8 +114,8 @@ class SystemBathCoolingChain(SystemBathMPS):
 
         Uses :func:`fishbonett.bath.chain.get_coupling`.  This class used to carry
         its own copy, which had silently lost the ``discretizer`` argument, so a
-        measure-adapted (TEDOPA) star was unreachable from this frame even though
-        every other frame supported one.
+        measure-adapted (TEDOPA) star was unreachable from this representation even though
+        every other representation supported one.
         """
         n = len(self.pd_boson)
         self.w_list, self.k_list = get_coupling(
@@ -127,7 +127,7 @@ class SystemBathCoolingChain(SystemBathMPS):
         normalized heating operators ``exp(2 betaOmega n_i)`` used by
         :meth:`get_rdm`.  The one expensive step; call before :meth:`get_u`."""
         self.build_coupling()
-        self.H = self.get_h2()
+        self.H = self.two_site_hamiltonians()
         self.heating_op = [scipy.linalg.expm(2 * self.betaOmega # * np.sign(freq[i])
                                              * annihilate(d).T @ annihilate(d)) for i, d in
                            enumerate(self.pd_boson)]
@@ -142,7 +142,7 @@ class SystemBathCoolingChain(SystemBathMPS):
             h1.append(self.w_list[i] * c.T @ c)
         return h1
 
-    def get_h2(self):
+    def two_site_hamiltonians(self):
         """Two-site Hamiltonians ``[(h, d1, d2), ...]`` along the chain.
 
         Bond 0 (system to c0) carries the cooling gauge: the coupling is
@@ -176,7 +176,7 @@ class SystemBathCoolingChain(SystemBathMPS):
     def get_u(self, dt):
         """Two-site gates ``exp(-i dt h)`` with legs ``(d1, d2, d1*, d2*)``.
 
-        The Hamiltonian is time-independent in this frame, so unlike the
+        The Hamiltonian is time-independent in this representation, so unlike the
         interaction-picture builders these gates are built **once**.  They are not
         unitary -- see the module docstring.
         """

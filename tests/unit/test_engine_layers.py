@@ -23,7 +23,7 @@ def test_tdvp_facade_preserves_established_entry_points():
     assert tdvp.tdvp1sweep is sweeps.tdvp1sweep
     assert tdvp.tdvp2sweep is sweeps.tdvp2sweep
     assert tdvp.tdvp1sweep_dynamic is sweeps.tdvp1sweep_dynamic
-    assert tdvp.run_mpo_frame is driver.run_mpo_frame
+    assert tdvp.run_mpo_hamiltonian is driver.run_mpo_hamiltonian
 
 
 def test_tdvp_dependencies_point_from_driver_to_sweep_to_kernel():
@@ -63,3 +63,20 @@ def test_modetree_dependencies_point_from_driver_to_sweep_and_core():
     assert "fishbonett.evolve._modetree_driver" not in _imports(sweeps)
     assert "fishbonett.evolve._modetree_core" in _imports(driver)
     assert "fishbonett.evolve._modetree_sweeps" in _imports(driver)
+
+
+def test_transformed_representations_do_not_import_propagation_layers():
+    """Hamiltonian transformations must remain independent of their encoders."""
+    from fishbonett.representations import interaction, multichannel, polaron
+
+    forbidden_prefixes = (
+        "fishbonett.encodings",
+        "fishbonett.evolve",
+        "fishbonett.states",
+    )
+    for module in (interaction, multichannel, polaron):
+        imports = _imports(module)
+        assert not {
+            name for name in imports
+            if name.startswith(forbidden_prefixes)
+        }, module.__name__
