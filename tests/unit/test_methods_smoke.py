@@ -22,6 +22,58 @@ def test_chain_cooling_gives_normalized_rdm():
     assert np.isclose(np.trace(rho).real, 1.0, atol=1e-6)
 
 
+def test_cooling_gauge_cancels_out_of_the_observable():
+    """The correctness criterion for the cooling-chain frame, which had none.
+
+    That frame carries finite temperature in a *non-unitary* ``betaOmega`` gauge
+    rather than in extra modes, so the propagated state is not the physical one.
+    Its docstring says observables must be read back through the heating operators
+    ``exp(2 betaOmega n_i)`` and that "reading the RDM the ordinary way would give
+    the wrong answer".  Both halves of that are checkable, and the whole frame had
+    exactly one test, asserting only that a trace came out as 1.
+
+    Three things, which together are what makes the scheme a gauge:
+
+    * at ``betaOmega=0`` the correction is the identity, so the two reads agree;
+    * at ``betaOmega>0`` they genuinely differ -- otherwise the machinery is inert
+      and the docstring's warning is empty;
+    * the *corrected* read is the same physical state at every gauge strength.
+
+    Measured separation is about 1e9: invariance holds to ~5e-12 while the gauge
+    shifts the naive read by up to 4.5e-3.
+    """
+    import numpy as np
+    from fishbonett.frames.coolingchain import SystemBathCoolingChain
+    from fishbonett.operators import sigma_x, sigma_z
+
+    sd = lambda w: 0.5 * abs(w) * np.exp(-abs(w) / 10.0)
+    pd = [2, 6, 6, 6]
+
+    def evolve(beta_omega):
+        st = SystemBathCoolingChain(
+            pd, betaOmega=beta_omega, h_sys=10.0 * sigma_x, coupling=sigma_z,
+            sd=sd, domain=[-50.0, 50.0], ncap=200).build()
+        st.U = st.get_u(0.01)
+        for _ in range(6):
+            for j in range(len(pd) - 1):
+                st.update_bond(j, 20, 1e-7, swap=0)
+        return st.get_rdm(), st.rdm(0)      # through the gauge, and ignoring it
+
+    ref, plain0 = evolve(0.0)
+    assert np.allclose(ref, plain0, atol=1e-12), (
+        "at betaOmega=0 the heating operators are the identity, so the corrected "
+        "and ordinary reads must agree")
+
+    for beta_omega in (0.2, 0.5):
+        gauged, plain = evolve(beta_omega)
+        assert np.abs(gauged - plain).max() > 1e-4, (
+            f"betaOmega={beta_omega} changes nothing; the gauge correction is inert")
+        assert np.abs(gauged - ref).max() < 1e-9, (
+            f"betaOmega={beta_omega} changes the physical RDM by "
+            f"{np.abs(gauged - ref).max():.2e}; the gauge is not cancelling")
+        assert abs(np.trace(gauged).real - 1.0) < 1e-10
+
+
 @pytest.mark.parametrize("module,cls", [("frames.coolingchain", "SystemBathCoolingChain")])
 def test_cooling_shares_the_canonical_engine(module, cls):
     mod = importlib.import_module(f"fishbonett.{module}")
