@@ -13,9 +13,9 @@ cross-correlated. Passing a list to `SystemBath(coupling=...)` selects this mode
 
 | method | representation | description |
 |---|---|---|
-| `multichannel-static` | `schrodinger-star` | static shared star, selected by default |
-| `multichannel-ip-star` | `interaction-star` | free-star interaction transformation, shared star retained |
-| `multichannel-ip` | `interaction-chain` | same interaction transformation, then a common star-to-chain rotation |
+| `schrodinger-star-tree-tebd` | `schrodinger-star` | static shared star, selected by default |
+| `interaction-star-tebd` | `interaction-star` | free-star interaction transformation, shared star retained |
+| `interaction-chain-tebd` | `interaction-chain` | same interaction transformation, then a common star-to-chain rotation |
 
 The interaction couplings are matrix valued. If $A_k=\sum_cg_{ck}O_c$, then
 
@@ -43,8 +43,8 @@ model = SystemBath(
 )
 
 static = model.run(dt=0.02, t_max=2.0)
-ip_chain = model.run(dt=0.02, t_max=2.0, method="multichannel-ip")
-ip_star = model.run(dt=0.02, t_max=2.0, method="multichannel-ip-star")
+ip_chain = model.run(dt=0.02, t_max=2.0, method="interaction-chain-tebd")
+ip_star = model.run(dt=0.02, t_max=2.0, method="interaction-star-tebd")
 ```
 
 For a thermofield-discretized signed frequency grid, temperature is already

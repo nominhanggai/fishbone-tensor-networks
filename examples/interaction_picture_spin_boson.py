@@ -8,7 +8,7 @@ is cross-correlated (see :mod:`fishbonett.representations.multichannel`).
 This is the **low-level** route, and the reason to reach for it is the bath: the
 modes are given explicitly rather than sampled from a continuous ``J(omega)``.  For
 a continuous spectral density use the high-level interface instead --
-``SystemBath(...).run(method="multichannel-ip")``, which builds the same
+``SystemBath(...).run(method="interaction-chain-tebd")``, which builds the same
 representation from a :class:`~fishbonett.bath.spec.Bath`.
 
 Run with:  python examples/interaction_picture_spin_boson.py

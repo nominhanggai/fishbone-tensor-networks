@@ -64,7 +64,7 @@ A `baths` entry may be one `bath.bind(operator)` object, a `(left, right)` pair
 
 ## Cost and truncation
 
-Both classes propagate with `tree-tebd-static`, a **second-order** (Strang) Trotter
+Both classes propagate with `schrodinger-chain-tree-tebd`, a **second-order** (Strang) Trotter
 step: halving `dt` cuts the error ~4×, as with every other method here
 ({doc}`/getting_started`).  On a tree that takes more care than on a chain — the
 edge gates must be applied in a palindromic order over the whole tree, not just down

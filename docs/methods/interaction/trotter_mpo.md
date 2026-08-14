@@ -1,11 +1,11 @@
 # Interaction-chain representation — conditional-displacement MPO
 
-`method="trotter-mpo"` writes the full system–bath propagator as one exact,
+`method="interaction-chain-trotter-mpo"` writes the full system–bath propagator as one exact,
 low-bond conditional-displacement MPO — no Trotter splitting between modes, no
 swap network.  This only works in the interaction picture, where all coupling
 terms commute.  Same physics as {doc}`/methods/interaction/tebd`, ~1.6× faster.
 
-`trotter-mpo` propagates the **same interaction-picture model as {doc}`/methods/interaction/tebd`**, but
+`interaction-chain-trotter-mpo` propagates the **same interaction representation as {doc}`/methods/interaction/tebd`**, but
 instead of Trotterizing the system–bath coupling into two-site gates and shuttling
 the system along the chain with a swap network, it writes the *entire* system–bath
 propagator as a single matrix-product operator whose bond dimension is the number
@@ -149,7 +149,8 @@ smaller prefactor).
 
 ```{note}
 The bond dimension of the *state* is unchanged — this is the same representation and the
-same physics as `tebd`, so it carries the same entanglement. `trotter-mpo` changes
+same physics as `interaction-chain-tebd`, so it carries the same entanglement.
+`interaction-chain-trotter-mpo` changes
 the cost of applying the propagator, not the cost of representing the state.  For a
 method that lowers the state entanglement itself, see {doc}`/methods/schrodinger/polaron_chain`.
 ```
@@ -163,7 +164,8 @@ Nothing above assumed a two-level system:
   on), still independent of the chain length.
 - **A non-two-level system** — `h` may be any $(d,d)$ Hamiltonian.
 - **An arbitrary initial state** via `initial=`.
-- **Finite temperature** works exactly as for `tebd` (thermofield / signed
+- **Finite temperature** works exactly as for `interaction-chain-tebd`
+  (thermofield / signed
   `domain`), since the representation is identical.
 
 ## Example
@@ -177,9 +179,9 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5), domain=(-25, 36),
             temperature=1.0, n_modes=40, phys_dim=20)
 model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
-r = model.run(dt=0.02, t_max=2.0, method="trotter-mpo", trunc_eps=1e-4,
+r = model.run(dt=0.02, t_max=2.0, method="interaction-chain-trotter-mpo", trunc_eps=1e-4,
               observables={"sz": sigma_z})
-r.expect["sz"]     # <sigma_z>(t) -- identical physics to method="tebd"
+r.expect["sz"]     # <sigma_z>(t) -- identical physics to interaction-chain-tebd
 r.max_bond         # peak bond dimension of the state
 ```
 

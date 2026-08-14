@@ -25,10 +25,11 @@ algorithm lived; it is here now, so *every* gate application is in this package 
 it is a tree, and :class:`fishbonett.models.fishbone.Fishbone` propagates it through
 ``sitetree`` like any other.
 
-Note the two tree rows are different **models**, not two integrators for one
-geometry: ``modetree`` is a balanced binary tree of *bath modes* around one system
-site (interaction picture, ``tree-tebd``), while ``sitetree`` is an arbitrary tree
-of *system sites* each with its own bath (Schroedinger, ``tree-tebd-static``).  See
+Note the two tree modules serve different geometries, not two integrators for one
+graph: ``modetree`` is a balanced binary tree of *bath modes* around one system
+site (interaction representation, ``interaction-chain-tree-tebd``), while
+``sitetree`` is an arbitrary tree of *system sites* and their baths
+(``schrodinger-chain-tree-tebd`` for the multi-site models).  See
 :mod:`fishbonett.models.registry`.
 
 .. rubric:: Layers

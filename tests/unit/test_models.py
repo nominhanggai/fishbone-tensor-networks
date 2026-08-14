@@ -62,6 +62,8 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
             assert name in R.MODELS[mk].methods()
         assert spec.representation.count("-") == 1
         assert spec.geometry in R.GEOMETRIES, f"{name} names unknown geometry"
+        geometry_tag = "" if spec.geometry == "path" else "tree-"
+        assert name == f"{spec.representation}-{geometry_tag}{spec.integrator}"
         # every single-system engine must resolve to one plan compiler
         if set(spec.models) & {"system-bath", "multichannel"}:
             assert callable(PLAN_COMPILERS.get(spec.engine)), (
@@ -72,15 +74,29 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
     assert not hasattr(SB, "_SWAP_REPRESENTATIONS")
 
 
+@pytest.mark.parametrize("old,new", sorted(R._RENAMED_METHODS.items()))
+def test_legacy_method_names_are_rejected_with_representation_explicit_hint(old, new):
+    """Old labels are migration hints, not aliases that preserve ambiguity."""
+    assert old not in R.METHODS
+    with pytest.raises(ValueError, match=re.escape(new)):
+        R.method_spec(old)
+
+
+def test_polaron_tdvp2_public_error_names_polaron_chain_replacement():
+    model = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath_pos())
+    with pytest.raises(ValueError, match="polaron-chain-tdvp2"):
+        model.run(dt=0.02, n_steps=1, method="polaron-tdvp2", bond_dim=8)
+
+
 def test_fixed_bond_methods_are_registry_data():
     """It was a private set in ``models/system_bath.py`` that tests had to import
     through the underscore.  Which methods cannot grow a bond is taxonomy."""
     assert R.FIXED_BOND_METHODS == frozenset(
         n for n, s in R.METHODS.items() if s.fixed_bond)
     # the 1-site TDVP variants and the adaptive ones, as before
-    assert "mpo-tdvp1" in R.FIXED_BOND_METHODS
-    assert "mpo-dtdvp" in R.FIXED_BOND_METHODS
-    assert "tebd" not in R.FIXED_BOND_METHODS
+    assert "schrodinger-chain-tdvp1" in R.FIXED_BOND_METHODS
+    assert "schrodinger-chain-dtdvp" in R.FIXED_BOND_METHODS
+    assert "interaction-chain-tebd" not in R.FIXED_BOND_METHODS
 
 
 def test_every_model_representation_pair_has_at_least_one_method():
@@ -120,28 +136,20 @@ def test_every_absent_representation_has_a_reason_available():
             assert why, f"model {key!r} cannot explain why it has no {representation!r} representation"
 
 
-def test_method_representations_is_a_projection_not_an_identity():
-    """``METHOD_REPRESENTATIONS`` maps a method to ``(representation, model)`` -- which no longer
-    identifies it, and that is the point.
-
-    The old taxonomy gave these different *models* (``chain`` / ``star`` /
-    ``mode-tree``) so that the pair looked like a key.  The first two are now part
-    of the complete representation name and the third is a state geometry; this means the pair is now a
-    genuine projection, and the axes that separate the collisions are the two the
-    taxonomy gained."""
-    sb = ("interaction-chain", "system-bath")
-    assert R.METHOD_REPRESENTATIONS["tree-tdvp2"] == sb
-    assert R.METHOD_REPRESENTATIONS["mpo-ip-tdvp2"] == sb
+def test_method_representations_is_a_lossless_projection():
+    """The projection records representation only; model ownership is separate."""
+    assert R.METHOD_REPRESENTATIONS["interaction-chain-tree-tdvp2"] == "interaction-chain"
+    assert R.METHOD_REPRESENTATIONS["interaction-chain-tdvp2"] == "interaction-chain"
     # ...same representation, same model, same integrator -- separated only by geometry
-    assert R.METHODS["tree-tdvp2"].geometry == "binary-tree"
-    assert R.METHODS["mpo-ip-tdvp2"].geometry == "path"
+    assert R.METHODS["interaction-chain-tree-tdvp2"].geometry == "binary-tree"
+    assert R.METHODS["interaction-chain-tdvp2"].geometry == "path"
 
-    assert R.METHOD_REPRESENTATIONS["mpo-tdvp2"] == ("schrodinger-chain", "system-bath")
-    assert R.METHOD_REPRESENTATIONS["mpo-star-tdvp2"] == ("schrodinger-star", "system-bath")
+    assert R.METHOD_REPRESENTATIONS["schrodinger-chain-tdvp2"] == "schrodinger-chain"
+    assert R.METHOD_REPRESENTATIONS["schrodinger-star-tdvp2"] == "schrodinger-star"
 
     # polaron is its own representation, not a Schrodinger sub-case
-    assert R.METHOD_REPRESENTATIONS["polaron"] == ("polaron-chain", "system-bath")
-    assert R.METHOD_REPRESENTATIONS["trotter-mpo"] == sb
+    assert R.METHOD_REPRESENTATIONS["polaron-chain-tebd"] == "polaron-chain"
+    assert R.METHOD_REPRESENTATIONS["interaction-chain-trotter-mpo"] == "interaction-chain"
 
 
 def test_multichannel_default_path_is_schrodinger_not_interaction():
@@ -152,13 +160,13 @@ def test_multichannel_default_path_is_schrodinger_not_interaction():
     future rewire cannot silently contradict it.
 
     The model now has a genuine interaction-picture path too
-    (``multichannel-ip``), which is a *different* method -- the point of this test
+    (``interaction-chain-tebd``), which is a *different* method -- the point of this test
     is that the static one is not it."""
     representations = R.MODELS["multichannel"].representations
-    assert R.MULTICHANNEL_STATIC in representations["schrodinger-star"]
-    assert R.MULTICHANNEL_IP in representations["interaction-chain"]
-    assert R.MULTICHANNEL_IP_STAR in representations["interaction-star"]
-    assert R.MULTICHANNEL_STATIC not in representations.get("interaction-star", ())
+    assert R.SCHRODINGER_STAR_TREE_TEBD in representations["schrodinger-star"]
+    assert R.INTERACTION_CHAIN_TEBD in representations["interaction-chain"]
+    assert R.INTERACTION_STAR_TEBD in representations["interaction-star"]
+    assert R.SCHRODINGER_STAR_TREE_TEBD not in representations.get("interaction-star", ())
     assert set(representations) == {
         "schrodinger-star", "interaction-chain", "interaction-star"}
 
@@ -215,7 +223,7 @@ def test_every_method_reports_max_bond(model_key):
     Six of them used to, for no reason beyond which driver they happened to go
     through: the 1-site TDVP wrappers returned ``(t, obs)`` while the 2-site ones
     returned ``maxD``, and the mode-tree engine never collected it -- yet
-    ``polaron-tdvp1``, the same sweep with the same fixed bond, did report it.  It
+    ``polaron-chain-tdvp1``, the same sweep with the same fixed bond, did report it.  It
     is the same quantity for every method, constant or not.
     """
     obj, _ = _run_for(model_key)
@@ -242,7 +250,7 @@ def test_result_shape_contract_matches_its_docstring():
                                 observables={"sz": sigma_z})
 
     single = SystemBath(h=h, coupling=sigma_z, bath=_bath_pos()).run(
-        method="tebd", **kw)
+        method="interaction-chain-tebd", **kw)
     assert single.meta == {}, "a single-system Result carries no n_sites"
     assert np.shape(single.rdm) == (2, 2, 2), "(n_steps, d, d)"
     assert np.shape(single.expect["sz"]) == (2,), "(n_steps,)"
@@ -292,13 +300,13 @@ def test_every_method_agrees_on_the_same_physics():
         for m in R.methods_of(key):
             results[(key, m)] = run(key, m)
 
-    ref = results[("system-bath", "tebd")]
+    ref = results[("system-bath", "interaction-chain-tebd")]
     for (key, m), sz in results.items():
-        # mpo-dtdvp is bond-adaptive: its accuracy is set by `prec`, not by dt, so
+        # schrodinger-chain-dtdvp is bond-adaptive: its accuracy is set by `prec`, not by dt, so
         # it sits a decade or so off the rest.  Still far from a wrong answer.
-        tol = 5e-3 if m == "mpo-dtdvp" else 1e-3
+        tol = 5e-3 if m == "schrodinger-chain-dtdvp" else 1e-3
         assert np.abs(sz - ref).max() < tol, (
-            f"{key}/{m} disagrees with system-bath/tebd by "
+            f"{key}/{m} disagrees with system-bath/interaction-chain-tebd by "
             f"{np.abs(sz - ref).max():.2e} on identical physics")
 
 
@@ -329,12 +337,12 @@ def test_application_matches_what_the_drivers_actually_do():
         f"{sorted(actual)}")
 
     # a swap network is what a star *interaction graph* costs on a *path* state.
-    # Deliberately keyed on `mode_decoupled`: `tebd` is
-    # interaction-chain and still swaps, because it is rotating H_B away that
+    # Deliberately keyed on `mode_decoupled`: `interaction-chain-tebd` still
+    # swaps, because it is rotating H_B away that
     # spreads the coupling over every mode, not the choice of modes to write it in.
     assert all(R.REPRESENTATIONS[R.METHODS[n].representation].mode_decoupled
                and R.METHODS[n].geometry == "path" for n in declared)
-    assert R.METHODS["tebd"].representation == "interaction-chain"
+    assert R.METHODS["interaction-chain-tebd"].representation == "interaction-chain"
 
     # and an application is realized *once*: the swap methods share one engine, and
     # differ only in which representation supplies H(t)
@@ -352,16 +360,16 @@ def test_run_takes_the_axes_directly():
     by_axes = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
         representation="interaction-chain", geometry="path", integrator="tdvp2", **kw)
     by_name = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath()).run(
-        method="mpo-ip-tdvp2", **kw)
-    assert by_axes.method == by_name.method == "mpo-ip-tdvp2"
+        method="interaction-chain-tdvp2", **kw)
+    assert by_axes.method == by_name.method == "interaction-chain-tdvp2"
     assert np.array_equal(by_axes.rdm, by_name.rdm)
 
     # the axis vocabulary is uniform across representations: "tebd" means the same word
     # whether the representation dresses the state or not
     sb = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=_bath())
-    assert sb.run(representation="polaron-chain", integrator="tebd", **kw).method == "polaron"
+    assert sb.run(representation="polaron-chain", integrator="tebd", **kw).method == "polaron-chain-tebd"
     assert sb.run(representation="interaction-chain", geometry="path", integrator="tebd",
-                  **kw).method == "tebd"
+                  **kw).method == "interaction-chain-tebd"
     # Partial names are intentionally not another public taxonomy.
     with pytest.raises(ValueError, match="no method"):
         sb.run(representation="polaron", integrator="tebd", **kw)
@@ -403,13 +411,14 @@ def test_interaction_chain_is_what_the_ip_methods_actually_run():
     d1 = np.abs(coefT @ (Vn * np.exp(-1j * freq * 0.5)))
     assert (d1 > 1e-3).sum() > 1, "the coupling must spread as t grows"
 
-    for m in ("tebd", "trotter-mpo", "mpo-ip-tdvp1", "mpo-ip-tdvp2",
-              "tree-tdvp", "tree-tdvp2", "tree-tebd"):
+    for m in ("interaction-chain-tebd", "interaction-chain-trotter-mpo",
+              "interaction-chain-tdvp1", "interaction-chain-tdvp2",
+              "interaction-chain-tree-tdvp1", "interaction-chain-tree-tdvp2", "interaction-chain-tree-tebd"):
         assert R.METHODS[m].representation == "interaction-chain", m
     # Multichannel exposes the same distinction explicitly.
-    assert R.METHODS[R.MULTICHANNEL_IP].representation == "interaction-chain"
-    assert R.METHODS[R.MULTICHANNEL_IP_STAR].representation == "interaction-star"
-    assert R.METHODS["mpo-ip-star-tdvp2"].representation == "interaction-star"
+    assert R.METHODS[R.INTERACTION_CHAIN_TEBD].representation == "interaction-chain"
+    assert R.METHODS[R.INTERACTION_STAR_TEBD].representation == "interaction-star"
+    assert R.METHODS["interaction-star-tdvp2"].representation == "interaction-star"
 
 
 def test_the_two_interaction_representations_agree():
@@ -425,7 +434,7 @@ def test_the_two_interaction_representations_agree():
     def run(m):
         sb = SystemBath(h=h, coupling=sigma_z, bath=_bath_pos())
         return np.asarray(sb.run(method=m, **kw).expect["sz"])
-    chain, star = run("mpo-ip-tdvp2"), run("mpo-ip-star-tdvp2")
+    chain, star = run("interaction-chain-tdvp2"), run("interaction-star-tdvp2")
     assert np.abs(chain - star).max() < 1e-3, np.abs(chain - star).max()
 
 
@@ -447,7 +456,7 @@ def test_axis_errors_name_what_separates_the_candidates():
         sb().run(representation="schrodinger-chain", geometry="binary-tree", **kw)
     # a name already fixes all four axes, so mixing spellings is a mistake
     with pytest.raises(ValueError, match="not both"):
-        sb().run(method="tebd", representation="polaron-chain", **kw)
+        sb().run(method="interaction-chain-tebd", representation="polaron-chain", **kw)
     # Neither a deprecated decomposition nor an application detail is an axis.
     for gone in ("basis", "frame", "layout"):
         with pytest.raises(TypeError, match="unknown axis"):
@@ -484,11 +493,11 @@ def test_every_method_is_reachable_by_its_axes():
 
 @pytest.mark.parametrize("model_key", ["comb", "site-tree"])
 def test_multi_site_models_reject_a_single_system_method(model_key):
-    """Asking a multi-site model for `tebd` must name the model that owns it,
+    """Asking a multi-site model for a path method names its owning model,
     rather than raising a bare TypeError as it did before."""
     obj, _ = _run_for(model_key)
     with pytest.raises(ValueError, match="belongs to system-bath"):
-        obj.run(dt=0.02, n_steps=1, method="tebd")
+        obj.run(dt=0.02, n_steps=1, method="interaction-chain-tebd")
 
 
 def test_multichannel_model_rejects_another_models_method():
@@ -497,8 +506,8 @@ def test_multichannel_model_rejects_another_models_method():
     mc = Bath(J=[_J, _J], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
     m = SystemBath(h=0.5 * sigma_x, coupling=[sigma_z, sigma_x], bath=mc)
-    with pytest.raises(ValueError, match="multichannel"):
-        m.run(dt=0.02, n_steps=1, method="tebd")
+    with pytest.raises(ValueError, match="system-bath"):
+        m.run(dt=0.02, n_steps=1, method="schrodinger-chain-tdvp2")
 
 
 def test_multi_site_models_report_max_bond():
@@ -512,9 +521,10 @@ def test_multi_site_models_report_max_bond():
 
 # -- lookups ------------------------------------------------------------------
 def test_models_of_reports_every_owner():
-    assert R.models_of("tebd") == ("system-bath",)
+    assert set(R.models_of("interaction-chain-tebd")) == {
+        "system-bath", "multichannel"}
     # the static tree engine serves both multi-site models
-    assert set(R.models_of(R.STATIC_TREE_TEBD)) == {"comb", "site-tree"}
+    assert set(R.models_of(R.SCHRODINGER_CHAIN_TREE_TEBD)) == {"comb", "site-tree"}
     assert R.models_of("not-a-method") == ()
 
 
@@ -527,7 +537,7 @@ def test_methods_of_explains_a_gap_instead_of_a_bare_keyerror():
 
 
 def test_one_engine_can_serve_two_representations():
-    """``tree-tebd-static`` and ``multichannel-static`` are the same engine on the
+    """``schrodinger-chain-tree-tebd`` and ``schrodinger-star-tree-tebd`` are the same engine on the
     same geometry, split because they are different **representations**.
 
     ``representations/schrodinger.py`` picks ``star_terms`` exactly when the bath is
@@ -535,7 +545,8 @@ def test_one_engine_can_serve_two_representations():
     One row could not carry both Hamiltonians, which is what forced it into the
     table -- and the two now say plainly which representation each
     model's bath is in."""
-    static, mc = R.METHODS[R.STATIC_TREE_TEBD], R.METHODS[R.MULTICHANNEL_STATIC]
+    static = R.METHODS[R.SCHRODINGER_CHAIN_TREE_TEBD]
+    mc = R.METHODS[R.SCHRODINGER_STAR_TREE_TEBD]
     assert static.engine == mc.engine == "static-tree-tebd"
     assert static.geometry == mc.geometry == "comb-tree"
     assert (static.representation, mc.representation) == ("schrodinger-chain", "schrodinger-star")

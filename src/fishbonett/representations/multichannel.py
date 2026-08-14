@@ -97,7 +97,7 @@ class MultichannelInteractionRepresentation:
         discretization already carries ``sqrt`` of the thermal weight and there is
         nothing left to double -- ``freq`` may contain negative entries and is used
         as given.  This is the convention the rest of the package uses, and it needs
-        no temperature units, so it is what ``run(method="multichannel-ip")`` calls.
+        no temperature units, so it is what ``run(method="interaction-chain-tebd")`` calls.
         ``len(pd) - 1`` must equal ``len(freq)``: in the interaction picture the
         chain is a rotation of the star modes, so dropping sites drops bath.
         """

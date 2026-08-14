@@ -4,7 +4,7 @@ The package implements both static Lang--Firsov representations.
 
 | representation | methods |
 |---|---|
-| `polaron-chain` | `polaron`, `polaron-tdvp1`, `polaron-tdvp2`, `polaron-dtdvp` |
+| `polaron-chain` | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` |
 | `polaron-star` | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` |
 
 ## Theory
@@ -51,7 +51,7 @@ This is an encoding distinction, not a change of represented Hamiltonian.
 
 ```python
 chain = model.run(
-    dt=0.02, t_max=4.0, method="polaron-tdvp2",
+    dt=0.02, t_max=4.0, method="polaron-chain-tdvp2",
     bond_dim=80, trunc_eps=1e-5,
 )
 

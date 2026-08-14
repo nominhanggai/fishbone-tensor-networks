@@ -364,7 +364,7 @@ def _compile_swap_plan(model, spec, context):
 
     coupled = model.coupled_bath.resolved(context.t_max)
     bath = coupled.bath
-    if "multichannel" in spec.models:
+    if model.coupled_bath.is_multichannel:
         representation, phys_dims = _multichannel_interaction_representation(
             model, coupled, spec.representation)
     else:
