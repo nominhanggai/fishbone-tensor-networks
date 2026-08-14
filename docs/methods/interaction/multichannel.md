@@ -143,11 +143,12 @@ r_ip = model.run(dt=0.02, t_max=2.0, method="multichannel-ip",
 - Passing a *single* operator gives an ordinary bath; passing a *list* is what makes
   it multichannel.  `method` selects the frame among the model's own propagators;
   asking for another model's method (e.g. `tebd`) raises and says so.
-- There is no polaron frame here, and that is now *derivable* rather than a written
-  exception: the channels share one set of modes, so this model forces the `star`
-  basis, while the polaron frame forces `chain` (its displacement has to localize on
-  $c_0$, and a star has no such site).  Two constraints, no basis satisfying both.
-  `registry.why_not("multichannel", "polaron")` says exactly that.
+- Both of this model's frames are *star* frames — `schrodinger-star`
+  (`multichannel-static`) and `interaction-star` (`multichannel-ip`).  The channels
+  share one set of modes, and Lanczos gives a chain per coupling operator, not per
+  cross-correlated set of them, so there is no chain mapping to make.  That rules
+  out `schrodinger-chain` and `polaron-chain` here, and
+  `registry.why_not("multichannel", "polaron-chain")` says so.
 - For the builder see {py:mod}`fishbonett.frames.multichannel`.
 - For several *independent* baths on one site (or on several sites), use
   {py:class}`~fishbonett.models.fishbone.TreeFishbone` with one `Bath` per bath instead —

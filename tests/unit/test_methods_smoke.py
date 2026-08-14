@@ -406,7 +406,7 @@ def test_interaction_graph_is_a_star_while_the_state_is_a_path():
 
     # and that mismatch is exactly what the registry derives: a star basis on a
     # path geometry is what a swap network costs
-    assert R.METHODS["tebd"].basis_for() == "star"
+    assert R.METHODS["tebd"].basis == "star"
     assert R.METHODS["tebd"].geometry == "path"
     assert R.METHODS["tebd"].application == "swap"
     assert R.APPLICATIONS["swap"].startswith("a star realized on a path")

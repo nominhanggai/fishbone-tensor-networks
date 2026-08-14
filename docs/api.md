@@ -2,26 +2,29 @@
 
 Start from `from fishbonett import Bath, SystemBath, Truncation`.
 
-A calculation is five **independent** choices: **model** (what is coupled to what —
-`models`), **frame** (which unitary is rotated out — `frames`), **basis** (which
-bath mode basis `H` is written in), **geometry** (the graph the state lives on —
-`states`), and **integrator** (how a step is taken — `evolve`).
+A calculation is four **independent** choices: **model** (what is coupled to what —
+`models`), **frame** (how the Hamiltonian is written down — a picture *and* a mode
+basis — `frames`), **geometry** (the graph the state lives on — `states`), and
+**integrator** (how a step is taken — `evolve`).
 {py:mod}`fishbonett.models.registry` records which combinations exist and why the
 rest do not.
 
 You can say them directly, which is usually clearer than remembering a name:
 
 ```python
-sb.run(dt=0.02, t_max=2.0, frame="interaction", geometry="path", integrator="tdvp2")
+sb.run(dt=0.02, t_max=2.0, frame="interaction-star", geometry="path",
+       integrator="tdvp2")
 sb.run(dt=0.02, t_max=2.0, method="mpo-ip-tdvp2")     # the same run, named
 ```
 
+The four frames are `schrodinger-chain`, `schrodinger-star`, `interaction-star` and
+`polaron-chain`. There is no `interaction-chain` (the interaction picture rotates out
+$H_B$, diagonal only in the star basis) and no `polaron-star` (the displacement must
+localize on $c_0$) — they are not rejected, they have no name.
 `integrator` is `"tebd"`, `"tdvp1"`, `"tdvp2"`, `"dtdvp"` or `"trotter-mpo"`.  Omit
 an axis and it is inferred when only one combination fits; when several do, the
-error lists them.  Most runs need two, because the frame constrains the basis —
-`interaction` forces `star`, `polaron` forces `chain`, and only `schrodinger` leaves
-it free.  `registry.describe_taxonomy()` prints the whole table.  `bath` turns a
-spectral density into the chain parameters every
+error lists them.  `registry.describe_taxonomy()` prints the whole table.  `bath`
+turns a spectral density into the chain parameters every
 model starts from, and `linalg`/`operators` hold the shared numerics.  The system
 sits at **site 0** throughout, with the bath modes following, nearest first.
 
