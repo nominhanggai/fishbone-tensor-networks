@@ -32,7 +32,7 @@ from numpy import exp
 
 from fishbonett.contract import contract as einsum
 from fishbonett.bath.lanczos import lanczos
-from fishbonett.frames.gates import swap_gate_pairs
+from fishbonett.frames.gates import SwapNetworkFrame
 from fishbonett.linalg import kron
 from fishbonett.operators import temp_factor, annihilate
 
@@ -42,7 +42,7 @@ from fishbonett.operators import temp_factor, annihilate
 
 
 
-class SystemBathMultiChannel:
+class SystemBathMultiChannel(SwapNetworkFrame):
     """Multichannel interaction-picture builder: system + harmonic bath, >=2 channels.
 
     Generalizes :class:`~fishbonett.frames.interaction_picture.SystemBathIP` to a
@@ -210,17 +210,8 @@ class SystemBathMultiChannel:
         self.chain_freq = np.diagonal(chain_freq)
         return self
 
-    def get_u(self, t, dt, factor=1, inc_sys=True):
-        """Two-site Trotter gates over ``[t, t+dt]`` as ``(U1, U2)``.
-
-        Exponentiates each two-site Hamiltonian from :meth:`get_h2` via
-        :func:`fishbonett.frames.gates.swap_gate_pairs`, shared with
-        :class:`~fishbonett.frames.interaction_picture.SystemBathIP`: this frame is
-        the interaction picture with a matrix-valued coupling, so only :meth:`get_h2`
-        differs.  ``factor`` divides the Hamiltonian (for sub-stepping).  Because the
-        frame is time-dependent, this must be called afresh each step.
-        """
-        self.H = self.get_h2(t, dt, inc_sys)
-        return swap_gate_pairs(self.H, factor)
+    # get_u comes from SwapNetworkFrame.  This frame is the interaction picture with
+    # a matrix-valued coupling, so get_h2 is the only part that differs from
+    # SystemBathIP -- which is exactly what the mixin's contract says.
 
 
