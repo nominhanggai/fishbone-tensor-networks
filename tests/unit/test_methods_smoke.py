@@ -176,6 +176,53 @@ def test_mps_joint_rdm_matches_the_dense_state():
                       st.expectation(sigma_z, 0))
 
 
+@pytest.mark.parametrize("model_key,method", [
+    ("chain", "tebd"),
+    ("chain", "trotter-mpo"),
+    ("chain", "polaron"),
+    ("site-tree", "tree-tebd-static"),
+    ("mode-tree", "tree-tebd"),
+])
+def test_gate_methods_are_second_order_in_dt(model_key, method):
+    """``evolve``'s claim that every whole step is second order (Strang), measured.
+
+    This is the check that caught ``tree-tebd-static`` propagating at order 1.07
+    while the docs claimed second order, so it is worth having as a test rather
+    than as a one-off measurement.
+
+    Only the *gate-based* methods are listed.  The static-frame TDVP ones are
+    second order too, but their error at a usable ``dt`` sits at 1e-8..1e-10 --
+    below the Krylov and round-off floor -- so a Richardson ratio there measures
+    noise, not the method.  Verified separately at larger ``dt``, where they come
+    out at order >= 2.
+    """
+    import numpy as np
+    from fishbonett import Bath, SystemBath
+    from fishbonett.models import TreeFishbone
+    from fishbonett.operators import sigma_x, sigma_z
+
+    J = lambda w: 0.2 * w * np.exp(-w / 5.0)
+    mk_bath = lambda: Bath(J=J, domain=(0.0, 40.0), n_modes=3, phys_dim=4)
+    h = 0.5 * sigma_x
+
+    def final_rdm(dt):
+        if model_key == "site-tree":
+            obj = TreeFishbone(sites=[h], edges=[], baths=[mk_bath()])
+        else:
+            obj = SystemBath(h=h, coupling=sigma_z, bath=mk_bath())
+        r = obj.run(dt=dt, n_steps=int(round(0.4 / dt)), method=method,
+                    bond_dim=40, trunc_eps=1e-12, observables={"sz": sigma_z})
+        rho = np.asarray(r.rdm[-1])
+        return rho[0] if rho.dtype == object else rho
+
+    a, b, c = final_rdm(0.05), final_rdm(0.025), final_rdm(0.0125)
+    d1, d2 = np.abs(a - b).max(), np.abs(b - c).max()
+    order = np.log2(d1 / d2)
+    assert order > 1.7, (
+        f"{model_key}/{method} converges at order {order:.2f}, not 2 "
+        f"(|rho(2dt)-rho(dt)|={d1:.2e}, |rho(dt)-rho(dt/2)|={d2:.2e})")
+
+
 def test_swap_network_frames_share_one_get_u():
     """The two swap-network frames differ in ``get_h2`` and in nothing after it.
 
