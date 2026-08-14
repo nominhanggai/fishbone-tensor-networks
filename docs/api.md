@@ -38,8 +38,15 @@ and an initial state, validated once so that no frame re-derives it.
    fishbonett.models.system_bath
    fishbonett.models.fishbone
    fishbonett.system
+   fishbonett.models.propagate
    fishbonett.models.result
 ```
+
+`propagate` is the driver layer: `RunCtx` (the run parameters that don't depend on
+which method was picked) and `propagate()` (the step/measure/collect loop every
+single-system method shares). What varies is passed in — the **integrator** supplies
+`step`, the **frame** supplies `rdm` (dressed frames undress their own observable),
+and the **state** supplies `peak_bond`.
 
 ## Geometry: the state ansätze
 
