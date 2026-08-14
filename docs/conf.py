@@ -11,6 +11,17 @@ import figures as _figures  # noqa: E402
 
 _figures.build_all()
 
+# The model/frame/propagator table is generated the same way and for the same
+# reason: it is registry data, and a copy pasted into a page goes stale.  (One
+# already has -- the hand-written table in docs/models/index.md predates two
+# combinations the registry gained.)  getting_started.md literal-includes this.
+from fishbonett.models.registry import describe_taxonomy  # noqa: E402
+
+_generated = Path(__file__).resolve().parent / "_generated"
+_generated.mkdir(exist_ok=True)
+(_generated / "taxonomy.txt").write_text(describe_taxonomy() + "\n",
+                                         encoding="utf-8")
+
 project = "fishbonett"
 copyright = "2020-2026, The fishbonett developers"
 author = "The fishbonett developers"
