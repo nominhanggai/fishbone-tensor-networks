@@ -100,6 +100,32 @@ def test_dtdvp_grows_bonds_and_tracks_dynamics():
     assert np.max(np.abs(sz - sz_ex)) < 1e-2           # adaptive, looser
 
 
+def test_the_two_bonddims_are_not_interchangeable():
+    """``mpo_apply.bond_dims`` and ``tdvp.bonddims`` look like duplicates; they are
+    not, and merging them would be a silent bug.
+
+    A structural clone scan flags them: identical shape, one underscore apart in the
+    name.  What differs is the leg convention -- ``mpo_apply`` stores ``(vL, p, vR)``
+    and reads axis 2, ``tdvp`` stores ``(vL, vR, p)`` and reads axis 1.  Applied to
+    the wrong convention each returns the *physical* dimensions with no error.
+
+    Pinned with a tensor whose bond and physical dimensions differ, so the two
+    genuinely disagree and a future "cleanup" that unifies them fails here.
+    """
+    from fishbonett.evolve.mpo_apply import bond_dims
+    from fishbonett.evolve.tdvp import bonddims
+
+    D, d = 3, 7                                   # bond != physical, so axes differ
+    mid_phys = [np.zeros((D, d, D)) for _ in range(2)]      # (vL, p, vR)
+    last_phys = [np.zeros((D, D, d)) for _ in range(2)]     # (vL, vR, p)
+
+    assert bond_dims(mid_phys) == [D, D, D]
+    assert bonddims(last_phys) == [D, D, D]
+    # each reads the physical leg when handed the other's layout
+    assert bond_dims(last_phys) == [D, d, d]
+    assert bonddims(mid_phys) == [D, d, d]
+
+
 def test_one_loop_serves_every_frame_and_sweep():
     """The point of the stage: frame and sweep are independent choices.
 
