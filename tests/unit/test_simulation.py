@@ -7,9 +7,6 @@ import pytest
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models.result import Result
 from fishbonett.models.simulation import SimulationPlan
-from fishbonett.encodings.capabilities import (
-    MPOHamiltonian, StaticGraphHamiltonian, require_capability,
-)
 
 
 def _spec():
@@ -75,19 +72,24 @@ def test_physical_model_does_not_import_representation_or_evolution_engines():
     assert not hasattr(SystemBath, "_SWAP_REPRESENTATIONS")
 
 
-def test_representation_capabilities_are_structural_and_checked_early():
-    from fishbonett.encodings.mpo import MPOEncoding
-    from fishbonett.encodings.terms import LocalTerms
+def test_representations_own_their_numerical_products():
+    from fishbonett.representations.interaction import InteractionRepresentation
+    from fishbonett.representations.polaron import PolaronRepresentation
+    from fishbonett.representations.schrodinger import (
+        LocalTerms, SchrodingerRepresentation,
+    )
 
-    mpo = MPOEncoding(
-        n_sites=1, phys_dim=2, system=(np.eye(2), np.eye(2), np.ones(2)),
-        mpo=lambda _t=None: [], static=True)
+    assert hasattr(SchrodingerRepresentation, "tdvp_mpo")
+    assert hasattr(InteractionRepresentation, "tdvp_mpo")
+    assert hasattr(InteractionRepresentation, "tebd_gates")
+    assert hasattr(InteractionRepresentation, "trotter_mpo")
+    assert hasattr(PolaronRepresentation, "tdvp_mpo")
+    assert hasattr(PolaronRepresentation, "tebd_gates")
     terms = LocalTerms(
         dims=[2], edges=[], site=[np.zeros((2, 2))], bond={})
-    assert isinstance(mpo, MPOHamiltonian)
-    assert isinstance(terms, StaticGraphHamiltonian)
-    with pytest.raises(TypeError, match="requires encoding capability MPOHamiltonian"):
-        require_capability(terms, MPOHamiltonian, engine="mpo-tdvp")
+    site_gates, edge_gates = terms.tebd_gates(0.1)
+    assert site_gates == [None]
+    assert edge_gates == {}
 
 
 def test_multisite_models_compile_through_simulation_plan(monkeypatch):

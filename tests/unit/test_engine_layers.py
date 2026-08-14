@@ -66,15 +66,16 @@ def test_modetree_dependencies_point_from_driver_to_sweep_and_core():
 
 
 def test_transformed_representations_do_not_import_propagation_layers():
-    """Hamiltonian transformations must remain independent of their encoders."""
-    from fishbonett.representations import interaction, multichannel, polaron
+    """Representations materialize operators but never advance tensor states."""
+    from fishbonett.representations import (
+        interaction, multichannel, polaron, schrodinger,
+    )
 
     forbidden_prefixes = (
-        "fishbonett.encodings",
         "fishbonett.evolve",
         "fishbonett.states",
     )
-    for module in (interaction, multichannel, polaron):
+    for module in (interaction, multichannel, polaron, schrodinger):
         imports = _imports(module)
         assert not {
             name for name in imports

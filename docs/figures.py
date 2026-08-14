@@ -57,7 +57,7 @@ def _panel(ax, ts, exact, curves, title):
     ax.set_ylabel("$C(t)$")
     ax.set_title(title)
     ax.grid(alpha=0.25)
-    ax.legend(loc="upper right", representationon=False, fontsize=8, ncol=2)
+    ax.legend(loc="upper right", frameon=False, fontsize=8, ncol=2)
 
 
 def _error_inset(ax, ts, exact, curves, loc=(0.44, 0.44, 0.52, 0.36)):
@@ -76,7 +76,7 @@ def _error_inset(ax, ts, exact, curves, loc=(0.44, 0.44, 0.52, 0.36)):
     ins.set_ylabel("rel. error", fontsize=7)
     ins.tick_params(labelsize=6)
     ins.grid(alpha=0.25, which="both")
-    ins.legend(fontsize=6, representationon=False, loc="lower right")
+    ins.legend(fontsize=6, frameon=False, loc="lower right")
     return ins
 
 
@@ -174,7 +174,7 @@ def bath_structured(path=None):
                label=rf"auto $\omega_{{hi}}={float(bath.domain[1]):.1f}$")
     a1.set_xlabel(r"$\omega$"); a1.set_ylabel(r"$J(\omega)$")
     a1.set_title("structured spectral density")
-    a1.legend(representationon=False, fontsize=8); a1.grid(alpha=0.25)
+    a1.legend(frameon=False, fontsize=8); a1.grid(alpha=0.25)
 
     _panel(a2, _TS, exact, curves, "correlation function")
     _error_inset(a2, _TS, exact, curves, loc=(0.46, 0.60, 0.50, 0.34))

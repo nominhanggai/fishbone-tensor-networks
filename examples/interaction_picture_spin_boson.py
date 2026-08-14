@@ -16,7 +16,6 @@ Run with:  python examples/interaction_picture_spin_boson.py
 import numpy as np
 
 from fishbonett.representations.multichannel import MultichannelInteractionRepresentation
-from fishbonett.encodings.gates import SwapGateEncoder
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.evolve import tebd
 from fishbonett.operators import sigma_x, sigma_z
@@ -35,8 +34,6 @@ def main():
     eth = MultichannelInteractionRepresentation(
         pd, coup_mat=coup_mat, freq=freq, temp=100.0,
         h_sys=130.0 * sigma_x + np.diag([0.0, -200.0])).build(n=0)
-    gates = SwapGateEncoder(eth)
-
     etn = SystemBathMPS(pd)
     etn.B[0][:] = 0.0
     etn.B[0][0, 0, 0] = 1.0                            # start in |0>
@@ -46,7 +43,8 @@ def main():
     for tn in range(n_steps):
         # One symmetric swap-network step: the system is walked along the chain so
         # that every mode gets its turn adjacent to it, then walked back.
-        tebd.symmetric_swap_step(etn, gates, tn * dt, dt, n_boson, chi, eps)
+        tebd.symmetric_swap_step(
+            etn, eth, tn * dt, dt, n_boson, chi, eps)
         theta = etn.get_theta1(0)
         rho = np.einsum('LiR,LjR->ij', theta, theta.conj())
         pops.append(np.einsum('ij,ji', rho, sigma_z).real / np.trace(rho).real)

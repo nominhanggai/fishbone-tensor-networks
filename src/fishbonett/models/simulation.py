@@ -19,11 +19,6 @@ import scipy.linalg as _la
 from fishbonett.evolve import modetree as _tree
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
-from fishbonett.encodings import mpo as _mpo_encoding
-from fishbonett.encodings.capabilities import (
-    DisplacementFactory, MPOHamiltonian, StaticGateFactory,
-    StaticGraphHamiltonian, SwapGateFactory, require_capability,
-)
 from fishbonett.models.propagate import (
     RunCtx, modetree_peak_bond, mps_peak_bond, propagate, tree_peak_bond,
 )
@@ -103,33 +98,29 @@ def _check_single_channel(model):
             "fishbonett.models.registry.")
 
 
-def _encode_plain_mpo(model, maker, bath, context, compiled):
-    encoding = maker(
-        n_chain=bath.n_modes,
-        d=bath.phys_dim, hsys=model.h, cop=model.coupling,
-        init=model.system.initial_vector(context.initial),
-        compiled=compiled)
+def _tdvp_hooks(context):
+    """Driver options shared by every representation supplying a TDVP MPO."""
     hooks = dict(
         observe=lambda tensors: _mpo.measure_rdm(tensors[0]),
         prec=context.kw.get("prec", 1e-4),
         tol=context.kw.get("tol", 1e-7),
         eshift=context.kw.get("eshift", False),
     )
-    return encoding, hooks
+    return hooks
 
 
-def _encode_interaction_mpo(model, context, coupled, name):
-    representation, _phys_dims = _interaction_representation(
-        model, coupled, name)
-    encoding = _mpo_encoding.encode_interaction(
-        representation, model.system.initial_vector(context.initial))
-    hooks = dict(
-        observe=lambda tensors: _mpo.measure_rdm(tensors[0]),
-        prec=context.kw.get("prec", 1e-4),
-        tol=context.kw.get("tol", 1e-7),
-        eshift=context.kw.get("eshift", False),
+def _schrodinger_representation(model, coupled, name):
+    from fishbonett.representations.schrodinger import (
+        SchrodingerRepresentation,
     )
-    return encoding, hooks
+
+    _check_single_channel(model)
+    compiled = (coupled.compiled_chain()
+                if name == "schrodinger-chain"
+                else coupled.compiled_star())
+    return SchrodingerRepresentation(
+        representation=name, h_sys=model.h, coupling=model.coupling,
+        compiled_bath=compiled)
 
 
 def _polaron_representation(model, context, name):
@@ -141,38 +132,25 @@ def _polaron_representation(model, context, name):
     n_modes, d_sys = bath.n_modes, model.h.shape[0]
     phys_dims = [d_sys] + [bath.phys_dim] * n_modes
     representation = PolaronRepresentation(
-        phys_dims, representation=name, h_sys=model.h, coupling=model.coupling,
+        representation=name, h_sys=model.h, coupling=model.coupling,
         compiled_polaron=coupled.compiled_polaron()).build()
     return representation, bath, n_modes, phys_dims
 
 
-def _compile_mpo_encoding(model, spec, context, bath, coupled):
-    """Prepare the MPO encoding selected by ``spec.representation``.
-
-    This is an encoding adapter, not another method registry: several registry
-    rows differing only in integrator share the same encoded Hamiltonian.
-    """
-    if spec.representation == "schrodinger-chain":
-        compiled = coupled.compiled_chain()
-        return _encode_plain_mpo(
-            model, _mpo_encoding.encode_schrodinger_chain, bath, context, compiled)
-    if spec.representation == "schrodinger-star":
-        compiled = coupled.compiled_star()
-        return _encode_plain_mpo(
-            model, _mpo_encoding.encode_schrodinger_star, bath, context, compiled)
-    if spec.representation == "interaction-chain":
-        return _encode_interaction_mpo(
-            model, context, coupled, spec.representation)
-    if spec.representation == "interaction-star":
-        return _encode_interaction_mpo(
-            model, context, coupled, spec.representation)
+def _compile_tdvp_representation(model, spec, context, coupled):
+    """Build the representation object supplying this method's ``tdvp_mpo``."""
+    if spec.representation in {"schrodinger-chain", "schrodinger-star"}:
+        representation = _schrodinger_representation(
+            model, coupled, spec.representation)
+        return representation, _tdvp_hooks(context)
+    if spec.representation in {"interaction-chain", "interaction-star"}:
+        representation, _phys_dims = _interaction_representation(
+            model, coupled, spec.representation)
+        return representation, _tdvp_hooks(context)
     if spec.representation in {"polaron-chain", "polaron-star"}:
-        from fishbonett.encodings.polaron import encode_polaron_mpo
-
         transformed, _bath, _n_modes, _phys_dims = _polaron_representation(
             model, context, spec.representation)
         initial = model.system.initial_vector(context.initial)
-        encoding = encode_polaron_mpo(transformed, initial)
 
         def prepare(tensors):
             return transformed.initial_mps(initial)
@@ -187,20 +165,21 @@ def _compile_mpo_encoding(model, spec, context, bath, coupled):
             initial_bond=context.kw.get(
                 "initial_bond", min(context.bond_dim or 6, 6)),
         )
-        return encoding, hooks
+        return transformed, hooks
     raise ValueError(f"engine 'mpo-tdvp' has no compiler for representation {spec.representation!r}")
 
 
 def _compile_mpo_plan(model, spec, context):
     _check_single_channel(model)
     coupled = model.coupled_bath.resolved(context.t_max)
-    bath = coupled.bath
-    encoding, hooks = _compile_mpo_encoding(model, spec, context, bath, coupled)
-    require_capability(encoding, MPOHamiltonian, engine=spec.engine)
+    representation, hooks = _compile_tdvp_representation(
+        model, spec, context, coupled)
+    initial = model.system.initial_vector(context.initial)
 
     def execute():
         times, rdms, max_bond = _mpo.run_mpo_hamiltonian(
-            encoding, dt=context.dt, nsteps=context.n_steps, sweep=spec.driver,
+            representation, initial=initial,
+            dt=context.dt, nsteps=context.n_steps, sweep=spec.driver,
             D=context.bond_dim, chi_max=context.bond_dim,
             eps=context.trunc_eps, krylov=context.krylov,
             seed=context.seed,
@@ -275,8 +254,7 @@ def _compile_static_tree_plan(model, spec, context):
         initial = context.initial
 
     terms = tree.local_terms(context.t_max)
-    require_capability(terms, StaticGraphHamiltonian, engine=spec.engine)
-    site_gates, edge_gates = terms.gates(context.dt / 2.0)
+    site_gates, edge_gates = terms.tebd_gates(context.dt / 2.0)
     parsed = [(name, _parse_observable(value))
               for name, value in context.obs_ops.items()]
 
@@ -339,7 +317,7 @@ def _interaction_representation(model, coupled, name):
     bath = coupled.bath
     phys_dims = [model.h.shape[0]] + [bath.phys_dim] * bath.n_modes
     representation = InteractionRepresentation(
-        phys_dims, representation=name, h_sys=model.h,
+        representation=name, h_sys=model.h,
         coupling=model.coupling,
         compiled_star=coupled.compiled_star()).build()
     return representation, phys_dims
@@ -359,7 +337,6 @@ def _multichannel_interaction_representation(model, coupled, name):
 
 
 def _compile_swap_plan(model, spec, context):
-    from fishbonett.encodings.gates import SwapGateEncoder
     from fishbonett.states.mps import SystemBathMPS
 
     coupled = model.coupled_bath.resolved(context.t_max)
@@ -371,9 +348,7 @@ def _compile_swap_plan(model, spec, context):
         _check_single_channel(model)
         representation, phys_dims = _interaction_representation(
             model, coupled, spec.representation)
-    gates = SwapGateEncoder(representation)
     state = SystemBathMPS(phys_dims)
-    require_capability(gates, SwapGateFactory, engine=spec.engine)
     psi0 = model.system.initial_vector(context.initial)
     state.B[0][:] = 0.0
     for index, amplitude in enumerate(psi0):
@@ -382,7 +357,7 @@ def _compile_swap_plan(model, spec, context):
     return SimulationPlan(
         spec, context,
         step=lambda k: _tebd.symmetric_swap_step(
-            state, gates, k * context.dt, context.dt, bath.n_modes,
+            state, representation, k * context.dt, context.dt, bath.n_modes,
             context.bond_dim, context.trunc_eps),
         measure_rdm=lambda: state.rdm(0),
         peak_bond=lambda: mps_peak_bond(state),
@@ -390,7 +365,6 @@ def _compile_swap_plan(model, spec, context):
 
 
 def _compile_displacement_plan(model, spec, context):
-    from fishbonett.encodings.displacement import ConditionalDisplacementEncoder
     from fishbonett.evolve.mpo_apply import (
         apply_mpo, bond_dims, compress, product_state,
     )
@@ -400,8 +374,6 @@ def _compile_displacement_plan(model, spec, context):
     bath = coupled.bath
     representation, phys_dims = _interaction_representation(
         model, coupled, spec.representation)
-    propagator = ConditionalDisplacementEncoder(representation)
-    require_capability(propagator, DisplacementFactory, engine=spec.engine)
     tensors = product_state(
         phys_dims, model.system.initial_vector(context.initial))
     u_half = _la.expm(-0.5j * context.dt * np.asarray(model.h, complex))
@@ -413,7 +385,8 @@ def _compile_displacement_plan(model, spec, context):
         tensors = compress(
             apply_mpo(
                 tensors,
-                propagator.displacement_mpo(index * context.dt, context.dt)),
+                representation.trotter_mpo(
+                    index * context.dt, context.dt)),
             context.bond_dim, context.trunc_eps)
         tensors[0] = np.einsum(
             "ij,ajb->aib", u_half, tensors[0])
@@ -429,7 +402,6 @@ def _compile_displacement_plan(model, spec, context):
 
 
 def _compile_polaron_plan(model, spec, context):
-    from fishbonett.encodings.polaron import PolaronGateEncoder
     from fishbonett.states.mps import SystemBathMPS
 
     representation, _bath, n_modes, phys_dims = _polaron_representation(
@@ -438,9 +410,7 @@ def _compile_polaron_plan(model, spec, context):
     psi0 = model.system.initial_vector(context.initial)
     state.split_truncate_theta(
         representation.initial_theta(psi0), 0, context.bond_dim, 1e-14)
-    gate_encoder = PolaronGateEncoder(representation)
-    require_capability(gate_encoder, StaticGateFactory, engine=spec.engine)
-    gates = gate_encoder.gates(context.dt / 2.0)
+    gates = representation.tebd_gates(context.dt / 2.0)
     return SimulationPlan(
         spec, context,
         step=lambda _index: _tebd.symmetric_static_step(

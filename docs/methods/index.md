@@ -80,8 +80,8 @@ same transformed Hamiltonian and both are implemented.
 | `polaron-star` | path | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`schrodinger/polaron_chain` |
 
 The two `interaction-chain` rows use the same Hamiltonian on different tensor
-graphs. Representation does not select TEBD or TDVP; the encoding and integrator
-do that later.
+graphs. The representation supplies the requested numerical product, while the
+integrator determines how that product advances the tensor state.
 
 ## Other models
 
@@ -103,7 +103,7 @@ star-to-chain transform to the matrix-valued mode couplings.
   method.
 - One-site TDVP methods require an explicit `bond_dim`; they cannot grow a bond
   from a product state.
-- Time-dependent interaction representations rebuild their encoded operator at
+- Time-dependent interaction representations rebuild their numerical operator at
   every step midpoint.
 - The conditional-displacement method `interaction-chain-trotter-mpo` is
   available because the
@@ -128,7 +128,7 @@ result = model.run(
 )
 ```
 
-See {doc}`/architecture` for the representation/encoding boundary and
+See {doc}`/architecture` for the representation/evolution boundary and
 {py:func}`fishbonett.models.registry.describe_taxonomy` for the complete runtime
 table.
 

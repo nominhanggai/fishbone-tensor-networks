@@ -3,18 +3,16 @@
 The public decomposition is:
 
 ```text
-model -> representation -> encoding -> state geometry -> integrator
+model -> representation -> state geometry -> integrator
 ```
 
 - A **model** defines the physical topology and system operators.
-- A **representation** defines the mathematical Hamiltonian.
-- An **encoding** turns that Hamiltonian into local terms, gates, an MPO, or a
-  factorized propagator.
+- A **representation** defines the mathematical Hamiltonian and materializes its
+  supported numerical products: a TDVP MPO, Trotter MPO, or TEBD gates.
 - A **state geometry** is the tensor graph: path, balanced mode tree, or comb.
-- An **integrator** advances the encoded operator and state.
+- An **integrator** advances the represented operator and state.
 
-Only `model`, `representation`, `geometry`, and `integrator` are public selection
-axes. Encoding is an implementation boundary chosen by the resolved method.
+These are the four public selection axes.
 
 ## Dependency direction
 
@@ -28,10 +26,7 @@ CoupledBath                         physical system--bath association
 StarBath / ChainBath / PolaronBath  immutable finite bath data
         |
         v
-representation                     mathematical transformation of H
-        |
-        v
-encoding                           LocalTerms / MPO / gates / factorized U
+representation                     transformation of H + numerical products
         |
         v
 SimulationPlan                     prepared state + propagation + measurement
@@ -45,8 +40,8 @@ Result                             times, RDMs, expectations, bond diagnostics
 
 Dependencies point downward. In particular, the six public representation
 builders do not import TEBD, TDVP, MPO drivers, or tensor-network state classes.
-The adapters in `fishbonett.encodings` may consume representation data, and the
-planner may combine an encoding with an integrator. The exploratory
+The planner requests the numerical product required by the resolved integrator
+directly from the representation. The exploratory
 `SystemBathCoolingChain` predates this boundary and remains a stateful,
 low-level compatibility utility outside `method=` dispatch.
 
@@ -87,10 +82,9 @@ star-to-chain transformation.
   star and chain data for the reweighted $J(\omega)/\omega^2$ measure plus the
   reorganization energy.
 - `fishbonett.representations` owns Hamiltonian transformations, time-dependent
-  coefficients, transformed initial states, and recovery of laboratory
-  observables.
-- `fishbonett.encodings` owns engine-facing forms: MPOs, local terms, swap gates,
-  static polaron gates, and conditional-displacement propagators.
+  coefficients, transformed initial states, recovery of laboratory observables,
+  and the `tdvp_mpo`, `trotter_mpo`, and `tebd_gates` products supported by each
+  representation.
 - {py:class}`~fishbonett.models.simulation.SimulationPlan` owns orchestration for
   one resolved method.
 - `fishbonett.evolve` advances tensors and does not discretize a bath or select a
@@ -99,16 +93,17 @@ star-to-chain transformation.
 `Bath.coupling` remains a deprecated compatibility input. `SystemBath(coupling=...)`
 is authoritative, and multi-site models should receive `bath.bind(operator)`.
 
-## Why encodings are separate
+## Numerical products of a representation
 
 One mathematical representation can support several propagation algorithms. For
-example, `interaction-chain` can be encoded as swap-network gates, a
-conditional-displacement MPO, a time-dependent Hamiltonian MPO, or a tree
-operator. None of those choices changes the represented Hamiltonian.
+example, `interaction-chain` supplies time-dependent Hamiltonian tensors through
+`tdvp_mpo(t)`, interval gates through `tebd_gates(t, dt)`, and its exact
+conditional-displacement propagator through `trotter_mpo(t, dt)`. These are
+products of the same represented Hamiltonian, not another selection axis.
 
-The separation is checked structurally through protocols in
-{py:mod}`fishbonett.encodings.capabilities`. A plan fails during compilation when
-an engine receives an incompatible encoding.
+Representations build operators but do not advance tensor states. Evolution
+engines consume those products without discretizing baths or selecting a
+representation.
 
 ## Dispatch boundary
 

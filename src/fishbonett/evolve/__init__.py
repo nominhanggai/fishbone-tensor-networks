@@ -58,12 +58,13 @@ The private split enforces dependency direction: kernels know only tensor algebr
 sweeps depend on kernels, and whole-run drivers depend on both.  Neither kernels
 nor sweeps resolve a bath or import a Hamiltonian representation.
 
-:func:`run_mpo_hamiltonian` takes a :class:`~fishbonett.encodings.mpo.MPOEncoding` -- the
+:func:`run_mpo_hamiltonian` takes a representation exposing ``tdvp_mpo`` -- the
 Hamiltonian, already built -- plus a sweep name, and runs the whole simulation.  It
 replaced seven ``run_*`` functions (``run_tdvp1``, ``run_star_tdvp2``,
 ``run_ip_tdvp1``, ...), one per *(MPO builder, sweep)* pair, which each built their
 own Hamiltonian and repeated the same loop. Building the engine-facing operator
-is an encoding question, so nothing here imports :mod:`fishbonett.representations`.
+is a representation question, so nothing here imports concrete representation
+classes.
 
 For ordinary use go through
 :meth:`fishbonett.models.system_bath.SystemBath.run`, which handles bath

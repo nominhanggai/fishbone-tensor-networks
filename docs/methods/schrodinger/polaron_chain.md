@@ -41,13 +41,13 @@ Laboratory coherences also require undoing the displacement during measurement;
 the high-level API performs this automatically and returns a laboratory-system
 RDM for both star and chain.
 
-## Encodings
+## Numerical products
 
-- `polaron-chain` supports a local nearest-neighbour gate encoding for TEBD.
-- Both representations support a static MPO encoding for one-site, two-site, and
+- `polaron-chain` supplies local nearest-neighbour gates for TEBD.
+- Both representations supply a static TDVP MPO for one-site, two-site, and
   dynamically adaptive TDVP.
 
-This is an encoding distinction, not a change of represented Hamiltonian.
+These are numerical products of the same represented Hamiltonian.
 
 ```python
 chain = model.run(

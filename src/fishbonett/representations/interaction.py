@@ -12,20 +12,40 @@ coefficients are ``d_n(t) = sum_k U[n,k] g_k exp(-i omega_k t)``.  Diagonalizing
 a finite chain can recover the same star quadrature, but that is a numerical
 discretization route rather than the definition of this representation.
 
-This module contains no TEBD, TDVP, MPO, or tensor-network state logic.  Numerical
-encodings live in :mod:`fishbonett.encodings`.
+The representation directly materializes its Hamiltonian for the supported
+tensor-network algorithms through :meth:`tdvp_mpo`, :meth:`trotter_mpo`, and
+:meth:`tebd_gates`.  It does not advance a tensor-network state.
 """
 
 import numpy as np
+import scipy.linalg as la
 
-from fishbonett.bath.chain import star_transform
-from fishbonett.bath.compiled import StarBath
 from fishbonett.bath.conventions import integrated_free_phase
-from fishbonett.linalg import kron
-from fishbonett.operators import annihilate
+from fishbonett.linalg import expm_gate, kron
+from fishbonett.operators import annihilate, create
+from fishbonett.representations._mpo import identity_product, product_sum_mpo
 from fishbonett.system import check_operator
 
-__all__ = ["InteractionRepresentation"]
+__all__ = ["InteractionRepresentation", "star_edges"]
+
+
+def star_edges(n_modes):
+    """Interaction-graph edges for a mode-decoupled representation."""
+    return [(0, mode) for mode in range(1, n_modes + 1)]
+
+
+def _swap_gate_pairs(hamiltonians, factor=1):
+    """Exponentiate interval Hamiltonians in both swap-network leg orders."""
+    first, second = [], []
+    for hamiltonian, d_boson, d_system in hamiltonians:
+        dense = (hamiltonian.toarray()
+                 if hasattr(hamiltonian, "toarray") else hamiltonian)
+        gate = expm_gate(dense / factor, 1).reshape(
+            d_boson, d_system, d_boson, d_system,
+        ).transpose(1, 0, 3, 2)
+        first.append(gate)
+        second.append(np.transpose(gate, (1, 0, 3, 2)))
+    return first, second
 
 
 class InteractionRepresentation:
@@ -33,68 +53,48 @@ class InteractionRepresentation:
 
     Parameters
     ----------
-    pd
-        ``[d_system, d_mode, ...]``.
     representation
         Exactly ``"interaction-star"`` or ``"interaction-chain"``.
     h_sys, coupling
         Hermitian system Hamiltonian and coupling operator.
     compiled_star
-        Preferred input: a finite star discretization and its optional
-        star-to-chain transform.  The ``sd``/``domain`` route remains available to
-        low-level research scripts.
+        A finite star discretization and its optional star-to-chain transform.
     """
 
     names = frozenset({"interaction-star", "interaction-chain"})
+    static = False
 
-    def __init__(self, pd, *, representation, h_sys, coupling, sd=None,
-                 domain=None, discretizer=None, compiled_star=None):
+    def __init__(self, *, representation, h_sys, coupling, compiled_star):
         if representation not in self.names:
             raise ValueError(
                 "representation must be 'interaction-star' or "
                 "'interaction-chain'")
         self.name = representation
-        self.pd_sys = int(pd[0])
-        self.pd_boson = [int(value) for value in pd[1:]]
+        self.h_sys = check_operator(h_sys, "h_sys")
+        self.pd_sys = self.h_sys.shape[0]
+        self.coupling = check_operator(coupling, "coupling", self.pd_sys)
+        self.pd_boson = [compiled_star.phys_dim] * compiled_star.n_modes
         self.len_boson = len(self.pd_boson)
         if not self.pd_boson:
-            raise ValueError("pd must include at least one bath mode")
-        self.h_sys = check_operator(h_sys, "h_sys", self.pd_sys)
-        self.coupling = check_operator(coupling, "coupling", self.pd_sys)
-        if compiled_star is None and (sd is None or domain is None):
-            raise ValueError(
-                "provide compiled_star or both sd and domain")
-        self.sd = sd
-        self.domain = None if domain is None else tuple(domain)
-        self.discretizer = discretizer
+            raise ValueError("compiled_star must include at least one bath mode")
         self.compiled_star = compiled_star
         self.frequencies = None
         self.star_couplings = None
         self.star_to_chain = None
 
     @property
-    def static(self):
-        return False
+    def dimensions(self):
+        return (self.pd_sys, *self.pd_boson)
+
+    @property
+    def n_sites(self):
+        return len(self.dimensions)
 
     def build(self):
         """Prepare the finite star data and optional star-to-chain transform."""
-        if self.compiled_star is None:
-            frequencies, couplings, transform = star_transform(
-                self.sd, self.len_boson, self.domain, self.discretizer)
-            star = StarBath(
-                frequencies, np.asarray(couplings)[None, :],
-                self.pd_boson[0], transform)
-        else:
-            star = self.compiled_star
+        star = self.compiled_star
         if star.n_channels != 1:
             raise ValueError("an interaction representation requires one channel")
-        if star.n_modes != self.len_boson:
-            raise ValueError(
-                f"compiled star has {star.n_modes} modes but pd describes "
-                f"{self.len_boson}")
-        if any(size != star.phys_dim for size in self.pd_boson):
-            raise ValueError(
-                "compiled star phys_dim does not match the mode dimensions")
         if self.name == "interaction-chain" and star.chain_transform is None:
             raise ValueError(
                 "interaction-chain requires a star-to-chain transform")
@@ -114,6 +114,30 @@ class InteractionRepresentation:
         phases = np.exp(-1j * self.frequencies * float(t))
         return self._express(self.star_couplings * phases)
 
+    def tdvp_mpo(self, t=None):
+        """Return the instantaneous Hamiltonian MPO consumed by TDVP."""
+        if self.frequencies is None:
+            raise ValueError("build the interaction representation first")
+        coefficients = self.coefficients(0.0 if t is None else t)
+        dimensions = list(self.dimensions)
+        destroy = annihilate(self.pd_boson[0])
+        create_op = create(self.pd_boson[0])
+        products, values = [], []
+
+        row = identity_product(dimensions)
+        row[0] = self.h_sys
+        products.append(row)
+        values.append(1.0)
+        # TDVP stores the bath sites in reverse coefficient order.
+        for mode, amplitude in enumerate(coefficients[::-1]):
+            row = identity_product(dimensions)
+            row[0] = self.coupling
+            row[mode + 1] = (
+                amplitude * destroy + np.conj(amplitude) * create_op)
+            products.append(row)
+            values.append(1.0)
+        return product_sum_mpo(dimensions, products, values)
+
     def interval_coefficients(self, t, delta):
         """Couplings integrated over ``[t, t + delta]``."""
         phases = np.array([
@@ -125,9 +149,8 @@ class InteractionRepresentation:
     def two_site_hamiltonians(self, t, delta, include_system=True):
         """One interval-integrated system–mode Hamiltonian per bath mode.
 
-        Matrices use ``(mode, system)`` ordering.  They are representation data;
-        :mod:`fishbonett.encodings.gates` decides whether and how to exponentiate
-        or arrange them on a tensor-network state.
+        Matrices use ``(mode, system)`` ordering.  :meth:`tebd_gates`
+        exponentiates and arranges them for the swap network.
         """
         out = []
         for dimension, amplitude in zip(
@@ -147,3 +170,40 @@ class InteractionRepresentation:
             system_term = delta * kron(np.eye(dimension), self.h_sys)
             out[0] = (out[0][0] + system_term, dimension, self.pd_sys)
         return out
+
+    def tebd_gates(self, t, dt, factor=1, include_system=True):
+        """Return both leg orderings of the interval's swap-network gates."""
+        return _swap_gate_pairs(
+            self.two_site_hamiltonians(
+                t, dt, include_system=include_system),
+            factor,
+        )
+
+    def trotter_mpo(self, t, dt):
+        """Return the exact conditional-displacement MPO for one interval.
+
+        This is the interaction part of the registered Strang/Trotter step; the
+        system Hamiltonian half-steps are applied by the simulation planner.
+        """
+        eigenvalues, vectors = la.eigh(self.coupling)
+        coefficients = self.interval_coefficients(t, dt)
+        rank = len(eigenvalues)
+        tensors = [np.zeros((1, rank, self.pd_sys, self.pd_sys), complex)]
+        for branch in range(rank):
+            vector = vectors[:, branch]
+            tensors[0][0, branch] = np.outer(vector, vector.conj())
+
+        for mode, coefficient in enumerate(coefficients):
+            dimension = self.pd_boson[mode]
+            destroy = annihilate(dimension)
+            create_op = destroy.conj().T
+            right_rank = rank if mode < len(coefficients) - 1 else 1
+            tensor = np.zeros(
+                (rank, right_rank, dimension, dimension), complex)
+            for branch, eigenvalue in enumerate(eigenvalues):
+                alpha = -1j * eigenvalue * np.conj(coefficient)
+                target = branch if right_rank > 1 else 0
+                tensor[branch, target] = la.expm(
+                    alpha * create_op - np.conj(alpha) * destroy)
+            tensors.append(tensor)
+        return tensors

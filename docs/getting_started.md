@@ -155,35 +155,39 @@ is whatever the code actually offers:
 ## Low-level engines
 
 For finer control the underlying layers are available directly. The high-level
-path compiles `Bath`, constructs a representation, encodes it for an engine, and
-then propagates. Legacy low-level constructors also accept a spectral density and
-domain directly:
+path compiles `Bath`, constructs a representation, asks it for the numerical
+product needed by the integrator, and then propagates:
 
 ```python
 import numpy as np
+from fishbonett import Bath
 from fishbonett.representations.polaron import PolaronRepresentation
-from fishbonett.encodings.polaron import PolaronGateEncoder
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.evolve import tebd
 from fishbonett.operators import sigma_x, sigma_z
 
-pd = [2] + [10] * 8                        # system on site 0, then the bath chain
-builder = PolaronRepresentation(
-    pd, representation="polaron-chain",
+bath = Bath(
+    J=lambda w: 0.3 * w * np.exp(-w / 2.5),
+    domain=(0.3, 12.0), n_modes=8, phys_dim=10,
+)
+compiled = bath.bind(sigma_z).compiled_polaron()
+representation = PolaronRepresentation(
+    representation="polaron-chain",
     h_sys=0.5 * sigma_x, coupling=sigma_z,
-    sd=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0)).build()
+    compiled_polaron=compiled,
+).build()
+pd = list(representation.dimensions)        # system on site 0, then the bath chain
 
 state = SystemBathMPS(pd)
-gates = PolaronGateEncoder(builder).gates(0.02 / 2)
+gates = representation.tebd_gates(0.02 / 2)
 tebd.symmetric_static_step(state, gates, len(pd) - 1, chi_max=60, eps=1e-4)
 rho = state.rdm(0)                         # inherited from TensorNetwork
 ```
 
 `symmetric_static_step` applies each gate twice, so it takes **half**-step gates —
 the convention every second-order step here uses. The interaction and
-multichannel representations can instead be adapted with
-{py:class}`~fishbonett.encodings.gates.SwapGateEncoder`; their time-dependent
-gates are rebuilt each step. For a
+multichannel representations expose `tebd_gates(t, dt)` directly; their
+time-dependent gates are rebuilt each step. For a
 multi-site model the state is a {py:class}`~fishbonett.states.tree.TreeTensorNetwork` driven
 by {py:mod}`fishbonett.evolve.sitetree` instead.
 

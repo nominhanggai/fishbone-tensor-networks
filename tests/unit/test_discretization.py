@@ -32,15 +32,19 @@ def test_recurrence_needs_no_orthpol():
 
 def test_interaction_representation_starts_from_a_finite_star():
     """Star discretization precedes the interaction and chain transformations."""
+    from fishbonett import Bath
     from fishbonett.representations.interaction import InteractionRepresentation
 
     n_boson = 4
-    eth = InteractionRepresentation([2] + [6] * n_boson,
-                       representation="interaction-chain",
-                       h_sys=10.0 * np.array([[0.0, 1.0], [1.0, 0.0]]),
-                       coupling=np.diag([1.0, -1.0]),
-                       sd=lambda w: 0.5 * w * np.exp(-w / 10.0),
-                       domain=[0.0, 50.0]).build()
+    coupling = np.diag([1.0, -1.0])
+    compiled = Bath(
+        J=lambda w: 0.5 * w * np.exp(-w / 10.0),
+        domain=(0.0, 50.0), n_modes=n_boson, phys_dim=6,
+    ).bind(coupling).compiled_star()
+    eth = InteractionRepresentation(
+        representation="interaction-chain",
+        h_sys=10.0 * np.array([[0.0, 1.0], [1.0, 0.0]]),
+        coupling=coupling, compiled_star=compiled).build()
 
     assert len(eth.frequencies) == n_boson
     assert len(eth.star_couplings) == n_boson
@@ -51,10 +55,9 @@ def test_interaction_representation_starts_from_a_finite_star():
         np.eye(n_boson), atol=1e-10)
 
     star = InteractionRepresentation(
-        [2] + [6] * n_boson, representation="interaction-star",
+        representation="interaction-star",
         h_sys=eth.h_sys, coupling=eth.coupling,
-        sd=lambda w: 0.5 * w * np.exp(-w / 10.0),
-        domain=[0.0, 50.0]).build()
+        compiled_star=compiled).build()
     np.testing.assert_allclose(
         eth.coefficients(0.37),
         eth.star_to_chain @ star.coefficients(0.37))
@@ -63,8 +66,8 @@ def test_interaction_representation_starts_from_a_finite_star():
 def test_star_transform_has_one_implementation():
     """The star->chain transform is bath machinery, and there is one of it.
 
-    ``evolve.modetree`` carried a byte-identical copy of what ``encodings.mpo`` used --
-    the same pathology as the chain mapping in five copies.  It lives in ``bath``
+    ``evolve.modetree`` once carried a byte-identical copy of the transform.  It
+    lives in ``bath``
     now because that is what it is (the same star/Lanczos pair as
     ``get_bath_nn_paras``, keeping the transform instead of discarding it), and
     because importing it from there leaves ``evolve`` depending on no representation.
@@ -73,9 +76,8 @@ def test_star_transform_has_one_implementation():
     import inspect
     from fishbonett.bath.chain import star_transform
     from fishbonett.evolve import modetree
-    from fishbonett.encodings import mpo
 
-    assert modetree._star_transform is star_transform is mpo.star_transform
+    assert modetree._star_transform is star_transform
 
     # and the layering it was fixed under still holds
     src = inspect.getsource(modetree)

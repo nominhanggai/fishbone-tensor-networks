@@ -8,9 +8,10 @@ Run with:  python benchmarks/mpo_tdvp.py
 """
 import numpy as np
 
+from fishbonett import Bath
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian, SX, SZ
-from fishbonett.encodings.mpo import chain_coeffs, encode_schrodinger_chain
 from fishbonett.operators import annihilate, create, number
+from fishbonett.representations.schrodinger import SchrodingerRepresentation
 
 DOMAIN = (-25.0, 36.0)
 
@@ -34,7 +35,9 @@ def embed(op, site, dims):
 
 
 def exact_sz(n_chain, d, V, ts):
-    eps_c, t_c, c0 = chain_coeffs(Jb, n_chain, DOMAIN)
+    chain = compiled_chain(n_chain, d)
+    eps_c, t_c, c0 = (
+        chain.frequencies, chain.hoppings, chain.system_coupling)
     dims = [2] + [d] * n_chain
     b, bd, nb = annihilate(d), create(d), number(d)
     H = embed(V * SX, 0, dims) + c0 * (embed(SZ, 0, dims) @ embed(b + bd, 1, dims))
@@ -52,15 +55,22 @@ def exact_sz(n_chain, d, V, ts):
                      @ (szop @ (Uv @ (np.exp(-1j * E * t) * coef))) for t in ts]).real
 
 
+def compiled_chain(n_modes, phys_dim):
+    bath = Bath(J=Jb, domain=DOMAIN, n_modes=n_modes, phys_dim=phys_dim)
+    return bath.bind(SZ).compiled_chain()
+
+
 def main():
     n_chain, d, V = 3, 6, 1.0
-    # one MPO encoding, three sweeps (the integrator)
-    encoding = encode_schrodinger_chain(Jb, DOMAIN, n_chain=n_chain, d=d, V=V)
-    t, sz1, _ = run_mpo_hamiltonian(encoding, dt=0.10, nsteps=30, sweep="tdvp1",
+    # one representation-supplied MPO, three TDVP sweeps
+    representation = SchrodingerRepresentation(
+        representation="schrodinger-chain", h_sys=V * SX, coupling=SZ,
+        compiled_bath=compiled_chain(n_chain, d))
+    t, sz1, _ = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp1",
                               D=40, krylov=25)
-    _, sz2, md2 = run_mpo_hamiltonian(encoding, dt=0.10, nsteps=30, sweep="tdvp2",
+    _, sz2, md2 = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp2",
                                 chi_max=40, eps=1e-12, krylov=25)
-    _, szd, maxd = run_mpo_hamiltonian(encoding, dt=0.10, nsteps=30, sweep="dtdvp",
+    _, szd, maxd = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="dtdvp",
                                  prec=1e-8, D=40, Dplusmax=6, krylov=25)
     sz_ex = exact_sz(n_chain, d, V, t)
     print(f"{'t':>6} {'exact':>10} {'TDVP1':>10} {'TDVP2':>10} {'DTDVP':>10}")
