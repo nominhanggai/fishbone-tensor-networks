@@ -30,6 +30,16 @@ def _bath(**kw):
     return Bath(J=_J, **kw)
 
 
+def _bath_pos():
+    """Zero-temperature bath on a positive domain.
+
+    The cross-method comparison uses this rather than the thermalized signed-domain
+    ``_bath`` so that every method sees the same bath with no thermofield branch --
+    what is being compared is the propagators, not the discretization.
+    """
+    return Bath(J=_J, domain=(0.0, 40.0), n_modes=3, phys_dim=4)
+
+
 # -- the taxonomy is self-consistent -----------------------------------------
 def test_registry_is_the_only_dispatch_table():
     """There is one table, so there is no seam to drift.
@@ -193,6 +203,48 @@ def test_every_method_reports_max_bond(model_key):
         assert r.max_bond is not None, f"{model_key}/{method} reports no max_bond"
         assert np.shape(r.max_bond) == (2,), f"{model_key}/{method}: one per step"
         assert np.all(np.asarray(r.max_bond) >= 1), f"{model_key}/{method}"
+
+
+def test_every_method_agrees_on_the_same_physics():
+    """The methods are each other's cross-check -- so check them against each other.
+
+    ``chain``, ``star`` and ``mode-tree`` are three representations of one
+    system-plus-bath, and a one-site ``site-tree`` is a fourth; the frames on top of
+    them are exact rewritings, not approximations.  So every one of these must land
+    on the same trajectory to within its own Trotter and truncation error.
+
+    This is the broadest correctness statement the package can make about itself:
+    17 independent code paths -- three frames, two geometries, TEBD and TDVP and an
+    exact displacement MPO -- agreeing on one number.  A frame that dropped a term,
+    a geometry wired to the wrong bath, or a propagator applying gates in the wrong
+    order would show up here as a gross disagreement rather than a subtle one.
+    """
+    h, coup = 0.5 * sigma_x, sigma_z
+    dt, n_steps = 0.02, 20
+
+    def run(model_key, method):
+        if model_key == "site-tree":
+            obj = TreeFishbone(sites=[h], edges=[], baths=[_bath_pos()])
+        else:
+            obj = SystemBath(h=h, coupling=coup, bath=_bath_pos())
+        r = obj.run(dt=dt, n_steps=n_steps, method=method, bond_dim=40,
+                    trunc_eps=1e-10, observables={"sz": sigma_z})
+        sz = np.asarray(r.expect["sz"])
+        return sz.reshape(n_steps, -1)[:, 0] if sz.ndim > 1 else sz
+
+    results = {}
+    for key in ("chain", "star", "mode-tree", "site-tree"):
+        for m in R.methods_of(key):
+            results[(key, m)] = run(key, m)
+
+    ref = results[("chain", "tebd")]
+    for (key, m), sz in results.items():
+        # mpo-dtdvp is bond-adaptive: its accuracy is set by `prec`, not by dt, so
+        # it sits a decade or so off the rest.  Still far from a wrong answer.
+        tol = 5e-3 if m == "mpo-dtdvp" else 1e-3
+        assert np.abs(sz - ref).max() < tol, (
+            f"{key}/{m} disagrees with chain/tebd by "
+            f"{np.abs(sz - ref).max():.2e} on identical physics")
 
 
 def test_layout_matches_what_the_drivers_actually_do():
