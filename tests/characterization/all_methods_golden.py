@@ -17,6 +17,14 @@ the unit suite for this purpose: it compares exactly (``==``, not ``allclose``),
 it catches a reordered Trotter term that stays within tolerance.
 
 Deliberate changes are expected sometimes -- re-capture and say so in the commit.
+
+.. note::
+   A baseline is specific to the contraction backend it was captured on.  Comparing
+   an ``opt_einsum`` capture against a ``FISHBONETT_EINSUM=numpy`` run shows one
+   method differing: ``chain/trotter-mpo``, by 2.2e-16 in the RDM (under one machine
+   epsilon, and 0 in the observable).  That is a single rounding step from a
+   different contraction order, not a disagreement -- but since this file compares
+   exactly, capture and check on the same backend.
 """
 import pickle
 import sys
