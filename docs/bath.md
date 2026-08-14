@@ -264,10 +264,10 @@ $$
 so a *pure-state* simulation on the doubled (signed) domain reproduces the thermal
 dynamics.  In practice you just pass a `temperature` (or `beta`) and a signed
 `domain`; `Bath.spectral_density()` returns the thermalized density.  The
-transform is {py:func}`fishbonett.models.thermalize`, usable on its own:
+transform is {py:func}`fishbonett.bath.spec.thermalize`, usable on its own:
 
 ```python
-from fishbonett.models import thermalize
+from fishbonett.bath import thermalize
 
 J0 = lambda w: 0.2 * w * np.exp(-w / 5)            # zero-T density on w > 0
 J_beta = thermalize(J0, beta=1.0)                  # signed, finite-T density
