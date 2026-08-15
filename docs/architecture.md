@@ -40,9 +40,7 @@ Result                             times, RDMs, expectations, bond diagnostics
 Dependencies point downward. In particular, the six public representation
 builders do not import TEBD, TDVP, MPO drivers, or tensor-network state classes.
 The planner requests the numerical product required by the resolved integrator
-directly from the representation. The exploratory
-`SystemBathCoolingChain` predates this boundary and remains a stateful,
-low-level compatibility utility outside `method=` dispatch.
+directly from the representation.
 
 ## Bath discretization and the interaction representation
 
@@ -79,14 +77,14 @@ star-to-chain transformation.
   star or chain coefficients, Hamiltonian transformations, time-dependent
   coefficients, transformed initial states, recovery of laboratory observables,
   and the `tdvp_mpo`, `trotter_mpo`, and `tebd_gates` products supported by each
-  representation. Private coefficient containers are not a public layer.
+  representation. Private coefficient containers remain internal.
 - {py:class}`~fishbonett.models.simulation.SimulationPlan` owns orchestration for
   one resolved method.
 - `fishbonett.evolve` advances tensors and does not discretize a bath or select a
   representation.
 
-`Bath.coupling` remains a deprecated compatibility input. `SystemBath(coupling=...)`
-is authoritative, and multi-site models should receive `bath.bind(operator)`.
+`Bath.coupling` is deprecated. Use `SystemBath(coupling=...)` for single-system
+models and `bath.bind(operator)` for multi-site models.
 
 ## Numerical products of a representation
 
@@ -94,7 +92,7 @@ One mathematical representation can support several propagation algorithms. For
 example, `interaction-chain` supplies time-dependent Hamiltonian tensors through
 `tdvp_mpo(t)`, interval gates through `tebd_gates(t, dt)`, and its exact
 conditional-displacement propagator through `trotter_mpo(t, dt)`. These are
-products of the same represented Hamiltonian, not another selection axis.
+products of the same represented Hamiltonian.
 
 Representations build operators but do not advance tensor states. Evolution
 engines consume those products without discretizing baths or selecting a
@@ -109,11 +107,9 @@ internal engine key. {py:data}`fishbonett.models.simulation.PLAN_COMPILERS` maps
 only those engine keys to preparation code. Physical model classes do not maintain
 duplicate method tables.
 
-Public method names are derived from their registry row rather than maintained as
-an independent label: `<representation>-<integrator>` on a 1D MPS, with `tree`
-inserted for tree tensor-network geometries. This makes names such as
-`polaron-chain-tdvp2` and `interaction-chain-tree-tdvp2` self-describing and
-prevents the name from disagreeing with the represented Hamiltonian.
+Method names use `<representation>-<integrator>` on a 1D MPS and insert `tree`
+for tree tensor-network geometries, as in `polaron-chain-tdvp2` and
+`interaction-chain-tree-tdvp2`.
 
 All high-level model classes execute through `SimulationPlan`. `run(seed=...)`
 also scopes randomized linear algebra to that plan without changing NumPy's

@@ -18,7 +18,7 @@ kernel is exhausted, and truncating there is exact to that tolerance.  If it has
 *not* decayed by the end of the short runs, extrapolation is unjustified -- watch
 the ``T_norm`` returned by :func:`transfer_mat`.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ===============================  ================================================
 :func:`dynamical_maps`           assemble ``E(t)`` from the stored short runs

@@ -40,9 +40,9 @@ coupled = bath.bind(sigma_z)
 
 Representations receive `bath` directly and discretize it into their own finite
 star or chain coefficients. Those coefficients are private implementation data,
-not another public bath type. `CoupledBath` records only the physical association
-between a bath and one or more model operators. The old `Bath(coupling=...)`
-spelling emits `DeprecationWarning` and will be removed in a future major release.
+while `CoupledBath` records the physical association between a bath and one or
+more model operators. `Bath(coupling=...)` is deprecated; use
+`SystemBath(coupling=...)` or `bath.bind(operator)`.
 If it duplicates `SystemBath(coupling=...)`, the values must agree.
 
 ## Automatic defaults

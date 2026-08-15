@@ -11,7 +11,7 @@ chain or star of modes, a comb, or an arbitrary loop-free tree of sites each
 with its own bath(s).  It directly materializes the represented Hamiltonian as
 an MPO for TDVP or as local terms and TEBD gates for a state tree.
 
-.. rubric:: What's here
+.. rubric:: API
 
 * :class:`SchrodingerRepresentation`: one system and bath as a TDVP MPO.
 * :func:`terms`: systems and baths as static :class:`LocalTerms`.
@@ -80,7 +80,7 @@ class LocalTerms:
         return site_gates, edge_gates
 
     def as_tuple(self):
-        """Return the historical ``(dims, edges, site, bond)`` tuple."""
+        """Return ``(dims, edges, site, bond)`` for tuple-based consumers."""
         return self.dims, self.edges, self.site, self.bond
 
 

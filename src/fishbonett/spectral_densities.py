@@ -1,7 +1,7 @@
 """Analytic bath spectral densities ``J(omega)``.
 
-Formerly part of the catch-all ``fishbonett.operators`` module.  Pass any of these (or
-your own callable) as the ``J`` of a :class:`fishbonett.bath.spec.Bath`.
+Pass these functions, or another callable, as the ``J`` argument of
+:class:`fishbonett.bath.spec.Bath`.
 """
 import numpy as np
 

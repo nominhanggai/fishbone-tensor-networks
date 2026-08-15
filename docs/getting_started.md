@@ -56,7 +56,7 @@ result.expect["sz"]      # <sigma_z>(t)
 result.max_bond          # peak bond dimension per step
 ```
 
-Every `method` name begins with its complete representation, followed by the
+Every `method` name begins with its Hamiltonian representation, followed by the
 integrator; tree tensor-network methods also include `tree`. Examples include
 `interaction-chain-tebd`, `interaction-chain-trotter-mpo`,
 `polaron-chain-tdvp2`, `schrodinger-chain-tdvp2`, and
@@ -135,8 +135,7 @@ The general `tree` state supports several model-specific tensor-network
 geometries: a comb for `Fishbone`, an arbitrary loop-free tree for
 `TreeFishbone`, and a star for the static multichannel model.
 
-A representation name is complete. There is no second public category to combine
-with it:
+Supported Hamiltonian representations are:
 
 | transformation | chain representation | star representation |
 |---|---|---|
@@ -194,9 +193,9 @@ time-dependent gates are rebuilt each step. For a
 multi-site model the state is a {py:class}`~fishbonett.states.tree.TreeTensorNetwork` driven
 by {py:mod}`fishbonett.evolve.sitetree` instead.
 
-The high-level interface above is a thin wrapper over exactly this loop, and
-additionally resolves the automatic `domain` / `n_modes`, prepares the initial
-state, and — in time-dependent representations — rebuilds the gates each step.
+The high-level interface resolves the automatic `domain` / `n_modes`, prepares
+the initial state, runs this loop, and — in time-dependent representations —
+rebuilds the gates each step.
 
 See the [`examples/`](https://github.com/nominhanggai/fishbone-tensor-networks/tree/main/examples)
 directory for runnable scripts — start with `friendly_interface.py`, which also

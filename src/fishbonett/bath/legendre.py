@@ -12,25 +12,24 @@ robust and cheap, but it means a sharply peaked or infrared-divergent ``J`` can
 fall between nodes; :mod:`fishbonett.bath.tedopa` adapts the nodes to the
 measure instead and should be preferred in those cases.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ==============================  =================================================
 :func:`get_legendre_recursion`  Legendre recurrence coefficients on a window
 :func:`get_vn_squared`          the star: ``(freq, V_squared)`` -- the main entry
 :func:`get_approx_func`         the discretized ``J`` as a smooth function, to plot
-:func:`get_recursion`           the old, costly route (deprecated)
+:func:`get_recursion`           numerical recurrence route (deprecated)
 ==============================  =================================================
-
-Created on Tue Nov 16 15:20:02 2021 by michaelwu, Mulliken.
 """
 
 import numpy as np
 
 
 def get_recursion(n, j, domain, g=1, ncap=20000):  # j=weight function
-    """
-    The old way of calculating. Deprecated due to computational cost.
-    Replaced by get_legendre_recursion() where an analytical expression for alpha and beta is used.
+    """Return recurrence coefficients numerically.
+
+    Deprecated because :func:`get_legendre_recursion` evaluates the Legendre
+    coefficients analytically at lower cost.
     """
     import fishbonett.bath.recurrence as rc
     alphaL, sqrt_betaL = rc.recurrenceCoefficients(

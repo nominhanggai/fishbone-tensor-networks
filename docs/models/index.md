@@ -11,10 +11,6 @@ tensor-network geometry is selected by `state_geometry`.
 | `comb` | {py:class}`~fishbonett.models.fishbone.Fishbone` | several system sites on a line, baths per site |
 | `site-tree` | {py:class}`~fishbonett.models.fishbone.TreeFishbone` | several system sites on any loop-free graph, baths per site |
 
-`chain`, `star`, and `mode-tree` are not models. Chain and star occur only inside
-complete representation names; a balanced mode tree is a binary tree tensor-network
-geometry.
-
 The registry records every implemented combination and explains unavailable
 ones:
 

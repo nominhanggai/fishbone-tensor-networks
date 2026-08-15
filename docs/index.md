@@ -69,7 +69,7 @@ api
   against another — is a one-word change.
 - **Many representations, one model.** The same physical model can use a
   Schrödinger, interaction, or polaron representation, with star or chain included
-  in the complete representation name. The representation determines how much
+  in the representation name. The representation determines how much
   entanglement the state has to carry. Which representations a model admits — and
   why the others are absent — is recorded in
   {py:mod}`fishbonett.models.registry`.

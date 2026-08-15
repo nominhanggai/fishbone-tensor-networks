@@ -5,7 +5,7 @@ The order-``k`` correction in :mod:`fishbonett.rates.golden_rule_multi` is a
 about four dimensions deterministic quadrature is impractical, so these routines
 sample it instead.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ==============================  ===============================================
 :func:`mcmc_time_ordered`       the one that matters: time-ordered ``dim``-D

@@ -59,8 +59,8 @@ res.rdm                 # (n_steps, n_sites, d, d)
 ```
 
 A `baths` entry may be one `bath.bind(operator)` object, a `(left, right)` pair
-(two baths per site — the fishbone), or `None`. Bare baths retain the historical
-`sigma_z`/`sigma_x` positional defaults but are intended only for migration.
+(two baths per site — the fishbone), or `None`. Bare baths use positional
+`sigma_z`/`sigma_x` defaults; explicit `bath.bind(operator)` values are preferred.
 
 ## Cost and truncation
 

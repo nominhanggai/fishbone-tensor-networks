@@ -78,7 +78,7 @@ diagonalization of the discretized star (3 modes, $d=5$, 10 steps of $dt=0.05$):
 | `schrodinger-chain-tdvp1` | Schrödinger, chain MPO | $5.7\times10^{-8}$ |
 | `interaction-chain-tdvp1` | interaction, rebuilt MPO | $5.4\times10^{-4}$ |
 
-The ordering is the point: the two static-star methods are limited only by the TDVP
+The two static-star methods are limited by the TDVP
 sweep, the chain adds the tridiagonalization, and the interaction-picture star adds
 the per-step midpoint rebuild.
 

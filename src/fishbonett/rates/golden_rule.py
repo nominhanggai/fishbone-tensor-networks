@@ -10,7 +10,7 @@ transform of the lineshape function ``exp(g(t))``, with
 evaluated on the star modes ``(w, V^2)`` that
 :func:`fishbonett.bath.legendre.get_vn_squared` returns.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ===============================  ================================================
 :func:`fgr_rate`                 the golden-rule rate (2nd order in ``c``)

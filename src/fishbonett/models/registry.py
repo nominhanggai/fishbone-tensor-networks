@@ -1,8 +1,6 @@
-"""The taxonomy: the four axes a run is made of, and which combinations exist.
+"""Registry of supported model, representation, state, and integrator combinations.
 
-A run is **four independent choices**, and the point of this module is that they
-are independent -- which they were not when three of them were mashed into one
-string called the "model"::
+A run is specified by four axes::
 
     model     what is coupled to what      system-bath | multichannel | comb | site-tree
     representation  how H is written         schrodinger-chain | schrodinger-star
@@ -11,43 +9,26 @@ string called the "model"::
     state_geometry  tensor-network state        mps | binary-tree | tree
     integrator  how a step is taken        tebd | tdvp1 | tdvp2 | dtdvp | trotter-mpo
 
-.. rubric:: Six complete representations
+Availability of each Hamiltonian representation for a model is recorded by
+:attr:`Model.gaps`.
 
-Each representation name is complete.  There is no secondary public taxonomy to
-combine with it.  All six describe valid Hamiltonians; availability for a model
-is recorded by :attr:`Model.gaps`.
+* ``interaction-chain`` takes the interaction representation of the discretized
+  star bath and then applies the star-to-chain transformation. Its coupling
+  ``|d_n(t)|`` starts as ``(|V|, 0, ..., 0)`` and spreads outward with ``t``.
+* ``polaron-star`` applies the Lang-Firsov transformation per star mode,
+  ``prod_k D_k(g_k sigma_z / w_k)``. The chain form uses the ``J/w^2``
+  transformation to localize the displacement on ``c0``.
 
-* ``interaction-chain`` **exists**, and is what this package actually runs for
-  ``interaction-chain-*`` methods.  ``H_B`` is
-  obtained by taking the interaction representation of the discretized star bath
-  and then applying its star-to-chain transformation.  Its coupling ``|d_n(t)|``
-  starts as ``(|V|, 0, ..., 0)`` and spreads outward with ``t``.
-* ``polaron-star`` **exists** too: the textbook Lang-Firsov transform is *defined*
-  per star mode, ``prod_k D_k(g_k sigma_z / w_k)``.  It is the chain version that
-  uses the ``J/w^2`` transformation to localize that displacement on ``c0``.
+The star-to-chain transform relates each star/chain pair. The physics is
+identical while tensor-network costs may differ.
 
-The star-to-chain transform relates each star/chain pair without creating another
-user-facing axis.  The physics is identical while tensor-network costs may differ.
+``interaction-chain-tdvp1`` and ``interaction-chain-tree-tdvp1`` use the same
+representation on an MPS and a binary tree tensor network, respectively.
 
-``state_geometry`` stays a separate axis because it genuinely is one:
-``interaction-chain-tdvp1`` and ``interaction-chain-tree-tdvp1`` are the *same
-representation*, laid on a 1D MPS and on a binary tree tensor network, which is
-why they produce identical numbers rather than merely close ones.
-``mode-tree`` used to be listed as a model for that difference; it was never a
-model.
+:data:`METHODS` records each supported combination and its implementation engine.
+:mod:`fishbonett.models.simulation` compiles a selected row into a prepared plan.
 
-:data:`METHODS` is therefore the single source of truth for the taxonomy and
-method selection: each row carries its four axes plus the engine that realizes it.
-After that lookup, :mod:`fishbonett.models.simulation` compiles the engine into one
-prepared plan; the physical model contains no private dispatch tables.
-
-.. note::
-   The name ``fishbonett.models`` was used once before, for what is now
-   :mod:`fishbonett.representations`.  If you are reading commits from before
-   that rename, ``models/`` there means the Hamiltonian builders, not this.
-
-Propagator-level gaps, finer than this table records: the Schroedinger chain could
-be driven by TEBD gates but is not (only MPO/TDVP is wired); the
+At the propagator level, the Schroedinger chain currently supports MPO/TDVP. The
 conditional-displacement MPO of ``interaction-chain-trotter-mpo`` exists only in
 the interaction representation, because outside it the coupling does not commute
 with the free-bath term.
@@ -69,7 +50,7 @@ __all__ = ["Model", "Representation", "Method", "MODELS", "REPRESENTATIONS", "ME
 # -- representations ------------------------------------------------------------------
 @dataclass(frozen=True)
 class Representation:
-    """One complete mathematical representation of the Hamiltonian."""
+    """One mathematical representation of the Hamiltonian."""
     key: str
     label: str
     blurb: str
@@ -209,9 +190,8 @@ class Model:
 class Method:
     """One realizable representation/state-geometry/integrator combination.
 
-    This is the single source of truth for what exists and which engine realizes it.
-    ``models`` lists the compatible physical models because one method can serve
-    several topologies -- static tree TEBD runs the comb and the site-tree, while
+    ``models`` lists the compatible physical models. One method can serve several
+    topologies: static tree TEBD runs the comb and site-tree, while
     interaction-chain TEBD serves scalar and multichannel system-bath models.
     """
     name: str
@@ -424,12 +404,11 @@ _NO_MULTICHANNEL_POLARON = (
 MODELS = {
     "system-bath": Model(
         key="system-bath", label="system-bath",
-        blurb="One system site coupled to one bath through one coupling operator.  "
-              "The most developed model: all six representations, both single-system "
-              "geometries and the whole integrator family.  What used to be three "
-              "separate 'models' (chain, star, mode-tree) is this one model in the "
-              "schrodinger-chain, schrodinger-star and interaction-chain representations, the "
-              "last on two geometries.",
+        blurb="One system site coupled to one bath through one coupling operator. "
+              "It supports all six representations, both single-system tensor-network "
+              "geometries and the full integrator family. The schrodinger-chain, "
+              "schrodinger-star and interaction-chain representations describe the "
+              "Hamiltonian, while interaction-chain supports two state geometries.",
         cls="SystemBath"),
     "multichannel": Model(
         key="multichannel", label="multichannel system-bath",

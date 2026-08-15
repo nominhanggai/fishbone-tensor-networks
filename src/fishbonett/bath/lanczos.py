@@ -10,7 +10,7 @@ Both routines use full reorthogonalization, which matters here: the Krylov
 vectors lose orthogonality quickly for the strongly graded weights typical of a
 discretized spectral density, and the chain coefficients are sensitive to it.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ======================  =========================================================
 :func:`lanczos`         single-vector iteration -- one coupling channel

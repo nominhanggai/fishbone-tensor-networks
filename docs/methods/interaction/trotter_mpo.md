@@ -131,7 +131,7 @@ Applying the MPO multiplies the MPS bond by $\chi_U$; a QR + truncated-SVD sweep
 ({py:func}`fishbonett.evolve.mpo_apply.compress`) brings it back down to whatever
 `trunc_eps` requires.
 
-## What this buys
+## Computational properties
 
 Compared with the swap network of {doc}`/methods/interaction/tebd`, per step:
 

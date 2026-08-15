@@ -20,7 +20,7 @@ The split from :mod:`fishbonett.linalg` is by subject: this subpackage turns
 physics (a spectral density) into chain parameters, and ``linalg`` manipulates
 the tensors those parameters end up in.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ===============================  ================================================
 :func:`get_coupling`             ``(w_list, k_list)`` straight from the recurrence
@@ -98,11 +98,8 @@ def get_coupling(sd, n, domain, g=1, ncap=20000, discretizer=None):
 
     ``g`` rescales the frequency axis and ``discretizer`` selects the quadrature.
 
-    ``ncap`` is **accepted and ignored**, kept because callers pass it: the
-    discretization accuracy is set by ``n``.  It used to cap a fixed-length
-    recursion in the py-orthpol implementation that this replaced -- see
-    :func:`fishbonett.bath.recurrence.recurrenceCoefficients`, which says the same.
-    Tuning it does nothing.
+    ``ncap`` is accepted for API compatibility and ignored. Discretization
+    accuracy is set by ``n``; changing ``ncap`` has no effect.
     """
     alphaL, betaL = rc.recurrenceCoefficients(
         n - 1, lb=domain[0], rb=domain[1], j=sd, g=g, ncap=ncap,

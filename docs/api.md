@@ -16,7 +16,7 @@ result = sb.run(
 )
 ```
 
-Each representation name is exact and complete:
+The supported Hamiltonian representations are
 `schrodinger-chain`, `schrodinger-star`, `interaction-chain`,
 `interaction-star`, `polaron-chain`, or `polaron-star`.
 
