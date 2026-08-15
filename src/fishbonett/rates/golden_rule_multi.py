@@ -11,7 +11,7 @@ states enter through their reorganization shifts ``s_list = (s_D, s_A1, s_A2)``
 -- only the *differences* matter, and each pair contributes a
 ``cos``/``sin``-weighted term in the exponent.
 
-.. rubric:: What's here -- three integrators for the same object
+.. rubric:: Integrators
 
 ===========================================  ==================================
 :func:`fgr_rate3_correction_order1`          order 1, ``nquad`` (3D)

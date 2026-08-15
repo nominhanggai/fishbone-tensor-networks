@@ -1,18 +1,14 @@
 """The single-system models: one system site coupled to one bath.
 
-Two models share this one class:
+This class supports two models:
 
 * ``system-bath`` -- one system, one bath, one coupling operator.  All implemented representations
   and both single-system geometries;
 * ``multichannel`` -- several couplings on shared modes, selected automatically
   by giving ``SystemBath(coupling=...)`` a *list* of operators.
 
-What used to be three further "models" here -- ``chain``, ``star`` and
-``mode-tree`` -- were never topologies.  ``chain`` and ``star`` belong in the
-complete representation name (``schrodinger-chain``, ``interaction-star``, ...),
-and ``mode-tree`` is a tensor-network **state geometry**. See
-:mod:`fishbonett.models.registry`, which is the authority on which combination
-exists and how it is dispatched.
+See :mod:`fishbonett.models.registry` for supported representation,
+state-geometry, and integrator combinations.
 """
 from fishbonett.linalg import Truncation
 from fishbonett.system import System
@@ -101,16 +97,16 @@ class SystemBath:
             initial="up", krylov=25, seed=None, **engine_kw):
         """Propagate and return a :class:`Result`.
 
-        .. rubric:: Two spellings, one lookup
+        .. rubric:: Method selection
 
-        A run is four independent choices, and they can be given **as themselves**::
+        Select a run with the four public axes::
 
             sb.run(dt=..., t_max=..., representation="interaction-star",
                    state_geometry="mps",
                    integrator="tdvp2")
 
-        ``model`` is what is coupled to what, and ``representation`` is one complete
-        choice for how ``H`` is written: ``"schrodinger-chain"``,
+        ``model`` specifies what is coupled to what. ``representation`` specifies
+        how ``H`` is written: ``"schrodinger-chain"``,
         ``"schrodinger-star"``, ``"interaction-chain"``, ``"interaction-star"``,
         ``"polaron-chain"``, or ``"polaron-star"``. ``state_geometry`` is the
         tensor-network geometry (``"mps"``/``"binary-tree"``/``"tree"``), and
@@ -118,24 +114,21 @@ class SystemBath:
         ``"dtdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
         one combination fits; if several do, the error lists them.
 
-        Representation names are deliberately exact: partial names such as
-        ``representation="polaron"`` are rejected.  This keeps construction order
-        explicit.  For ``interaction-chain`` the discretized star bath is put in
+        Representation values use the full names above; partial values such as
+        ``representation="polaron"`` are rejected. For ``interaction-chain`` the
+        discretized star bath is put in
         the interaction picture with respect to its free Hamiltonian and the
         resulting time-dependent coupling is then transformed star-to-chain.
 
-        The named combinations still work and are often shorter::
+        A method name provides a shorthand for the same selection::
 
             sb.run(dt=..., t_max=..., method="interaction-chain-tdvp2")
 
-        because ``"interaction-chain-tdvp2"`` fixes ``(interaction-chain, mps,
-        tdvp2)`` and this object supplies the ``system-bath`` model.  Every method
-        name starts with its complete representation.  Give one spelling or the
-        other, not both.
-        ``describe_taxonomy()`` prints the table; :mod:`fishbonett.models.registry`
-        is its source.
+        ``"interaction-chain-tdvp2"`` selects ``(interaction-chain, mps, tdvp2)``.
+        Do not combine ``method=`` with individual axis arguments.
+        ``describe_taxonomy()`` prints the available combinations.
 
-        Two models live on this class:
+        Supported models:
 
         * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all six
           representations.  *schrodinger-chain*
@@ -159,9 +152,8 @@ class SystemBath:
           thermalization.
         * **multichannel** -- one bath through several couplings on shared modes.
           Selected by giving ``SystemBath(coupling=...)`` a *list* of coupling
-          operators, **not** by a ``method`` name.  The deprecated
-          ``Bath.coupling`` field may contain the same list for compatibility, but
-          emits a warning and a conflicting duplicate is rejected.
+          operators. ``Bath.coupling`` is deprecated and emits a warning; a
+          conflicting duplicate is rejected.
 
         For several system sites use :class:`~fishbonett.models.fishbone.Fishbone` (1D
         backbone) or :class:`~fishbonett.models.fishbone.TreeFishbone` (any tree).

@@ -8,7 +8,7 @@ Hermitian matrix, not just a two-level spin, and ``coupling`` any ``(d, d)`` Her
 operator, not just ``sigma_z``.  This class is where that promise is checked, once,
 so the representations and models do not each re-derive it.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ======================  ========================================================
 :class:`System`         ``h`` + ``coupling`` + ``initial``, validated

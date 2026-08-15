@@ -33,9 +33,8 @@ $$
 d_n(t)=\sum_kU_{nk}g_ke^{-i\omega_kt}.
 $$
 
-The chain version therefore does not mean that a chain Hamiltonian must first be
-diagonalized as a conceptual step. Finite-chain diagonalization is merely one
-available route to equivalent finite star data.
+Finite-chain diagonalization is one available route to equivalent finite star
+data; the interaction construction itself begins with the star modes above.
 
 ## Integrators
 

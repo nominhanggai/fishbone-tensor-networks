@@ -5,12 +5,10 @@ the propagation algorithms in :mod:`fishbonett.evolve`).
 form, the per-bond gate store ``U``, and the local-basis-optimization projectors
 ``R``.  It provides the wavefunction accessors (:meth:`get_theta1`,
 :meth:`get_theta2`) and the canonical-form primitive :meth:`split_truncate_theta`
-(single / adaptive SVD split, optional LBO, optional CuPy GPU).  The
+(single / adaptive SVD split, optional LBO, optional CuPy GPU). The
 swap-network TEBD sweep that applies the gates lives in
 :func:`fishbonett.evolve.tebd.update_bond`; :meth:`update_bond` is a thin wrapper
-around it.  This single state replaces the ~20 near-identical chain-MPS copies that
-used to live inside the individual driver modules; every truncation scheme they
-implemented is selected per :meth:`update_bond` call:
+around it. Truncation behavior is selected per :meth:`update_bond` call:
 
 * **swap** -- ``swap=1`` transposes the two physical legs during the gate, so the
   two sites come back exchanged.  Sweeping outward from site 0 therefore walks the
@@ -26,8 +24,7 @@ implemented is selected per :meth:`update_bond` call:
 * optional **GPU** execution through CuPy (``gpu=True``), used only if CuPy is
   importable.
 
-With ``eps_lbo=None`` and ``adaptive=False`` the update reduces exactly to the
-plain single-SVD scheme, so results are unchanged from the historical engines.
+With ``eps_lbo=None`` and ``adaptive=False``, the update uses one truncated SVD.
 """
 import warnings
 

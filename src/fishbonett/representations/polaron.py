@@ -31,7 +31,7 @@ def _coherent(dimension, displacement):
 
 
 class PolaronRepresentation:
-    """A complete star or chain Lang–Firsov representation."""
+    """A star or chain Lang–Firsov representation."""
 
     names = frozenset({"polaron-star", "polaron-chain"})
 

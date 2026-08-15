@@ -1,9 +1,8 @@
-"""Binding between a bath specification and system coupling operators.
+"""Binding between a bath specification and its system coupling operators.
 
-Historically ``Bath.coupling`` and ``SystemBath(coupling=...)`` could both own the
-same operator.  The multichannel drivers followed the former and silently ignored
-the latter.  ``CoupledBath`` is the explicit model-level object that removes that
-ambiguity while allowing ``Bath.coupling`` as a compatibility input.
+``CoupledBath`` keeps environment properties in :class:`~fishbonett.bath.Bath`
+and associates them with the operators belonging to a physical model.
+``Bath.coupling`` remains available as a deprecated compatibility input.
 """
 from dataclasses import dataclass, field, replace
 import warnings
@@ -105,11 +104,10 @@ class CoupledBath:
 
 def bind_bath(bath, coupling=None, *, default_operator=None,
               validate_legacy=False):
-    """Return a :class:`CoupledBath` from new or compatibility-style input.
+    """Return a :class:`CoupledBath` from explicit or deprecated input.
 
-    ``coupling`` is the model-owned value.  If ``validate_legacy`` is true and the
-    old ``Bath.coupling`` field is also populated, both must agree.  This turns the
-    former silent-ignore behavior into a construction-time error.
+    ``coupling`` is the model-owned value. If ``validate_legacy`` is true and the
+    deprecated ``Bath.coupling`` field is also populated, both must agree.
     """
     if isinstance(bath, CoupledBath):
         if coupling is not None:

@@ -1,29 +1,21 @@
 """Propagation algorithms -- what actually advances a state in time.
 
-These act on the state ansaetze in :mod:`fishbonett.states`.  Two axes decide
-which module you want: the **geometry** of the state, and the **integrator**.
+These algorithms act on the state ansaetze in :mod:`fishbonett.states`. The
+tensor-network geometry and integrator determine the propagation module.
 
-.. rubric:: Which module for which geometry
+.. rubric:: Propagation modules
 
-Every propagator here is written for one geometry; none of them is generic.
-In particular the projector-splitting sweeps are **1D-chain only**: they act on a
-linear MPS and MPO. For a branching geometry use the graph-generic tree-operator
-module instead.
+Projector-splitting sweeps act on a one-dimensional MPS and MPO. Branching tensor
+networks use one of the tree modules.
 
-====================  ==================================  =====================
-geometry              module                              integrators
-====================  ==================================  =====================
+=======================  ==================================  =====================
+tensor-network geometry  module                              integrators
+=======================  ==================================  =====================
 1D chain (MPS)        :mod:`~fishbonett.evolve.tebd`      TEBD (Trotter gates)
 1D chain (MPS + MPO)  :mod:`~fishbonett.evolve.tdvp`      TDVP 1/2-site, adaptive
 binary tree of modes  :mod:`~fishbonett.evolve.modetree`  TTNO + Schmidt truncation
 any tree (incl comb)  :mod:`~fishbonett.evolve.sitetree`  TEBD
-====================  ==================================  =====================
-
-The last row used to point into :mod:`fishbonett.states`, which is where that
-algorithm lived; it is here now, so *every* gate application is in this package and
-``states`` holds only tensors and canonical form.  The comb is not a separate row:
-it is a tree, and :class:`fishbonett.models.fishbone.Fishbone` propagates it through
-``sitetree`` like any other.
+=======================  ==================================  =====================
 
 Note the two tree modules serve different geometries, not two integrators for one
 graph: ``modetree`` is a balanced binary tree of *bath modes* around one system
@@ -54,17 +46,14 @@ the level you need:
 Every whole step here is **second order** (Strang): each takes half-step gates and
 applies them in palindromic order.
 
-The private split enforces dependency direction: kernels know only tensor algebra,
-sweeps depend on kernels, and whole-run drivers depend on both.  Neither kernels
-nor sweeps resolve a bath or import a Hamiltonian representation.
+Private kernels implement tensor algebra, sweeps compose the kernels, and whole-run
+drivers compose the sweeps. Kernels and sweeps do not resolve baths or import
+Hamiltonian representations.
 
 :func:`run_mpo_hamiltonian` takes a representation exposing ``tdvp_mpo`` -- the
-Hamiltonian, already built -- plus a sweep name, and runs the whole simulation.  It
-replaced seven ``run_*`` functions (``run_tdvp1``, ``run_star_tdvp2``,
-``run_ip_tdvp1``, ...), one per *(MPO builder, sweep)* pair, which each built their
-own Hamiltonian and repeated the same loop. Building the engine-facing operator
-is a representation question, so nothing here imports concrete representation
-classes.
+Hamiltonian, already built -- plus a sweep name, and runs the whole simulation.
+Building the engine-facing operator is a representation concern, so this module
+does not import concrete representation classes.
 
 For ordinary use go through
 :meth:`fishbonett.models.system_bath.SystemBath.run`, which handles bath

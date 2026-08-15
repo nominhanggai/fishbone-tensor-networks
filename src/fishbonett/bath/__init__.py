@@ -17,7 +17,7 @@ matching TEDOPA exactly (:func:`make_tedopa_discretizer`,
 ``discretization="tedopa"``). Interaction representations always consume the
 finite star first and only then optionally apply its star-to-chain transform.
 
-.. rubric:: What's here
+.. rubric:: API
 
 =================================  =============================================
 :class:`Bath`                      environment physics + resolution settings

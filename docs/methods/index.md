@@ -14,14 +14,7 @@ Method names are representation-explicit. A 1D MPS method is named
 `interaction-chain-tree-tdvp2`. Thus `polaron-chain-tdvp2` states both the
 polaron-chain representation and the TDVP2 integrator.
 
-Older engine-first labels are rejected with a precise replacement rather than
-accepted as silent aliases. For example, `polaron-tdvp2` reports that its new name
-is `polaron-chain-tdvp2`.
-
 ## The six representations
-
-Each name below is complete. There is no second public category to combine with
-it.
 
 | representation | Hamiltonian structure | time dependence |
 |---|---|---|
@@ -49,9 +42,8 @@ d_n(t)=\sum_k U_{nk}g_k e^{-i\omega_k t}.
 $$
 
 At $t=0$, $d_n(0)$ is localized on $c_0$ for the usual Lanczos transform and
-then spreads through the chain modes. Diagonalizing a finite chain can generate
-equivalent star data, but that is a discretization technique rather than the
-definition of the interaction representation.
+then spreads through the chain modes. Diagonalizing a finite chain is an
+alternative way to generate equivalent star data.
 
 ### Polaron star and chain
 

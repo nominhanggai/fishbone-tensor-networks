@@ -12,7 +12,7 @@ the discretization scheme, the automatic domain and mode count) is the subject o
 this subpackage. Representations discretize a resolved specification into the
 finite coefficients required by their Hamiltonian.
 
-.. rubric:: What's here
+.. rubric:: API
 
 ======================  ==========================================================
 :class:`Bath`           the bath specification (spectral density + discretization)
@@ -84,12 +84,11 @@ class Bath:
         measure-adapted TEDOPA star (resolves IR-divergent / sharply peaked baths).
     extra_breaks, m_per : TEDOPA quadrature options.
     coupling : (d, d) array, or list of (d, d) arrays
-        Deprecated compatibility field for the Fishbone API, where each bath historically
-        carried its edge operator.  New code should bind operators explicitly with
-        :meth:`Bath.bind`; ``SystemBath(coupling=...)`` is authoritative for the
-        single-system API. Using it emits ``DeprecationWarning`` and a conflicting
-        duplicate is rejected. A list denotes channels sharing one mode grid and
-        therefore requires ``'legendre'``.
+        Deprecated compatibility field. Bind operators explicitly with
+        :meth:`Bath.bind`, or pass ``SystemBath(coupling=...)`` for the
+        single-system API. Using this field emits ``DeprecationWarning``; a
+        conflicting duplicate is rejected. A list denotes channels sharing one
+        mode grid and therefore requires ``'legendre'``.
     """
     J: object
     domain: tuple = None

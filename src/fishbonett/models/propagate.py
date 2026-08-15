@@ -94,26 +94,19 @@ def modetree_peak_bond(nodes):
 def propagate(spec, ctx, *, step, rdm, peak_bond, expect_from_rdm):
     """Run ``ctx.n_steps`` steps and assemble the :class:`Result`.
 
-    The loop every single-system method has in common.  It used to be written out
-    once per method -- five times in ``models/system_bath.py`` alone -- which is why
-    they disagreed about what to report: some collected the peak bond, some did not,
-    and two used differently-named helpers to compute it.
-
-    What genuinely varies is passed in, and each is a *layer's* business:
+    Method-specific operations are supplied as callbacks:
 
     ``step(k)``
-        advance one ``dt``, from step index ``k``.  The **integrator**.
+        Advance one ``dt`` from step index ``k``.
     ``rdm()``
-        the system reduced density matrix **in the lab representation** after that step.  The
-        **representation**, because a representation that dresses the state (polaron) has to undress
-        the observable, and one that does not simply reads it off.
+        Return the system reduced density matrix in the lab representation after
+        that step. A dressed representation such as polaron must transform the
+        observable back to the lab representation.
     ``peak_bond()``
-        the widest bond right now.  The **state**, hence
+        Return the widest current state bond, as implemented by
         :func:`mps_peak_bond` / :func:`tree_peak_bond`.
 
-    Every method reports ``max_bond``, including the fixed-bond ones where it is
-    constant: it is the same quantity, and "not reported" used to mean nothing more
-    than "this driver's author did not collect it".
+    Every method reports ``max_bond``; it is constant for fixed-bond methods.
     """
     rdms, max_bond = [], []
     for k in range(ctx.n_steps):

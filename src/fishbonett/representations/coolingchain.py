@@ -112,10 +112,8 @@ class SystemBathCoolingChain(SystemBathMPS):
     def build_coupling(self):
         """Chain-map ``self.sd`` over ``self.domain`` and store ``w_list``/``k_list``.
 
-        Uses :func:`fishbonett.bath.chain.get_coupling`.  This class used to carry
-        its own copy, which had silently lost the ``discretizer`` argument, so a
-        measure-adapted (TEDOPA) star was unreachable from this representation even though
-        every other representation supported one.
+        Uses :func:`fishbonett.bath.chain.get_coupling` and the configured bath
+        discretizer, including measure-adapted TEDOPA discretization.
         """
         n = len(self.pd_boson)
         self.w_list, self.k_list = get_coupling(
