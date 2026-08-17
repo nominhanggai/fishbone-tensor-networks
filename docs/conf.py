@@ -58,4 +58,4 @@ myst_enable_extensions = ["dollarmath", "amsmath"]
 
 html_theme = "furo"
 html_title = f"fishbonett {release}"
-exclude_patterns = ["_build"]
+exclude_patterns = ["_build", "_generated/*"]

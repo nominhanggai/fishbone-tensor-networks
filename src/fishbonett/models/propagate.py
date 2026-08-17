@@ -54,11 +54,19 @@ class RunCtx:
     krylov: int = 25
     seed: Optional[int] = None
     kw: Mapping[str, Any] = field(default_factory=dict)
+    resume: Any = None
+    bath_horizon: Optional[float] = None
+    observe_every: int = 1
 
     @property
     def t_max(self):
         """Physical time the run covers -- what sizes an automatic bath."""
         return self.n_steps * self.dt
+
+    @property
+    def elapsed(self):
+        """Time already represented by a continuation checkpoint."""
+        return 0.0 if self.resume is None else float(self.resume.elapsed)
 
 
 def mps_peak_bond(state):

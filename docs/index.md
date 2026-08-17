@@ -51,6 +51,7 @@ The main sections are meant to be read in this order, though each stands alone:
 :hidden:
 
 getting_started
+tutorials/index
 models/index
 bath
 conventions

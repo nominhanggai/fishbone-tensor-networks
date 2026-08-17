@@ -62,6 +62,20 @@ A `baths` entry may be one `bath.bind(operator)` object, a `(left, right)` pair
 (two baths per site — the fishbone), or `None`. Bare baths use positional
 `sigma_z`/`sigma_x` defaults; explicit `bath.bind(operator)` values are preferred.
 
+## Thermal preparation and continuation
+
+`GibbsPurification` prepares an exact finite-temperature state for a short,
+interacting system backbone and lifts its operators onto physical-plus-ancilla
+supersites. See {doc}`/tutorials/xxz_thermal_rectifier` for a complete example.
+
+Long static-tree runs can return a `result.checkpoint` and resume with
+`run(resume=result.checkpoint, ...)`. Set `bath_horizon` on the first segment to
+the complete intended time so automatic bath resolution contains the full light
+cone. A checkpoint validates the resolved Hamiltonian and rejects changed bath
+temperatures, coefficients, topology, or method. `observe_every` reduces how often
+RDMs and expensive composite observables are contracted without changing the TEBD
+integration step.
+
 ## Cost and truncation
 
 Both classes propagate with `schrodinger-chain-tree-tebd`, a **second-order** (Strang) Trotter

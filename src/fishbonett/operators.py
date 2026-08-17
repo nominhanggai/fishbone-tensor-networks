@@ -8,7 +8,7 @@ import numpy as np
 
 __all__ = ["sigma_p", "sigma_m", "sigma_x", "sigma_y", "sigma_z", "sigma_0",
            "sigma_1", "annihilate", "create", "number", "temp_factor",
-           "rlogr", "entang"]
+           "rlogr", "entang", "energy_current_operator"]
 
 # -- Pauli matrices ----------------------------------------------------------
 sigma_p = np.float64([[0, 1], [0, 0]])        # raising  S^+
@@ -61,3 +61,45 @@ def create(dim: int):
 def number(dim: int):
     """Bosonic number operator ``b^dagger b = diag(0, 1, ..., dim-1)``."""
     return annihilate(dim).T @ annihilate(dim)
+
+
+def energy_current_operator(onsite, right_bond, left_bond=None):
+    """Local energy current through the bond to the right of one site.
+
+    For a nearest-neighbour Hamiltonian with site term ``h_i`` and bonds
+    ``V_(i-1,i)`` / ``V_(i,i+1)``, the energy leaving the region ending at
+    site ``i`` is
+
+    ``j_i = 1j * [V_(i-1,i) + h_i, V_(i,i+1)]``.
+
+    The returned operator acts on ``(i, i+1)`` when ``left_bond`` is omitted
+    (the left boundary), otherwise on ``(i-1, i, i+1)``.  This definition is
+    derived directly from the continuity equation and fixes the current sign:
+    positive means flow from left to right.
+    """
+    onsite = np.asarray(onsite, complex)
+    right_bond = np.asarray(right_bond, complex)
+    if onsite.ndim != 2 or onsite.shape[0] != onsite.shape[1]:
+        raise ValueError("onsite must be a square matrix")
+    d_mid = onsite.shape[0]
+    if right_bond.ndim != 2 or right_bond.shape[0] != right_bond.shape[1]:
+        raise ValueError("right_bond must be a square matrix")
+    if right_bond.shape[0] % d_mid:
+        raise ValueError("right_bond dimension is incompatible with onsite")
+    d_right = right_bond.shape[0] // d_mid
+    if left_bond is None:
+        stored = np.kron(onsite, np.eye(d_right))
+        current = 1j * (stored @ right_bond - right_bond @ stored)
+    else:
+        left_bond = np.asarray(left_bond, complex)
+        if left_bond.ndim != 2 or left_bond.shape[0] != left_bond.shape[1]:
+            raise ValueError("left_bond must be a square matrix")
+        if left_bond.shape[0] % d_mid:
+            raise ValueError("left_bond dimension is incompatible with onsite")
+        d_left = left_bond.shape[0] // d_mid
+        stored = (np.kron(left_bond, np.eye(d_right))
+                  + np.kron(np.eye(d_left), np.kron(onsite, np.eye(d_right))))
+        crossing = np.kron(np.eye(d_left), right_bond)
+        current = 1j * (stored @ crossing - crossing @ stored)
+    # Suppress roundoff anti-Hermitian components without concealing bad input.
+    return 0.5 * (current + current.conj().T)

@@ -12,6 +12,7 @@ python examples/interaction_picture_spin_boson.py
 | [`interaction_picture_spin_boson.py`](interaction_picture_spin_boson.py) | Interaction-picture spin-boson dynamics with a discrete multichannel bath (unified TEBD engine + leg swaps). |
 | [`cooling_spin_boson.py`](cooling_spin_boson.py) | Finite-temperature "cooling" scheme with a chain bath and a `get_rdm` readout. |
 | [`golden_rule_rate.py`](golden_rule_rate.py) | Fermi golden-rule vs Marcus electron-transfer rate from a spectral density (`fishbonett.rates`). |
+| [`xxz_thermal_rectifier.py`](xxz_thermal_rectifier.py) | A purified four-spin XXZ junction coupled to two independently thermalized T-TEDOPA baths, with heat-current and convergence controls. |
 
 ## Legacy examples
 
