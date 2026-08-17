@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from fishbonett import (
-    Bath, Fishbone, GibbsPurification, SimulationCheckpoint,
+    Bath, Fishbone, GibbsPurification, SimulationCheckpoint, TreeFishbone,
     energy_current_operator,
 )
 from fishbonett.operators import sigma_x, sigma_y, sigma_z
@@ -37,6 +37,34 @@ def test_gibbs_purification_reduces_to_exact_density_matrix():
     pure_expectation = np.vdot(thermal.vector, lifted @ thermal.vector)
     exact_expectation = np.trace(exact @ np.kron(sigma_z, sigma_x))
     assert pure_expectation == pytest.approx(exact_expectation, abs=1e-13)
+    assert np.array_equal(
+        thermal.lift_site_operator(sigma_z, 1),
+        thermal.lift_operator(sigma_z, [1]))
+
+
+def test_site_indexed_bath_mapping_is_explicit_and_validated():
+    bath = Bath(
+        J=lambda w: 0.03 * w * np.exp(-w), domain=(0.0, 4.0),
+        n_modes=2, phys_dim=3, discretization="tedopa")
+    left = bath.bind(sigma_x)
+    right = bath.bind(sigma_z)
+
+    chain = Fishbone(
+        sites=[sigma_z, sigma_z, sigma_z],
+        baths={0: left, 2: right})
+    assert chain.baths == [left, None, right]
+
+    tree = TreeFishbone(
+        sites=[sigma_z, sigma_z, sigma_z],
+        edges=[(0, 1), (1, 2)], baths={0: left, 2: right})
+    assert tree.baths[0] == [left]
+    assert tree.baths[1] == []
+    assert tree.baths[2] == [right]
+
+    with pytest.raises(TypeError, match="integer site indices"):
+        Fishbone(sites=[sigma_z], baths={"left": left})
+    with pytest.raises(ValueError, match="0 <= site < 1"):
+        Fishbone(sites=[sigma_z], baths={1: left})
 
 
 def test_gibbs_mps_embeds_in_a_tree_with_spectator_arms():

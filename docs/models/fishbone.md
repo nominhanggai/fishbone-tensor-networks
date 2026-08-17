@@ -9,7 +9,8 @@ general engine {py:class}`~fishbonett.models.fishbone.TreeFishbone` wires them i
 ## The general engine: `TreeFishbone`
 
 Give `TreeFishbone` a list of electronic site Hamiltonians, an **edge list**
-describing the (loop-free) couplings between them, and one bath entry per site.
+describing the (loop-free) couplings between them, and the baths attached to
+their site indices.
 For example a central site coupled to three others (a star), each with its own
 bath:
 
@@ -38,6 +39,10 @@ Each `edges` entry is `(i, j)` or `(i, j, coupling)`, where `coupling` is a
 (several on one site), or `None`.  Baths may even use different domains and
 discretizations.
 
+For sparse attachments, `baths` may instead be a mapping such as
+`{0: left_bath, 3: right_bath}`. The keys are system-site indices and omitted
+sites have no bath. The positional sequence form remains supported.
+
 ## The 1D specialization: `Fishbone`
 
 The 1D chain is the most common case, so it has a convenience class that takes a
@@ -61,6 +66,22 @@ res.rdm                 # (n_steps, n_sites, d, d)
 A `baths` entry may be one `bath.bind(operator)` object, a `(left, right)` pair
 (two baths per site — the fishbone), or `None`. Bare baths use positional
 `sigma_z`/`sigma_x` defaults; explicit `bath.bind(operator)` values are preferred.
+
+A mapping makes endpoint attachments readable without counting `None` values:
+
+```python
+fb = Fishbone(
+    sites=sites,
+    backbone=backbone,
+    baths={
+        0: left_bath.bind(left_coupling),
+        3: right_bath.bind(right_coupling),
+    },
+)
+```
+
+The mapping keys attach these baths to system sites 0 and 3. `bind` specifies the
+system operator through which each bath couples.
 
 ## Thermal preparation and continuation
 
