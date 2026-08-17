@@ -246,51 +246,73 @@ def _compile_static_tree_plan(model, spec, context):
         tree = model._tree() if isinstance(model, Fishbone) else model
         initial = context.initial
 
-    terms = tree.local_terms(context.t_max)
+    horizon = context.bath_horizon or context.t_max
+    terms = tree.local_terms(horizon)
     site_gates, edge_gates = terms.tebd_gates(context.dt / 2.0)
     parsed = [(name, _parse_observable(value))
               for name, value in context.obs_ops.items()]
 
     def execute():
-        state = TreeTensorNetwork(terms.dims, terms.edges, root=0)
-        for site in range(tree.ns):
-            state.set_physical(site, tree._initial_vec(initial, site))
+        if context.resume is not None:
+            state = context.resume.restore(terms)
+        else:
+            state = TreeTensorNetwork(terms.dims, terms.edges, root=0)
+            if hasattr(initial, "initialize_tree"):
+                initial.initialize_tree(state, range(tree.ns))
+            else:
+                for site in range(tree.ns):
+                    state.set_physical(site, tree._initial_vec(initial, site))
 
+        record_steps = [step for step in range(context.n_steps)
+                        if (step + 1) % context.observe_every == 0
+                        or step + 1 == context.n_steps]
+        record_step_set = set(record_steps)
+        n_records = len(record_steps)
         expect = {
-            name: (np.full((context.n_steps, tree.ns), np.nan)
+            name: (np.full((n_records, tree.ns), np.nan)
                    if kind == "persite"
-                   else np.full(context.n_steps, np.nan))
+                   else np.full(n_records, np.nan))
             for name, (kind, _operator, _sites) in parsed
         }
-        rdms = np.empty((context.n_steps, tree.ns), dtype=object)
-        max_bond = np.empty(context.n_steps, dtype=int)
+        rdms = np.empty((n_records, tree.ns), dtype=object)
+        max_bond = np.empty(n_records, dtype=int)
+        record = 0
         for step in range(context.n_steps):
             state.step(
                 site_gates, edge_gates, context.bond_dim, context.trunc_eps)
+            if step not in record_step_set:
+                continue
             for site in range(tree.ns):
-                rdms[step, site] = state.rdm(site)
+                rdms[record, site] = state.rdm(site)
             for name, (kind, operator, sites) in parsed:
                 if kind == "persite":
                     for site in range(tree.ns):
                         if operator.shape == (tree.de[site], tree.de[site]):
-                            expect[name][step, site] = np.trace(
-                                rdms[step, site] @ operator).real
+                            expect[name][record, site] = np.trace(
+                                rdms[record, site] @ operator).real
                 else:
-                    expect[name][step] = state.expectation(operator, sites)
-            max_bond[step] = tree_peak_bond(state)
+                    expect[name][record] = state.expectation(operator, sites)
+            max_bond[record] = tree_peak_bond(state)
             state.move_oc_to(0)
+            record += 1
 
         if len(set(tree.de)) == 1:
             rdm = np.array([
                 [rdms[step, site] for site in range(tree.ns)]
-                for step in range(context.n_steps)
+                for step in range(n_records)
             ])
         else:
             rdm = rdms
+        elapsed = context.elapsed
+        from fishbonett.models.result import SimulationCheckpoint
+        checkpoint = SimulationCheckpoint.from_state(
+            state, terms, method=spec.name,
+            elapsed=elapsed + context.n_steps * context.dt,
+            bath_horizon=horizon)
         result = Result(
-            t=np.arange(1, context.n_steps + 1) * context.dt,
+            t=elapsed + (np.asarray(record_steps) + 1) * context.dt,
             expect=expect, rdm=rdm, max_bond=max_bond, method=spec.name,
-            meta={"n_sites": tree.ns},
+            meta={"n_sites": tree.ns}, checkpoint=checkpoint,
         )
         if not single_system:
             return result

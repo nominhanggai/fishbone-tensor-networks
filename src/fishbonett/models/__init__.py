@@ -26,7 +26,7 @@ for each model, including reasons for unavailable combinations.
 print(d())"`` prints the whole thing.
 
 """
-from fishbonett.models.result import Result
+from fishbonett.models.result import Result, SimulationCheckpoint
 from fishbonett.models.system_bath import SystemBath
 from fishbonett.models.fishbone import Fishbone, TreeFishbone
 from fishbonett.models.simulation import SimulationPlan, compile_plan
@@ -38,7 +38,7 @@ from fishbonett.models.registry import (
 
 __all__ = [
     # model classes
-    "SystemBath", "Fishbone", "TreeFishbone", "Result",
+    "SystemBath", "Fishbone", "TreeFishbone", "Result", "SimulationCheckpoint",
     "SimulationPlan", "compile_plan",
     # the taxonomy
     "MODELS", "REPRESENTATIONS", "Model", "Representation", "METHOD_REPRESENTATIONS",

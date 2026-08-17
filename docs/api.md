@@ -64,6 +64,7 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.states.network
    fishbonett.states.mps
    fishbonett.states.tree
+   fishbonett.states.thermal
 ```
 
 ## Propagation algorithms

@@ -150,7 +150,8 @@ class TreeFishbone:
     def run(self, *, dt, t_max=None, n_steps=None,
             method=SCHRODINGER_CHAIN_TREE_TEBD,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial="up", seed=None):
+            initial=None, seed=None, resume=None, bath_horizon=None,
+            observe_every=1):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
         ``method`` exists for symmetry with
@@ -183,7 +184,12 @@ class TreeFishbone:
           in that order, e.g. a two-site correlation ``sigma_z (x) sigma_z``).
           For the last two forms ``expect[name]`` is ``(n_steps,)``.
 
-        ``rdm`` holds the single-site reduced density matrices per step."""
+        ``rdm`` holds the single-site reduced density matrices at each recorded
+        time. ``observe_every`` records every Nth integration step (and always the
+        final one) without changing the TEBD step. ``bath_horizon`` fixes the time
+        used for automatic bath resolution; make it cover all continuation
+        segments. A returned ``result.checkpoint`` resumes through ``resume=`` and
+        is rejected if the resolved Hamiltonian changes."""
         m = method.lower().replace("_", "-")
         if m not in methods_of(self._MODEL):
             raise unknown_method_error(m, self._MODEL)
@@ -192,6 +198,29 @@ class TreeFishbone:
                 raise ValueError("provide either t_max or n_steps")
             n_steps = int(round(t_max / dt))
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+        if int(observe_every) != observe_every or observe_every < 1:
+            raise ValueError("observe_every must be a positive integer")
+        if resume is not None:
+            from fishbonett.models.result import SimulationCheckpoint
+            if not isinstance(resume, SimulationCheckpoint):
+                raise TypeError("resume must be a SimulationCheckpoint")
+            if initial is not None:
+                raise ValueError("initial and resume cannot be supplied together")
+            if resume.method != m:
+                raise ValueError(
+                    f"checkpoint method is {resume.method!r}, requested {m!r}")
+            if bath_horizon is None:
+                bath_horizon = resume.bath_horizon
+            elif not np.isclose(bath_horizon, resume.bath_horizon):
+                raise ValueError("bath_horizon cannot change when resuming")
+            if resume.elapsed + n_steps * dt > bath_horizon + 1e-12:
+                raise ValueError(
+                    "continuation exceeds the checkpoint bath_horizon; rerun the "
+                    "initial segment with a horizon covering the complete time")
+        elif bath_horizon is None:
+            bath_horizon = n_steps * dt
+        elif bath_horizon + 1e-12 < n_steps * dt:
+            raise ValueError("bath_horizon must cover the requested propagation")
         bond_dim, trunc_eps = trunc.max_bond, trunc.eps
         if observables is None:
             observables = {"sz": sigma_z, "sx": sigma_x} if all(
@@ -199,7 +228,8 @@ class TreeFishbone:
         context = RunCtx(
             dt=dt, n_steps=n_steps, bond_dim=bond_dim,
             trunc_eps=trunc_eps, obs_ops=observables, initial=initial,
-            seed=seed,
+            seed=seed, resume=resume, bath_horizon=bath_horizon,
+            observe_every=int(observe_every),
         )
         from fishbonett.models.simulation import compile_plan
         return compile_plan(self, method_spec(m, self._MODEL), context).run()
@@ -276,7 +306,8 @@ class Fishbone:
     def run(self, *, dt, t_max=None, n_steps=None,
             method=SCHRODINGER_CHAIN_TREE_TEBD,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial="up", seed=None):
+            initial=None, seed=None, resume=None, bath_horizon=None,
+            observe_every=1):
         """Propagate the 1D fishbone through the shared simulation planner. See
         :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout.
@@ -291,13 +322,37 @@ class Fishbone:
                 raise ValueError("provide either t_max or n_steps")
             n_steps = int(round(t_max / dt))
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+        if int(observe_every) != observe_every or observe_every < 1:
+            raise ValueError("observe_every must be a positive integer")
+        if resume is not None:
+            from fishbonett.models.result import SimulationCheckpoint
+            if not isinstance(resume, SimulationCheckpoint):
+                raise TypeError("resume must be a SimulationCheckpoint")
+            if initial is not None:
+                raise ValueError("initial and resume cannot be supplied together")
+            if resume.method != m:
+                raise ValueError(
+                    f"checkpoint method is {resume.method!r}, requested {m!r}")
+            if bath_horizon is None:
+                bath_horizon = resume.bath_horizon
+            elif not np.isclose(bath_horizon, resume.bath_horizon):
+                raise ValueError("bath_horizon cannot change when resuming")
+            if resume.elapsed + n_steps * dt > bath_horizon + 1e-12:
+                raise ValueError(
+                    "continuation exceeds the checkpoint bath_horizon; rerun the "
+                    "initial segment with a horizon covering the complete time")
+        elif bath_horizon is None:
+            bath_horizon = n_steps * dt
+        elif bath_horizon + 1e-12 < n_steps * dt:
+            raise ValueError("bath_horizon must cover the requested propagation")
         if observables is None:
             observables = ({"sz": sigma_z, "sx": sigma_x}
                            if all(d == 2 for d in self.de) else {})
         context = RunCtx(
             dt=dt, n_steps=n_steps, bond_dim=trunc.max_bond,
             trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
-            seed=seed,
+            seed=seed, resume=resume, bath_horizon=bath_horizon,
+            observe_every=int(observe_every),
         )
         from fishbonett.models.simulation import compile_plan
         return compile_plan(self, method_spec(m, self._MODEL), context).run()
