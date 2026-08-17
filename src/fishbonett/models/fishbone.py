@@ -17,6 +17,8 @@ Do not confuse the ``site-tree`` *model* with the ``binary-tree`` tensor-network
 a single system's bath modes are placed on a tree; see
 :mod:`fishbonett.models.registry`.
 """
+from collections.abc import Mapping
+
 import numpy as np
 
 from fishbonett.representations.schrodinger import terms as schrodinger_terms
@@ -30,6 +32,32 @@ from fishbonett.models.registry import (
 )
 
 __all__ = ["TreeFishbone", "Fishbone", "SCHRODINGER_CHAIN_TREE_TEBD"]
+
+
+def _site_entries(baths, n_sites):
+    """Return one bath specification per system site.
+
+    Sequences retain the original positional interface.  A mapping makes sparse
+    attachments explicit: omitted sites have no bath.
+    """
+    if isinstance(baths, Mapping):
+        entries = [None] * n_sites
+        for site, entry in baths.items():
+            if (not isinstance(site, (int, np.integer))
+                    or isinstance(site, (bool, np.bool_))):
+                raise TypeError("bath mapping keys must be integer site indices")
+            site = int(site)
+            if site < 0 or site >= n_sites:
+                raise ValueError(
+                    f"bath mapping site {site} is outside the valid range "
+                    f"0 <= site < {n_sites}")
+            entries[site] = entry
+        return entries
+
+    entries = list(baths)
+    if len(entries) != n_sites:
+        raise ValueError("baths must have one entry per site")
+    return entries
 
 
 def _parse_observable(spec):
@@ -61,11 +89,14 @@ class TreeFishbone:
     edges : list of (i, j) or (i, j, C)
         Electronic-electronic couplings; the pairs must form a tree over the
         sites.  ``C`` is a ``(d_i*d_j, d_i*d_j)`` operator (default: none).
-    baths : list
-        One entry per site: a single :class:`~fishbonett.bath.spec.Bath`, a list of
-        baths, or ``None``.  Prefer :class:`~fishbonett.bath.coupled.CoupledBath`
-        entries made with ``bath.bind(operator)``.  A bare bath is bound to
-        ``sigma_z`` for compatibility.  Baths may have different settings.
+    baths : sequence or mapping
+        A sequence with one entry per site, or a mapping from system-site index
+        to bath entry.  Each entry is a single
+        :class:`~fishbonett.bath.spec.Bath`, a list of baths, or ``None``.
+        Missing mapping keys mean no bath on that site.  Prefer
+        :class:`~fishbonett.bath.coupled.CoupledBath` entries made with
+        ``bath.bind(operator)``.  A bare bath is bound to ``sigma_z`` for
+        compatibility.  Baths may have different settings.
     """
 
     def __init__(self, sites, edges, baths):
@@ -84,7 +115,7 @@ class TreeFishbone:
         if len(self.edges) != self.ns - 1:
             raise ValueError("edges must form a tree over the sites (n_sites-1 edges)")
         self.baths = []
-        for entry in baths:
+        for entry in _site_entries(baths, self.ns):
             if entry is None:
                 self.baths.append([])
             elif isinstance(entry, (list, tuple)):
@@ -98,8 +129,6 @@ class TreeFishbone:
                     entry if isinstance(entry, CoupledBath)
                     else bind_bath(entry, default_operator=sigma_z)
                 ])
-        if len(self.baths) != self.ns:
-            raise ValueError("baths must have one entry per site")
 
     def local_terms(self, t_max=None):
         """The static Hamiltonian as a
@@ -240,13 +269,14 @@ class Fishbone:
 
     A convenience specialization of :class:`~fishbonett.models.fishbone.TreeFishbone`
     (which handles *any* loop-free electronic topology) to a **linear** backbone:
-    site ``i`` is joined to site ``i+1`` by ``backbone[i]``.  Each ``baths`` entry
-    is a single :class:`Bath` (one bath -- may be multichannel), a ``(left, right)``
-    pair (two baths per site -- the fishbone), or ``None``.  Prefer explicit
-    ``bath.bind(operator)`` values.  For compatibility, a bare left bath defaults
-    to ``sigma_z`` and a bare right bath to ``sigma_x``.  ``run`` and the returned
-    :class:`Result` are exactly those
-    of :meth:`fishbonett.models.fishbone.TreeFishbone.run`.
+    site ``i`` is joined to site ``i+1`` by ``backbone[i]``.  ``baths`` may be a
+    sequence with one entry per site or a mapping from site index to entry;
+    omitted mapping keys mean no bath.  Each entry is a single :class:`Bath`
+    (one bath -- possibly multichannel), a ``(left, right)`` pair (two baths per
+    site -- the fishbone), or ``None``.  Prefer explicit ``bath.bind(operator)``
+    values.  For compatibility, a bare left bath defaults to ``sigma_z`` and a
+    bare right bath to ``sigma_x``.  ``run`` and the returned :class:`Result` are
+    exactly those of :meth:`fishbonett.models.fishbone.TreeFishbone.run`.
     """
 
     #: The model this class realizes -- ``comb`` rather than ``site-tree``, so
@@ -258,9 +288,7 @@ class Fishbone:
         self.sites = [np.asarray(h, complex) for h in sites]
         self.nc = len(self.sites)
         self.de = [h.shape[0] for h in self.sites]
-        if len(baths) != self.nc:
-            raise ValueError("baths must have one entry per site")
-        self.baths = list(baths)
+        self.baths = _site_entries(baths, self.nc)
         if backbone is None:
             backbone = [np.zeros((self.de[i] * self.de[i + 1],) * 2, complex)
                         for i in range(self.nc - 1)]

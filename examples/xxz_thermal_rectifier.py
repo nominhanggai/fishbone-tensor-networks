@@ -62,13 +62,15 @@ def make_rectifier(config, temperatures):
         J=spectral_density, temperature=temperature,
         phys_dim=config.phys_dim, discretization="tedopa")
         for temperature in temperatures]
-    coupling_left = purification.lift_operator(sigma_x, [0])
-    coupling_right = purification.lift_operator(sigma_x, [3])
+    coupling_left = purification.lift_site_operator(sigma_x, 0)
+    coupling_right = purification.lift_site_operator(sigma_x, 3)
     model = Fishbone(
         sites=purification.sites,
         backbone=purification.backbone,
-        baths=[baths[0].bind(coupling_left), None, None,
-               baths[1].bind(coupling_right)],
+        baths={
+            0: baths[0].bind(coupling_left),
+            3: baths[1].bind(coupling_right),
+        },
     )
 
     currents = [

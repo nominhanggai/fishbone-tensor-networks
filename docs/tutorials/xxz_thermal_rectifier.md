@@ -61,6 +61,12 @@ a product of wire and bath Gibbs states is not the interacting global Gibbs stat
 The equal-temperature trajectory is therefore a measured control, not something
 assumed to have zero current at every time.
 
+In `make_rectifier`, `lift_site_operator(sigma_x, 0)` constructs the coupling
+matrix for purified site 0; it does not attach a bath. The keys in
+`baths={0: ..., 3: ...}` perform the attachment, so the left bath acts on endpoint
+0 and the right bath on endpoint 3. This separates the operator definition from
+the model topology.
+
 ## Current from continuity
 
 For a cut to the right of site $i$, let $H_{\le i}$ contain the site and bond terms
