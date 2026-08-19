@@ -179,7 +179,8 @@ def _compile_mpo_plan(model, spec, context):
             dt=context.dt, nsteps=context.n_steps, sweep=spec.driver,
             D=context.bond_dim, chi_max=context.bond_dim,
             eps=context.trunc_eps, krylov=context.krylov,
-            seed=context.seed,
+            seed=context.seed, progress=context.progress,
+            bond_expand=context.kw.get("bond_expand"),
             Dplusmax=context.kw.get("Dplusmax", 4), **hooks)
         return Result(
             t=times, expect=_expect_from_rdm(rdms, context.obs_ops),
@@ -303,6 +304,12 @@ def _compile_static_tree_plan(model, spec, context):
                     context.bond_dim, context.trunc_eps)
                 state.step(site_gates, edge_gates,
                            context.bond_dim, context.trunc_eps)
+            if context.progress is not None:
+                context.progress({
+                    "step": step, "n_steps": context.n_steps,
+                    "t": context.elapsed + (step + 1) * context.dt,
+                    "bond": tree_peak_bond(state), "state": state,
+                })
             if step not in record_step_set:
                 continue
             for site in range(tree.ns):
@@ -461,20 +468,24 @@ def _compile_interaction_fishbone_plan(model, spec, context):
     """Independent interaction-chain baths on an electronic comb."""
     from scipy.linalg import expm
     from fishbonett.models.fishbone import _parse_observable
+    from fishbonett.models.result import SimulationCheckpoint, plan_signature
     from fishbonett.representations.interaction import InteractionRepresentation
     from fishbonett.states.tree import TreeTensorNetwork
     from fishbonett.evolve.sitetree import (
         apply_site, symmetric_branch_swap_step, symmetric_graph_step,
     )
 
-    if context.resume is not None:
-        raise ValueError("interaction-chain Fishbone continuation is not implemented")
     horizon = context.bath_horizon or context.t_max
     system_count = model.nc
     dims = list(model.de)
     edges = [(site, site + 1) for site in range(system_count - 1)]
     branches = []
     representation_cache = {}
+    # Material for the continuation signature: a checkpoint may only be resumed
+    # into the same resolved Hamiltonian, and here that means the same electronic
+    # terms *and* the same per-site bath resolution.
+    signature_arrays = [np.asarray(value) for value in model.sites]
+    signature_scalars = [f"horizon={horizon!r}"]
     next_node = system_count
     for site, entry in enumerate(model.baths):
         coupled_baths = model._site_baths(entry)
@@ -501,12 +512,10 @@ def _compile_interaction_fishbone_plan(model, spec, context):
         edges.extend(zip(path[:-1], path[1:]))
         dims.extend([bath.phys_dim] * bath.n_modes)
         branches.append((path, representation))
+        signature_arrays.append(np.asarray(coupled.operator))
+        signature_scalars.append(
+            f"site={site} modes={bath.n_modes} d={bath.phys_dim}")
         next_node += bath.n_modes
-
-    state = TreeTensorNetwork(dims, edges, root=0)
-    helper = model._tree()
-    for site in range(system_count):
-        state.set_physical(site, helper._initial_vec(context.initial, site))
 
     site_quarter = [expm(-0.25j * context.dt * value)
                     for value in model.sites]
@@ -521,6 +530,25 @@ def _compile_interaction_fishbone_plan(model, spec, context):
             model.de[edge[0]], model.de[edge[1]])
         for edge, value in graph.items()
     }
+    for edge, value in sorted(graph.items()):
+        signature_scalars.append(f"edge={tuple(map(int, edge))}")
+        signature_arrays.append(np.asarray(value))
+    signature = plan_signature(dims, edges, signature_arrays, signature_scalars)
+
+    if context.resume is not None:
+        # The bath was discretized for a horizon; resuming against a different one
+        # would silently continue into a different environment.
+        if not np.isclose(context.resume.bath_horizon, horizon):
+            raise ValueError(
+                f"checkpoint was produced with bath_horizon="
+                f"{context.resume.bath_horizon!r} but this run resolves "
+                f"{horizon!r}; pass bath_horizon= to keep them equal")
+        state = context.resume.restore_tree(dims, edges, signature)
+    else:
+        state = TreeTensorNetwork(dims, edges, root=0)
+        helper = model._tree()
+        for site in range(system_count):
+            state.set_physical(site, helper._initial_vec(context.initial, site))
 
     def electronic_half_step():
         for site, gate in enumerate(site_quarter):
@@ -536,6 +564,10 @@ def _compile_interaction_fishbone_plan(model, spec, context):
               for name, value in context.obs_ops.items()]
 
     def execute():
+        # `elapsed` is physics here, not bookkeeping: the interaction-picture
+        # couplings d_n(t) are functions of absolute time, so a continuation that
+        # restarted the clock would quietly evolve a different Hamiltonian.
+        elapsed = context.elapsed
         record_steps = [step for step in range(context.n_steps)
                         if (step + 1) % context.observe_every == 0
                         or step + 1 == context.n_steps]
@@ -552,9 +584,16 @@ def _compile_interaction_fishbone_plan(model, spec, context):
             electronic_half_step()
             for path, representation in branches:
                 symmetric_branch_swap_step(
-                    state, representation, path, step * context.dt, context.dt,
+                    state, representation, path,
+                    elapsed + step * context.dt, context.dt,
                     context.bond_dim, context.trunc_eps)
             electronic_half_step()
+            if context.progress is not None:
+                context.progress({
+                    "step": step, "n_steps": context.n_steps,
+                    "t": elapsed + (step + 1) * context.dt,
+                    "bond": tree_peak_bond(state), "state": state,
+                })
             if step not in record_set:
                 continue
             for site in range(system_count):
@@ -572,10 +611,15 @@ def _compile_interaction_fishbone_plan(model, spec, context):
         rdm = (np.array([[rdms[t, site] for site in range(system_count)]
                          for t in range(n_records)])
                if len(set(model.de)) == 1 else rdms)
+        checkpoint = SimulationCheckpoint.from_tree(
+            state, dims, edges, signature=signature, method=spec.name,
+            elapsed=elapsed + context.n_steps * context.dt,
+            bath_horizon=horizon)
         return Result(
-            t=(np.asarray(record_steps) + 1) * context.dt,
+            t=elapsed + (np.asarray(record_steps) + 1) * context.dt,
             expect=expect, rdm=rdm, max_bond=max_bond, method=spec.name,
-            meta={"n_sites": system_count, "representation": "interaction-chain"})
+            meta={"n_sites": system_count, "representation": "interaction-chain"},
+            checkpoint=checkpoint)
 
     return SimulationPlan(spec, context, execute=execute)
 

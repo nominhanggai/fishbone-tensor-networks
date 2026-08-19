@@ -63,12 +63,14 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
         assert spec.representation.count("-") == 1
         assert spec.state_geometry in R.STATE_GEOMETRIES, (
             f"{name} names unknown state geometry")
+        # naming is checked once, by rule, in
+        # test_every_method_name_is_derivable_from_its_axes.  It used to be
+        # checked here with "tree-" for every non-mps geometry plus a hardcoded
+        # exception for interaction-chain-fishbone-tebd -- two geometries are
+        # trees, so that was a rule and a counterexample rather than a rule.
         if name == "interaction-chain-fishbone-tebd":
             assert spec.models == ("comb",)
             assert spec.state_geometry == "tree"
-        else:
-            state_geometry_tag = "" if spec.state_geometry == "mps" else "tree-"
-            assert name == f"{spec.representation}-{state_geometry_tag}{spec.integrator}"
         # every single-system engine must resolve to one plan compiler
         if set(spec.models) & {"system-bath", "multichannel"}:
             assert callable(PLAN_COMPILERS.get(spec.engine)), (
@@ -584,3 +586,56 @@ def test_describe_taxonomy_mentions_every_model_and_method():
         assert m.label in text
         for method in m.methods():
             assert method in text
+
+
+#: ``state_geometry`` -> the infix a method name carries.  Two geometries are
+#: trees, so "insert tree" is not a rule that can name both.
+GEOMETRY_INFIX = {"mps": "", "binary-tree": "tree", "tree": "tree"}
+
+#: The one method whose name cannot be derived from its axes.  Both tree
+#: geometries take the infix "tree", so ``interaction-chain`` + ``tebd`` collides:
+#: ``interaction-chain-tree-tebd`` is already the binary-tree method, so the comb
+#: one is named "fishbone" instead.  Recorded rather than special-cased inline, so
+#: a second collision has to be a decision.
+NAME_EXCEPTIONS = {"interaction-chain-fishbone-tebd": ("interaction-chain", "tree", "tebd")}
+
+
+def test_every_method_name_is_derivable_from_its_axes():
+    """A name must be a *spelling* of the axes, carrying nothing they do not.
+
+    This is what stops a name and its row drifting apart, and it pins the infix
+    rule that ``docs/architecture.md`` documents.
+    """
+    assert set(GEOMETRY_INFIX) == {s.state_geometry for s in R.METHODS.values()}, (
+        "a new state_geometry needs an infix here and in docs/architecture.md")
+    for name, spec in R.METHODS.items():
+        if name in NAME_EXCEPTIONS:
+            assert NAME_EXCEPTIONS[name] == (
+                spec.representation, spec.state_geometry, spec.integrator), name
+            # the exception must be *necessary*: the derived name must be taken
+            infix = GEOMETRY_INFIX[spec.state_geometry]
+            collides = "-".join([spec.representation, infix, spec.integrator])
+            assert collides in R.METHODS and R.METHODS[collides] is not spec, (
+                f"{name} deviates from the rule but nothing collides with "
+                f"{collides!r} -- rename it instead")
+            continue
+        infix = GEOMETRY_INFIX[spec.state_geometry]
+        parts = [spec.representation] + ([infix] if infix else []) + [spec.integrator]
+        assert name == "-".join(parts), name
+
+
+def test_no_gaps_does_not_mean_every_integrator_exists():
+    """``Model.gaps`` is keyed by representation, so "0 gaps" is not "complete".
+
+    Pinned because the registry reads as though a model with no gaps offers every
+    combination.  ``system-bath`` reports no gaps yet has no
+    ``schrodinger-chain-trotter-mpo``: the conditional-displacement propagator is
+    an interaction-chain construction, and that absence has no recorded reason
+    because gaps cannot express integrator-level granularity.
+    """
+    assert R.MODELS["system-bath"].gaps == {}
+    have = {(s.representation, s.integrator) for s in R.METHODS.values()}
+    assert ("interaction-chain", "trotter-mpo") in have
+    for rep in ("schrodinger-chain", "schrodinger-star", "polaron-chain",
+                "polaron-star", "interaction-star"):
+        assert (rep, "trotter-mpo") not in have, rep

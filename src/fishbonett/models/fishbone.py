@@ -180,7 +180,7 @@ class TreeFishbone:
             method=SCHRODINGER_CHAIN_TREE_TEBD,
             representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial=None, seed=None, resume=None, bath_horizon=None,
+            initial=None, seed=0, resume=None, bath_horizon=None, progress=None,
             observe_every=1):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
@@ -270,7 +270,7 @@ class TreeFishbone:
             dt=dt, n_steps=n_steps, bond_dim=bond_dim,
             trunc_eps=trunc_eps, obs_ops=observables, initial=initial,
             seed=seed, resume=resume, bath_horizon=bath_horizon,
-            observe_every=int(observe_every),
+            observe_every=int(observe_every), progress=progress,
         )
         from fishbonett.models.simulation import compile_plan
         return compile_plan(self, spec, context).run()
@@ -411,7 +411,7 @@ class Fishbone:
             method=SCHRODINGER_CHAIN_TREE_TEBD,
             representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial=None, seed=None, resume=None, bath_horizon=None,
+            initial=None, seed=0, resume=None, bath_horizon=None, progress=None,
             observe_every=1):
         """Propagate the 1D fishbone through the shared simulation planner. See
         :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the arguments, the
@@ -469,7 +469,7 @@ class Fishbone:
             dt=dt, n_steps=n_steps, bond_dim=trunc.max_bond,
             trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
             seed=seed, resume=resume, bath_horizon=bath_horizon,
-            observe_every=int(observe_every),
+            observe_every=int(observe_every), progress=progress,
         )
         from fishbonett.models.simulation import compile_plan
         return compile_plan(self, spec, context).run()

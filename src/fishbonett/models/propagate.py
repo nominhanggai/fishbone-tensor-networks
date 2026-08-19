@@ -38,9 +38,12 @@ class RunCtx:
     krylov
         Krylov dimension for the TDVP exponentials.  Ignored by the TEBD drivers.
     seed
-        Optional run-local random seed for randomized truncation and the tiny
-        subspace seeds needed by fixed-bond TDVP.  It never mutates NumPy's
-        process-global random state.
+        Run-local random seed for randomized truncation and the tiny subspace
+        seeds needed by fixed-bond TDVP.  It never mutates NumPy's
+        process-global random state.  Defaults to ``0`` so that a run is
+        **reproducible**: randomized truncation is an internal optimization and
+        must not make an observable depend on when it was run.  Pass ``None``
+        to draw from NumPy's global generator instead.
     kw
         Engine-specific extras passed through from ``run(**engine_kw)``.
     """
@@ -52,11 +55,17 @@ class RunCtx:
     obs_ops: Mapping[str, Any] = field(default_factory=dict)
     initial: Any = "up"
     krylov: int = 25
-    seed: Optional[int] = None
+    seed: Optional[int] = 0
     kw: Mapping[str, Any] = field(default_factory=dict)
     resume: Any = None
     bath_horizon: Optional[float] = None
     observe_every: int = 1
+    #: Optional ``callable(info)`` invoked after **every** step with a dict of
+    #: ``step``, ``n_steps``, ``t``, ``bond`` and ``state``.  Separate from
+    #: ``observe_every``, which controls what is *recorded* into the Result:
+    #: this controls what is *reported* while a long run is still going, so a
+    #: multi-hour propagation is not silent between observations.
+    progress: Any = None
 
     @property
     def t_max(self):
@@ -121,6 +130,10 @@ def propagate(spec, ctx, *, step, rdm, peak_bond, expect_from_rdm):
         step(k)
         rdms.append(rdm())
         max_bond.append(peak_bond())
+        if ctx.progress is not None:
+            ctx.progress({"step": k, "n_steps": ctx.n_steps,
+                          "t": (k + 1) * ctx.dt, "bond": max_bond[-1],
+                          "rdm": rdms[-1], "state": None})
     return Result(t=np.arange(1, ctx.n_steps + 1) * ctx.dt,
                   expect=expect_from_rdm(rdms, ctx.obs_ops),
                   max_bond=np.array(max_bond),
