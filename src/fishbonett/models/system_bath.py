@@ -94,7 +94,7 @@ class SystemBath:
     def run(self, *, dt, t_max=None, n_steps=None, method=None,
             model=None, representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial="up", krylov=25, seed=None, **engine_kw):
+            initial="up", krylov=25, seed=0, progress=None, **engine_kw):
         """Propagate and return a :class:`Result`.
 
         .. rubric:: Method selection
@@ -237,7 +237,8 @@ class SystemBath:
                 f"{', '.join(alternatives)}")
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
-                     krylov=krylov, seed=seed, kw=engine_kw)
+                     krylov=krylov, seed=seed, kw=engine_kw,
+                     progress=progress)
         # Local import keeps the physical model independent of every concrete
         # representation and evolution engine until a run is actually compiled.
         from fishbonett.models.simulation import compile_plan

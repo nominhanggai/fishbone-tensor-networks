@@ -107,9 +107,27 @@ internal engine key. {py:data}`fishbonett.models.simulation.PLAN_COMPILERS` maps
 only those engine keys to preparation code. Physical model classes do not maintain
 duplicate method tables.
 
-Method names use `<representation>-<integrator>` on a 1D MPS and insert `tree`
-for tree tensor-network geometries, as in `polaron-chain-tdvp2` and
-`interaction-chain-tree-tdvp2`.
+Method names are `<representation>-<infix>-<integrator>`, where the infix is
+fixed by the tensor-network geometry:
+
+| `state_geometry` | infix | example |
+|---|---|---|
+| `mps` | *(none)* | `polaron-chain-tdvp2` |
+| `binary-tree` | `tree` | `interaction-chain-tree-tdvp2` |
+| `tree` | `tree` | `schrodinger-chain-tree-tebd` |
+
+Both tree geometries take the same infix, so a name is **not** in general
+derivable from the axes: `binary-tree` is one system's bath modes on a balanced
+tree, `tree` is the comb / general site tree, and the axes do not distinguish
+them in the name. Where that collides, the name breaks the tie:
+
+- `interaction-chain-tree-tebd` is the `binary-tree` method, so the `comb`
+  method with the same representation and integrator is named
+  **`interaction-chain-fishbone-tebd`**. This is the only such exception.
+
+`tests/unit/test_models.py::test_every_method_name_is_derivable_from_its_axes`
+pins both the rule and that single exception, so a second collision has to be
+named deliberately rather than resolved ad hoc.
 
 All high-level model classes execute through `SimulationPlan`. `run(seed=...)`
 also scopes randomized linear algebra to that plan without changing NumPy's

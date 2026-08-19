@@ -71,7 +71,8 @@ Three knobs control accuracy:
 - **`dt`** — the time step. Every method here is second order, so halving `dt`
   cuts the time-discretization error roughly 4×.
 - **`trunc_eps`** (default `1e-4`) — the truncation threshold. Singular values
-  below it are discarded, so this alone sets how large the bond dimension grows.
+  below it are discarded, so this is the main control on how large the bond
+  dimension grows.
 - **`bond_dim`** (default `None`, meaning **unlimited**) — an optional hard cap on
   the bond dimension, for when memory rather than accuracy is the binding
   constraint. `result.max_bond` reports what was actually used.
@@ -81,6 +82,34 @@ The recommended workflow: pick `trunc_eps` for the accuracy you need, leave
 `dt` and tightening `trunc_eps` one notch each and checking the answer moves less
 than you care about. (A few methods have a *fixed* bond dimension and therefore
 require an explicit `bond_dim` — see {doc}`methods/index`.)
+
+The two-site sweeps (`tdvp2`, `dtdvp`) additionally keep a couple of Schmidt
+directions from just *below* the threshold, which is what lets a bond grow at
+all. The entangling component one step creates is of order `dt` × coupling, so
+strict thresholding discards it and the next step regenerates the same small
+seed instead of accumulating — the bond then stays wherever it started. From a
+product state that means bond 1 forever, and the run returns a mean-field answer
+with no warning. `bond_expand` (default `2`) sets the allowance; the bond settles
+near (threshold rank + `bond_expand`), not at `bond_dim`. `bond_expand=0`
+restores strict thresholding, and is mainly useful for reproducing the older
+behaviour.
+
+### Reproducibility: `seed`
+
+Truncation uses a randomized SVD on large blocks, so it draws random numbers.
+`run(seed=...)` defaults to `0`, which makes a run **bit-for-bit reproducible**:
+an internal optimization should never make an observable depend on when it was
+run. The generator is run-local and never touches NumPy's global random state,
+so seeding a run does not perturb anything else in your process.
+
+Pass `seed=None` to draw from NumPy's global generator instead. That is the only
+way to get run-to-run variation, and it is worth knowing what it costs: on a
+converged spin-boson run at `bond_dim=12`, repeats scattered by ~1e-7 in
+the population — enough to be mistaken for convergence error while
+tightening `trunc_eps`.
+
+Blocks smaller than 128 use the exact SVD regardless, which is both deterministic
+and (measured) faster at that size.
 
 ## The fishbone tensor-network geometry
 

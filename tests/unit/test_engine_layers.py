@@ -65,19 +65,43 @@ def test_modetree_dependencies_point_from_driver_to_sweep_and_core():
     assert "fishbonett.evolve._modetree_sweeps" in _imports(driver)
 
 
-def test_transformed_representations_do_not_import_propagation_layers():
-    """Representations materialize operators but never advance tensor states."""
-    from fishbonett.representations import (
-        interaction, multichannel, polaron, schrodinger,
-    )
+#: ``representations/coolingchain.py`` is exempt because it is not a
+#: representation builder at all: ``SystemBathCoolingChain`` *subclasses*
+#: ``states.mps.SystemBathMPS``, so it is a state that happens to live in this
+#: package.  It is not one of the six entries in ``registry.REPRESENTATIONS``.
+#: Relocating it to ``states/`` would remove the exemption; until then it is
+#: named here so the exemption is a decision rather than an oversight.
+LAYERING_EXEMPT = {"coolingchain"}
 
-    forbidden_prefixes = (
-        "fishbonett.evolve",
-        "fishbonett.states",
-    )
-    for module in (interaction, multichannel, polaron, schrodinger):
-        imports = _imports(module)
-        assert not {
-            name for name in imports
-            if name.startswith(forbidden_prefixes)
-        }, module.__name__
+
+def test_transformed_representations_do_not_import_propagation_layers():
+    """Representations materialize operators but never advance tensor states.
+
+    Discovered by globbing the package rather than from a hand-written module
+    list: a list silently stops covering whatever is added next, and the module
+    that actually violates this invariant was missing from the previous one.
+    """
+    import importlib
+    import pathlib
+
+    forbidden_prefixes = ("fishbonett.evolve", "fishbonett.states")
+    root = pathlib.Path(__file__).resolve().parents[2] / "src" / "fishbonett" / "representations"
+    checked = set()
+    for path in sorted(root.glob("*.py")):
+        if path.stem.startswith("__") or path.stem in LAYERING_EXEMPT:
+            continue
+        module = importlib.import_module(f"fishbonett.representations.{path.stem}")
+        checked.add(path.stem)
+        offenders = {n for n in _imports(module) if n.startswith(forbidden_prefixes)}
+        assert not offenders, f"{module.__name__} imports {sorted(offenders)}"
+
+    # the sweep must actually have covered the six public representations
+    assert {"interaction", "multichannel", "polaron", "schrodinger"} <= checked
+
+
+def test_layering_exemptions_are_real_modules():
+    """An exemption for a module that no longer exists silently weakens the sweep."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2] / "src" / "fishbonett" / "representations"
+    for stem in LAYERING_EXEMPT:
+        assert (root / f"{stem}.py").exists(), stem

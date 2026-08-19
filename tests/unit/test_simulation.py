@@ -144,3 +144,99 @@ def test_run_seed_is_reproducible_and_does_not_touch_global_rng():
     np.testing.assert_array_equal(first.rdm, second.rdm)
     assert not np.array_equal(first.rdm, different.rdm)
     np.testing.assert_array_equal(np.random.random(3), expected_global)
+
+
+def _comb_vibronic_model(n_sites=3, modes=10):
+    """A small interaction-chain comb: independent vibronic baths on a backbone."""
+    import numpy as np
+    from fishbonett import Bath
+    from fishbonett.models import Fishbone
+
+    occupied = np.diag([0.0, 1.0])
+    cm = 2.0 * np.pi * 2.99792458e-2
+    cutoff = 120.0 * cm
+    bath = Bath.vibronic(
+        [420.0 * cm], [0.04],
+        continuum=lambda w: 2.0 * np.pi * 0.05 * max(float(w), 0.0)
+                            * np.exp(-max(float(w), 0.0) / cutoff),
+        temperature=0.695034 * 300.0 * cm,
+        domain=(-6.0 * cutoff, 8.0 * cutoff), n_modes=modes, phys_dim=3,
+        discretization="tedopa")
+    h = np.zeros((n_sites, n_sites))
+    for i in range(n_sites):
+        h[i, i] = (n_sites - 1 - i) * 250.0 * cm
+        if i + 1 < n_sites:
+            h[i, i + 1] = h[i + 1, i] = 90.0 * cm
+    model = Fishbone.from_single_excitation(
+        h, baths={i: bath.bind(occupied) for i in range(n_sites)})
+    initial = [np.array([1.0, 0.0], complex) for _ in range(n_sites)]
+    initial[0] = np.array([0.0, 1.0], complex)
+    return model, initial, occupied
+
+
+def test_interaction_chain_comb_run_can_be_resumed():
+    """Splitting a run at a checkpoint must reproduce the unsplit run exactly.
+
+    This is not a bookkeeping check.  The interaction-picture couplings d_n(t)
+    are functions of *absolute* time, so a continuation that restarted the clock
+    at zero would keep evolving -- with a different Hamiltonian -- and produce a
+    perfectly healthy-looking wrong answer.  The negative control below pins that
+    the comparison can actually fail.
+    """
+    import numpy as np
+
+    model, initial, occupied = _comb_vibronic_model()
+    kw = dict(dt=0.002, representation="interaction-chain",
+              state_geometry="tree", integrator="tebd",
+              observables={"population": occupied},
+              trunc_eps=1e-5, bond_dim=64, bath_horizon=0.02)
+
+    whole = model.run(n_steps=10, initial=initial, **kw)
+    assert whole.checkpoint is not None, "no checkpoint emitted"
+
+    first = model.run(n_steps=4, initial=initial, **kw)
+    second = model.run(n_steps=6, resume=first.checkpoint, **kw)
+
+    end_whole = np.asarray(whole.expect["population"])[-1]
+    end_split = np.asarray(second.expect["population"])[-1]
+    assert np.array_equal(end_whole, end_split)
+    assert np.isclose(second.t[-1], whole.t[-1])
+    assert second.t[0] > first.t[-1], "the resumed time grid must continue"
+
+    # negative control: restarting the clock is a *detectable* error, so the
+    # equality above is a real constraint rather than a tautology
+    restarted = model.run(n_steps=6, initial=initial, **kw)
+    assert not np.allclose(
+        np.asarray(restarted.expect["population"])[-1], end_split, atol=1e-6)
+
+
+def test_resumed_comb_rejects_a_different_hamiltonian(tmp_path):
+    """A checkpoint may only continue into the model that produced it, and it
+    survives a pickle-free round trip through disk."""
+    import numpy as np
+    from fishbonett.models import Fishbone
+    from fishbonett.models.result import SimulationCheckpoint
+
+    model, initial, occupied = _comb_vibronic_model()
+    kw = dict(dt=0.002, representation="interaction-chain",
+              state_geometry="tree", integrator="tebd",
+              observables={"population": occupied},
+              trunc_eps=1e-5, bond_dim=64, bath_horizon=0.02)
+    first = model.run(n_steps=4, initial=initial, **kw)
+
+    reloaded = SimulationCheckpoint.load(first.checkpoint.save(tmp_path / "c.npz"))
+    a = model.run(n_steps=3, resume=first.checkpoint, **kw)
+    b = model.run(n_steps=3, resume=reloaded, **kw)
+    assert np.array_equal(np.asarray(a.expect["population"])[-1],
+                          np.asarray(b.expect["population"])[-1])
+
+    cm = 2.0 * np.pi * 2.99792458e-2
+    other, other_initial, _ = _comb_vibronic_model()
+    other.sites[0] = other.sites[0] + 5.0 * cm * np.diag([0.0, 1.0])
+    with pytest.raises(ValueError, match="does not match this resolved model"):
+        other.run(n_steps=2, resume=first.checkpoint, **kw)
+
+    # ...and a bath resolved for a different horizon is refused too
+    with pytest.raises(ValueError, match="bath_horizon"):
+        model.run(n_steps=2, resume=first.checkpoint,
+                  **{**kw, "bath_horizon": 0.05})

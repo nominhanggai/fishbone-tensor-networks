@@ -14,7 +14,7 @@ field                single-system models         multi-site models
 ``max_bond``         peak bond per step          same
 ``method``           the method that ran         same
 ``meta``             ``{}``                      ``{"n_sites": n}``
-``checkpoint``       ``None``                    resumable static-tree state
+``checkpoint``       ``None``                    resumable tree state
 ===================  ==========================  ==============================
 
 ``system-bath`` and ``multichannel`` are single-system; ``comb`` and ``site-tree``
@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["Result", "SimulationCheckpoint"]
+__all__ = ["Result", "SimulationCheckpoint", "plan_signature"]
 
 
 def _update_array(digest, value):
@@ -51,12 +51,36 @@ def _hamiltonian_signature(terms):
     return digest.hexdigest()
 
 
+def plan_signature(dims, edges, arrays=(), scalars=()):
+    """Digest for a plan that builds its own topology rather than :class:`LocalTerms`.
+
+    The interaction-picture comb assembles ``dims``/``edges`` itself from the
+    electronic graph plus one bath branch per site, so it has no ``LocalTerms`` to
+    hash.  It supplies the same information directly: the topology, the arrays that
+    define the Hamiltonian (site terms, graph couplings, coupling operators) and
+    the scalars that fix how each bath was resolved.
+    """
+    digest = hashlib.sha256()
+    digest.update(json.dumps(list(map(int, dims))).encode("ascii"))
+    digest.update(json.dumps([list(map(int, edge)) for edge in edges]).encode("ascii"))
+    for value in arrays:
+        _update_array(digest, value)
+    digest.update(json.dumps([str(value) for value in scalars]).encode("ascii"))
+    return digest.hexdigest()
+
+
 @dataclass(frozen=True)
 class SimulationCheckpoint:
-    """A resumable static-tree tensor state and its compatibility metadata.
+    """A resumable tree tensor state and its compatibility metadata.
 
     Checkpoints are valid only for the same fully resolved Hamiltonian.  They can
     be kept in memory or stored as a pickle-free NPZ archive with :meth:`save`.
+
+    Both tree plans produce one: the static comb/site-tree, and the
+    interaction-picture comb.  The latter also stores ``elapsed``, which is not
+    bookkeeping there but physics -- its couplings ``d_n(t)`` are functions of
+    absolute time, so a continuation that restarted the clock at zero would evolve
+    a different Hamiltonian while looking perfectly healthy.
     """
 
     tensors: tuple
@@ -79,15 +103,31 @@ class SimulationCheckpoint:
             signature=_hamiltonian_signature(terms),
         )
 
+    @classmethod
+    def from_tree(cls, state, dims, edges, *, signature, method, elapsed,
+                  bath_horizon):
+        """Checkpoint a tree state whose topology was assembled by the plan."""
+        return cls(
+            tensors=tuple(np.array(value, complex, copy=True) for value in state.T),
+            dims=tuple(map(int, dims)),
+            edges=tuple(tuple(map(int, edge)) for edge in edges),
+            oc=int(state.oc), method=str(method), elapsed=float(elapsed),
+            bath_horizon=float(bath_horizon), signature=str(signature))
+
     def restore(self, terms):
         """Return a fresh tree state after validating ``terms``."""
-        if self.signature != _hamiltonian_signature(terms):
+        return self.restore_tree(terms.dims, terms.edges,
+                                 _hamiltonian_signature(terms))
+
+    def restore_tree(self, dims, edges, signature):
+        """Return a fresh tree state after validating an explicit topology."""
+        if self.signature != str(signature):
             raise ValueError(
                 "checkpoint Hamiltonian does not match this resolved model; "
                 "bath temperatures, couplings, discretization and topology must "
                 "remain unchanged")
         from fishbonett.states.tree import TreeTensorNetwork
-        state = TreeTensorNetwork(terms.dims, terms.edges, root=0)
+        state = TreeTensorNetwork(dims, edges, root=0)
         if len(self.tensors) != state.n:
             raise ValueError("checkpoint tensor count does not match model topology")
         state.T = [np.array(value, complex, copy=True) for value in self.tensors]

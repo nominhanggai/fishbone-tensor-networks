@@ -75,6 +75,8 @@ def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
                                          ("interaction-chain-tdvp2", 2),
                                          ("schrodinger-star-tdvp1", 2),
                                          ("schrodinger-star-tdvp2", 2),
+                                         ("interaction-star-tdvp1", 2),
+                                         ("interaction-star-tdvp2", 2),
                                          ("interaction-chain-tree-tdvp1", 1),
                                          ("interaction-chain-tree-tdvp2", 1), ("interaction-chain-tree-tebd", 1)])
 def test_method_matches_exact(method, step):
@@ -159,12 +161,19 @@ def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
     kw = dict(dt=0.01, n_steps=20, bond_dim=80, trunc_eps=1e-12, observables=obs)
     r_static = model.run(**kw)
     r_ip = model.run(method="interaction-chain-tebd", **kw)
-    # the two differ by *representation* -- schrodinger-star vs interaction-star -- which is
-    # why the static one is `schrodinger-star-tree-tebd` and not the multi-site models'
-    # `schrodinger-chain-tree-tebd`: same engine, but those chain-map their baths and this
-    # cannot (the channels share one set of modes).
+    r_ip_star = model.run(method="interaction-star-tebd", **kw)
+    # Three representations of one shared-mode star: the static schrodinger-star,
+    # and the interaction picture kept in the star modes (`interaction-star-tebd`)
+    # or rotated on to a Lanczos chain (`interaction-chain-tebd`).  The chain seed
+    # is one channel, which is legitimate here only because the interaction picture
+    # leaves no mode-mode terms -- see representations/multichannel.py.
+    #
+    # The static one is `schrodinger-star-tree-tebd`, not the multi-site models'
+    # `schrodinger-chain-tree-tebd`: same engine, but those chain-map their baths
+    # statically and this cannot, since the channels share one set of modes.
     assert r_static.method == "schrodinger-star-tree-tebd"
     assert r_ip.method == "interaction-chain-tebd"
+    assert r_ip_star.method == "interaction-star-tebd"
 
     # exact diagonalization of the same shared-mode star
     freq, g = None, []
@@ -197,6 +206,8 @@ def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
                 (U @ (np.exp(-1j * E * t) * c)).reshape(2, -1)), O).real
             for t in r_ip.t])
         assert np.max(np.abs(r_ip.expect[name] - ref)) < 3e-3, f"ip vs exact ({name})"
+        assert np.max(np.abs(r_ip_star.expect[name] - ref)) < 3e-3, (
+            f"ip-star vs exact ({name})")
         assert np.max(np.abs(r_static.expect[name] - ref)) < 3e-3, f"static vs exact ({name})"
 
 
@@ -396,6 +407,10 @@ def test_trotter_mpo_matches_tebd_general_coupling():
 POLARON_METHODS = [
     "polaron-chain-tebd", "polaron-chain-tdvp1", "polaron-chain-tdvp2",
     "polaron-chain-dtdvp",
+    # The star polaron displaces every mode instead of localizing on c0.  Same
+    # physics, so it must reproduce the interaction picture just as the chain
+    # one does -- and until this was added the whole representation had no test.
+    "polaron-star-tdvp1", "polaron-star-tdvp2", "polaron-star-dtdvp",
 ]
 
 
@@ -475,3 +490,81 @@ def test_free_chain_gates_put_each_frequency_on_its_own_mode():
             f"bond {m}: gate Hamiltonian does not match "
             f"k={b.hoppings[m - 1]:.4f} hopping + "
             f"w={b.frequencies[m]:.4f} on c_{m}")
+
+
+def test_two_site_tdvp_bond_grows_at_the_default_threshold():
+    """Two-site TDVP must be accurate at the *default* trunc_eps, not only at 1e-12.
+
+    Regression test.  ``_split2`` used to keep only the Schmidt values above
+    ``eps * s[0]``, with no allowance for growth.  Starting from a product state
+    the entangling component a step creates is O(coupling * dt); when that fell
+    below ``eps`` it was discarded, so the next step regenerated the same O(dt)
+    seed instead of accumulating -- the bond locked at 1 and the run returned a
+    mean-field answer with no warning.
+
+    Measured before the fix, at the default ``trunc_eps=1e-4``: 5.5e-2 error
+    against exact diagonalization with peak bond 1, while one-site TDVP on the
+    identical MPO gave 5.4e-4.  The error was *flat* from eps=1e-2 to 1e-5,
+    which is the signature: tightening the accuracy knob did nothing.
+
+    ``test_method_matches_exact`` covers the same method but at ``trunc_eps=1e-12``,
+    which is deep inside the region where the bug is invisible.  This test pins the
+    default explicitly, and asserts the bond actually grew.
+    """
+    from fishbonett.linalg import DEFAULT_EPS
+
+    model = _model()
+    r = model.run(dt=0.05, n_steps=10, method="interaction-chain-tdvp2",
+                  bond_dim=40, trunc_eps=DEFAULT_EPS,
+                  observables={"sz": sigma_z})
+    sz_exact = _exact_sz(model.bath, r.t)
+    err = np.max(np.abs(r.expect["sz"] - sz_exact))
+    assert err < 5e-3, f"tdvp2 at the default trunc_eps is off by {err:.2e}"
+    assert int(np.max(r.max_bond)) > 1, "the bond never grew past a product state"
+
+    # ...and it must agree with the two independent propagators of the same H(t)
+    for other in ("interaction-chain-trotter-mpo", "interaction-chain-tebd"):
+        r2 = _model().run(dt=0.05, n_steps=10, method=other, bond_dim=40,
+                          trunc_eps=DEFAULT_EPS, observables={"sz": sigma_z})
+        gap = np.max(np.abs(np.asarray(r.expect["sz"])
+                            - np.asarray(r2.expect["sz"])))
+        assert gap < 5e-3, f"tdvp2 disagrees with {other} by {gap:.2e}"
+
+
+def test_bond_expansion_allowance_is_bounded():
+    """The growth allowance must not inflate the bond without limit.
+
+    It admits a fixed few directions beyond the threshold, so the bond settles
+    at (threshold rank + expand) rather than creeping to ``bond_dim``.
+    """
+    from fishbonett.evolve._tdvp_sweeps import DEFAULT_BOND_EXPAND
+
+    model = _model()
+    loose = model.run(dt=0.05, n_steps=10, method="interaction-chain-tdvp2",
+                      bond_dim=40, trunc_eps=1e-2,
+                      observables={"sz": sigma_z})
+    # far below the cap: the allowance is additive, not a floor at bond_dim
+    assert int(np.max(loose.max_bond)) <= 4 + 2 * DEFAULT_BOND_EXPAND
+    # explicitly disabling it reproduces the old locked-at-1 behaviour
+    stuck = _model().run(dt=0.05, n_steps=10, method="interaction-chain-tdvp2",
+                         bond_dim=40, trunc_eps=1e-2,
+                         observables={"sz": sigma_z}, bond_expand=0)
+    assert int(np.max(stuck.max_bond)) == 1
+
+
+def test_dynamic_tdvp_honours_the_bond_expansion_allowance():
+    """``dtdvp`` must get the allowance too -- it is a two-site sweep.
+
+    ``tdvp1sweep_dynamic`` is ``tdvp2sweep`` with ``prec`` as its threshold, so it
+    shared the growth bug, and adaptive bond growth is the one thing it exists to
+    do.  When the allowance was first added the driver passed it only on the
+    ``tdvp2`` branch, so ``bond_expand`` was accepted and silently ignored here.
+    """
+    grown = _model().run(dt=0.05, n_steps=8, method="schrodinger-chain-dtdvp",
+                         bond_dim=40, trunc_eps=1e-3,
+                         observables={"sz": sigma_z})
+    off = _model().run(dt=0.05, n_steps=8, method="schrodinger-chain-dtdvp",
+                       bond_dim=40, trunc_eps=1e-3, bond_expand=0,
+                       observables={"sz": sigma_z})
+    assert int(np.max(grown.max_bond)) > int(np.max(off.max_bond)), (
+        "bond_expand does not reach the dtdvp sweep")
