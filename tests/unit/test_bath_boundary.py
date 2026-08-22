@@ -104,16 +104,18 @@ def test_conflicting_legacy_and_model_couplings_are_rejected():
     bath = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x],
                 domain=(0.0, 40.0), n_modes=3, phys_dim=4)
 
-    with pytest.raises(ValueError, match="specified twice"):
-        SystemBath(h=0.5 * sigma_x,
-                   coupling=[sigma_x, sigma_x], bath=bath)
+    with pytest.warns(DeprecationWarning, match="Bath.coupling is deprecated"):
+        with pytest.raises(ValueError, match="specified twice"):
+            SystemBath(h=0.5 * sigma_x,
+                       coupling=[sigma_x, sigma_x], bath=bath)
 
 
 def test_matching_legacy_duplicate_remains_compatible():
     bath = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x],
                 domain=(0.0, 40.0), n_modes=3, phys_dim=4)
-    model = SystemBath(h=0.5 * sigma_x,
-                       coupling=[sigma_z, sigma_x], bath=bath)
+    with pytest.warns(DeprecationWarning, match="Bath.coupling is deprecated"):
+        model = SystemBath(h=0.5 * sigma_x,
+                           coupling=[sigma_z, sigma_x], bath=bath)
     assert model.coupled_bath.is_multichannel
 
 

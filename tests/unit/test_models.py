@@ -184,9 +184,10 @@ def test_multichannel_default_tree_is_schrodinger_not_interaction():
     assert set(representations) == {
         "schrodinger-star", "interaction-chain", "interaction-star"}
 
-    mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+    mc = Bath(J=[_J, _J], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
-    fb = TreeFishbone(sites=[sigma_x], edges=[], baths=[mc])
+    fb = TreeFishbone(
+        sites=[sigma_x], edges=[], baths=[mc.bind([sigma_z, sigma_x])])
     _dims, _edges, site_H, _edge_H = fb.hamiltonians(t_max=1.0)
     # the bath nodes (everything past the single system site) carry w_k * n
     bath_on_site = [H for H in site_H[1:] if np.any(H)]

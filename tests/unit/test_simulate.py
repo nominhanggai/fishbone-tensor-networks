@@ -132,14 +132,15 @@ def test_spinboson_multichannel_routes_to_star():
     def Jx(w):
         return 0.1 * w * np.exp(-w / 8.0)
 
-    mc = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+    mc = Bath(J=[Jz, Jx], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
     h = 0.3 * sigma_z + 0.8 * sigma_x
     r = SystemBath(h=h, coupling=[sigma_z, sigma_x], bath=mc).run(
         dt=0.02, n_steps=10, bond_dim=40, observables={"sz": sigma_z})
     assert r.expect["sz"].shape == (10,)          # single-system, not per-site
     assert r.rdm.shape == (10, 2, 2)
-    fbr = TreeFishbone(sites=[h], edges=[], baths=[mc]).run(
+    fbr = TreeFishbone(
+        sites=[h], edges=[], baths=[mc.bind([sigma_z, sigma_x])]).run(
         dt=0.02, n_steps=10, bond_dim=40, observables={"sz": sigma_z})
     assert np.allclose(r.expect["sz"], fbr.expect["sz"][:, 0])
 
@@ -153,7 +154,8 @@ def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
     ops = [sigma_z, sigma_x]
     nm, d = 3, 6
     sd = lambda w: 0.15 * w * np.exp(-w / 6.0)
-    mc = Bath(J=[sd, sd], coupling=ops, domain=(0.0, 30.0), n_modes=nm, phys_dim=d)
+    mc = Bath(
+        J=[sd, sd], domain=(0.0, 30.0), n_modes=nm, phys_dim=d)
     h = 0.5 * sigma_x
     model = SystemBath(h=h, coupling=ops, bath=mc)
 
@@ -177,7 +179,7 @@ def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
 
     # exact diagonalization of the same shared-mode star
     freq, g = None, []
-    for Jc, _op in mc.channels():
+    for Jc in mc.spectral_densities():
         f, v_sq = get_vn_squared(Jc, nm, list(mc.domain))
         g.append(np.sqrt(np.asarray(v_sq) / np.pi))
         freq = np.asarray(f) if freq is None else freq
@@ -216,7 +218,7 @@ def test_multichannel_ip_rejects_a_zero_lanczos_seed():
     Lanczos seed.  That used to produce a silent NaN chain; it must raise."""
     sy = np.array([[0, -1j], [1j, 0]], complex)
     sd = lambda w: 0.15 * w * np.exp(-w / 6.0)
-    mc = Bath(J=[sd, sd], coupling=[sigma_x, sy], domain=(0.0, 30.0),
+    mc = Bath(J=[sd, sd], domain=(0.0, 30.0),
               n_modes=3, phys_dim=4)
     m = SystemBath(h=0.5 * sigma_z, coupling=[sigma_x, sy], bath=mc)
     with pytest.raises(ValueError, match="seed"):
