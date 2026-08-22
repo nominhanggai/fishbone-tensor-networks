@@ -16,7 +16,7 @@ def _J(w):
 
 
 def _bath(nm, dph, op):
-    return Bath(J=_J, domain=DOM, n_modes=nm, phys_dim=dph, coupling=op)
+    return Bath(J=_J, domain=DOM, n_modes=nm, phys_dim=dph).bind(op)
 
 
 def _embed(op, s, dims):
@@ -220,8 +220,10 @@ def test_multi_site_observable_vs_exact():
 def test_per_bath_domains_allowed():
     # As a specialization of the general tree engine, each bath discretizes
     # independently, so baths on different frequency domains are allowed.
-    b1 = Bath(J=_J, domain=(0.0, 40.0), n_modes=2, phys_dim=4, coupling=sigma_z)
-    b2 = Bath(J=_J, domain=(0.0, 30.0), n_modes=2, phys_dim=4, coupling=sigma_z)
+    b1 = Bath(
+        J=_J, domain=(0.0, 40.0), n_modes=2, phys_dim=4).bind(sigma_z)
+    b2 = Bath(
+        J=_J, domain=(0.0, 30.0), n_modes=2, phys_dim=4).bind(sigma_z)
     fb = Fishbone(sites=[sigma_z, sigma_z], baths=[b1, b2],
                   backbone=[np.zeros((4, 4))])
     res = fb.run(dt=0.02, n_steps=4, bond_dim=20)

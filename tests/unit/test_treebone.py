@@ -16,7 +16,7 @@ def _J(w):
 
 
 def _bath(nm, d, op):
-    return Bath(J=_J, domain=DOM, n_modes=nm, phys_dim=d, coupling=op)
+    return Bath(J=_J, domain=DOM, n_modes=nm, phys_dim=d).bind(op)
 
 
 def _embed(op, s, dims):
@@ -178,11 +178,12 @@ def test_multichannel_single_bath():
     def Jx(w):
         return 0.10 * w * np.exp(-w / 8.0)
 
-    mc = Bath(J=[Jz, Jx], coupling=[sigma_z, sigma_x],
+    mc = Bath(J=[Jz, Jx],
               domain=(0.0, 40.0), n_modes=3, phys_dim=4)
-    assert mc.is_multichannel
+    coupled = mc.bind([sigma_z, sigma_x])
+    assert coupled.is_multichannel
     h = 0.3 * sigma_z + 0.8 * sigma_x
-    fb = TreeFishbone(sites=[h], edges=[], baths=[mc])
+    fb = TreeFishbone(sites=[h], edges=[], baths=[coupled])
     r = fb.run(dt=0.02, n_steps=12, bond_dim=40, trunc_eps=1e-12,
                observables={"sz": sigma_z})
     dims, edges, site_H, edge_H = fb.hamiltonians()
@@ -257,10 +258,10 @@ def test_multichannel_star_on_spin_of_spin_vibration_tree():
     bvi = annihilate(dv); nv = bvi.T @ bvi
     mc = Bath(J=[lambda w: 0.2 * w * np.exp(-w / 5.0),
                  lambda w: 0.1 * w * np.exp(-w / 8.0)],
-              coupling=[sigma_z, sigma_x], domain=(0.0, 40.0), n_modes=2, phys_dim=4)
+              domain=(0.0, 40.0), n_modes=2, phys_dim=4)
     fb = TreeFishbone(sites=[0.25 * sigma_z + sigma_x, 1.5 * nv],
                       edges=[(0, 1, 0.4 * np.kron(sigma_z, bvi + bvi.T))],
-                      baths=[mc, None])
+                      baths=[mc.bind([sigma_z, sigma_x]), None])
     r = fb.run(dt=0.02, n_steps=8, bond_dim=40, trunc_eps=1e-12,
                observables={"sz_spin": (sigma_z, 0)})
     dims, edges, site_H, edge_H = fb.hamiltonians()
@@ -292,10 +293,12 @@ def test_multichannel_star_on_spin_of_spin_vibration_tree():
 def test_multichannel_requires_legendre():
     def Jz(w):
         return 0.2 * w * np.exp(-w / 5.0)
-    mc = Bath(J=[Jz, Jz], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+    mc = Bath(J=[Jz, Jz], domain=(0.0, 40.0),
               n_modes=2, phys_dim=3, discretization="tedopa")
     with pytest.raises(ValueError):
-        TreeFishbone(sites=[sigma_z], edges=[], baths=[mc])
+        TreeFishbone(
+            sites=[sigma_z], edges=[],
+            baths=[mc.bind([sigma_z, sigma_x])])
 
 
 def test_non_tree_edges_raise():

@@ -66,7 +66,7 @@ def _model_for(key):
     if key == "system-bath":
         return SystemBath(h=h, coupling=sigma_z, bath=_bath())
     if key == "multichannel":
-        mc = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x], domain=(0.0, 40.0),
+        mc = Bath(J=[_J, _J], domain=(0.0, 40.0),
                   n_modes=3, phys_dim=4)
         return SystemBath(h=h, coupling=[sigma_z, sigma_x], bath=mc)
     if key == "comb":

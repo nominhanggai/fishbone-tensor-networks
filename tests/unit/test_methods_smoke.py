@@ -434,8 +434,8 @@ def test_schrodinger_representation_serves_every_topology():
     from fishbonett.operators import sigma_x, sigma_z
 
     J = lambda w: 0.2 * w * np.exp(-w / 5.0)
-    mk = lambda: Bath(J=J, domain=(0.0, 40.0), n_modes=2, phys_dim=4,
-                      coupling=sigma_z)
+    mk = lambda: Bath(
+        J=J, domain=(0.0, 40.0), n_modes=2, phys_dim=4).bind(sigma_z)
     C = 0.3 * np.kron(sigma_z, sigma_z)
     h = 0.5 * sigma_z + sigma_x
 
