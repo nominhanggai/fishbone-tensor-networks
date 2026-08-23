@@ -12,6 +12,7 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+.private/
 docs/_build/
 docs/generated/
 docs/_generated/

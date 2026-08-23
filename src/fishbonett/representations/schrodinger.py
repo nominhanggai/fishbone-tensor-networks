@@ -21,7 +21,7 @@ an MPO for TDVP or as local terms and TEBD gates for a state tree.
 The representation never advances tensor states; :mod:`fishbonett.evolve`
 consumes the MPOs and gates built here.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -50,6 +50,7 @@ class LocalTerms:
     edges: List[Tuple[int, int]]
     site: List[np.ndarray]
     bond: Dict[Tuple[int, int], np.ndarray]
+    graph_bond: Dict[Tuple[int, int], np.ndarray] = field(default_factory=dict)
 
     def __post_init__(self):
         n_nodes = len(self.dims)

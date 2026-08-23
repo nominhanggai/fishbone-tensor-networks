@@ -45,6 +45,36 @@ more model operators. `Bath(coupling=...)` is deprecated; use
 `SystemBath(coupling=...)` or `bath.bind(operator)`.
 If it duplicates `SystemBath(coupling=...)`, the values must agree.
 
+## Discrete molecular vibrations
+
+Spectroscopically resolved modes should not be broadened merely to make them look
+like a continuous density. `Bath.vibronic` accepts their positive physical
+frequencies and Huang–Rhys factors directly, with an optional continuous
+background:
+
+```python
+vibronic = Bath.vibronic(
+    frequencies=[84.0, 167.0, 183.0],
+    huang_rhys=[0.0151, 0.0081, 0.0072],
+    continuum=J_environment,
+    temperature=kBT,
+    phys_dim=6,
+)
+```
+
+All numbers must use the same energy/frequency units. The discrete coupling is
+$g_k=\omega_k\sqrt{S_k}$, so the physical reorganization energy is
+$\sum_k\omega_kS_k$ plus the positive-frequency continuum contribution. At
+finite temperature the discrete modes are internally doubled onto signed
+frequencies with Bose weights. The negative thermofield partners are therefore
+never counted as negative physical reorganization energy.
+
+After resolution, `bath.correlation(times)` evaluates the represented finite-bath
+correlation. `bath.compressed(t_max, correlation_tol=...)` constructs the smallest
+Lanczos/Gaussian quadrature meeting that error target on the requested interval.
+Compression is controlled by the correlation error rather than an arbitrary
+number of retained peaks.
+
 ## Automatic defaults
 
 `domain` and `n_modes` can both be left unspecified; they are then derived from

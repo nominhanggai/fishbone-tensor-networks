@@ -101,6 +101,158 @@ class Bath:
     extra_breaks: tuple = ()
     m_per: int = 60
     coupling: object = None
+    discrete_frequencies: tuple = ()
+    discrete_couplings: tuple = ()
+    continuum_present: bool = False
+    physical_reorganization: float = None
+    compression_error: float = None
+    uncompressed_modes: int = None
+
+    @classmethod
+    def vibronic(cls, frequencies, huang_rhys, *, continuum=None,
+                 temperature=None, beta=None, phys_dim=20, domain=None,
+                 n_modes=None, discretization="tedopa", **kwargs):
+        """A bath of resolved molecular vibrations and an optional continuum.
+
+        Frequencies are positive angular frequencies in the package's working
+        units.  With ``J = pi sum |g_k|^2 delta(w-w_k)``, a Huang--Rhys factor
+        gives ``g_k = w_k sqrt(S_k)`` and contributes ``w_k S_k`` to the
+        physical reorganization energy.  At finite temperature the discrete
+        modes are thermofield doubled internally; callers still supply only the
+        positive physical frequencies.
+        """
+        frequencies = np.asarray(frequencies, float)
+        huang_rhys = np.asarray(huang_rhys, float)
+        if (frequencies.ndim != 1 or huang_rhys.shape != frequencies.shape
+                or frequencies.size == 0):
+            raise ValueError(
+                "frequencies and huang_rhys must be non-empty 1D arrays of equal length")
+        if np.any(frequencies <= 0):
+            raise ValueError("vibronic frequencies must be positive")
+        if np.any(huang_rhys < 0):
+            raise ValueError("Huang-Rhys factors must be non-negative")
+        if temperature is not None and beta is not None:
+            raise ValueError("provide temperature or beta, not both")
+        strengths = frequencies * np.sqrt(huang_rhys)
+        zero = lambda _w: 0.0
+        density = continuum if continuum is not None else zero
+        physical_reorganization = float(np.sum(frequencies * huang_rhys))
+        if continuum is not None and domain is not None:
+            from fishbonett.bath.conventions import reorganization_energy
+            lo, hi = domain
+            if hi > 0:
+                physical_reorganization += reorganization_energy(
+                    continuum, (max(0.0, lo), hi))
+        elif continuum is not None:
+            physical_reorganization = None
+        return cls(
+            J=density, domain=domain, n_modes=n_modes, phys_dim=phys_dim,
+            temperature=temperature, beta=beta,
+            discretization=discretization,
+            discrete_frequencies=tuple(frequencies),
+            discrete_couplings=tuple(strengths),
+            continuum_present=continuum is not None,
+            physical_reorganization=physical_reorganization,
+            **kwargs,
+        )
+
+    def _discrete_star_data(self):
+        """Effective zero-temperature star modes for the discrete component."""
+        frequency = np.asarray(self.discrete_frequencies, float)
+        coupling = np.asarray(self.discrete_couplings, float)
+        if not len(frequency):
+            return frequency, coupling
+        if self.thermalized or (self.temperature is None and self.beta is None):
+            return frequency, coupling
+        beta = self.beta if self.beta is not None else 1.0 / self.temperature
+        occupation = 1.0 / np.expm1(beta * frequency)
+        return (
+            np.concatenate((frequency, -frequency)),
+            np.concatenate((coupling * np.sqrt(occupation + 1.0),
+                            coupling * np.sqrt(occupation))),
+        )
+
+    def reorganization_energy(self):
+        """Physical reorganization energy, using positive frequencies only."""
+        if self.physical_reorganization is not None:
+            return float(self.physical_reorganization)
+        from fishbonett.bath.conventions import reorganization_energy
+        if self.domain is None:
+            raise ValueError("resolve the bath or provide a domain first")
+        lo, hi = self.domain
+        discrete = 0.0
+        frequency = np.asarray(self.discrete_frequencies, float)
+        coupling = np.asarray(self.discrete_couplings, float)
+        positive = frequency > 0
+        if np.any(positive):
+            discrete = float(np.sum(coupling[positive] ** 2 / frequency[positive]))
+        continuum = (reorganization_energy(self.J, (max(0.0, lo), hi))
+                     if self.continuum_present and hi > 0 else 0.0)
+        return discrete + continuum
+
+    def correlation(self, times):
+        """Correlation function of the resolved finite star representation."""
+        from fishbonett.bath._coefficients import star_coefficients
+        star = star_coefficients(self)
+        times = np.asarray(times, float)
+        return np.sum(
+            star.couplings[0][None, :] ** 2
+            * np.exp(-1j * np.outer(times, star.frequencies)), axis=1)
+
+    def compressed(self, t_max, correlation_tol=1e-3, *, samples=401,
+                   max_modes=None):
+        """Compress a resolved vibronic measure by correlation-controlled quadrature.
+
+        The first ``m`` Lanczos coefficients define the ``m``-node Gaussian
+        quadrature of the complete finite thermal measure.  The smallest ``m``
+        whose maximum absolute correlation error, normalized by ``C(0)``, is at
+        most ``correlation_tol`` on ``[0, t_max]`` is returned.
+        """
+        if t_max < 0:
+            raise ValueError("t_max must be non-negative")
+        if correlation_tol <= 0:
+            raise ValueError("correlation_tol must be positive")
+        if samples < 2:
+            raise ValueError("samples must be at least 2")
+        if max_modes is not None and max_modes < 1:
+            raise ValueError("max_modes must be positive")
+        from fishbonett.bath._coefficients import star_coefficients
+        from fishbonett.bath.lanczos import lanczos
+        bath = self.resolved(t_max)
+        star = star_coefficients(bath)
+        if star.n_channels != 1:
+            raise ValueError("correlation compression requires one bath channel")
+        frequency = star.frequencies
+        coupling = star.couplings[0]
+        tri, _ = lanczos(np.diag(frequency), coupling)
+        times = np.linspace(0.0, float(t_max), int(samples))
+        exact = np.sum(coupling[None, :] ** 2
+                       * np.exp(-1j * np.outer(times, frequency)), axis=1)
+        scale = max(abs(exact[0]), np.finfo(float).tiny)
+        limit = min(len(frequency), max_modes or len(frequency))
+        selected = None
+        for count in range(1, limit + 1):
+            values, vectors = np.linalg.eigh(tri[:count, :count])
+            strengths = np.linalg.norm(coupling) * vectors[0, :]
+            approx = np.sum(strengths[None, :] ** 2
+                            * np.exp(-1j * np.outer(times, values)), axis=1)
+            error = float(np.max(np.abs(approx - exact)) / scale)
+            if error <= correlation_tol:
+                selected = (values, np.abs(strengths), error)
+                break
+        if selected is None:
+            raise ValueError(
+                f"no quadrature with at most {limit} modes reaches correlation_tol="
+                f"{correlation_tol:g}")
+        values, strengths, error = selected
+        zero = lambda _w: 0.0
+        compressed = replace(
+            bath, J=zero, domain=(float(values.min()), float(values.max())),
+            n_modes=len(values), temperature=None, beta=None, thermalized=True,
+            discretization="legendre", discrete_frequencies=tuple(values),
+            discrete_couplings=tuple(strengths), continuum_present=False,
+            compression_error=error, uncompressed_modes=len(frequency))
+        return compressed
 
     def _thermalized(self, Jfunc):
         if self.thermalized or (self.temperature is None and self.beta is None):
@@ -186,16 +338,32 @@ class Bath:
         reorganization energy; ``n_modes`` (if unset) the light-cone extent of the
         interaction-picture chain couplings up to ``t_max``.  Returns ``self`` when
         both are already given.  Called by ``run`` with the propagation time."""
-        domain = self.domain if self.domain is not None else self._auto_domain()
+        discrete_frequency, _ = self._discrete_star_data()
+        if self.domain is not None:
+            domain = self.domain
+        elif self.continuum_present:
+            domain = self._auto_domain()
+        elif len(discrete_frequency):
+            domain = (float(np.min(discrete_frequency)),
+                      float(np.max(discrete_frequency)))
+        else:
+            domain = self._auto_domain()
         n_modes = self.n_modes
         if n_modes is None:
-            if t_max is None:
+            if not self.continuum_present and len(discrete_frequency):
+                n_modes = len(discrete_frequency)
+            elif t_max is None:
                 raise ValueError("Bath.n_modes is automatic and needs the "
                                  "propagation time; call from run() (which supplies "
                                  "t_max) or set n_modes explicitly")
-            from fishbonett.bath.auto import auto_n_modes
-            n_modes = auto_n_modes(self.spectral_density(), domain, t_max,
-                                   discretizer=self.discretizer())
+            else:
+                from fishbonett.bath.auto import auto_n_modes
+                n_modes = len(discrete_frequency) + auto_n_modes(
+                    self.spectral_density(), domain, t_max,
+                    discretizer=self.discretizer())
+        if n_modes < len(discrete_frequency):
+            raise ValueError(
+                "n_modes cannot be smaller than the thermally represented discrete modes")
         if domain is self.domain and n_modes == self.n_modes:
             return self
         return replace(self, domain=tuple(domain), n_modes=int(n_modes))

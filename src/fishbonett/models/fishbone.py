@@ -28,7 +28,7 @@ from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.models.propagate import RunCtx
 from fishbonett.models.registry import (
     SCHRODINGER_CHAIN_TREE_TEBD, method_spec, methods_of,
-    unknown_method_error,
+    unknown_method_error, resolve,
 )
 
 __all__ = ["TreeFishbone", "Fishbone", "SCHRODINGER_CHAIN_TREE_TEBD"]
@@ -178,6 +178,7 @@ class TreeFishbone:
 
     def run(self, *, dt, t_max=None, n_steps=None,
             method=SCHRODINGER_CHAIN_TREE_TEBD,
+            representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, seed=None, resume=None, bath_horizon=None,
             observe_every=1):
@@ -219,9 +220,20 @@ class TreeFishbone:
         used for automatic bath resolution; make it cover all continuation
         segments. A returned ``result.checkpoint`` resumes through ``resume=`` and
         is rejected if the resolved Hamiltonian changes."""
-        m = method.lower().replace("_", "-")
-        if m not in methods_of(self._MODEL):
-            raise unknown_method_error(m, self._MODEL)
+        axes_given = any(value is not None for value in
+                         (representation, state_geometry, integrator))
+        if axes_given:
+            if method != SCHRODINGER_CHAIN_TREE_TEBD:
+                raise ValueError("give either method= or representation/state_geometry/integrator")
+            spec = resolve(
+                {self._MODEL}, representation=representation,
+                state_geometry=state_geometry, integrator=integrator)
+            m = spec.name
+        else:
+            m = method.lower().replace("_", "-")
+            if m not in methods_of(self._MODEL):
+                raise unknown_method_error(m, self._MODEL)
+            spec = method_spec(m, self._MODEL)
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
@@ -261,15 +273,17 @@ class TreeFishbone:
             observe_every=int(observe_every),
         )
         from fishbonett.models.simulation import compile_plan
-        return compile_plan(self, method_spec(m, self._MODEL), context).run()
+        return compile_plan(self, spec, context).run()
 
 # -- 1D fishbone: a specialization of TreeFishbone to a linear backbone -------
 class Fishbone:
-    """A 1D chain of electronic sites, each coupled to one or two baths.
+    """Electronic sites with independent baths on a comb tensor network.
 
     A convenience specialization of :class:`~fishbonett.models.fishbone.TreeFishbone`
-    (which handles *any* loop-free electronic topology) to a **linear** backbone:
-    site ``i`` is joined to site ``i+1`` by ``backbone[i]``.  ``baths`` may be a
+    (which handles *any* loop-free electronic topology) to a **linear** tensor
+    backbone. The electronic Hamiltonian may use either nearest-neighbour
+    ``backbone`` terms or an arbitrary ``couplings={(i, j): operator}`` graph;
+    the latter is applied by a reversible swap network. ``baths`` may be a
     sequence with one entry per site or a mapping from site index to entry;
     omitted mapping keys mean no bath.  Each entry is a single :class:`Bath`
     (one bath -- possibly multichannel), a ``(left, right)`` pair (two baths per
@@ -284,17 +298,79 @@ class Fishbone:
     #: the two share an engine.
     _MODEL = "comb"
 
-    def __init__(self, sites, baths, backbone=None):
+    def __init__(self, sites, baths, backbone=None, *, couplings=None):
         self.sites = [np.asarray(h, complex) for h in sites]
         self.nc = len(self.sites)
         self.de = [h.shape[0] for h in self.sites]
         self.baths = _site_entries(baths, self.nc)
+        if couplings is not None and backbone is not None:
+            raise ValueError("provide either backbone or couplings, not both")
+        self.graph_couplings = None
+        if couplings is not None:
+            if not isinstance(couplings, Mapping):
+                raise TypeError("couplings must be a mapping {(i, j): operator}")
+            parsed = {}
+            for edge, operator in couplings.items():
+                if (not isinstance(edge, tuple) or len(edge) != 2
+                        or not all(isinstance(x, (int, np.integer))
+                                   and not isinstance(x, (bool, np.bool_))
+                                   for x in edge)):
+                    raise TypeError("coupling keys must be integer pairs (i, j)")
+                i, j = map(int, edge)
+                if i >= j:
+                    raise ValueError("coupling keys must use the canonical order i < j")
+                if i < 0 or j >= self.nc:
+                    raise ValueError(f"coupling edge {(i, j)} is outside the system")
+                value = np.asarray(operator, complex)
+                expected = self.de[i] * self.de[j]
+                if value.shape != (expected, expected):
+                    raise ValueError(
+                        f"coupling {(i, j)} has shape {value.shape}, expected "
+                        f"{(expected, expected)}")
+                if not np.allclose(value, value.conj().T):
+                    raise ValueError(f"coupling {(i, j)} must be Hermitian")
+                parsed[(i, j)] = value
+            if len(set(self.de)) > 1:
+                raise ValueError(
+                    "arbitrary-graph Fishbone currently requires equal system-site "
+                    "dimensions for its swap network")
+            self.graph_couplings = parsed
         if backbone is None:
             backbone = [np.zeros((self.de[i] * self.de[i + 1],) * 2, complex)
                         for i in range(self.nc - 1)]
         if len(backbone) != max(self.nc - 1, 0):
             raise ValueError("backbone must have n_sites - 1 entries")
         self.backbone = [np.asarray(b, complex) for b in backbone]
+
+    @classmethod
+    def from_single_excitation(cls, exciton_hamiltonian, *, baths):
+        """Build local two-level sites from a one-excitation Hamiltonian.
+
+        ``H[i, i]`` becomes the energy of ``|1>`` on site ``i`` and
+        ``H[i, j]`` becomes excitation hopping between sites ``i`` and ``j``.
+        The resulting many-site Hamiltonian conserves excitation number and its
+        projection onto the one-excitation sector is exactly the supplied matrix.
+        """
+        hamiltonian = np.asarray(exciton_hamiltonian, complex)
+        if (hamiltonian.ndim != 2 or hamiltonian.shape[0] != hamiltonian.shape[1]
+                or hamiltonian.shape[0] == 0):
+            raise ValueError("exciton_hamiltonian must be a non-empty square matrix")
+        if not np.allclose(hamiltonian, hamiltonian.conj().T):
+            raise ValueError("exciton_hamiltonian must be Hermitian")
+        occupied = np.diag([0.0, 1.0]).astype(complex)
+        sites = [hamiltonian[i, i].real * occupied
+                 for i in range(len(hamiltonian))]
+        couplings = {}
+        for i in range(len(hamiltonian)):
+            for j in range(i + 1, len(hamiltonian)):
+                value = hamiltonian[i, j]
+                if abs(value) == 0:
+                    continue
+                term = np.zeros((4, 4), complex)
+                term[2, 1] = value
+                term[1, 2] = np.conj(value)
+                couplings[(i, j)] = term
+        return cls(sites=sites, baths=baths, couplings=couplings)
 
     @staticmethod
     def _site_baths(entry):
@@ -333,6 +409,7 @@ class Fishbone:
 
     def run(self, *, dt, t_max=None, n_steps=None,
             method=SCHRODINGER_CHAIN_TREE_TEBD,
+            representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, seed=None, resume=None, bath_horizon=None,
             observe_every=1):
@@ -342,9 +419,21 @@ class Fishbone:
 
         ``method`` is validated against the ``comb`` model before delegating, so
         an unsupported one names ``comb`` rather than ``site-tree``."""
-        m = method.lower().replace("_", "-")
-        if m not in methods_of(self._MODEL):
-            raise unknown_method_error(m, self._MODEL)
+        axes_given = any(value is not None for value in
+                         (representation, state_geometry, integrator))
+        if axes_given:
+            if method != SCHRODINGER_CHAIN_TREE_TEBD:
+                raise ValueError(
+                    "give either method= or representation/state_geometry/integrator")
+            spec = resolve(
+                {self._MODEL}, representation=representation,
+                state_geometry=state_geometry, integrator=integrator)
+            m = spec.name
+        else:
+            m = method.lower().replace("_", "-")
+            if m not in methods_of(self._MODEL):
+                raise unknown_method_error(m, self._MODEL)
+            spec = method_spec(m, self._MODEL)
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
@@ -383,4 +472,4 @@ class Fishbone:
             observe_every=int(observe_every),
         )
         from fishbonett.models.simulation import compile_plan
-        return compile_plan(self, method_spec(m, self._MODEL), context).run()
+        return compile_plan(self, spec, context).run()
