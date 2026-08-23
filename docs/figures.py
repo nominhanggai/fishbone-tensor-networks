@@ -290,13 +290,12 @@ def bridge_electron_transfer(path=None):
     suite = example.run_profile("docs", announce=True)
     summary = example.summarize(suite)
     plt = _mpl()
-    figure, axes = plt.subplots(1, 3, figsize=(15.0, 4.4), sharey=True)
+    figure, axes = plt.subplots(1, 2, figsize=(10.8, 4.4), sharey=True)
     colors = {"donor": "#4C6EF5", "bridge": "#E8590C", "acceptor": "#2B8A3E"}
-    cases = ("diagonal_reference", "weak_diagonal", "noncondon")
+    cases = ("diagonal_reference", "noncondon")
     titles = {
-        "diagonal_reference": r"diagonal, $V_{DB}/V_{BA}=22/45$",
-        "weak_diagonal": r"diagonal, $V_{DB}/V_{BA}=2/2$",
-        "noncondon": r"non-Condon, $V_{DB}/V_{BA}=2/2$",
+        "diagonal_reference": r"(a) diagonal, $V_{DB}/V_{BA}=22/45$",
+        "noncondon": r"(b) $V_{DB}/V_{BA}=2/2$",
     }
     display_names = {
         "diagonal_reference": "diagonal reference",
@@ -307,10 +306,21 @@ def bridge_electron_transfer(path=None):
         result = suite["results"][case]["primary"]
         for state, color in colors.items():
             axis.plot(result.t, result.expect[state], color=color, label=state)
+        if case == "noncondon":
+            control = suite["results"]["weak_diagonal"]["primary"]
+            for state, color in colors.items():
+                axis.plot(
+                    control.t, control.expect[state], "--", color=color,
+                    alpha=0.75,
+                )
+            axis.plot(
+                [], [], "--", color="#495057", label="weak diagonal control",
+            )
         axis.set(xlabel="time (ps)", title=titles[case])
         axis.grid(alpha=0.25)
     axes[0].set_ylabel("population")
     axes[0].legend(frameon=False)
+    axes[1].legend(frameon=False)
     figure.tight_layout()
     output = Path(path or IMG / "bridge_electron_transfer.png")
     figure.savefig(output, dpi=140)
@@ -321,6 +331,8 @@ def bridge_electron_transfer(path=None):
     rows = "\n".join(
         f"| {display_names[case]} | "
         f"{lifetime_text(values['effective_lifetime_ps'])} | "
+        f"{values['final_donor_population']:.3g} | "
+        f"{values['donor_population_loss']:.3g} | "
         f"{values['peak_bridge_population']:.3g} | "
         f"{values['final_acceptor_population']:.3g} | "
         f"{values['normalization_error']:.2e} |"
@@ -328,15 +340,17 @@ def bridge_electron_transfer(path=None):
     )
     _write_summary("bridge_electron_transfer", fr"""## Generated result
 
-| coupling model | descriptive donor lifetime (ps) | max bridge population | final acceptor population | normalization error |
-|---|---:|---:|---:|---:|
+| coupling model | descriptive donor lifetime (ps) | final donor | donor loss | max bridge | final acceptor | normalization error |
+|---|---:|---:|---:|---:|---:|---:|
 {rows}
 
 The docs profile used the paper's $\alpha={suite['bath']['alpha']}$,
 $\omega_c={suite['bath']['cutoff_cm']:.0f}\ \mathrm{{cm}}^{{-1}}$ bath and
-{suite['bath']['n_modes']} automatically resolved modes. This 0.2 ps transient
-does not resolve the paper's donor lifetimes. The weak-diagonal panel is the
-fixed-Hamiltonian control needed to identify the non-Condon enhancement.
+{suite['bath']['n_modes']} automatically resolved modes. The donor loss and
+compensating bridge/acceptor growth show population transfer, but this 0.2 ps
+transient does not resolve the paper's donor lifetimes. Dashed curves in panel
+(b) are the weak-diagonal fixed-Hamiltonian control; solid curves include the
+non-Condon bath coupling.
 
 Any fitted donor lifetime summarizes the full population trace; it is not an
 isolated elementary $D\to A$ rate because bridge occupation and recrossing
