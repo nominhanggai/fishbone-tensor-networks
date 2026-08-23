@@ -592,12 +592,26 @@ def test_describe_taxonomy_mentions_every_model_and_method():
 #: trees, so "insert tree" is not a rule that can name both.
 GEOMETRY_INFIX = {"mps": "", "binary-tree": "tree", "tree": "tree"}
 
-#: The one method whose name cannot be derived from its axes.  Both tree
-#: geometries take the infix "tree", so ``interaction-chain`` + ``tebd`` collides:
-#: ``interaction-chain-tree-tebd`` is already the binary-tree method, so the comb
-#: one is named "fishbone" instead.  Recorded rather than special-cased inline, so
-#: a second collision has to be a decision.
-NAME_EXCEPTIONS = {"interaction-chain-fishbone-tebd": ("interaction-chain", "tree", "tebd")}
+#: Methods whose name is not derivable from their axes, with the reason, so that
+#: every deviation is a recorded decision rather than a drifting label.
+#:
+#: ``"collision"``  the derived name is already taken by another method.  Both tree
+#:                  geometries take the infix "tree", so ``interaction-chain`` +
+#:                  ``tebd`` collides with the binary-tree method and the comb one
+#:                  is named "fishbone" instead.
+#: ``"sibling"``    the derived name is free, but the method shares a model and a
+#:                  representation with a ``"collision"`` exception and is named to
+#:                  match it, so the two read alike where a user meets them.
+NAME_EXCEPTIONS = {
+    "interaction-chain-fishbone-tebd":
+        ("interaction-chain", "tree", "tebd", "collision"),
+    "interaction-chain-fishbone-trotter-mpo":
+        ("interaction-chain", "tree", "trotter-mpo", "sibling"),
+    # a real collision, like the tebd one: interaction-chain-tree-tdvp2 is the
+    # binary mode-tree method
+    "interaction-chain-fishbone-tdvp2":
+        ("interaction-chain", "tree", "tdvp2", "collision"),
+}
 
 
 def test_every_method_name_is_derivable_from_its_axes():
@@ -610,14 +624,33 @@ def test_every_method_name_is_derivable_from_its_axes():
         "a new state_geometry needs an infix here and in docs/architecture.md")
     for name, spec in R.METHODS.items():
         if name in NAME_EXCEPTIONS:
-            assert NAME_EXCEPTIONS[name] == (
+            *axes, reason = NAME_EXCEPTIONS[name]
+            assert tuple(axes) == (
                 spec.representation, spec.state_geometry, spec.integrator), name
-            # the exception must be *necessary*: the derived name must be taken
+            # an exception must be *justified*, and the two reasons are checkable
             infix = GEOMETRY_INFIX[spec.state_geometry]
-            collides = "-".join([spec.representation, infix, spec.integrator])
-            assert collides in R.METHODS and R.METHODS[collides] is not spec, (
-                f"{name} deviates from the rule but nothing collides with "
-                f"{collides!r} -- rename it instead")
+            derived = "-".join([spec.representation, infix, spec.integrator])
+            taken = derived in R.METHODS and R.METHODS[derived] is not spec
+            if reason == "collision":
+                assert taken, (
+                    f"{name} claims a collision but nothing holds {derived!r} "
+                    f"-- rename it to the derived name instead")
+            else:
+                assert reason == "sibling", f"{name}: unknown reason {reason!r}"
+                assert not taken, (
+                    f"{name} claims to be named after a sibling, but {derived!r} "
+                    f"is taken -- it is really a collision")
+                qualifier = name.rsplit(spec.integrator, 1)[0]
+                kin = [other for other, value in NAME_EXCEPTIONS.items()
+                       if value[-1] == "collision"
+                       and other.startswith(qualifier)
+                       and value[0] == spec.representation]
+                assert kin, (
+                    f"{name} is named after a sibling, but no 'collision' "
+                    f"exception shares the prefix {qualifier!r} -- so the "
+                    f"deviation buys no consistency and should be dropped")
+                assert set(R.METHODS[name].models) & set(R.METHODS[kin[0]].models), (
+                    f"{name} and {kin[0]} do not even share a model")
             continue
         infix = GEOMETRY_INFIX[spec.state_geometry]
         parts = [spec.representation] + ([infix] if infix else []) + [spec.integrator]

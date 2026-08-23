@@ -23,13 +23,8 @@ Core dependencies are `numpy`, `scipy` and `opt_einsum`; Python ≥ 3.10 is requ
 
 The tree and MPO engines contract many-operand tensor networks in their inner
 loop. `opt_einsum` evaluates such a contraction as a sequence of pairwise
-`tensordot`/BLAS calls, whereas `numpy.einsum` — even with `optimize="greedy"`
-and a pre-computed path — still falls back to its unvectorized `c_einsum` C loop
-for the actual multi-operand contraction. On the tree engine the difference is
-about **100×** (measured: 0.51 s vs 55 s for the same `interaction-chain-tree-tdvp2` step), so
-`opt_einsum` is a hard requirement rather than a convenience: `numpy`'s
-`optimize=` option chooses a good contraction *order* but cannot match the
-per-contraction throughput.
+`tensordot`/BLAS calls and supplies reusable contraction paths, so it is a core
+dependency rather than an optional convenience.
 
 ## A first simulation
 
@@ -102,14 +97,11 @@ an internal optimization should never make an observable depend on when it was
 run. The generator is run-local and never touches NumPy's global random state,
 so seeding a run does not perturb anything else in your process.
 
-Pass `seed=None` to draw from NumPy's global generator instead. That is the only
-way to get run-to-run variation, and it is worth knowing what it costs: on a
-converged spin-boson run at `bond_dim=12`, repeats scattered by ~1e-7 in
-the population — enough to be mistaken for convergence error while
-tightening `trunc_eps`.
+Pass `seed=None` to draw from NumPy's global generator instead. This permits
+run-to-run variation from randomized truncation and is generally unsuitable for
+convergence comparisons.
 
-Blocks smaller than 128 use the exact SVD regardless, which is both deterministic
-and (measured) faster at that size.
+Blocks smaller than 128 use the exact SVD and are deterministic.
 
 ## The fishbone tensor-network geometry
 

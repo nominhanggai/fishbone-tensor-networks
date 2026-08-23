@@ -8,7 +8,7 @@ import numpy as np
 
 __all__ = ["sigma_p", "sigma_m", "sigma_x", "sigma_y", "sigma_z", "sigma_0",
            "sigma_1", "annihilate", "create", "number", "temp_factor",
-           "rlogr", "entang", "energy_current_operator"]
+           "rlogr", "entang", "energy_current_operator", "displacement"]
 
 # -- Pauli matrices ----------------------------------------------------------
 sigma_p = np.float64([[0, 1], [0, 0]])        # raising  S^+
@@ -61,6 +61,68 @@ def create(dim: int):
 def number(dim: int):
     """Bosonic number operator ``b^dagger b = diag(0, 1, ..., dim-1)``."""
     return annihilate(dim).T @ annihilate(dim)
+
+
+#: Cached ``(vectors, eigenvalues)`` of ``i(b^dagger - b)`` per truncation, for
+#: :func:`displacement`.  One small ``eigh`` per dimension for the whole process.
+_DISPLACEMENT_BASIS = {}
+
+
+def _displacement_basis(dim: int):
+    """Eigendecomposition of the Hermitian ``K = i(b^dagger - b)``."""
+    basis = _DISPLACEMENT_BASIS.get(dim)
+    if basis is None:
+        generator = 1j * (create(dim) - annihilate(dim))
+        eigenvalues, vectors = np.linalg.eigh(generator)
+        basis = _DISPLACEMENT_BASIS[dim] = (vectors, eigenvalues)
+    return basis
+
+
+def displacement(alpha, dim: int):
+    """``exp(alpha b^dagger - conj(alpha) b)`` on a ``dim``-level truncation.
+
+    ``alpha`` may be a scalar or an array; the result has shape
+    ``(*np.shape(alpha), dim, dim)``.
+
+    Computed in closed form rather than by a matrix exponential per ``alpha``.
+    Writing ``alpha = r e^{i phi}`` and using ``e^{i phi n} b^dagger e^{-i phi n} =
+    e^{i phi} b^dagger``,
+
+    .. math::
+
+        \\alpha b^\\dagger - \\alpha^* b
+            = r\\, e^{i\\phi n} (b^\\dagger - b) e^{-i\\phi n},
+
+    so with the *fixed* Hermitian ``K = i(b^dagger - b) = V diag(mu) V^dagger``
+    (one cached ``eigh`` per ``dim``)
+
+    .. math::
+
+        D(\\alpha) = P(\\phi)\\, V e^{-i r \\mu} V^\\dagger P(\\phi)^\\dagger ,
+        \\qquad P(\\phi) = \\mathrm{diag}(e^{i \\phi n}).
+
+    Exact on the truncated ladder, because it exponentiates the *truncated*
+    generator -- the same operator ``expm`` would be handed.  Note that a single
+    displacement is not the exact propagator of a truncated oscillator, since
+    ``[b, b^dagger] = I - dim |dim-1><dim-1|``; that discrepancy lives at the top
+    Fock level and is controlled by ``phys_dim``, not by this routine.
+
+    Notes
+    -----
+    Replaces a per-``alpha`` ``scipy.linalg.expm``, which dominated the cost of
+    building :meth:`~fishbonett.representations.interaction.InteractionRepresentation.trotter_mpo`
+    (one call per mode per coupling eigenvalue, every step).
+    """
+    alpha = np.asarray(alpha, dtype=complex)
+    vectors, eigenvalues = _displacement_basis(dim)
+    radius, phi = np.abs(alpha), np.angle(alpha)
+    # V exp(-i r mu) V^dagger, batched over alpha
+    inner = np.einsum(
+        "am,...m,bm->...ab", vectors,
+        np.exp(-1j * radius[..., None] * eigenvalues), vectors.conj())
+    ladder = np.arange(dim)
+    rotation = np.exp(1j * phi[..., None] * ladder)        # diag of P(phi)
+    return rotation[..., :, None] * inner * rotation.conj()[..., None, :]
 
 
 def energy_current_operator(onsite, right_bond, left_bond=None):

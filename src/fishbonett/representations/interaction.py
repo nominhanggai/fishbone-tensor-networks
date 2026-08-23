@@ -23,7 +23,7 @@ import scipy.linalg as la
 from fishbonett.bath._coefficients import require_resolved, star_coefficients
 from fishbonett.bath.conventions import integrated_free_phase
 from fishbonett.linalg import expm_gate, kron
-from fishbonett.operators import annihilate, create
+from fishbonett.operators import annihilate, create, displacement
 from fishbonett.representations._mpo import identity_product, product_sum_mpo
 from fishbonett.system import check_operator
 
@@ -116,8 +116,17 @@ class InteractionRepresentation:
         phases = np.exp(-1j * self.frequencies * float(t))
         return self._express(self.star_couplings * phases)
 
-    def tdvp_mpo(self, t=None):
-        """Return the instantaneous Hamiltonian MPO consumed by TDVP."""
+    def tdvp_mpo(self, t=None, reverse=True):
+        """Return the instantaneous Hamiltonian MPO consumed by TDVP.
+
+        ``reverse`` chooses which end of the chain carries the *first*
+        coefficient.  The 1D drivers store the bath sites in reverse coefficient
+        order, so that is the default.  A comb stores each branch forward, in the
+        same order as :meth:`interval_coefficients` and :meth:`tebd_gates`, so the
+        tree engine passes ``reverse=False``.  Getting it backwards attaches every
+        coupling to the wrong mode: the Hamiltonian stays Hermitian and the run
+        stays stable, so the error shows up only as wrong dynamics.
+        """
         if self.frequencies is None:
             raise ValueError("build the interaction representation first")
         coefficients = self.coefficients(0.0 if t is None else t)
@@ -130,8 +139,8 @@ class InteractionRepresentation:
         row[0] = self.h_sys
         products.append(row)
         values.append(1.0)
-        # TDVP stores the bath sites in reverse coefficient order.
-        for mode, amplitude in enumerate(coefficients[::-1]):
+        for mode, amplitude in enumerate(
+                coefficients[::-1] if reverse else coefficients):
             row = identity_product(dimensions)
             row[0] = self.coupling
             row[mode + 1] = (
@@ -181,13 +190,50 @@ class InteractionRepresentation:
             factor,
         )
 
+    def coupling_spectrum(self):
+        """Cached ``eigh`` of the coupling operator.
+
+        The coupling does not change during a run, but :meth:`trotter_mpo` is
+        called every step, so this is computed once.
+        """
+        if getattr(self, "_coupling_spectrum", None) is None:
+            operator = np.asarray(self.coupling, complex)
+            if not np.allclose(operator, operator.conj().T, atol=1e-12):
+                raise ValueError(
+                    "trotter-mpo needs a Hermitian coupling operator: the "
+                    "propagator is built from its eigenbasis, so a non-Hermitian "
+                    "one would give a non-unitary step")
+            self._coupling_spectrum = np.linalg.eigh(operator)
+        return self._coupling_spectrum
+
     def trotter_mpo(self, t, dt):
         """Return the exact conditional-displacement MPO for one interval.
 
         This is the interaction part of the registered Strang/Trotter step; the
         system Hamiltonian half-steps are applied by the simulation planner.
+
+        All the coupling terms share one system operator ``O`` and act on distinct
+        modes, so they commute and the interval propagator factorizes exactly: in
+        each eigenbranch ``lambda`` of ``O`` every mode is displaced by
+        ``alpha = -i lambda conj(c_k)``.  That makes the MPO bond exactly
+        ``len(eigenvalues)`` and diagonal in the branch index.
+
+        The displacements come from :func:`~fishbonett.operators.displacement`, in
+        closed form, rather than one ``expm`` per (mode, branch).
+
+        Notes
+        -----
+        A single displacement is the exact interval propagator only on an
+        untruncated ladder.  On ``phys_dim`` levels the residual is a
+        ``lambda**2``-weighted phase of order ``dt**3`` per step, plus a deviation
+        confined to the top Fock level.  Because the weight is ``lambda**2``, the
+        phase is common to all branches -- and so unobservable -- whenever the
+        coupling's eigenvalues share a magnitude (``sigma_z``, for instance); it is
+        a relative phase for couplings that do not (a projector). Either way it
+        accumulates as ``O(dt**2)``, matching the order of the surrounding Strang
+        splitting.
         """
-        eigenvalues, vectors = la.eigh(self.coupling)
+        eigenvalues, vectors = self.coupling_spectrum()
         coefficients = self.interval_coefficients(t, dt)
         rank = len(eigenvalues)
         tensors = [np.zeros((1, rank, self.pd_sys, self.pd_sys), complex)]
@@ -195,17 +241,20 @@ class InteractionRepresentation:
             vector = vectors[:, branch]
             tensors[0][0, branch] = np.outer(vector, vector.conj())
 
-        for mode, coefficient in enumerate(coefficients):
-            dimension = self.pd_boson[mode]
-            destroy = annihilate(dimension)
-            create_op = destroy.conj().T
+        # (mode, branch) displacement amplitudes in one array
+        alphas = -1j * np.outer(np.conj(coefficients), eigenvalues)
+        dimensions = list(self.pd_boson[:len(coefficients)])
+        uniform = len(set(dimensions)) == 1
+        matrices = (displacement(alphas, dimensions[0]) if uniform else None)
+
+        for mode in range(len(coefficients)):
+            dimension = dimensions[mode]
             right_rank = rank if mode < len(coefficients) - 1 else 1
             tensor = np.zeros(
                 (rank, right_rank, dimension, dimension), complex)
-            for branch, eigenvalue in enumerate(eigenvalues):
-                alpha = -1j * eigenvalue * np.conj(coefficient)
-                target = branch if right_rank > 1 else 0
-                tensor[branch, target] = la.expm(
-                    alpha * create_op - np.conj(alpha) * destroy)
+            block = (matrices[mode] if uniform
+                     else displacement(alphas[mode], dimension))
+            for branch in range(rank):
+                tensor[branch, branch if right_rank > 1 else 0] = block[branch]
             tensors.append(tensor)
         return tensors

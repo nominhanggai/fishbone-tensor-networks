@@ -229,3 +229,242 @@ def test_per_bath_domains_allowed():
     for tn in range(4):
         for cn in range(2):
             assert abs(np.trace(res.rdm[tn, cn]).real - 1.0) < 1e-6
+
+
+PROJECTOR = np.array([[1.0, 0.0], [0.0, 0.0]])
+COMB_MPO = "interaction-chain-fishbone-trotter-mpo"
+COMB_TEBD = "interaction-chain-fishbone-tebd"
+COMB_TDVP2 = "interaction-chain-fishbone-tdvp2"
+#: Every integrator the comb offers.  They solve the same H(t) and must agree.
+COMB_METHODS = (COMB_TEBD, COMB_MPO, COMB_TDVP2)
+
+
+def _comb(npig, nm=3, dph=6, op=PROJECTOR):
+    """A comb with a backbone coupled to independent projector baths."""
+    return Fishbone(
+        sites=[0.5 * sigma_z + sigma_x] * npig,
+        baths=[_bath(nm, dph, op)] * npig,
+        backbone=[0.4 * np.kron(sigma_z, sigma_z)] * (npig - 1))
+
+
+@pytest.mark.parametrize("method", [COMB_MPO, COMB_TDVP2])
+def test_comb_operator_integrators_match_exact_diagonalization(method):
+    """One system site is a system-bath model, so there is an exact answer to hit.
+
+    Run it for both couplings the eigenvalue structure distinguishes: ``sigma_z``
+    (equal magnitudes) and a projector (unequal), since only the latter exposes the
+    branch-dependent phase of the conditional-displacement propagator.
+    """
+    from fishbonett.bath.chain import star_transform
+
+    for coupling in (sigma_z, PROJECTOR):
+        bath = Bath(J=_J, domain=DOM, n_modes=3, phys_dim=6)
+        freq, vn, _ = star_transform(bath.spectral_density(), 3, list(DOM))
+        dims = [2] + [6] * 3
+        h_sys = 1.0 * sigma_x
+        H = _embed(h_sys, 0, dims)
+        for k in range(3):
+            H = H + freq[k] * _embed(
+                annihilate(6).T @ annihilate(6), 1 + k, dims)
+            H = H + vn[k] * (_embed(coupling, 0, dims)
+                             @ _embed(annihilate(6) + annihilate(6).T, 1 + k, dims))
+        energies, vectors = np.linalg.eigh(H)
+        psi0 = np.zeros(int(np.prod(dims)), complex)
+        psi0[0] = 1.0
+        amps = vectors.conj().T @ psi0
+        observable = _embed(sigma_z, 0, dims)
+
+        model = Fishbone(sites=[h_sys], baths=[_bath(3, 6, coupling)])
+        result = model.run(dt=0.02, n_steps=25, method=method, bond_dim=64,
+                           trunc_eps=1e-10, observables={"sz": sigma_z})
+        reference = np.array([
+            (lambda psi: (psi.conj() @ (observable @ psi)).real)(
+                vectors @ (np.exp(-1j * energies * t) * amps))
+            for t in result.t])
+        got = np.asarray(result.expect["sz"]).reshape(len(result.t), -1)[:, 0]
+        assert np.max(np.abs(got - reference)) < 1e-3
+
+
+def test_every_pair_of_comb_integrators_agrees_to_second_order():
+    """All three solve the same H(t), so each pairwise difference vanishes as dt^2.
+
+    This is what checks that a new comb integrator carries the *same physics* rather
+    than merely something plausible: a wrong term -- a coupling attached to the
+    wrong mode, say, which leaves H Hermitian and the run stable -- shows up as a
+    wrong convergence order, not as a larger constant.
+    """
+    series = {method: [] for method in COMB_METHODS}
+    for dt in (0.04, 0.02, 0.01):
+        for method in COMB_METHODS:
+            result = _comb(3).run(
+                dt=dt, n_steps=int(round(0.2 / dt)), method=method, bond_dim=64,
+                trunc_eps=1e-10, observables={"sz": sigma_z})
+            series[method].append(np.asarray(result.expect["sz"]))
+    for index, first in enumerate(COMB_METHODS):
+        for second in COMB_METHODS[index + 1:]:
+            errors = [float(np.max(np.abs(a - b)))
+                      for a, b in zip(series[first], series[second])]
+            assert errors[0] < 1e-4, (first, second, errors)
+            for coarse, fine in zip(errors, errors[1:]):
+                assert 3.4 < coarse / fine < 4.6, (
+                    f"{first} vs {second} is not second order: {errors}")
+
+
+def test_two_site_tdvp_does_not_beat_a_trotter_step_at_a_binding_cap():
+    """Pin the measured fact, because the intuition points the other way.
+
+    One-site TDVP works strictly inside a fixed-bond manifold and never truncates,
+    so it is tempting to assume a capped two-site TDVP inherits that.  It does not:
+    ``tdvp2sweep`` splits every two-site block with a truncating SVD, so once the
+    cap binds it discards weight exactly as a Trotter step does.
+
+    Each method is compared against *its own* uncapped limit, which isolates the
+    cap's cost.  (Averaging the two methods' uncapped runs does not work -- their
+    mutual difference exceeds the cap error, so every capped run sits half that
+    distance from the average and the cap becomes invisible.)
+    """
+    cache = {}
+
+    def run(method, cap):
+        if (method, cap) not in cache:
+            result = _comb(2, nm=4).run(
+                dt=0.02, n_steps=20, method=method, bond_dim=cap,
+                trunc_eps=1e-12, observables={"sz": sigma_z})
+            cache[method, cap] = np.asarray(result.expect["sz"])
+        return cache[method, cap]
+
+    tight = {}
+    for method in (COMB_MPO, COMB_TDVP2):
+        uncapped = run(method, None)
+        errors = [float(np.max(np.abs(run(method, cap) - uncapped)))
+                  for cap in (3, 5)]
+        assert errors[0] > errors[1], f"{method}: a looser cap must not be worse"
+        tight[method] = errors[0]
+
+    ratio = tight[COMB_MPO] / tight[COMB_TDVP2]
+    assert 0.5 < ratio < 2.0, (
+        "the cap is expected to cost the two integrators about the same; if this "
+        f"has changed, re-measure before claiming otherwise (ratio {ratio:.2f})")
+
+
+def test_unknown_comb_run_options_are_rejected():
+    """A misspelled numerical option must not be accepted and ignored."""
+    for method in (COMB_TEBD, COMB_MPO, COMB_TDVP2):
+        with pytest.raises(TypeError, match=r"unexpected run option.*trunc_epz"):
+            _comb(2).run(dt=0.02, n_steps=1, method=method,
+                         trunc_epz=1e-8, observables={"sz": sigma_z})
+
+
+def test_branch_workers_is_not_a_public_run_option():
+    """Concurrent writes through a shared system tensor are not a valid engine."""
+    with pytest.raises(TypeError, match=r"unexpected run option.*branch_workers"):
+        _comb(3).run(dt=0.02, n_steps=1, method=COMB_MPO,
+                     branch_workers=4, observables={"sz": sigma_z})
+
+
+def _two_line_bath(freqs, strengths, dph, op, temperature=None):
+    """A vibronic bath of the given discrete lines and no continuum.
+
+    ``n_modes`` must be the thermofield-doubled line count: the resolver refuses a
+    smaller one, because at finite temperature each physical line becomes a pair.
+    """
+    freqs = np.asarray(freqs, float)
+    doubled = 2 * len(freqs) if temperature is not None else len(freqs)
+    return Bath.vibronic(
+        freqs, np.asarray(strengths, float) ** 2 / freqs ** 2,
+        continuum=None, temperature=temperature, domain=(-40.0, 40.0),
+        n_modes=doubled, phys_dim=dph, discretization="legendre").bind(op)
+
+
+def test_splitting_a_bath_across_branches_is_exact():
+    """Two one-mode baths on a site must equal one two-mode bath on that site.
+
+    The bath Hamiltonian is a sum over independent oscillators, so partitioning
+    them between branches is an identity, not an approximation.  That makes this the
+    sharpest available check on the per-branch bookkeeping the comb planner does --
+    node allocation, ``dims``, the edge list and the continuation signature -- since
+    any mistake there shows up as a *physics* difference rather than a crash.
+    """
+    freqs, strengths = np.array([3.0, 11.0]), np.array([0.5, 0.35])
+    together = _two_line_bath(freqs, strengths, 6, PROJECTOR)
+    apart = [_two_line_bath(freqs[k:k + 1], strengths[k:k + 1], 6, PROJECTOR)
+             for k in range(2)]
+
+    series = []
+    for spec in (together, apart):
+        model = Fishbone(sites=[1.0 * sigma_x], baths=[spec])
+        result = model.run(dt=0.02, n_steps=20, method=COMB_MPO, bond_dim=64,
+                           trunc_eps=1e-12, observables={"sz": sigma_z})
+        series.append(
+            np.asarray(result.expect["sz"]).reshape(len(result.t), -1)[:, 0])
+    assert np.max(np.abs(series[0] - series[1])) < 3e-8, (
+        "splitting a bath between branches changed the dynamics")
+
+
+def test_a_site_may_carry_baths_with_different_phys_dim():
+    """Each branch keeps its own truncation, so parts can be sized independently.
+
+    This is what makes a split worthwhile beyond the chain-mixing question: modes
+    that are barely populated do not need the ``phys_dim`` the strongly driven ones
+    do, and before this a site had a single bath and therefore a single value.
+    """
+    freqs, strengths = np.array([3.0, 11.0]), np.array([0.5, 0.35])
+    apart = [_two_line_bath(freqs[:1], strengths[:1], 6, PROJECTOR),
+             _two_line_bath(freqs[1:], strengths[1:], 3, PROJECTOR)]
+    model = Fishbone(sites=[1.0 * sigma_x], baths=[apart])
+    result = model.run(dt=0.02, n_steps=4, method=COMB_MPO, bond_dim=32,
+                       trunc_eps=1e-10, observables={"sz": sigma_z})
+    # one electronic site plus one mode per branch, at 6 and 3 levels
+    dims = sorted(t.shape[-1] for t in result.checkpoint.tensors)
+    assert dims == [2, 3, 6], dims
+
+
+def test_an_unbound_list_of_baths_is_rejected():
+    """Several baths require explicit operators; their position has no meaning."""
+    raw = Bath(J=_J, domain=DOM, n_modes=2, phys_dim=4)
+    with pytest.raises(ValueError, match="bind every coupling operator explicitly"):
+        Fishbone._site_baths([raw, raw])
+
+
+@pytest.mark.parametrize("method", COMB_METHODS)
+def test_noncommuting_baths_on_one_site_are_second_order(method):
+    """Local bath branches need a symmetric split when their operators differ."""
+    from scipy.linalg import expm
+
+    h_sys = 0.3 * sigma_z + 0.7 * sigma_x
+    frequencies = (2.0, 3.0)
+    huang_rhys = (0.08, 0.05)
+    dimension = 4
+    baths = [
+        Bath.vibronic([frequencies[0]], [huang_rhys[0]],
+                      phys_dim=dimension).bind(sigma_z),
+        Bath.vibronic([frequencies[1]], [huang_rhys[1]],
+                      phys_dim=dimension).bind(sigma_x),
+    ]
+    destroy = annihilate(dimension)
+    number = destroy.T @ destroy
+    position = destroy + destroy.T
+    identity = np.eye(dimension)
+    full = np.kron(np.kron(h_sys, identity), identity)
+    full += frequencies[0] * np.kron(np.kron(np.eye(2), number), identity)
+    full += frequencies[1] * np.kron(np.kron(np.eye(2), identity), number)
+    full += frequencies[0] * np.sqrt(huang_rhys[0]) * np.kron(
+        np.kron(sigma_z, position), identity)
+    full += frequencies[1] * np.sqrt(huang_rhys[1]) * np.kron(
+        np.kron(sigma_x, identity), position)
+    initial = np.zeros(2 * dimension ** 2, complex)
+    initial[0] = 1.0
+    end_time = 0.2
+    final = expm(-1j * full * end_time) @ initial
+    observable = np.kron(np.kron(sigma_z, identity), identity)
+    exact = np.vdot(final, observable @ final).real
+
+    errors = []
+    for dt in (0.04, 0.02, 0.01):
+        result = Fishbone(sites=[h_sys], baths=[baths]).run(
+            dt=dt, n_steps=int(round(end_time / dt)), method=method,
+            bond_dim=200, trunc_eps=1e-13, observables={"sz": sigma_z})
+        got = np.asarray(result.expect["sz"])[-1, 0]
+        errors.append(abs(got - exact))
+    assert 3.7 < errors[0] / errors[1] < 4.3, errors
+    assert 3.7 < errors[1] / errors[2] < 4.3, errors

@@ -44,9 +44,8 @@ mode k  ->  CARRY->CARRY: 1     CARRY->DONE: (a+a^dag)
 so the bond profile is $[1, 3, 3, \dots, 3, 1]$ — one larger than the
 interaction-picture star, and still independent of $N$.  The last mode closes to
 bond 1 and must emit **no** identity from `START` or `CARRY`, or the operator would
-contain a term with the coupling left dangling.  This is
-`SchrodingerRepresentation.tdvp_mpo`; it is exact (verified
-elementwise against the dense $H$, and Hermitian).
+contain a term with the coupling left dangling. This construction is the
+Hermitian MPO returned by `SchrodingerRepresentation.tdvp_mpo`.
 
 ### Star or chain?
 
@@ -66,21 +65,10 @@ full system–bath correlation *and* the star interaction graph gives no localit
 represent it.  Expect the bond dimension to grow faster than for
 {doc}`/methods/schrodinger/chain` on the same problem.
 
-What the static star is good for is **accuracy per step** and as an independent
-check: it shares no code path with the chain MPO beyond the TDVP sweep itself, so
-agreement between the two is a genuine cross-validation.  Measured against exact
-diagonalization of the discretized star (3 modes, $d=5$, 10 steps of $dt=0.05$):
-
-| method | representation | max error vs exact |
-|---|---|---|
-| `schrodinger-star-tdvp2` | Schrödinger, static MPO | $7.3\times10^{-11}$ |
-| `schrodinger-star-tdvp1` | Schrödinger, static MPO | $1.1\times10^{-9}$ |
-| `schrodinger-chain-tdvp1` | Schrödinger, chain MPO | $5.7\times10^{-8}$ |
-| `interaction-chain-tdvp1` | interaction, rebuilt MPO | $5.4\times10^{-4}$ |
-
-The two static-star methods are limited by the TDVP
-sweep, the chain adds the tridiagonalization, and the interaction-picture star adds
-the per-step midpoint rebuild.
+The static star is also useful as an independent numerical check: it shares no
+Hamiltonian-MPO construction with the chain representation beyond the TDVP sweep.
+Agreement after independently converging both calculations is therefore a useful
+cross-validation.
 
 Two variants:
 

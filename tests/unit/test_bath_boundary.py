@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from fishbonett import Bath, SystemBath
+from fishbonett.bath.spec import thermalize
 from fishbonett.operators import sigma_x, sigma_z
 
 
@@ -114,3 +115,32 @@ def test_matching_legacy_duplicate_remains_compatible():
     model = SystemBath(h=0.5 * sigma_x,
                        coupling=[sigma_z, sigma_x], bath=bath)
     assert model.coupled_bath.is_multichannel
+
+
+def test_thermalized_ohmic_density_has_the_correct_zero_frequency_limit():
+    density = thermalize(lambda w: 0.4 * w, beta=2.0)
+    assert density(0.0) == pytest.approx(0.2, rel=1e-7)
+    assert density(1e-9) == pytest.approx(0.2, rel=1e-7)
+    assert density(-1e-9) == pytest.approx(0.2, rel=1e-7)
+
+
+def test_thermalize_rejects_nonphysical_beta():
+    with pytest.raises(ValueError, match="beta must be finite and positive"):
+        thermalize(_J, beta=0.0)
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"n_modes": 1.5}, "n_modes"),
+        ({"n_modes": 0}, "n_modes"),
+        ({"phys_dim": 0}, "phys_dim"),
+        ({"temperature": 0.0}, "temperature"),
+        ({"beta": -1.0}, "beta"),
+        ({"temperature": 1.0, "beta": 1.0}, "temperature or beta"),
+    ],
+)
+def test_bath_rejects_invalid_discretization_sizes_and_temperatures(
+        kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        Bath(J=_J, domain=(0.0, 10.0), **kwargs)

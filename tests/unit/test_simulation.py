@@ -120,6 +120,41 @@ def test_multisite_models_compile_through_simulation_plan(monkeypatch):
     ]
 
 
+def test_system_bath_rejects_unknown_engine_options():
+    from fishbonett import Bath, SystemBath
+    from fishbonett.operators import sigma_x, sigma_z
+
+    model = SystemBath(
+        h=sigma_x, coupling=sigma_z,
+        bath=Bath(
+            J=lambda w: 0.2 * w * np.exp(-w / 5.0),
+            domain=(0.0, 20.0), n_modes=2, phys_dim=3))
+    with pytest.raises(TypeError, match=r"unexpected run option.*trunc_epz"):
+        model.run(
+            dt=0.02, n_steps=1, method="interaction-chain-tebd",
+            trunc_epz=1e-5)
+    with pytest.raises(TypeError, match=r"unexpected run option.*initial_bond"):
+        model.run(
+            dt=0.02, n_steps=1, method="schrodinger-chain-tdvp2",
+            initial_bond=4)
+
+
+def test_binary_tree_reports_progress_each_step():
+    from fishbonett import Bath, SystemBath
+    from fishbonett.operators import sigma_x, sigma_z
+
+    model = SystemBath(
+        h=sigma_x, coupling=sigma_z,
+        bath=Bath.vibronic([1.0, 2.0], [0.1, 0.05], phys_dim=3))
+    updates = []
+    model.run(
+        dt=0.02, n_steps=2, method="interaction-chain-tree-tebd",
+        bond_dim=16, progress=updates.append)
+    assert [item["step"] for item in updates] == [0, 1]
+    assert [item["t"] for item in updates] == pytest.approx([0.02, 0.04])
+    assert all(item["bond"] >= 1 for item in updates)
+
+
 def test_run_seed_is_reproducible_and_does_not_touch_global_rng():
     from fishbonett import Bath, SystemBath
     from fishbonett.operators import sigma_x, sigma_z
@@ -240,3 +275,27 @@ def test_resumed_comb_rejects_a_different_hamiltonian(tmp_path):
     with pytest.raises(ValueError, match="bath_horizon"):
         model.run(n_steps=2, resume=first.checkpoint,
                   **{**kw, "bath_horizon": 0.05})
+
+
+def test_resumed_comb_rejects_changed_resolved_bath_coefficients():
+    """Equal topology is insufficient: the finite bath measure must also match."""
+    import numpy as np
+    from fishbonett import Bath
+    from fishbonett.models import Fishbone
+
+    occupied = np.diag([0.0, 1.0])
+
+    def model(frequency):
+        bath = Bath.vibronic([frequency], [0.08], phys_dim=3)
+        return Fishbone(
+            sites=[0.4 * np.array([[0.0, 1.0], [1.0, 0.0]])],
+            baths=[bath.bind(occupied)])
+
+    options = dict(
+        dt=0.01, n_steps=1,
+        method="interaction-chain-fishbone-trotter-mpo",
+        bath_horizon=0.02, bond_dim=32, trunc_eps=1e-10,
+        observables={"population": occupied})
+    first = model(1.0).run(**options)
+    with pytest.raises(ValueError, match="does not match this resolved model"):
+        model(9.0).run(**{**options, "resume": first.checkpoint})
