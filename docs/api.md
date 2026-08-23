@@ -34,6 +34,7 @@ The supported Hamiltonian representations are
    fishbonett.models.propagate
    fishbonett.models.result
    fishbonett.system
+   fishbonett.targets
 ```
 
 ## Representations
