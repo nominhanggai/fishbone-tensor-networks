@@ -2,6 +2,7 @@
 
 import importlib.util
 from pathlib import Path
+import re
 import sys
 
 import numpy as np
@@ -39,6 +40,24 @@ def test_tutorial_profiles_have_fast_default_and_automatic_resolved_runs(name):
     assert round(smoke_horizon / smoke_step) == 4
     assert docs.n_modes is None or docs.n_modes >= 12
     assert reference.n_modes is None
+
+
+@pytest.mark.parametrize("name", TUTORIALS)
+def test_tutorial_pages_are_self_contained(name):
+    """A reader must not need to reverse-engineer the corresponding example."""
+    page = (ROOT / "docs" / "tutorials" / f"{name}.md").read_text(
+        encoding="utf-8"
+    )
+    programs = re.findall(r"```python\n(.*?)```", page, flags=re.DOTALL)
+    assert "Complete runnable" in page
+    assert "Common mistakes" in page
+    assert programs
+    program = max(programs, key=len)
+    assert "from fishbonett import" in program
+    assert ".run(" in program
+    assert "observables=" in program
+    assert ".expect[" in program
+    assert "matplotlib" in program
 
 
 def test_vibronic_dimer_smoke_conserves_the_excitation():
