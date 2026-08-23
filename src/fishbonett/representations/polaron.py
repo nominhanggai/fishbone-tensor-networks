@@ -12,9 +12,8 @@ transformed initial state, and recovery of laboratory observables.
 import numpy as np
 import scipy.linalg as la
 
-from fishbonett.bath._coefficients import require_resolved
-from fishbonett.bath.chain import star_transform
-from fishbonett.bath.conventions import reorganization_energy
+from fishbonett.bath._coefficients import require_resolved, star_coefficients
+from fishbonett.bath.lanczos import lanczos
 from fishbonett.linalg import expm_gate
 from fishbonett.operators import annihilate
 from fishbonett.representations._mpo import identity_product, product_sum_mpo
@@ -28,6 +27,37 @@ def _coherent(dimension, displacement):
     generator = destroy.conj().T - destroy
     vacuum = np.eye(dimension, dtype=complex)[:, 0]
     return la.expm(displacement * generator) @ vacuum
+
+
+def _validate_infrared_integrability(density, domain):
+    """Reject a continuum whose Lang--Firsov displacement norm diverges.
+
+    The norm is proportional to ``integral J(w)/w**2 dw``.  When the domain
+    touches zero, estimate the local power law on each represented side and
+    require ``J(w) = O(|w|**s)`` with ``s > 1``.  A gapped domain needs no
+    extrapolation.
+    """
+    left, right = map(float, domain)
+    if not left <= 0.0 <= right:
+        return
+    sides = [sign for sign, extent in ((1.0, right), (-1.0, -left)) if extent > 0]
+    for sign in sides:
+        extent = right if sign > 0 else -left
+        frequency = extent * np.power(10.0, -np.arange(3.0, 9.0))
+        values = np.array([float(density(sign * value)) for value in frequency])
+        if np.any(~np.isfinite(values)) or np.any(values < 0):
+            raise ValueError("spectral density must be finite and non-negative")
+        active = values > np.finfo(float).tiny
+        if np.count_nonzero(active) < 3:
+            continue
+        slope = np.polyfit(
+            np.log(frequency[active]), np.log(values[active]), 1
+        )[0]
+        if slope <= 1.0 + 1e-3:
+            raise ValueError(
+                "the polaron representation requires finite integral "
+                "J(w)/w**2 near zero; use a gapped or super-Ohmic density"
+            )
 
 
 class PolaronRepresentation:
@@ -71,22 +101,41 @@ class PolaronRepresentation:
         if len(densities) != 1:
             raise ValueError("the polaron representation requires one channel")
         density = densities[0]
+        if self.bath.continuum_present:
+            _validate_infrared_integrability(density, self.bath.domain)
 
-        def displaced_density(frequency):
-            if abs(frequency) < 1e-15:
-                return 0.0
-            return density(frequency) / frequency ** 2
+        # Build the polaron from the *same finite star Hamiltonian* propagated by
+        # the other representations.  This includes explicit vibronic lines and
+        # makes the counterterm exactly consistent with the discretized model.
+        star = star_coefficients(self.bath)
+        star_frequencies = np.asarray(star.frequencies, float)
+        star_couplings = np.asarray(star.couplings[0], float)
+        active = np.abs(star_couplings) > 100 * np.finfo(float).eps
+        if np.any(np.abs(star_frequencies[active]) <= 100 * np.finfo(float).eps):
+            raise ValueError(
+                "the finite bath contains a coupled zero-frequency mode, so the "
+                "polaron displacement diverges"
+            )
+        star_displacements = np.divide(
+            star_couplings, star_frequencies,
+            out=np.zeros_like(star_couplings), where=star_frequencies != 0,
+        )
+        reorganization = float(np.sum(
+            np.divide(
+                star_couplings**2, star_frequencies,
+                out=np.zeros_like(star_couplings), where=star_frequencies != 0,
+            )
+        ))
 
-        star_frequencies, star_displacements, transform = star_transform(
-            displaced_density, self.bath.n_modes, list(self.bath.domain),
-            self.bath.discretizer())
-        star_frequencies = np.asarray(star_frequencies, float)
-        star_displacements = np.asarray(star_displacements, float)
-        chain_matrix = transform @ np.diag(star_frequencies) @ transform.T
+        if len(star_frequencies) == 1:
+            chain_matrix = np.diag(star_frequencies)
+        else:
+            chain_matrix, _ = lanczos(
+                np.diag(star_frequencies), star_displacements
+            )
         chain_frequencies = np.diagonal(chain_matrix)
         chain_hoppings = np.diagonal(chain_matrix, -1)
         chain_displacement = np.linalg.norm(star_displacements)
-        reorganization = reorganization_energy(density, self.bath.domain)
 
         if self.name == "polaron-star":
             self.frequencies = np.asarray(star_frequencies, float)
@@ -272,7 +321,7 @@ class PolaronRepresentation:
                         optimize=True)
                 transformed[left, right] = environment.reshape(-1)[0]
         lab = self.eigenvectors @ transformed @ self.eigenvectors.conj().T
-        return lab / np.trace(lab).real
+        return lab / np.trace(lab)
 
     def recover_pair_rdm(self, theta):
         """Fast laboratory RDM recovery for the local chain representation."""
@@ -291,4 +340,4 @@ class PolaronRepresentation:
                 out[left, right] = np.einsum(
                     "ab,ba->", transformed[left, :, right, :], displacement)
         lab = self.eigenvectors @ out @ self.eigenvectors.conj().T
-        return lab / np.trace(lab).real
+        return lab / np.trace(lab)

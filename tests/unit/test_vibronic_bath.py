@@ -64,3 +64,17 @@ def test_correlation_controlled_compression_reports_achieved_error():
     error /= abs(bath.correlation([0])[0])
     assert error <= 1e-3 * 1.001
     assert compressed.n_modes <= bath.n_modes
+
+
+def test_thermal_compression_retains_the_signed_effective_measure():
+    bath = Bath.vibronic(
+        [1.0, 2.0, 4.0], [0.2, 0.05, 0.01], beta=0.8,
+    ).resolved(0.2)
+    compressed = bath.compressed(0.2, correlation_tol=1e-3)
+    assert compressed.thermalized
+    assert any(value < 0 for value in compressed.discrete_frequencies)
+    times = np.linspace(0.0, 0.2, 101)
+    relative_error = np.max(
+        np.abs(bath.correlation(times) - compressed.correlation(times))
+    ) / abs(bath.correlation([0.0])[0])
+    assert relative_error <= 1.01e-3

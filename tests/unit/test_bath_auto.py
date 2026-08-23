@@ -22,6 +22,16 @@ def test_reorganization_energy_drude():
     assert abs(reorganization_energy(J) - lam) < 1e-2
 
 
+@pytest.mark.parametrize("frequency_scale", [1e-10, 1.0, 1e10])
+def test_automatic_reorganization_is_independent_of_frequency_units(
+        frequency_scale):
+    lam = 0.7
+    density = lambda w: (
+        2 * lam * frequency_scale * w / (w**2 + frequency_scale**2)
+    )
+    assert reorganization_energy(density) == pytest.approx(lam, rel=2e-6)
+
+
 def test_auto_domain_covers_reorg_energy():
     lo, hi = auto_domain(_ohmic, coverage=0.999)
     assert lo == 0.0 and 25.0 < hi < 45.0          # ~34.5 for this bath

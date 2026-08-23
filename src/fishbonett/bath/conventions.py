@@ -11,6 +11,7 @@ numerical helpers here prevents representation implementations from silently cho
 different factor of ``pi`` or a different zero-frequency limit.
 """
 import numpy as np
+from scipy.integrate import trapezoid
 
 __all__ = [
     "integrated_free_phase", "reorganization_energy", "star_coupling_squared",
@@ -58,4 +59,4 @@ def reorganization_energy(density, domain, *, points=4001):
         else:
             zero_limit = density(-probe) / (-probe)
         values[~mask] = zero_limit
-    return float(np.trapezoid(values, frequency) / np.pi)
+    return float(trapezoid(values, frequency) / np.pi)

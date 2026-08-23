@@ -13,8 +13,9 @@ field                single-system models         multi-site models
                                                  dimensions differ
 ``max_bond``         peak bond per step          same
 ``method``           the method that ran         same
-``meta``             ``{}``                      ``{"n_sites": n}``
-``checkpoint``       ``None``                    resumable tree state
+``meta``             method and settings         method, settings, ``n_sites``
+``checkpoint``       currently ``None``          resumable tree state for
+                                                 supported tree methods
 ===================  ==========================  ==============================
 
 ``system-bath`` and ``multichannel`` are single-system; ``comb`` and ``site-tree``
@@ -23,7 +24,9 @@ are multi-site.  See :mod:`fishbonett.models.registry`.
 from dataclasses import dataclass, field
 import hashlib
 import json
+import os
 from pathlib import Path
+import tempfile
 
 import numpy as np
 
@@ -128,9 +131,38 @@ class SimulationCheckpoint:
                 "remain unchanged")
         from fishbonett.states.tree import TreeTensorNetwork
         state = TreeTensorNetwork(dims, edges, root=0)
+        if tuple(map(int, dims)) != self.dims:
+            raise ValueError("checkpoint physical dimensions do not match the model")
+        normalized_edges = tuple(tuple(map(int, edge)) for edge in edges)
+        if normalized_edges != self.edges:
+            raise ValueError("checkpoint topology does not match the model")
         if len(self.tensors) != state.n:
             raise ValueError("checkpoint tensor count does not match model topology")
-        state.T = [np.array(value, complex, copy=True) for value in self.tensors]
+        if self.oc < 0 or self.oc >= state.n:
+            raise ValueError("checkpoint orthogonality centre is outside the state")
+        tensors = [np.array(value, complex, copy=True) for value in self.tensors]
+        for node, tensor in enumerate(tensors):
+            expected_rank = len(state.neighbours(node)) + 1
+            if tensor.ndim != expected_rank:
+                raise ValueError(
+                    f"checkpoint tensor {node} has rank {tensor.ndim}, "
+                    f"expected {expected_rank}"
+                )
+            if tensor.shape[-1] != state.dims[node]:
+                raise ValueError(
+                    f"checkpoint tensor {node} has physical dimension "
+                    f"{tensor.shape[-1]}, expected {state.dims[node]}"
+                )
+            if not np.all(np.isfinite(tensor)):
+                raise ValueError(f"checkpoint tensor {node} contains non-finite values")
+        for left, right in normalized_edges:
+            left_leg = state.neighbours(left).index(right)
+            right_leg = state.neighbours(right).index(left)
+            if tensors[left].shape[left_leg] != tensors[right].shape[right_leg]:
+                raise ValueError(
+                    f"checkpoint bond {(left, right)} has incompatible dimensions"
+                )
+        state.T = tensors
         state.oc = int(self.oc)
         return state
 
@@ -146,7 +178,21 @@ class SimulationCheckpoint:
             "n_tensors": len(self.tensors),
         }
         arrays = {f"tensor_{i}": value for i, value in enumerate(self.tensors)}
-        np.savez_compressed(path, metadata=np.array(json.dumps(metadata)), **arrays)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=f".{path.name}.", suffix=".npz",
+            delete=False,
+        )
+        temporary = Path(handle.name)
+        handle.close()
+        try:
+            np.savez_compressed(
+                temporary, metadata=np.array(json.dumps(metadata)), **arrays
+            )
+            os.replace(temporary, path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
         return path
 
     @classmethod

@@ -61,7 +61,9 @@ def drude(w, lam, gam=100.):
 
 def brownian(w, lam, gam, w0=1):
     """Brownian-oscillator density centred on ``w0`` with damping ``gam``."""
-    return 2 * lam * gam * w0 ** 2 * w / ((w0 ** 2 - w ** 2) + gam ** 2 * w ** 2)
+    return 2 * lam * gam * w0 ** 2 * w / (
+        (w0 ** 2 - w ** 2) ** 2 + gam ** 2 * w ** 2
+    )
 
 
 def natphys(w, lam):

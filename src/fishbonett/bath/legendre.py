@@ -51,13 +51,18 @@ def get_legendre_recursion(n, domain):
     ``beta`` length ``n-1``; together they are the Jacobi matrix whose eigenvalues
     are the quadrature nodes.
     """
-    l = domain[0]
-    r = domain[1]
-    assert l < r
-    a = (l+ r) / 2
+    if (not isinstance(n, (int, np.integer))
+            or isinstance(n, (bool, np.bool_)) or n < 1):
+        raise ValueError("n must be a positive integer")
+    l = float(domain[0])
+    r = float(domain[1])
+    if not np.isfinite(l) or not np.isfinite(r) or l >= r:
+        raise ValueError("domain must contain two finite values with left < right")
+    a = (l + r) / 2
     a = np.repeat(a, n)
-    _temp = (r-l)/2
-    b = np.vectorize(lambda x: _temp * x / np.sqrt(4 * x ** 2 - 1))(np.arange(1, n))
+    _temp = (r - l) / 2
+    k = np.arange(1, n, dtype=float)
+    b = _temp * k / np.sqrt(4 * k ** 2 - 1)
     return a, b
 
 

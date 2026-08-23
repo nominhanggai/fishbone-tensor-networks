@@ -19,6 +19,13 @@ def boys_func(mat_mu):
     mat_mu : ndarray, shape (dim, dim, 3)
         State (diagonal) and transition (off-diagonal) dipole vectors.
     """
+    mat_mu = np.asarray(mat_mu)
+    if (mat_mu.ndim != 3 or mat_mu.shape[0] == 0
+            or mat_mu.shape[0] != mat_mu.shape[1]
+            or not np.all(np.isfinite(mat_mu))):
+        raise ValueError(
+            "mat_mu must be a finite array with shape (n_states, n_states, n_components)"
+        )
     dim = mat_mu.shape[0]
     return sum(norm(mat_mu[i, i, :] - mat_mu[j, j, :]) ** 2
                for i, j in it.combinations(range(dim), 2))
@@ -42,14 +49,11 @@ def boys_loc(mat_mu, u_final):
         mu_jj = mat_mu_after[j, j]
         F = norm(mu_ij) ** 2 - .25 * norm(mu_ii - mu_jj) ** 2
         G = mu_ij @ (mu_ii - mu_jj)
-        theta1 = np.arccos(-F / np.sqrt(F ** 2 + G ** 2))
-        theta2 = np.arcsin(G / np.sqrt(F ** 2 + G ** 2))
-        t1_l = [theta1 + 2 * k * np.pi for k in range(-2, 3)] + \
-               [2 * k * np.pi - theta1 for k in range(-1, 1)]
-        t2_l = [theta2 + 2 * k * np.pi for k in range(-2, 3)] + \
-               [(2 * k + 1) * np.pi - theta2 for k in range(-1, 1)]
-        val_l = [a for a, b in it.product(t1_l, t2_l) if np.abs(a - b) <= 1e-4]
-        theta = .25 * val_l[int(np.argmin(np.abs(val_l)))]
+        if np.hypot(F, G) <= np.finfo(float).eps:
+            # The pair is already completely degenerate in the localization
+            # functional; every angle is equivalent, so leave it unchanged.
+            continue
+        theta = 0.25 * np.arctan2(G, -F)
         u = np.eye(dim)
         u[i, j] = np.sin(theta)
         u[j, i] = -np.sin(theta)
@@ -64,14 +68,25 @@ def diabatize(mat_mu, tol=1e-3, max_sweeps=1000):
 
     Returns the accumulated rotation ``u`` and the localized dipole stack.
     """
+    raw = np.asarray(mat_mu)
+    if np.iscomplexobj(raw) and np.any(np.abs(raw.imag) > 1e-14):
+        raise ValueError("Boys localization currently requires real dipole matrices")
+    mat_mu = np.asarray(raw.real, float)
+    boys_func(mat_mu)  # validates shape and finiteness
+    if not np.isfinite(tol) or tol < 0:
+        raise ValueError("tol must be finite and non-negative")
+    if (not isinstance(max_sweeps, (int, np.integer))
+            or isinstance(max_sweeps, (bool, np.bool_)) or max_sweeps < 1):
+        raise ValueError("max_sweeps must be a positive integer")
     dim = mat_mu.shape[0]
     u_final = np.eye(dim)
-    boys_value, boys_value_0 = 0.0, 1.0
     for _ in range(max_sweeps):
-        if abs(boys_value - boys_value_0) <= tol:
-            break
         u_final, mat_mu, boys_value, boys_value_0 = boys_loc(mat_mu, u_final)
-    return u_final, mat_mu
+        if abs(boys_value - boys_value_0) <= tol:
+            return u_final, mat_mu
+    raise RuntimeError(
+        f"Boys localization did not converge within {max_sweeps} sweeps"
+    )
 
 
 if __name__ == "__main__":

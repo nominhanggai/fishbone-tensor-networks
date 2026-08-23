@@ -31,7 +31,8 @@ from fishbonett.models.system_bath import SystemBath
 from fishbonett.models.fishbone import Fishbone, TreeFishbone
 from fishbonett.models.simulation import SimulationPlan, compile_plan
 from fishbonett.models.registry import (
-    MODELS, REPRESENTATIONS, Model, Representation, METHOD_REPRESENTATIONS,
+    MODELS, REPRESENTATIONS, Model, RepresentationSpec, MethodSpec,
+    METHOD_REPRESENTATIONS,
     models_of, representations_of, methods_of, all_methods, model,
     methods_by_representation, representation_label, describe_taxonomy,
 )
@@ -41,7 +42,8 @@ __all__ = [
     "SystemBath", "Fishbone", "TreeFishbone", "Result", "SimulationCheckpoint",
     "SimulationPlan", "compile_plan",
     # the taxonomy
-    "MODELS", "REPRESENTATIONS", "Model", "Representation", "METHOD_REPRESENTATIONS",
+    "MODELS", "REPRESENTATIONS", "Model", "RepresentationSpec", "MethodSpec",
+    "METHOD_REPRESENTATIONS",
     "models_of", "representations_of", "methods_of", "all_methods", "model",
     "methods_by_representation", "representation_label", "describe_taxonomy",
 ]

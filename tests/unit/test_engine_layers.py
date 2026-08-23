@@ -48,7 +48,6 @@ def test_modetree_facade_preserves_established_entry_points():
     assert modetree.build_tree_mpo is core.build_tree_mpo
     assert modetree.apply_op_node is sweeps.apply_op_node
     assert modetree.truncate_from_root is sweeps.truncate_from_root
-    assert modetree.run_tree_mpo is driver.run_tree_mpo
     assert modetree.run_tree_tebd is driver.run_tree_tebd
 
 

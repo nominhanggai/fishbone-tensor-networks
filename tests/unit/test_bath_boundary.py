@@ -30,9 +30,10 @@ def test_bath_is_the_only_public_discretization_input():
     interaction = InteractionRepresentation(
         representation="interaction-star", h_sys=sigma_x,
         coupling=sigma_z, bath=bath).build()
+    polaron_bath = Bath(J=_J, domain=(0.2, 40.0), n_modes=3, phys_dim=4)
     polaron = PolaronRepresentation(
         representation="polaron-chain", h_sys=sigma_x,
-        coupling=sigma_z, bath=bath).build()
+        coupling=sigma_z, bath=polaron_bath).build()
 
     assert len(schrodinger.tdvp_mpo()) == 4
     assert len(interaction.tdvp_mpo(0.0)) == 4
@@ -55,13 +56,16 @@ def test_low_level_representation_requires_a_resolved_bath():
             coupling=sigma_z, bath=bath)
 
 
-def test_automatic_resolution_is_cached_per_run_horizon():
+def test_automatic_resolution_is_fresh_per_run_horizon():
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=None, phys_dim=4)
     coupled = bath.bind(sigma_z)
 
     first = coupled.resolved(0.2)
-    assert first is coupled.resolved(0.2)
+    second = coupled.resolved(0.2)
+    assert first is not second
+    assert first.bath.n_modes == second.bath.n_modes
     assert first is not coupled.resolved(0.3)
+    assert coupled.bath.n_modes is None
 
 
 def test_legacy_coupling_emits_a_migration_warning():

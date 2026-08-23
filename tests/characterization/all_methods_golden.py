@@ -79,8 +79,7 @@ def _model_for(key):
 def _fixed_bond():
     """Methods needing an explicit cap.  Read from wherever it currently lives so
     the harness survives the move of this table into the registry."""
-    for mod, name in (("fishbonett.models.registry", "FIXED_BOND_METHODS"),
-                      ("fishbonett.models.system_bath", "_FIXED_BOND_METHODS")):
+    for mod, name in (("fishbonett.models.registry", "BOND_CAP_REQUIRED_METHODS"),):
         try:
             return getattr(__import__(mod, fromlist=[name]), name)
         except AttributeError:

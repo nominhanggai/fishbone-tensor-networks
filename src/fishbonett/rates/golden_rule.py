@@ -26,11 +26,39 @@ below).  For the multi-state / higher-order corrections see
 """
 import numpy as np
 from scipy import integrate
+import warnings
 from fishbonett.bath.legendre import get_vn_squared
 
 
-def fgr_rate(c, e, kbT, _w, _v_sq):
-    """Golden-rule transfer rate ``2 c^2 Re int_0^inf dt e^{g(t)} e^{i e t}``.
+def _validated_star(kbT, frequencies, weights):
+    if not np.isfinite(kbT) or kbT <= 0:
+        raise ValueError("kbT must be finite and positive")
+    w = np.asarray(frequencies, float)
+    v_sq = np.asarray(weights, float)
+    if w.ndim != 1 or v_sq.shape != w.shape or w.size == 0:
+        raise ValueError("frequencies and squared couplings must be non-empty 1D arrays")
+    if (np.any(~np.isfinite(w)) or np.any(~np.isfinite(v_sq))
+            or np.any(w == 0) or np.any(v_sq < 0)):
+        raise ValueError(
+            "frequencies must be finite and non-zero and squared couplings "
+            "finite and non-negative"
+        )
+    return w, v_sq
+
+
+def _finite_window(t_max):
+    if t_max is None:
+        raise ValueError(
+            "a finite discrete star has a quasiperiodic correlation and cannot "
+            "be integrated to infinity; provide a convergence-tested t_max"
+        )
+    if not np.isfinite(t_max) or t_max <= 0:
+        raise ValueError("t_max must be finite and positive")
+    return float(t_max)
+
+
+def fgr_rate(c, e, kbT, _w, _v_sq, *, t_max=None):
+    """Windowed golden-rule integral ``2 c^2 Re int_0^t_max e^{g(t)+iet} dt``.
 
     Parameters
     ----------
@@ -44,42 +72,47 @@ def fgr_rate(c, e, kbT, _w, _v_sq):
         Star-mode frequencies and squared couplings, e.g. from
         :func:`fishbonett.bath.legendre.get_vn_squared`.
 
-    The time integral is taken to infinity by ``scipy.integrate.quad``; it
-    converges because ``Re g(t)`` decays.  A near-zero mode frequency makes
-    ``1/w^2`` blow up, so keep the discretization domain away from ``w = 0``.
+    A finite star correlation is quasiperiodic and does not decay at infinite
+    time, so ``t_max`` is required and must be checked for a stable rate plateau.
     """
-    w = np.array(_w)
-    v_sq = np.array(_v_sq)
+    t_max = _finite_window(t_max)
+    w, v_sq = _validated_star(kbT, _w, _v_sq)
     j_factor = (-v_sq / np.pi / w ** 2)
     coth = 1 / np.tanh(w / (2 * kbT))
     exponent = lambda t: np.sum(j_factor * (coth * (1 - np.cos(w * t)) + 1j * np.sin(t * w)))
     integrand = lambda t: np.real(np.exp(exponent(t)) * np.exp(1j * e * t))
-    integral, _ = integrate.quad(integrand, 0, np.inf, limit=5000)
+    integral, _ = integrate.quad(integrand, 0, t_max, limit=5000)
     return 2 * (c ** 2) * integral
 
 
 def fgr_decay_profile(e, kbT, _w, _v_sq, t):
-    """The lineshape decay ``Re e^{g(t)}`` on ``[0, t]``, sampled at 500 points.
+    """The lineshape magnitude ``|e^{g(t)}|`` on ``[0, t]`` at 500 points.
 
     A diagnostic for :func:`fgr_rate`: the rate integral only converges if this
     profile has decayed within the window.  Returns ``(t_grid, values)`` and warns
     when ``t < 5/e``, where the oscillatory factor ``e^{i e t}`` is not yet
     resolved.
     """
-    if t < 5 / e:
-        print("Warning: t is too small for this energy difference" + f"Recommend t > {5 / e}")
+    if not np.isfinite(t) or t <= 0:
+        raise ValueError("t must be finite and positive")
+    if e != 0 and t < 5 / abs(e):
+        warnings.warn(
+            f"t may be too short to resolve the energy difference; try t > {5 / abs(e):g}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     t = np.linspace(0, t, 500)
-    w = np.array(_w)
-    v_sq = np.array(_v_sq)
+    w, v_sq = _validated_star(kbT, _w, _v_sq)
     j_factor = (-v_sq / np.pi / w ** 2)
     coth = 1 / np.tanh(w / (2 * kbT))
     exponent = lambda t: np.sum(j_factor * (coth * (1 - np.cos(w * t)) + 1j * np.sin(t * w)))
-    integrand = lambda t: np.real(np.exp(exponent(t)))
+    integrand = lambda t: np.abs(np.exp(exponent(t)))
     integrand_discrete = np.vectorize(integrand)(t)
     return t, integrand_discrete
 
 
-def fgr_rate_by_order(c, e, kbT, _w, _v_sq, perturbation, order: int):
+def fgr_rate_by_order(c, e, kbT, _w, _v_sq, perturbation, order: int, *,
+                      t_max=None):
     """Golden-rule rate with an extra ``perturbation`` expanded to ``order``.
 
     Same integral as :func:`fgr_rate` with the additional factor
@@ -97,16 +130,21 @@ def fgr_rate_by_order(c, e, kbT, _w, _v_sq, perturbation, order: int):
             exp_approx += num / denom
         return exp_approx
 
+    if (not isinstance(order, (int, np.integer))
+            or isinstance(order, (bool, np.bool_)) or order < 0):
+        raise ValueError("order must be a non-negative integer")
+    t_max = _finite_window(t_max)
     p = perturbation
-    w = np.array(_w)
-    v_sq = np.array(_v_sq)
+    w, v_sq = _validated_star(kbT, _w, _v_sq)
     j_factor = (-v_sq / np.pi / w ** 2)
     coth = 1 / np.tanh(w / (2 * kbT))
 
     exponent = lambda t: np.sum(j_factor * (coth * (1 - np.cos(w * t)) + 1j * np.sin(t * w)))
     integrand = lambda t: np.real(np.exp(exponent(t)) * np.exp(1j * (e) * t) * taylor_exp(- 1j * p * t, order))
 
-    integral, _ = integrate.quad(integrand, 0, np.inf, limit=5000, epsrel=5e-25)
+    integral, _ = integrate.quad(
+        integrand, 0, t_max, limit=5000, epsrel=1e-10
+    )
     return 2 * (c ** 2) * integral
 
 
@@ -118,6 +156,9 @@ def marcus_rate(c: float, e: float, kbT: float, reorg_e: float):
     check: the two agree when ``kbT`` is large compared with the bath frequencies,
     and diverge when nuclear tunneling matters.
     """
+    if (not np.isfinite(kbT) or kbT <= 0 or not np.isfinite(reorg_e)
+            or reorg_e <= 0):
+        raise ValueError("kbT and reorg_e must be finite and positive")
     return 2 * np.pi * c ** 2 / np.sqrt(4 * np.pi * kbT * reorg_e) * np.exp(
         -(reorg_e - e) ** 2 / (4 * kbT * reorg_e))
 
@@ -148,11 +189,13 @@ if __name__ == "__main__":
 
     coup = 5e-3
     e = np.linspace(0.015, 0.03, 20)
-    rate_fgr = np.vectorize(lambda ei: fgr_rate(C_DA, ei - coup, kbT, w, v_sq)
+    rate_fgr = np.vectorize(lambda ei: fgr_rate(
+        C_DA, ei - coup, kbT, w, v_sq, t_max=5000.0)
                             )(e)
 
     order = 5
-    rate_fgr_perturbative = np.vectorize(lambda ei: fgr_rate_by_order(C_DA, ei, kbT, w, v_sq, coup, order)
+    rate_fgr_perturbative = np.vectorize(lambda ei: fgr_rate_by_order(
+        C_DA, ei, kbT, w, v_sq, coup, order, t_max=5000.0)
                                          )(e)
     rate_marcus = np.vectorize(lambda ei: marcus_rate(C_DA, ei - coup, kbT, reorg_e))(e)
     fig = plt.figure()

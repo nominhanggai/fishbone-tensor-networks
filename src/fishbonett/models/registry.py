@@ -22,7 +22,7 @@ Availability of each Hamiltonian representation for a model is recorded by
 The star-to-chain transform relates each star/chain pair. The physics is
 identical while tensor-network costs may differ.
 
-``interaction-chain-tdvp1`` and ``interaction-chain-tree-tdvp1`` use the same
+``interaction-chain-tdvp1`` and ``interaction-chain-tree-tebd`` use the same
 representation on an MPS and a binary tree tensor network, respectively.
 
 :data:`METHODS` records each supported combination and its implementation engine.
@@ -36,8 +36,8 @@ with the free-bath term.
 from dataclasses import dataclass, field
 from typing import Mapping, Tuple
 
-__all__ = ["Model", "Representation", "Method", "MODELS", "REPRESENTATIONS", "METHODS",
-           "STATE_GEOMETRIES", "APPLICATIONS", "FIXED_BOND_METHODS",
+__all__ = ["Model", "RepresentationSpec", "MethodSpec", "MODELS", "REPRESENTATIONS", "METHODS",
+           "STATE_GEOMETRIES", "APPLICATIONS", "BOND_CAP_REQUIRED_METHODS",
            "why_not", "models_of", "representations_of",
            "methods_of", "all_methods", "model", "method_spec", "resolve",
            "combinations", "METHOD_REPRESENTATIONS",
@@ -49,7 +49,7 @@ __all__ = ["Model", "Representation", "Method", "MODELS", "REPRESENTATIONS", "ME
 
 # -- representations ------------------------------------------------------------------
 @dataclass(frozen=True)
-class Representation:
+class RepresentationSpec:
     """One mathematical representation of the Hamiltonian."""
     key: str
     label: str
@@ -60,7 +60,7 @@ class Representation:
 
 
 REPRESENTATIONS = {
-    "schrodinger-chain": Representation(
+    "schrodinger-chain": RepresentationSpec(
         "schrodinger-chain", "Schrodinger chain representation",
         "Nothing rotated out, bath chain-mapped.  H is time-independent and its MPO "
         "is built once, so TDVP conserves energy -- but the state carries the full "
@@ -68,13 +68,13 @@ REPRESENTATIONS = {
         "nearest-neighbour hoppings are what an MPS is good at, and the system "
         "touches only c0.",
         static=True, mode_decoupled=False),
-    "schrodinger-star": Representation(
+    "schrodinger-star": RepresentationSpec(
         "schrodinger-star", "Schrodinger star representation",
         "Nothing rotated out, no chain mapping: every mode couples straight to the "
         "system.  No mode-mode terms, but no locality for the MPS to exploit "
         "either.  Static, so still one MPO built once.",
         static=True, mode_decoupled=True),
-    "interaction-chain": Representation(
+    "interaction-chain": RepresentationSpec(
         "interaction-chain", "interaction chain representation",
         "A finite star is put in the interaction representation with respect to "
         "its free Hamiltonian, then its time-dependent coupling is transformed "
@@ -84,21 +84,19 @@ REPRESENTATIONS = {
         "sense that matters to an MPS.  Entanglement is much smaller than the "
         "Schrodinger representation's, but H is time-dependent, so gates/MPOs are "
         "rebuilt "
-        "every step.  All the coupling terms commute here, which is what makes the "
-        "exact conditional-displacement propagator possible.",
+        "every step.  For a single coupling channel the mode terms commute, which "
+        "makes the conditional-displacement propagator possible.",
         static=False, mode_decoupled=True),
-    "interaction-star": Representation(
+    "interaction-star": RepresentationSpec(
         "interaction-star", "interaction star representation",
         "The same rotation as interaction-chain, left in the star modes instead of "
         "being rotated back: the coupling of mode k is simply V_k e^{-i w_k t}.  "
-        "Reaches the same trajectory through a completely different coupling "
-        "vector, so it is an independent check on the chain route rather than a "
-        "restatement of it.  Which is cheaper is not settled -- the guess that the "
-        "chain wins (its coupling starts on c0 and spreads) is not what measuring "
-        "shows.  The multichannel model exposes both forms by applying one common "
-        "orthogonal transform to its matrix-valued star couplings.",
+        "It is unitarily equivalent to interaction-chain. Their tensor-network "
+        "costs can differ because the time-dependent coupling vectors differ. The "
+        "multichannel model exposes both forms using one common orthogonal transform "
+        "for its matrix-valued star couplings.",
         static=False, mode_decoupled=True),
-    "polaron-chain": Representation(
+    "polaron-chain": RepresentationSpec(
         "polaron-chain", "polaron chain representation",
         "The static part of the coupling is absorbed into a bath displacement, "
         "leaving a free chain plus a dressed tunneling term.  Static like the "
@@ -108,7 +106,7 @@ REPRESENTATIONS = {
         "coherences must be un-dressed.  The J/w^2 reweighting is what localizes "
         "the displacement on c0.",
         static=True, mode_decoupled=False),
-    "polaron-star": Representation(
+    "polaron-star": RepresentationSpec(
         "polaron-star", "polaron star representation",
         "The textbook Lang-Firsov transform, which is *defined* per star mode: "
         "prod_k D_k(g_k sigma_z / w_k).  Perfectly well defined -- it is the chain "
@@ -120,8 +118,7 @@ REPRESENTATIONS = {
 #: The tensor-network geometry of the state. Independent of the representation:
 #: the same interaction-chain Hamiltonian runs on a 1D MPS
 #: (``interaction-chain-tdvp1``) and a balanced tree
-#: (``interaction-chain-tree-tdvp1``), which is why ``mode-tree`` was never a
-#: model.
+#: (``interaction-chain-tree-tebd``).
 STATE_GEOMETRIES = {
     "mps": "a 1D MPS: system at site 0, modes 1..N in a line.",
     "binary-tree": "a binary tree tensor network with the system at the root, "
@@ -132,8 +129,7 @@ STATE_GEOMETRIES = {
 
 
 #: Why the binary tree needs a representation with no mode-mode terms
-#: (:attr:`Representation.mode_decoupled`).  Not an oversight: the tree is worth
-#: having *because* nothing
+#: (:attr:`RepresentationSpec.mode_decoupled`). The tree is useful because nothing
 #: couples mode to mode, so every mode hangs off the system independently and the
 #: only question is how deep the bonds are.
 #:
@@ -153,8 +149,7 @@ _NO_MODE_MODE = (
 # -- models ------------------------------------------------------------------
 @dataclass(frozen=True)
 class Model:
-    """A physical setup -- **only** the topology, now that the mode structure lives in
-    the representation and the tensor-network state graph in ``state_geometry``.
+    """A physical setup containing only its coupling topology.
 
     ``gaps`` maps an absent representation key to the reason it is absent. All six
     names describe valid Hamiltonians; gaps record model-specific implementation
@@ -187,7 +182,7 @@ class Model:
 
 # -- methods: the one dispatch table -----------------------------------------
 @dataclass(frozen=True)
-class Method:
+class MethodSpec:
     """One realizable representation/state-geometry/integrator combination.
 
     ``models`` lists the compatible physical models. One method can serve several
@@ -204,7 +199,7 @@ class Method:
     driver: str = ""
     #: 1-site TDVP cannot grow a bond and adaptive tangent expansion needs a ceiling, so
     #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
-    fixed_bond: bool = False
+    requires_bond_cap: bool = False
     #: The integrator **axis** -- ``"tebd"``, ``"tdvp1"``, ``"tdvp2"``, ``"dtdvp"``,
     #: ``"trotter-mpo"``. Unique within a
     #: ``(model, representation, state_geometry)``, which is
@@ -223,7 +218,7 @@ class Method:
         every mode to the system, a star, while the state is a 1D MPS -- and this
         records what pays for that.  See :data:`APPLICATIONS`.
 
-        Keys on :attr:`Representation.mode_decoupled`, **not** on the structure:
+        Keys on :attr:`RepresentationSpec.mode_decoupled`, **not** on the structure:
         ``interaction-chain-tebd`` still needs a swap network, because it is rotating
         out ``H_B`` that spreads the coupling over every mode, not the choice of
         modes to write it in.
@@ -236,12 +231,11 @@ class Method:
         return "local"
 
 
-#: The values :attr:`Method.application` takes.
+#: The values :attr:`MethodSpec.application` takes.
 #:
-#: This is the axis the package had no name for, which is why three methods each
-#: re-derived a swap network and nothing recorded that they did.  It is not the same
-#: question as the representation: the *representation* decides which terms exist, the application
-#: decides what it costs to apply them to a state whose graph is shaped differently.
+#: This is derived from the representation, state geometry, and integrator. The
+#: representation decides which terms exist; the application records how those
+#: terms act on the selected tensor-network graph.
 APPLICATIONS = {
     "local": "interaction edges are state edges -- gates apply in place",
     "swap": "a star realized on a 1D MPS: the system site is walked past every mode "
@@ -264,14 +258,14 @@ def _canonical_method_name(representation, integrator, state_geometry="mps"):
     return f"{representation}-{state_geometry_tag}{integrator}"
 
 
-def _m(representation, models, engine, driver="", fixed_bond=False,
+def _m(representation, models, engine, driver="", requires_bond_cap=False,
        integrator="", state_geometry="mps", qualifier=None):
     integrator = integrator or driver
     if qualifier is None:
         name = _canonical_method_name(representation, integrator, state_geometry)
     else:
         name = f"{representation}-{qualifier}-{integrator}"
-    return Method(name, representation, models, engine, driver, fixed_bond,
+    return MethodSpec(name, representation, models, engine, driver, requires_bond_cap,
                   integrator, state_geometry)
 
 
@@ -300,9 +294,11 @@ _RENAMED_METHODS = {
     "mpo-ip-tdvp2": "interaction-chain-tdvp2",
     "mpo-ip-star-tdvp1": "interaction-star-tdvp1",
     "mpo-ip-star-tdvp2": "interaction-star-tdvp2",
-    "tree-tdvp": "interaction-chain-tree-tdvp1",
-    "tree-tdvp2": "interaction-chain-tree-tdvp2",
+    "tree-tdvp": "interaction-chain-tree-tebd",
+    "tree-tdvp2": "interaction-chain-tree-tebd",
     "tree-tebd": "interaction-chain-tree-tebd",
+    "interaction-chain-tree-tdvp1": "interaction-chain-tree-tebd",
+    "interaction-chain-tree-tdvp2": "interaction-chain-tree-tebd",
     "polaron": "polaron-chain-tebd",
     "polaron-tdvp1": "polaron-chain-tdvp1",
     "polaron-tdvp2": "polaron-chain-tdvp2",
@@ -322,12 +318,12 @@ _SB = ("system-bath",)
 _METHOD_ROWS = [
     # -- system-bath, static Schroedinger representations --------------------
     _m("schrodinger-chain", _SB, "mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", requires_bond_cap=True),
     _m("schrodinger-chain", _SB, "mpo-tdvp", "tdvp2"),
     _m("schrodinger-chain", _SB, "mpo-tdvp",
-       "dtdvp", fixed_bond=True),
+       "dtdvp", requires_bond_cap=True),
     _m("schrodinger-star", _SB, "mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", requires_bond_cap=True),
     _m("schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
     # -- system-bath, interaction transformation, on a 1D MPS -------------------------
     # `interaction-chain`, not `-star`: the star-to-chain transform rotates the phases
@@ -338,32 +334,27 @@ _METHOD_ROWS = [
     _m("interaction-chain", _SB, "displacement-mpo",
        integrator="trotter-mpo"),
     _m("interaction-chain", _SB, "mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", requires_bond_cap=True),
     _m("interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
     # -- ...the same rotation left in the star modes --------------------------
     _m("interaction-star", _SB, "mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", requires_bond_cap=True),
     _m("interaction-star", _SB, "mpo-tdvp", "tdvp2"),
     # -- ...and the chain representation on a balanced binary tree ---------------------
-    _m("interaction-chain", _SB, "modetree",
-       "run_tree_tdvp", integrator="tdvp1",
-       state_geometry="binary-tree"),
-    _m("interaction-chain", _SB, "modetree",
-       "run_tree_tdvp2", integrator="tdvp2", state_geometry="binary-tree"),
     _m("interaction-chain", _SB, "modetree",
        "run_tree_tebd", integrator="tebd", state_geometry="binary-tree"),
     # -- system-bath, polaron representation -------------------------------------------
     _m("polaron-chain", _SB, "polaron-tebd", integrator="tebd"),
     _m("polaron-chain", _SB, "mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", requires_bond_cap=True),
     _m("polaron-chain", _SB, "mpo-tdvp", "tdvp2"),
     _m("polaron-chain", _SB, "mpo-tdvp",
-       "dtdvp", fixed_bond=True),
+       "dtdvp", requires_bond_cap=True),
     _m("polaron-star", _SB, "mpo-tdvp",
-       "tdvp1", fixed_bond=True),
+       "tdvp1", requires_bond_cap=True),
     _m("polaron-star", _SB, "mpo-tdvp", "tdvp2"),
     _m("polaron-star", _SB, "mpo-tdvp",
-       "dtdvp", fixed_bond=True),
+       "dtdvp", requires_bond_cap=True),
     # -- the static tree engine: one engine, two representations, three topologies -----
     _m("schrodinger-chain", ("comb", "site-tree"),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
@@ -394,9 +385,10 @@ if _duplicate_method_names:
         + ", ".join(sorted(_duplicate_method_names)))
 METHODS = {spec.name: spec for spec in _METHOD_ROWS}
 
-#: Derived from :data:`METHODS` -- was a hand-maintained set in
-#: ``models/system_bath.py`` that the tests had to import privately.
-FIXED_BOND_METHODS = frozenset(n for n, s in METHODS.items() if s.fixed_bond)
+#: Methods whose integrator requires a finite bond-dimension ceiling.
+BOND_CAP_REQUIRED_METHODS = frozenset(
+    name for name, spec in METHODS.items() if spec.requires_bond_cap
+)
 
 
 #: The multi-site models are wired for one representation only.  Their baths are chain-mapped
@@ -470,8 +462,8 @@ def why_not(model_key, representation=None, *, state_geometry=None):
     """Why a combination is unavailable, or ``None`` if it exists.
 
     Every one of the six representations is a real representation, so nothing here says "impossible".
-    What it reports is per-model work nobody has done (:attr:`Model.gaps`, which
-    says *why* it would or would not pay), plus the one genuine constraint: a
+    It reports unimplemented model combinations (:attr:`Model.gaps`) plus the
+    structural constraint that a
     balanced binary tree needs a representation with no mode-mode terms.
     """
     if (state_geometry == "binary-tree" and representation is not None
@@ -490,7 +482,7 @@ def why_not(model_key, representation=None, *, state_geometry=None):
 
 
 def method_spec(name, model_key=None):
-    """The :class:`Method` for ``name``, or a :class:`ValueError` naming what is."""
+    """The :class:`MethodSpec` for ``name``, or an explanatory error."""
     spec = METHODS.get(name)
     if spec is None or (model_key is not None and model_key not in spec.models):
         raise unknown_method_error(name, model_key)
@@ -510,7 +502,7 @@ _AXES = ("model", "representation", "state_geometry", "integrator")
 
 
 def resolve(model_keys, *, method=None, **axes):
-    """The :class:`Method` selected by either spelling.
+    """The :class:`MethodSpec` selected by either spelling.
 
     ``method=`` names a representation/state-geometry/integrator combination; the
     physical object supplies the compatible model.  The four axes can also be
@@ -522,6 +514,12 @@ def resolve(model_keys, *, method=None, **axes):
     Representation names are explicit: use ``interaction-chain`` rather than a
     partial name such as ``interaction``.
     """
+    model_keys = set(model_keys)
+    if not model_keys:
+        raise ValueError("model_keys must contain at least one model")
+    unknown_models = model_keys - set(MODELS)
+    if unknown_models:
+        raise ValueError(f"unknown model key(s): {', '.join(sorted(unknown_models))}")
     if "geometry" in axes:
         raise TypeError(
             "'geometry' is no longer a public axis; use state_geometry")
@@ -540,13 +538,17 @@ def resolve(model_keys, *, method=None, **axes):
     avail = combinations(model_keys)
     if method is not None:
         if not given:
-            return method_spec(method)
+            spec = method_spec(method)
+            if not model_keys.intersection(spec.models):
+                requested_for = ", ".join(sorted(model_keys))
+                raise ValueError(
+                    f"method {method!r} is not available for {requested_for}; "
+                    f"it belongs to {', '.join(spec.models)}"
+                )
+            return spec
         raise ValueError(
-            "give either method= or the axes (model / representation / "
-            "state_geometry / integrator), not both -- a method name already "
-            "fixes the representation, state_geometry and integrator, while the "
-            "object selects "
-            "a compatible model.")
+            "give either method= or representation/state_geometry/integrator, "
+            "not both")
 
     def matches(c):
         for k, v in given.items():

@@ -101,8 +101,8 @@ def test_unlimited_bond_grows_beyond_a_small_cap():
     assert free.max_bond.max() > capped.max_bond.max()
 
 
-def test_fixed_bond_methods_require_an_explicit_cap():
+def test_bond_cap_methods_require_an_explicit_cap():
     """1-site TDVP cannot grow a bond, so 'unlimited' is meaningless for it and
     must be rejected with a message naming a usable alternative."""
-    with pytest.raises(ValueError, match="fixed bond dimension"):
+    with pytest.raises(ValueError, match="fixed one-site TDVP manifold"):
         _model().run(dt=0.05, n_steps=1, method="schrodinger-chain-tdvp1", bond_dim=None)

@@ -113,7 +113,7 @@ fixed by the tensor-network geometry:
 | `state_geometry` | infix | example |
 |---|---|---|
 | `mps` | *(none)* | `polaron-chain-tdvp2` |
-| `binary-tree` | `tree` | `interaction-chain-tree-tdvp2` |
+| `binary-tree` | `tree` | `interaction-chain-tree-tebd` |
 | `tree` | `tree` | `schrodinger-chain-tree-tebd` |
 
 Both tree geometries use `tree` in ordinary method names. The binary-tree method

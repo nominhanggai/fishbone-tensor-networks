@@ -1,7 +1,7 @@
 """Compile a resolved method into an executable simulation plan.
 
 The model layer resolves user-facing choices to a
-:class:`~fishbonett.models.registry.Method`.  This module owns the next boundary:
+:class:`~fishbonett.models.registry.MethodSpec`.  This module owns the next boundary:
 it lowers that method and the physical problem into a prepared representation, state,
 integrator and measurement policy.  The resulting :class:`SimulationPlan` is the
 only object :class:`~fishbonett.models.system_bath.SystemBath` has to execute.
@@ -77,16 +77,38 @@ class SimulationPlan:
         """Execute the prepared plan and return a uniform :class:`Result`."""
         with random_seed(self.context.seed):
             if self.execute is not None:
-                return self.execute()
-            return propagate(
-                self.spec, self.context, step=self.step, rdm=self.measure_rdm,
-                peak_bond=self.peak_bond, expect_from_rdm=_expect_from_rdm)
+                result = self.execute()
+            else:
+                result = propagate(
+                    self.spec, self.context, step=self.step,
+                    rdm=self.measure_rdm, peak_bond=self.peak_bond,
+                    expect_from_rdm=_expect_from_rdm,
+                )
+        metadata = {
+            "method": self.spec.name,
+            "representation": getattr(self.spec, "representation", ""),
+            "state_geometry": getattr(self.spec, "state_geometry", ""),
+            "integrator": getattr(self.spec, "integrator", ""),
+            "dt": self.context.dt,
+            "n_steps": self.context.n_steps,
+            "trunc_eps": self.context.trunc_eps,
+            "max_bond_cap": self.context.bond_dim,
+            "krylov": self.context.krylov,
+            "seed": self.context.seed,
+        }
+        metadata.update(result.meta)
+        result.meta = metadata
+        return result
 
 
 def _expect_from_rdm(rdms, obs_ops: Mapping[str, np.ndarray]):
     rdms = np.asarray(rdms)
-    return {name: np.einsum("tij,ji->t", rdms, np.asarray(operator)).real
-            for name, operator in obs_ops.items()}
+    return {
+        name: np.real_if_close(
+            np.einsum("tij,ji->t", rdms, np.asarray(operator))
+        )
+        for name, operator in obs_ops.items()
+    }
 
 
 def _check_single_channel(model):
@@ -102,7 +124,7 @@ def _tdvp_hooks(context):
     """Driver options shared by every representation supplying a TDVP MPO."""
     hooks = dict(
         observe=lambda tensors: _mpo.measure_rdm(tensors[0]),
-        prec=context.kw.get("prec", 1e-4),
+        prec=context.kw.get("prec", context.trunc_eps),
         tol=context.kw.get("tol", 1e-7),
         eshift=context.kw.get("eshift", False),
     )
@@ -156,12 +178,12 @@ def _compile_tdvp_representation(model, spec, context, coupled):
             prepare=prepare,
             observe=transformed.recover_rdm,
             prec=context.kw.get("prec", context.trunc_eps),
-            # Padding every bond to a large memory cap is especially wasteful in
-            # the displaced representation.  Six seed states converge the prepared
-            # coherent block; users can request a larger fixed manifold explicitly.
-            initial_bond=context.kw.get(
-                "initial_bond", min(context.bond_dim or 6, 6)),
         )
+        if spec.driver == "tdvp1":
+            # One-site TDVP evolves on a fixed manifold, so the public bond_dim
+            # is the manifold requested by the user.  A hidden cap here made
+            # polaron TDVP1 silently run at bond dimension six.
+            hooks["initial_bond"] = context.bond_dim
         return transformed, hooks
     raise ValueError(f"engine 'mpo-tdvp' has no compiler for representation {spec.representation!r}")
 
@@ -181,7 +203,7 @@ def _compile_mpo_plan(model, spec, context):
             eps=context.trunc_eps, krylov=context.krylov,
             seed=context.seed, progress=context.progress,
             bond_expand=context.kw.get("bond_expand"),
-            Dplusmax=context.kw.get("Dplusmax", 4), **hooks)
+            **hooks)
         return Result(
             t=times, expect=_expect_from_rdm(rdms, context.obs_ops),
             max_bond=max_bond, rdm=np.asarray(rdms), method=spec.name)
@@ -207,14 +229,7 @@ def _compile_modetree_plan(model, spec, context):
             dt=context.dt, nsteps=context.n_steps, D=context.bond_dim,
             observe=observe, seed=context.seed, progress=context.progress,
             **context.kw)
-        if spec.driver == "run_tree_tdvp":
-            times, rdms = _tree.run_tree_mpo(
-                representation, sweep="tdvp1", **common)
-        elif spec.driver == "run_tree_tdvp2":
-            times, rdms = _tree.run_tree_mpo(
-                representation, sweep="tdvp2",
-                trunc_eps=context.trunc_eps, **common)
-        elif spec.driver == "run_tree_tebd":
+        if spec.driver == "run_tree_tebd":
             times, rdms = _tree.run_tree_tebd(
                 representation, trunc_eps=context.trunc_eps, **common)
         else:
@@ -249,11 +264,9 @@ def _compile_static_tree_plan(model, spec, context):
         initial = context.initial
 
     horizon = context.bath_horizon or context.t_max
-    terms = tree.local_terms(horizon)
+    terms = model.local_terms(horizon) if isinstance(model, Fishbone) else tree.local_terms(horizon)
     graph_couplings = (model.graph_couplings
                        if isinstance(model, Fishbone) else None)
-    if graph_couplings is not None:
-        terms.graph_bond.update(graph_couplings)
     gate_time = context.dt / 4.0 if graph_couplings is not None else context.dt / 2.0
     site_gates, edge_gates = terms.tebd_gates(gate_time)
     if graph_couplings is not None:
@@ -264,7 +277,7 @@ def _compile_static_tree_plan(model, spec, context):
                 tree.de[edge[0]], tree.de[edge[1]])
             for edge, value in graph_couplings.items()
         }
-    parsed = [(name, _parse_observable(value))
+    parsed = [(name, _parse_observable(value, tree.de, name))
               for name, value in context.obs_ops.items()]
 
     def execute():
@@ -284,9 +297,9 @@ def _compile_static_tree_plan(model, spec, context):
         record_step_set = set(record_steps)
         n_records = len(record_steps)
         expect = {
-            name: (np.full((n_records, tree.ns), np.nan)
+            name: (np.full((n_records, tree.ns), np.nan, dtype=complex)
                    if kind == "persite"
-                   else np.full(n_records, np.nan))
+                   else np.full(n_records, np.nan, dtype=complex))
             for name, (kind, _operator, _sites) in parsed
         }
         rdms = np.empty((n_records, tree.ns), dtype=object)
@@ -320,7 +333,7 @@ def _compile_static_tree_plan(model, spec, context):
                     for site in range(tree.ns):
                         if operator.shape == (tree.de[site], tree.de[site]):
                             expect[name][record, site] = np.trace(
-                                rdms[record, site] @ operator).real
+                                rdms[record, site] @ operator)
                 else:
                     expect[name][record] = state.expectation(operator, sites)
             max_bond[record] = tree_peak_bond(state)
@@ -342,7 +355,9 @@ def _compile_static_tree_plan(model, spec, context):
             bath_horizon=horizon)
         result = Result(
             t=elapsed + (np.asarray(record_steps) + 1) * context.dt,
-            expect=expect, rdm=rdm, max_bond=max_bond, method=spec.name,
+            expect={name: np.real_if_close(values)
+                    for name, values in expect.items()},
+            rdm=rdm, max_bond=max_bond, method=spec.name,
             meta={"n_sites": tree.ns}, checkpoint=checkpoint,
         )
         if not single_system:
@@ -415,7 +430,6 @@ def _compile_displacement_plan(model, spec, context):
 
     _check_single_channel(model)
     coupled = model.coupled_bath.resolved(context.t_max)
-    bath = coupled.bath
     representation, phys_dims = _interaction_representation(
         model, coupled, spec.representation)
     tensors = product_state(
@@ -438,7 +452,7 @@ def _compile_displacement_plan(model, spec, context):
     def measure_rdm():
         rho = np.einsum(
             "lsr,ltr->st", tensors[0], tensors[0].conj())
-        return rho / np.trace(rho).real
+        return rho / np.trace(rho)
 
     return SimulationPlan(
         spec, context, step=step, measure_rdm=measure_rdm,
@@ -631,7 +645,7 @@ def _compile_interaction_fishbone_plan(model, spec, context):
         for site, gate in enumerate(site_quarter):
             apply_site(state, site, gate)
 
-    parsed = [(name, _parse_observable(value))
+    parsed = [(name, _parse_observable(value, model.de, name))
               for name, value in context.obs_ops.items()]
 
     def execute():
@@ -645,8 +659,9 @@ def _compile_interaction_fishbone_plan(model, spec, context):
         record_set = set(record_steps)
         n_records = len(record_steps)
         expect = {
-            name: (np.full((n_records, system_count), np.nan)
-                   if kind == "persite" else np.full(n_records, np.nan))
+            name: (np.full((n_records, system_count), np.nan, dtype=complex)
+                   if kind == "persite"
+                   else np.full(n_records, np.nan, dtype=complex))
             for name, (kind, _operator, _sites) in parsed}
         rdms = np.empty((n_records, system_count), dtype=object)
         max_bond = np.empty(n_records, dtype=int)
@@ -670,7 +685,7 @@ def _compile_interaction_fishbone_plan(model, spec, context):
                     for site in range(system_count):
                         if operator.shape == (model.de[site], model.de[site]):
                             expect[name][record, site] = np.trace(
-                                rdms[record, site] @ operator).real
+                                rdms[record, site] @ operator)
                 else:
                     expect[name][record] = state.expectation(operator, sites)
             max_bond[record] = tree_peak_bond(state)
@@ -684,7 +699,9 @@ def _compile_interaction_fishbone_plan(model, spec, context):
             bath_horizon=horizon)
         return Result(
             t=elapsed + (np.asarray(record_steps) + 1) * context.dt,
-            expect=expect, rdm=rdm, max_bond=max_bond, method=spec.name,
+            expect={name: np.real_if_close(values)
+                    for name, values in expect.items()},
+            rdm=rdm, max_bond=max_bond, method=spec.name,
             meta={"n_sites": system_count, "representation": "interaction-chain"},
             checkpoint=checkpoint)
 

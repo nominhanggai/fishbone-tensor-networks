@@ -5,10 +5,9 @@ import numpy as np
 
 from fishbonett import Bath
 from fishbonett.bath.chain import star_transform
-from fishbonett.evolve.modetree import (run_tree_tdvp, run_tree_tdvp2,
-                             run_tree_tebd, build_balanced_tree, build_tree_mpo,
-                             tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
-                             SZ, SX)
+from fishbonett.evolve._modetree_core import _hamiltonian_direct
+from fishbonett.evolve.modetree import (run_tree_tebd, build_balanced_tree, build_tree_mpo,
+                             tree_depth, hamiltonian_from_mpo, SZ, SX)
 from fishbonett.operators import annihilate, create
 from fishbonett.representations.interaction import InteractionRepresentation
 
@@ -74,15 +73,6 @@ def test_tree_is_shallower_than_chain():
     assert tree_depth(nodes, root) < 64        # log-depth, vs chain length 65
 
 
-def test_tree_tdvp_matches_exact():
-    n_chain, d, V = 3, 5, 1.0
-    t, sz = run_tree_tdvp(
-        _representation(n_chain, d, V), dt=0.05, nsteps=12, D=30)
-    sz_ex = _exact_sz(n_chain, d, V, t)
-    assert np.isclose(sz[0], 0.995, atol=0.01)
-    assert np.max(np.abs(sz - sz_ex)) < 5e-3   # 2nd-order Trotter at dt=0.05
-
-
 def test_tree_tebd_matches_exact():
     n_chain, d, V = 3, 5, 1.0
     t, sz = run_tree_tebd(
@@ -90,12 +80,3 @@ def test_tree_tebd_matches_exact():
         trunc_eps=1e-12)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3
-
-
-def test_tree_tdvp2_matches_exact():
-    n_chain, d, V = 3, 5, 1.0
-    t, sz = run_tree_tdvp2(
-        _representation(n_chain, d, V), dt=0.05, nsteps=12, D=40,
-        trunc_eps=1e-13)
-    sz_ex = _exact_sz(n_chain, d, V, t)
-    assert np.max(np.abs(sz - sz_ex)) < 5e-3    # 2nd-order Trotter

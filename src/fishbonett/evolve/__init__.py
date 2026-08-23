@@ -65,9 +65,7 @@ from fishbonett.evolve.tebd import (
     symmetric_swap_step, symmetric_static_step,
 )
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian
-from fishbonett.evolve.modetree import (
-    run_tree_tdvp, run_tree_tdvp2, run_tree_tebd,
-)
+from fishbonett.evolve.modetree import run_tree_tebd
 from fishbonett.evolve.mpo_apply import apply_mpo, compress
 
 __all__ = [
@@ -79,5 +77,5 @@ __all__ = [
     # TDVP driver (1D chain): one loop, any representation, any sweep
     "run_mpo_hamiltonian",
     # tree drivers
-    "run_tree_tdvp", "run_tree_tdvp2", "run_tree_tebd",
+    "run_tree_tebd",
 ]

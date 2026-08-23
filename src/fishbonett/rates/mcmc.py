@@ -23,39 +23,72 @@ watching the running mean rather than trusting a single ``N``, and note that the
 estimator is *biased* at finite ``N`` (it is a ratio of means), which is why
 ``burn_in`` samples are discarded.
 
-Sampling uses ``numpy.random`` without a seed argument, so results are not
-reproducible unless you seed the global RNG yourself.
+Each function accepts a local ``seed`` and never mutates NumPy's global random
+state.
 """
 import math
 
 import numpy as np
 
 
-def mcmc2d(func, interval, N):
+def _validated_inputs(interval, N, seed):
+    if (not isinstance(N, (int, np.integer)) or isinstance(N, (bool, np.bool_))
+            or N < 1):
+        raise ValueError("N must be a positive integer")
+    if len(interval) != 2:
+        raise ValueError("interval must be (lower, upper)")
+    lower, upper = map(float, interval)
+    if not np.isfinite(lower) or not np.isfinite(upper) or lower >= upper:
+        raise ValueError("interval must contain finite values with lower < upper")
+    return lower, upper, np.random.default_rng(seed)
+
+
+def _positive_weight(value):
+    value = np.asarray(value)
+    if value.ndim != 0 or np.iscomplexobj(value):
+        raise ValueError("Metropolis sampling weights must be real scalars")
+    weight = float(value)
+    if not np.isfinite(weight) or weight < 0:
+        raise ValueError("Metropolis sampling weights must be finite and non-negative")
+    return weight
+
+
+def _acceptance_ratio(new_weight, old_weight, proposal_ratio=1.0):
+    """Stable Metropolis ratio, including zero-density states."""
+    if old_weight == 0:
+        return 1.0 if new_weight > 0 else 0.0
+    return min(1.0, new_weight / old_weight * proposal_ratio)
+
+
+def mcmc2d(func, interval, N, *, seed=None):
     """Metropolis sample of ``func(x, y)`` over the ordered wedge ``x < y``.
 
     Two-dimensional test case for the machinery in :func:`mcmc_time_ordered`;
     returns the array of ``N+1`` accepted samples (not yet normalized by the
     domain volume).
     """
-    y = np.random.uniform(interval[0], interval[1])
-    x = np.random.uniform(interval[0], y)
-    samples = [func(x, y)]
+    lower, upper, rng = _validated_inputs(interval, N, seed)
+    y = rng.uniform(lower, upper)
+    x = rng.uniform(lower, y)
+    samples = [_positive_weight(func(x, y))]
     mc_points = [(x, y)]
 
     def Omega(X1, X2):
         xa1, yb1 = X1
         xa2, yb2 = X2
-        return 1 / yb2
+        return 1 / (yb2 - lower)
 
     for i in range(N):
-        y = np.random.uniform(interval[0], interval[1])
-        x = np.random.uniform(interval[0], y)
+        y = rng.uniform(lower, upper)
+        x = rng.uniform(lower, y)
 
-        new_sample = func(x, y)
-        ratio = new_sample / samples[i] * Omega((x, y), mc_points[i]) / Omega(mc_points[i], (x, y))
+        new_sample = _positive_weight(func(x, y))
+        ratio = _acceptance_ratio(
+            new_sample, samples[i],
+            Omega((x, y), mc_points[i]) / Omega(mc_points[i], (x, y)),
+        )
 
-        r = np.random.uniform(0, 1)
+        r = rng.uniform(0, 1)
 
         if r < ratio:
             samples.append(new_sample)
@@ -67,28 +100,29 @@ def mcmc2d(func, interval, N):
     return np.array(samples)
 
 
-def mcmc1d(func, interval, N):
+def mcmc1d(func, interval, N, *, seed=None):
     """Metropolis sample of ``func(x)`` over ``interval`` with a uniform proposal.
 
     The one-dimensional reference case: with a uniform proposal the
     Metropolis ratio reduces to ``f(new)/f(old)``.  Returns the ``N+1`` accepted
     samples.
     """
-    x = np.random.uniform(interval[0], interval[1])
-    d = interval[1] - interval[0]
-    samples = [func(x)]
+    lower, upper, rng = _validated_inputs(interval, N, seed)
+    x = rng.uniform(lower, upper)
+    d = upper - lower
+    samples = [_positive_weight(func(x))]
     mc_points = [x]
 
     def Omega(X1, X2):
         return 1 / d
 
     for i in range(N):
-        x = np.random.uniform(interval[0], interval[1])
+        x = rng.uniform(lower, upper)
 
-        new_sample = func(x)
-        ratio = new_sample / samples[i] * Omega(x, mc_points[i]) / Omega(mc_points[i], x)
+        new_sample = _positive_weight(func(x))
+        ratio = _acceptance_ratio(new_sample, samples[i])
 
-        r = np.random.uniform(0, 1)
+        r = rng.uniform(0, 1)
 
         if r < ratio:
             samples.append(new_sample)
@@ -100,7 +134,7 @@ def mcmc1d(func, interval, N):
     return np.array(samples)
 
 
-def mcmc_time_ordered(func, dim, interval, N, burn_in=1000):
+def mcmc_time_ordered(func, dim, interval, N, burn_in=1000, *, seed=None):
     """Time-ordered ``dim``-dimensional integral of a complex oscillatory ``func``.
 
     Samples the simplex ``t_max > t_1 > t_2 > ... > t_dim > t_min`` by drawing
@@ -132,19 +166,25 @@ def mcmc_time_ordered(func, dim, interval, N, burn_in=1000):
         convergence can be inspected -- see the module docstring on why a single
         ``N`` should not be trusted.
     """
-    t_max = interval[1]
-    t_min = interval[0]
+    t_min, t_max, rng = _validated_inputs(interval, N, seed)
+    if (not isinstance(dim, (int, np.integer)) or isinstance(dim, (bool, np.bool_))
+            or dim < 1):
+        raise ValueError("dim must be a positive integer")
+    if (not isinstance(burn_in, (int, np.integer))
+            or isinstance(burn_in, (bool, np.bool_))
+            or burn_in < 0 or burn_in >= N + 1):
+        raise ValueError("burn_in must satisfy 0 <= burn_in < N + 1")
 
     def generate_t():
         t_list = np.array([t_max] * (dim + 1), dtype=np.float64)
         for i in range(1, dim + 1):
-            t_list[i] = np.random.uniform(t_min, t_list[i - 1])
+            t_list[i] = rng.uniform(t_min, t_list[i - 1])
 
         t_list = t_list[1:]
         return t_list
 
     mc_points = [generate_t()]
-    samples = [np.abs(func(*(mc_points[-1])))]
+    samples = [_positive_weight(np.abs(func(*mc_points[-1])))]
 
     def omega(X1, X2):
         return 1 / np.prod(X2[:-1] - t_min)
@@ -152,11 +192,13 @@ def mcmc_time_ordered(func, dim, interval, N, burn_in=1000):
     for i in range(N):
         t_list = generate_t()
 
-        new_sample = np.abs(func(*t_list))
-        ratio = new_sample / samples[i] * omega(t_list, mc_points[i]) / omega(mc_points[i], t_list)
-        ratio = min(ratio, 1)
+        new_sample = _positive_weight(np.abs(func(*t_list)))
+        ratio = _acceptance_ratio(
+            new_sample, samples[i],
+            omega(t_list, mc_points[i]) / omega(mc_points[i], t_list),
+        )
 
-        r = np.random.uniform(0, 1)
+        r = rng.uniform(0, 1)
 
         if r < ratio:
             samples.append(new_sample)
@@ -164,9 +206,14 @@ def mcmc_time_ordered(func, dim, interval, N, burn_in=1000):
         else:
             samples.append(samples[i])
             mc_points.append(mc_points[i])
-    nominator = np.array([np.exp(1j*np.angle(func(*p))) for p in mc_points])
+    numerator = np.array([np.exp(1j * np.angle(func(*p))) for p in mc_points])
     samples = np.array(samples) / math.factorial(dim) * (t_max - t_min) ** dim
-    return np.mean(nominator) / np.mean(1/samples[burn_in:]), nominator, samples
+    retained_weights = samples[burn_in:]
+    if np.any(retained_weights <= 0):
+        raise ValueError("retained samples contain zero target weight")
+    retained_phase = numerator[burn_in:]
+    estimate = np.mean(retained_phase) / np.mean(1 / retained_weights)
+    return estimate, numerator, samples
 
 
 

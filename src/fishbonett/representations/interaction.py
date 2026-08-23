@@ -18,7 +18,6 @@ tensor-network algorithms through :meth:`tdvp_mpo`, :meth:`trotter_mpo`, and
 """
 
 import numpy as np
-import scipy.linalg as la
 
 from fishbonett.bath._coefficients import require_resolved, star_coefficients
 from fishbonett.bath.conventions import integrated_free_phase

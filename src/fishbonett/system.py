@@ -30,13 +30,18 @@ def check_operator(op, name, dim=None, hermitian=True):
     of dimension ``dim`` (when given), or not Hermitian (when required).  Used by
     the representation builders, which take ``h_sys``/``coupling`` as loose arrays.
     """
-    a = np.asarray(op, complex)
-    if a.ndim != 2 or a.shape[0] != a.shape[1]:
-        raise ValueError(f"{name} must be a square matrix, got shape {a.shape}")
+    a = np.array(op, dtype=complex, copy=True)
+    if a.ndim != 2 or a.shape[0] == 0 or a.shape[0] != a.shape[1]:
+        raise ValueError(
+            f"{name} must be a non-empty square matrix, got shape {a.shape}"
+        )
     if dim is not None and a.shape[0] != dim:
         raise ValueError(f"{name} has shape {a.shape}, expected {(dim, dim)}")
+    if not np.all(np.isfinite(a)):
+        raise ValueError(f"{name} must contain only finite values")
     if hermitian and not np.allclose(a, a.conj().T, atol=1e-9):
         raise ValueError(f"{name} must be Hermitian")
+    a.setflags(write=False)
     return a
 
 
@@ -69,8 +74,12 @@ class System:
         self.h = check_operator(self.h, "h")
         self.dim = self.h.shape[0]
         if self.is_multichannel:
-            self.coupling = [check_operator(o, f"coupling[{i}]", self.dim)
-                             for i, o in enumerate(self.coupling)]
+            if not self.coupling:
+                raise ValueError("coupling must contain at least one operator")
+            self.coupling = tuple(
+                check_operator(o, f"coupling[{i}]", self.dim)
+                for i, o in enumerate(self.coupling)
+            )
         else:
             self.coupling = check_operator(self.coupling, "coupling", self.dim)
 
@@ -103,7 +112,12 @@ class System:
         if v.shape[0] != d:
             raise ValueError(f"initial state has length {v.shape[0]}, expected the "
                              f"system dimension {d}")
-        return v / np.linalg.norm(v)
+        if not np.all(np.isfinite(v)):
+            raise ValueError("initial state must contain only finite values")
+        norm = np.linalg.norm(v)
+        if not np.isfinite(norm) or norm == 0:
+            raise ValueError("initial state must have a finite non-zero norm")
+        return v / norm
 
     def observables(self):
         """The default observables: Pauli z/x for a two-level system, else none.

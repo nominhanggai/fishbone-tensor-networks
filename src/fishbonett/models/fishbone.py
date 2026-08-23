@@ -3,8 +3,11 @@
 * ``site-tree`` (:class:`TreeFishbone`) -- sites wired into any loop-free tree;
 * ``comb`` (:class:`Fishbone`) -- the same with a linear backbone, the fishbone.
 
-Both are Schroedinger-picture, and the Hamiltonian itself is the representation's business,
-not the model's: :meth:`TreeFishbone.local_terms` asks
+The model only defines the physical topology. Static methods ask
+:meth:`TreeFishbone.local_terms` for a Schrödinger representation, while the
+interaction-chain comb methods are compiled separately. In either case the
+Hamiltonian is the representation's business, not the model's:
+:meth:`TreeFishbone.local_terms` asks
 :func:`fishbonett.representations.schrodinger.terms` to turn the sites and baths into a
 :class:`~fishbonett.representations.schrodinger.LocalTerms` graph -- bath frequencies on their own
 nodes, couplings on the edges -- and the model only decides the topology and drives
@@ -25,11 +28,12 @@ from fishbonett.representations.schrodinger import terms as schrodinger_terms
 from fishbonett.bath.coupled import CoupledBath, bind_bath
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.models.propagate import RunCtx
+from fishbonett.models.propagate import RunCtx, resolve_time_grid
 from fishbonett.models.registry import (
     SCHRODINGER_CHAIN_TREE_TEBD, method_spec, methods_of,
     unknown_method_error, resolve,
 )
+from fishbonett.system import check_operator
 
 __all__ = ["TreeFishbone", "Fishbone", "SCHRODINGER_CHAIN_TREE_TEBD"]
 
@@ -60,20 +64,72 @@ def _site_entries(baths, n_sites):
     return entries
 
 
-def _parse_observable(spec):
+def _parse_observable(spec, dimensions=None, name="observable"):
     """Normalise an observable spec to ``(kind, operator, sites)``.
 
     A bare ``(d, d)`` operator is measured on every matching site (``kind
     "persite"``); ``(operator, i)`` or ``(operator, (i, j, ...))`` targets a
     specific site or a composite of sites (``kind "sites"``)."""
     if isinstance(spec, tuple):
+        # A tuple-of-tuples is a perfectly ordinary matrix.  Only interpret a
+        # two-tuple as a targeted observable when the whole object is not a
+        # square numerical array.
+        try:
+            whole = np.asarray(spec)
+        except (TypeError, ValueError):
+            whole = None
+        if whole is not None and whole.ndim == 2 and whole.shape[0] == whole.shape[1]:
+            kind, operator, sites = "persite", whole, None
+            return _validate_observable_target(
+                kind, operator, sites, dimensions, name
+            )
+        if len(spec) != 2:
+            raise ValueError(
+                "a targeted observable must be (operator, site) or "
+                "(operator, sites)"
+            )
         op, where = spec
         if np.isscalar(where) or isinstance(where, (int, np.integer)):
             sites = [int(where)]
         else:
             sites = [int(s) for s in where]
-        return "sites", np.asarray(op), sites
-    return "persite", np.asarray(spec), None
+        kind, operator = "sites", np.asarray(op)
+        return _validate_observable_target(
+            kind, operator, sites, dimensions, name
+        )
+    return _validate_observable_target(
+        "persite", np.asarray(spec), None, dimensions, name
+    )
+
+
+def _validate_observable_target(kind, operator, sites, dimensions, name):
+    """Validate one parsed observable against the electronic site dimensions."""
+    operator = np.asarray(operator, complex)
+    if (operator.ndim != 2 or operator.shape[0] == 0
+            or operator.shape[0] != operator.shape[1]
+            or not np.all(np.isfinite(operator))):
+        raise ValueError(f"{name} must contain a finite square operator")
+    if dimensions is None:
+        return kind, operator, sites
+    if kind == "persite":
+        if not any(operator.shape == (d, d) for d in dimensions):
+            raise ValueError(
+                f"{name} has shape {operator.shape}, which matches no system site"
+            )
+        return kind, operator, sites
+    if not sites:
+        raise ValueError(f"{name} must target at least one site")
+    if len(set(sites)) != len(sites):
+        raise ValueError(f"{name} cannot target the same site more than once")
+    if any(site < 0 or site >= len(dimensions) for site in sites):
+        raise ValueError(f"{name} targets a site outside the system")
+    expected = int(np.prod([dimensions[site] for site in sites]))
+    if operator.shape != (expected, expected):
+        raise ValueError(
+            f"{name} has shape {operator.shape}, expected {(expected, expected)} "
+            f"for sites {sites}"
+        )
+    return kind, operator, sites
 
 
 def _bind_site_entry(entry, *, single_default):
@@ -103,6 +159,21 @@ def _reject_engine_options(options):
         raise TypeError(f"unexpected run option(s): {names}")
 
 
+def _run_sampling_options(observe_every, bath_horizon):
+    """Validate multi-site recording and automatic-bath horizon settings."""
+    if (isinstance(observe_every, (bool, np.bool_))
+            or not isinstance(observe_every, (int, np.integer))
+            or observe_every < 1):
+        raise ValueError("observe_every must be a positive integer")
+    if bath_horizon is not None:
+        if (isinstance(bath_horizon, (bool, np.bool_))
+                or not isinstance(bath_horizon, (int, float, np.number))
+                or not np.isfinite(bath_horizon) or bath_horizon <= 0):
+            raise ValueError("bath_horizon must be finite and positive")
+        bath_horizon = float(bath_horizon)
+    return int(observe_every), bath_horizon
+
+
 class TreeFishbone:
     """Electronic sites wired into an *arbitrary tree*, each with one or more baths.
 
@@ -128,20 +199,55 @@ class TreeFishbone:
     """
 
     def __init__(self, sites, edges, baths):
-        self.sites = [np.asarray(h, complex) for h in sites]
+        self.sites = [check_operator(h, f"sites[{i}]")
+                      for i, h in enumerate(sites)]
         self.ns = len(self.sites)
+        if self.ns == 0:
+            raise ValueError("sites must contain at least one Hamiltonian")
         self.de = [h.shape[0] for h in self.sites]
         self.edges = []
-        for e in edges:
+        seen = set()
+        for edge_index, e in enumerate(edges):
+            if not isinstance(e, (tuple, list)) or len(e) not in (2, 3):
+                raise ValueError(
+                    "each edge must be (i, j) or (i, j, coupling)"
+                )
+            i, j = e[:2]
+            if (not isinstance(i, (int, np.integer))
+                    or isinstance(i, (bool, np.bool_))
+                    or not isinstance(j, (int, np.integer))
+                    or isinstance(j, (bool, np.bool_))):
+                raise TypeError("edge endpoints must be integer site indices")
+            i, j = int(i), int(j)
+            if i < 0 or j < 0 or i >= self.ns or j >= self.ns:
+                raise ValueError(f"edge {(i, j)} is outside the system")
+            if i == j:
+                raise ValueError(f"edge {(i, j)} is a self-edge")
+            key = tuple(sorted((i, j)))
+            if key in seen:
+                raise ValueError(f"duplicate edge {key}")
+            seen.add(key)
             if len(e) == 2:
-                i, j = e
                 C = np.zeros((self.de[i] * self.de[j],) * 2, complex)
             else:
-                i, j, C = e
-                C = np.asarray(C, complex)
-            self.edges.append((int(i), int(j), C))
+                C = e[2]
+            C = check_operator(
+                C, f"edges[{edge_index}].coupling", self.de[i] * self.de[j]
+            )
+            self.edges.append((i, j, C))
         if len(self.edges) != self.ns - 1:
             raise ValueError("edges must form a tree over the sites (n_sites-1 edges)")
+        adjacency = [set() for _ in range(self.ns)]
+        for i, j, _ in self.edges:
+            adjacency[i].add(j)
+            adjacency[j].add(i)
+        reached = {0}
+        frontier = [0]
+        while frontier:
+            frontier.extend(adjacency[frontier.pop()] - reached)
+            reached.update(frontier)
+        if len(reached) != self.ns:
+            raise ValueError("edges must form one connected tree over the sites")
         self.baths = []
         for entry in _site_entries(baths, self.ns):
             self.baths.append(_bind_site_entry(
@@ -187,8 +293,19 @@ class TreeFishbone:
             w, U = np.linalg.eigh(self.sites[i])
             return U[:, int(np.argmin(w))].astype(complex)
         item = initial[i] if isinstance(initial, (list, tuple)) else initial
-        v = np.asarray(item, complex)
-        return v / np.linalg.norm(v)
+        v = np.asarray(item, complex).reshape(-1)
+        if v.shape != (de,):
+            raise ValueError(
+                f"initial state for site {i} has length {v.size}, expected {de}"
+            )
+        if not np.all(np.isfinite(v)):
+            raise ValueError(f"initial state for site {i} must be finite")
+        norm = np.linalg.norm(v)
+        if not np.isfinite(norm) or norm == 0:
+            raise ValueError(
+                f"initial state for site {i} must have a finite non-zero norm"
+            )
+        return v / norm
 
     #: The model this class realizes.  ``Fishbone`` overrides it with ``"comb"``.
     _MODEL = "site-tree"
@@ -252,13 +369,11 @@ class TreeFishbone:
                 raise unknown_method_error(m, self._MODEL)
             spec = method_spec(m, self._MODEL)
         _reject_engine_options(engine_kw)
-        if n_steps is None:
-            if t_max is None:
-                raise ValueError("provide either t_max or n_steps")
-            n_steps = int(round(t_max / dt))
+        dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
-        if int(observe_every) != observe_every or observe_every < 1:
-            raise ValueError("observe_every must be a positive integer")
+        observe_every, bath_horizon = _run_sampling_options(
+            observe_every, bath_horizon
+        )
         if resume is not None:
             from fishbonett.models.result import SimulationCheckpoint
             if not isinstance(resume, SimulationCheckpoint):
@@ -288,7 +403,7 @@ class TreeFishbone:
             dt=dt, n_steps=n_steps, bond_dim=bond_dim,
             trunc_eps=trunc_eps, obs_ops=observables, initial=initial,
             seed=seed, resume=resume, bath_horizon=bath_horizon,
-            observe_every=int(observe_every), progress=progress,
+            observe_every=observe_every, progress=progress,
             kw=engine_kw,
         )
         from fishbonett.models.simulation import compile_plan
@@ -319,8 +434,11 @@ class Fishbone:
     _MODEL = "comb"
 
     def __init__(self, sites, baths, backbone=None, *, couplings=None):
-        self.sites = [np.asarray(h, complex) for h in sites]
+        self.sites = [check_operator(h, f"sites[{i}]")
+                      for i, h in enumerate(sites)]
         self.nc = len(self.sites)
+        if self.nc == 0:
+            raise ValueError("sites must contain at least one Hamiltonian")
         self.de = [h.shape[0] for h in self.sites]
         self.baths = _site_entries(baths, self.nc)
         if couplings is not None and backbone is not None:
@@ -341,14 +459,10 @@ class Fishbone:
                     raise ValueError("coupling keys must use the canonical order i < j")
                 if i < 0 or j >= self.nc:
                     raise ValueError(f"coupling edge {(i, j)} is outside the system")
-                value = np.asarray(operator, complex)
                 expected = self.de[i] * self.de[j]
-                if value.shape != (expected, expected):
-                    raise ValueError(
-                        f"coupling {(i, j)} has shape {value.shape}, expected "
-                        f"{(expected, expected)}")
-                if not np.allclose(value, value.conj().T):
-                    raise ValueError(f"coupling {(i, j)} must be Hermitian")
+                value = check_operator(
+                    operator, f"coupling {(i, j)}", expected
+                )
                 parsed[(i, j)] = value
             if len(set(self.de)) > 1:
                 raise ValueError(
@@ -360,7 +474,12 @@ class Fishbone:
                         for i in range(self.nc - 1)]
         if len(backbone) != max(self.nc - 1, 0):
             raise ValueError("backbone must have n_sites - 1 entries")
-        self.backbone = [np.asarray(b, complex) for b in backbone]
+        self.backbone = [
+            check_operator(
+                value, f"backbone[{i}]", self.de[i] * self.de[i + 1]
+            )
+            for i, value in enumerate(backbone)
+        ]
 
     @classmethod
     def from_single_excitation(cls, exciton_hamiltonian, *, baths):
@@ -412,7 +531,10 @@ class Fishbone:
         Same as :meth:`fishbonett.models.fishbone.TreeFishbone.local_terms`, with the
         linear backbone expanded into the equivalent edge list.
         """
-        return self._tree().local_terms(t_max)
+        terms = self._tree().local_terms(t_max)
+        if self.graph_couplings:
+            terms.graph_bond.update(self.graph_couplings)
+        return terms
 
     def hamiltonians(self, t_max=None):
         """``(dims, edges, site_H, edge_H)`` -- :meth:`local_terms` as a 4-tuple."""
@@ -446,13 +568,11 @@ class Fishbone:
                 raise unknown_method_error(m, self._MODEL)
             spec = method_spec(m, self._MODEL)
         _reject_engine_options(engine_kw)
-        if n_steps is None:
-            if t_max is None:
-                raise ValueError("provide either t_max or n_steps")
-            n_steps = int(round(t_max / dt))
+        dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
-        if int(observe_every) != observe_every or observe_every < 1:
-            raise ValueError("observe_every must be a positive integer")
+        observe_every, bath_horizon = _run_sampling_options(
+            observe_every, bath_horizon
+        )
         if resume is not None:
             from fishbonett.models.result import SimulationCheckpoint
             if not isinstance(resume, SimulationCheckpoint):
@@ -481,7 +601,7 @@ class Fishbone:
             dt=dt, n_steps=n_steps, bond_dim=trunc.max_bond,
             trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
             seed=seed, resume=resume, bath_horizon=bath_horizon,
-            observe_every=int(observe_every), progress=progress,
+            observe_every=observe_every, progress=progress,
             kw=engine_kw,
         )
         from fishbonett.models.simulation import compile_plan

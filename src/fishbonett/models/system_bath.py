@@ -11,12 +11,12 @@ See :mod:`fishbonett.models.registry` for supported representation,
 state-geometry, and integrator combinations.
 """
 from fishbonett.linalg import Truncation
-from fishbonett.system import System
+from fishbonett.system import System, check_operator
 from fishbonett.bath.coupled import bind_bath
-from fishbonett.models.propagate import RunCtx
+from fishbonett.models.propagate import RunCtx, resolve_time_grid
 from fishbonett.models import registry
 from fishbonett.models.registry import (
-    FIXED_BOND_METHODS, methods_of, unknown_method_error,
+    BOND_CAP_REQUIRED_METHODS, methods_of, unknown_method_error,
 )
 
 __all__ = ["SystemBath"]
@@ -24,7 +24,7 @@ __all__ = ["SystemBath"]
 #: ``run``'s default.  Used to tell "the user asked for a method" apart from
 #: "the user left it alone", which matters for the multichannel model where
 #: ``method`` has nothing to choose.
-_DEFAULT_METHOD = "interaction-chain-tree-tdvp2"
+_DEFAULT_METHOD = "interaction-chain-tree-tebd"
 
 
 def _bond_growing_siblings(method):
@@ -38,7 +38,7 @@ def _bond_growing_siblings(method):
         name
         for model_key in spec.models
         for name in methods_of(model_key, spec.representation)
-        if name not in FIXED_BOND_METHODS
+        if name not in BOND_CAP_REQUIRED_METHODS
     }
     return sorted(siblings)
 
@@ -139,10 +139,10 @@ class SystemBath:
           bond dimensions.  *interaction-chain*
           (``interaction-chain-tebd``, ``interaction-chain-trotter-mpo``,
           ``interaction-chain-tdvp1/2`` on a 1D MPS;
-          ``interaction-chain-tree-tdvp1/2 | interaction-chain-tree-tebd`` on a
+          ``interaction-chain-tree-tebd`` on a
           balanced binary tree, which keeps the high-bond region ``O(log N)`` edges
           deep instead of ``O(N)``) -- low entanglement, gates rebuilt each step;
-          all coupling terms commute here, which is what makes
+          for the single-channel model the mode terms commute, which makes
           ``interaction-chain-trotter-mpo``'s exact factorization possible.
           *polaron-chain* (``polaron-chain-tebd``,
           ``polaron-chain-tdvp1/tdvp2/dtdvp``) -- static *and* low-entanglement; needs
@@ -189,14 +189,20 @@ class SystemBath:
             raise TypeError(
                 f"{joined} is not a public run axis; use one exact "
                 "representation= value instead")
-        if n_steps is None:
-            if t_max is None:
-                raise ValueError("provide either t_max or n_steps")
-            n_steps = int(round(t_max / dt))
+        dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
         bond_dim, trunc_eps = trunc.max_bond, trunc.eps
         # a general system has no canonical observables, so it gets the RDM only
         obs_ops = observables if observables is not None else self.system.observables()
+        if not hasattr(obs_ops, "items"):
+            raise TypeError("observables must be a mapping from names to operators")
+        obs_ops = {
+            name: check_operator(
+                operator, f"observables[{name!r}]", self.system.dim,
+                hermitian=False,
+            )
+            for name, operator in obs_ops.items()
+        }
 
         axis_kw = dict(
             model=model, representation=representation,
@@ -227,26 +233,29 @@ class SystemBath:
             raise unknown_method_error(spec.name)
         allowed_engine_options = set()
         if spec.engine == "mpo-tdvp":
-            allowed_engine_options.update({"prec", "bond_expand", "Dplusmax"})
-            if spec.representation.startswith("polaron-"):
-                allowed_engine_options.add("initial_bond")
-            else:
-                allowed_engine_options.update({"tol", "eshift"})
+            allowed_engine_options.update({"tol", "eshift"})
+            if spec.integrator == "tdvp2":
+                allowed_engine_options.add("bond_expand")
+            elif spec.integrator == "dtdvp":
+                allowed_engine_options.update({"prec", "bond_expand"})
         unknown_options = set(engine_kw) - allowed_engine_options
         if unknown_options:
             names = ", ".join(sorted(unknown_options))
             raise TypeError(
                 f"unexpected run option(s) for {spec.name}: {names}")
-        if bond_dim is None and spec.fixed_bond:
+        if bond_dim is None and spec.requires_bond_cap:
             alternatives = _bond_growing_siblings(spec.name) or [
                 "interaction-chain-tebd"]
+            reason = (
+                "uses a fixed one-site TDVP manifold"
+                if spec.integrator == "tdvp1"
+                else "grows bonds adaptively but requires a finite memory ceiling"
+            )
             raise ValueError(
-                f"method {spec.name!r} has a fixed bond dimension and cannot grow "
-                "it from a product state, so bond_dim must be given explicitly "
-                "(bond_dim=None means 'unlimited', which is only meaningful for "
-                "the truncation-driven methods).  To let trunc_eps choose the bond "
-                "instead, use a bond-growing method of the same representation: "
-                f"{', '.join(alternatives)}")
+                f"method {spec.name!r} {reason}, so bond_dim must be given "
+                "explicitly. To let trunc_eps choose an uncapped bond instead, "
+                "use: " + ", ".join(alternatives)
+            )
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
                      krylov=krylov, seed=seed, kw=engine_kw,
