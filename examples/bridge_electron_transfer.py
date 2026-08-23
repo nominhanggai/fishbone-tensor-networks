@@ -70,17 +70,21 @@ def _case(case):
     return CM_TO_RAD_PS * hamiltonian, coupling
 
 
-def propagation_hamiltonian(case):
-    """Hamiltonian used with Fishbone's unshifted harmonic bath.
+def quapi_equivalent_hamiltonian(case):
+    """Explicit-bath Hamiltonian matching the paper's QUAPI convention.
 
-    This reproduction interprets the quoted diabatic energies as the minima of
-    displaced bath potentials.  In the bilinear ``SystemBath`` convention that
-    requires the reorganization counterterm ``lambda_R M^2``.  ``SystemBath``
-    deliberately does not add a model-dependent counterterm itself.
+    The paper diagonalizes ``M = U D U^dagger`` before applying the standard
+    Makri influence coefficients.  Those coefficients include the local
+    reorganization contribution ``lambda_R D^2``.  An explicit harmonic-bath
+    propagation therefore uses ``lambda_R U D^2 U^dagger``, which is exactly
+    ``lambda_R M^2``.  This is a conversion between propagation conventions;
+    it is not an extra term printed in the paper's Eq. (1).
     """
     hamiltonian, coupling = _case(case)
-    counterterm = CM_TO_RAD_PS * REORGANIZATION_CM * (coupling @ coupling)
-    return hamiltonian + counterterm, coupling
+    renormalization = (
+        CM_TO_RAD_PS * REORGANIZATION_CM * (coupling @ coupling)
+    )
+    return hamiltonian + renormalization, coupling
 
 
 def spectral_density(omega):
@@ -94,7 +98,7 @@ def spectral_density(omega):
 
 
 def make_model(case, *, phys_dim, n_modes, domain):
-    hamiltonian, coupling = propagation_hamiltonian(case)
+    hamiltonian, coupling = quapi_equivalent_hamiltonian(case)
     beta = 1.0 / (KB_CM_PER_K * TEMPERATURE_K * CM_TO_RAD_PS)
     bath = Bath(
         J=spectral_density,

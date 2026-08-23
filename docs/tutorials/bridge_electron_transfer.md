@@ -14,10 +14,10 @@ separate 15 ps validation targets and must not be fitted from this short trace.
 ## 1. Physical model
 
 Use the diabatic basis $\{|D\rangle,|B\rangle,|A\rangle\}$ for donor, bridge,
-and acceptor. The Hamiltonian is
+and acceptor. The paper writes the Hamiltonian as
 
 $$
-H=H_S+H_B+M\sum_j c_jx_j+\lambda_R M^2,
+H=H_S+H_B+M\sum_j c_jx_j,
 $$
 
 with
@@ -41,18 +41,33 @@ One collective bath coordinate multiplies the entire matrix $M$. Consequently,
 the site-energy and coupling fluctuations are correlated; this is not a model of
 three independent local baths.
 
-The last term is the reorganization counterterm. This reproduction interprets
-the quoted diabatic energies as the minima of the three displaced bath
-potentials. Fishbone's `SystemBath` represents a raw bilinear Hamiltonian and
-does not guess whether a particular model uses vertical energies or
-potential-minimum energies, so the tutorial adds the counterterm explicitly.
-Omitting it changes the energy landscape: for diagonal
-$M=\operatorname{diag}(2,1,0)$, the bath would lower the donor minimum by
-$4\lambda_R$ and spuriously trap the initial population.
+There is an important propagation-convention detail. The paper diagonalizes the
+coupling operator,
 
-For non-Condon coupling, $M^2$ is itself non-diagonal. The counterterm must
-therefore be evaluated as the full matrix product; shifting only the three
-diagonal energies is not equivalent.
+$$
+U^\dagger M U=D,
+$$
+
+and performs the MACGIC-QUAPI calculation in that basis. The standard Makri
+influence coefficients used by that calculation include the local Hamiltonian
+renormalization $\lambda_R D^2$. `SystemBath`, by contrast, propagates an
+explicit unshifted harmonic bath and does not insert such a model-dependent
+renormalization. The Hamiltonian passed to `SystemBath` must therefore be
+
+$$
+H_S^{\mathrm{explicit}}=H_S+\lambda_R U D^2U^\dagger
+                       =H_S+\lambda_R M^2.
+$$
+
+This is a conversion between the paper's QUAPI convention and an explicit-bath
+Hamiltonian. The $\lambda_RM^2$ term is not printed in Eq. (1) or in the
+supplement. Omitting the conversion instead reproduces the unrenormalized
+bilinear Hamiltonian, not the published QUAPI propagation.
+
+For non-Condon coupling, $M^2$ has off-diagonal entries. Keeping them follows
+directly from rotating $\lambda_RD^2$ back to the diabatic basis. Keeping only
+the diagonal of $M^2$ would not be invariant under the basis transformation used
+in the paper and would define a different model.
 
 Fig. 2 requires three calculations:
 
@@ -147,8 +162,8 @@ OBSERVABLES = {"donor": P_D, "bridge": P_B, "acceptor": P_A}
 COLORS = {"donor": "#4C6EF5", "bridge": "#E8590C", "acceptor": "#2B8A3E"}
 
 
-def system_matrices(case):
-    """Return the propagation Hamiltonian and dimensionless bath operator M."""
+def quapi_equivalent_matrices(case):
+    """Return the explicit-bath form of the paper's QUAPI model."""
     h_cm = np.diag([0.0, -150.0, -1000.0])
     coupling = np.diag([2.0, 1.0, 0.0])
 
@@ -164,13 +179,12 @@ def system_matrices(case):
     else:
         raise ValueError("unknown calculation")
 
-    # The paper quotes potential-minimum energies.  SystemBath supplies the
-    # bilinear M X interaction but deliberately adds no model-specific
-    # counterterm, so include lambda_R M^2 here.
-    h_propagation_cm = (
+    # Standard Makri influence coefficients include lambda_R D^2 after the
+    # paper diagonalizes M.  Rotating back gives lambda_R M^2.
+    h_explicit_cm = (
         h_cm + REORGANIZATION_CM * (coupling @ coupling)
     )
-    return CM_TO_RAD_PS * h_propagation_cm, coupling
+    return CM_TO_RAD_PS * h_explicit_cm, coupling
 
 
 def spectral_density(omega_rad_ps):
@@ -205,7 +219,7 @@ print(
 
 
 def run(case):
-    hamiltonian, coupling = system_matrices(case)
+    hamiltonian, coupling = quapi_equivalent_matrices(case)
     bath = Bath(
         J=spectral_density,
         beta=beta,
@@ -283,8 +297,8 @@ not an arbitrary accuracy preference.
 matrix multiplies one collective bath coordinate, exactly as $M$ does in the
 Hamiltonian. In the non-Condon calculation, the same fluctuation therefore
 changes site energies and the $D$--$B$ and $B$--$A$ couplings. The
-`h_propagation_cm` construction keeps the paper's potential-minimum energy
-convention while using this bilinear API.
+`h_explicit_cm` construction translates the QUAPI local-renormalization
+convention to this explicit-bath API.
 
 `interaction-chain-trotter-mpo` means:
 
@@ -307,10 +321,11 @@ the paper. No bath displacement conditioned on the donor is included.
 ```{include} ../_generated/bridge_electron_transfer.md
 ```
 
-The weak-diagonal and non-Condon calculations have identical *bare* $H_S$.
-Their different dynamics comes from the off-diagonal entries of $M$, including
-the corresponding terms required in $\lambda_RM^2$. The diagonal reference uses
-much larger bare electronic couplings and is a separate benchmark trajectory.
+The weak-diagonal and non-Condon calculations have identical $H_S$ in the
+paper's convention. Their different dynamics comes from the off-diagonal entries
+of $M$, including the terms generated when $\lambda_RD^2$ is rotated from the
+coupling eigenbasis back to the diabatic basis. The diagonal reference uses much
+larger electronic couplings and is a separate benchmark trajectory.
 
 The donor loss and compensating bridge/acceptor growth are the population
 transfer. Probability conservation checks that the apparent loss is not tensor
@@ -394,10 +409,10 @@ couplings are reduced from tens of cm$^{-1}$ to 2 cm$^{-1}$. The weak-diagonal
 control shows that the enhancement is caused by non-Condon fluctuations rather
 than by the weak electronic Hamiltonian itself.
 
-The early-time tutorial demonstrates that mechanism and checks the package
-mapping, including the energy counterterm needed for this electron-transfer
-convention. Recovery of the numerical values $2.36$ and $2.50$ ps remains a
-long-time convergence result, not a conclusion encoded into the page.
+The early-time tutorial demonstrates that mechanism and checks the conversion
+from the paper's QUAPI convention to an explicit tensor-network bath. Recovery
+of the numerical values $2.36$ and $2.50$ ps remains a long-time convergence
+result, not a conclusion encoded into the page.
 
 ## 10. Common mistakes
 
@@ -408,9 +423,10 @@ long-time convergence result, not a conclusion encoded into the page.
 - Using cm$^{-1}$ Hamiltonian entries directly with a ps step changes every
   dynamical timescale.
 - Converting $H_S$ but not $J(\omega)$ and $\beta$ is inconsistent.
-- Omitting $\lambda_RM^2$ interprets the quoted potential-minimum energies as
-  vertical energies and can spuriously localize the donor.
-- Keeping only the diagonal of $M^2$ changes the non-Condon Hamiltonian.
+- Omitting the QUAPI-to-explicit-bath renormalization propagates a different
+  Hamiltonian and can localize the donor for these parameters.
+- Keeping only the diagonal of $M^2$ is not equivalent to applying
+  $\lambda_RD^2$ in the coupling eigenbasis.
 - Counting negative thermofield frequencies in $\lambda_R$ double-counts
   temperature rather than molecular reorganization.
 - Fitting the 0.2 ps transient cannot recover a 2.5 ps lifetime.
