@@ -1,341 +1,410 @@
-"""Regenerate the documentation figures.
+"""Regenerate documentation figures from the public examples.
 
-The figures are **not** committed: they are build artefacts, produced here and
-written to ``docs/img/`` (gitignored).  ``docs/conf.py`` calls :func:`build_all`
-at the start of every Sphinx build, so a plain ``sphinx-build`` -- locally, in CI
-or on Read the Docs -- always renders against freshly computed data.  Run it
-directly to refresh them by hand::
-
-    python docs/figures.py
-
-Every figure here illustrates :doc:`bath`: that the automatic bath discretization
-(reorganization-energy ``domain`` + light-cone ``n_modes``) reproduces the bath
-correlation function, and that degrading either choice breaks it.
+Figures and numerical summaries are build artifacts. ``docs/conf.py`` invokes
+``build_all`` so a documentation build runs the same profiled calculations that
+the tutorial text describes.
 """
-from pathlib import Path
+
 import importlib.util
+from pathlib import Path
+import sys
 
 import numpy as np
 
-IMG = Path(__file__).resolve().parent / "img"
 
-# Every figure compares a discretized bath against an exact correlation function.
+DOCS = Path(__file__).resolve().parent
+ROOT = DOCS.parent
+IMG = DOCS / "img"
+GENERATED = DOCS / "_generated"
 T_MAX = 4.0
 _TS = np.linspace(0.0, T_MAX, 400)
 
 
 def _mpl():
-    """Import matplotlib with a headless backend (CI has no display)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     return plt
 
 
-def _c_disc(J, domain, n_modes, ts, beta=None):
-    """``C_disc(t) = sum_k g_k^2 e^{-i w_k t}`` for a Gauss-Legendre star.
-
-    ``g_k^2 = J(w_k) w_k / pi`` are the Gauss couplings; at finite temperature the
-    thermalized density on a signed domain already carries detailed balance, so the
-    same formula applies.
-    """
-    from fishbonett.bath.legendre import get_vn_squared
-    freq, v_sq = get_vn_squared(J, n_modes, list(domain))
-    return (np.asarray(v_sq)[None, :] / np.pi
-            * np.exp(-1j * np.outer(ts, freq))).sum(axis=1)
-
-
-def _panel(ax, ts, exact, curves, title):
-    """Real/imaginary parts of ``exact`` (lines) with discretizations (markers)."""
-    ax.plot(ts, exact.real, "-", color="#4C6EF5", lw=2.4, label=r"exact  Re $C(t)$")
-    ax.plot(ts, exact.imag, "-", color="#E8590C", lw=2.4, label=r"exact  Im $C(t)$")
-    sl = slice(None, None, max(1, len(ts) // 28))
-    ax.plot(ts[sl], curves["auto"].real[sl], "o", ms=5, mfc="none",
-            color="#4C6EF5", label="auto (Re)")
-    ax.plot(ts[sl], curves["auto"].imag[sl], "s", ms=5, mfc="none",
-            color="#E8590C", label="auto (Im)")
-    ax.set_xlabel("time $t$")
-    ax.set_ylabel("$C(t)$")
-    ax.set_title(title)
-    ax.grid(alpha=0.25)
-    ax.legend(loc="upper right", frameon=False, fontsize=8, ncol=2)
-
-
-def _error_inset(ax, ts, exact, curves, loc=(0.44, 0.44, 0.52, 0.36)):
-    """Inset: relative error of each discretization against the exact curve."""
-    ins = ax.inset_axes(loc)
-    scale = abs(exact[0])
-    style = {"auto": ("#2B8A3E", "-", "auto"),
-             "few": ("#868e96", "--", "too few modes"),
-             "narrow": ("#C92A2A", ":", "domain too narrow")}
-    for key, (color, ls, label) in style.items():
-        if key in curves:
-            ins.semilogy(ts, np.abs(curves[key] - exact) / scale, ls,
-                         color=color, lw=1.4, label=label)
-    ins.set_ylim(1e-4, 2.0)
-    ins.set_xlabel("$t$", fontsize=7)
-    ins.set_ylabel("rel. error", fontsize=7)
-    ins.tick_params(labelsize=6)
-    ins.grid(alpha=0.25, which="both")
-    ins.legend(fontsize=6, frameon=False, loc="lower right")
-    return ins
-
-
-def bath_correlation(path=None):
-    """T = 0 Ohmic bath: the automatic discretization vs two degraded ones."""
-    from fishbonett import Bath
-    plt = _mpl()
-    eta, wc = 0.2, 5.0
-    J = lambda w: eta * w * np.exp(-w / wc)
-    exact = (eta / np.pi) / (1 / wc + 1j * _TS) ** 2
-    bath = Bath(J=J, phys_dim=10).resolved(T_MAX)
-    curves = {
-        "auto": _c_disc(J, bath.domain, bath.n_modes, _TS),
-        "few": _c_disc(J, bath.domain, 20, _TS),
-        "narrow": _c_disc(J, (0.0, 10.0), bath.n_modes, _TS),
-    }
-    fig, ax = plt.subplots(figsize=(7.2, 4.6))
-    _panel(ax, _TS, exact, curves,
-           rf"Ohmic bath, $T=0$  (auto: domain $\approx$ "
-           rf"{tuple(round(float(x), 1) for x in bath.domain)}, "
-           rf"{bath.n_modes} modes)")
-    _error_inset(ax, _TS, exact, curves)
-    fig.tight_layout()
-    out = Path(path or IMG / "bath_correlation.png")
-    fig.savefig(out, dpi=140)
-    plt.close(fig)
-    return out
-
-
-def bath_correlation_finite_t(path=None):
-    """Finite temperature: the asymmetric signed (thermofield) domain."""
-    from fishbonett import Bath, thermalize
-    from scipy.integrate import quad
-    plt = _mpl()
-    eta, wc, kT = 0.2, 5.0, 1.0
-    beta = 1.0 / kT
-    J = lambda w: eta * w * np.exp(-w / wc)
-
-    def exact_c(t):                       # detailed-balance correlation function
-        re = quad(lambda w: J(w) / np.pi / np.tanh(beta * w / 2) * np.cos(w * t),
-                  0, 40 * wc, limit=400)[0]
-        im = -quad(lambda w: J(w) / np.pi * np.sin(w * t), 0, 40 * wc, limit=400)[0]
-        return re + 1j * im
-
-    exact = np.array([exact_c(t) for t in _TS])
-    bath = Bath(J=J, temperature=kT, phys_dim=10).resolved(T_MAX)
-    Jb = thermalize(J, beta)
-    curves = {
-        "auto": _c_disc(Jb, bath.domain, bath.n_modes, _TS),
-        "few": _c_disc(Jb, bath.domain, 20, _TS),
-        "narrow": _c_disc(Jb, (-1.0, 10.0), bath.n_modes, _TS),
-    }
-    fig, ax = plt.subplots(figsize=(7.2, 4.6))
-    _panel(ax, _TS, exact, curves,
-           rf"Ohmic bath, $k_BT={kT}$  (auto signed domain "
-           rf"{tuple(round(float(x), 1) for x in bath.domain)}, "
-           rf"{bath.n_modes} modes)")
-    _error_inset(ax, _TS, exact, curves)
-    fig.tight_layout()
-    out = Path(path or IMG / "bath_correlation_finiteT.png")
-    fig.savefig(out, dpi=140)
-    plt.close(fig)
-    return out
-
-
-def bath_structured(path=None):
-    """A structured density (Ohmic background + two vibrational peaks)."""
-    from fishbonett import Bath
-    from fishbonett.bath.legendre import get_vn_squared
-    from scipy.integrate import quad
-    plt = _mpl()
-
-    def J(w):
-        w = np.asarray(w, float)
-        out = 0.05 * w * np.exp(-w / 2.5)
-        for lam, gam, om in [(0.6, 1.2, 6.0), (0.5, 1.0, 13.0)]:
-            out = out + (2 * lam * gam * om ** 2 * w
-                         / ((om ** 2 - w ** 2) ** 2 + gam ** 2 * w ** 2))
-        return out
-
-    exact = np.array([quad(lambda w: J(w) / np.pi * np.cos(w * t), 0, 60,
-                           limit=600)[0]
-                      - 1j * quad(lambda w: J(w) / np.pi * np.sin(w * t), 0, 60,
-                                  limit=600)[0] for t in _TS])
-    bath = Bath(J=J, phys_dim=10).resolved(T_MAX)
-    curves = {"auto": _c_disc(J, bath.domain, bath.n_modes, _TS)}
-
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11.4, 4.4))
-    grid = np.linspace(1e-3, float(bath.domain[1]) * 1.05, 900)
-    a1.plot(grid, J(grid), "-", color="#4C6EF5", lw=2.0, label=r"$J(\omega)$")
-    freq, v_sq = get_vn_squared(J, bath.n_modes, list(bath.domain))
-    a1.plot(freq, J(np.asarray(freq)), "o", ms=3, color="#E8590C",
-            label=f"{bath.n_modes} star modes")
-    a1.axvline(float(bath.domain[1]), color="#868e96", ls="--", lw=1.2,
-               label=rf"auto $\omega_{{hi}}={float(bath.domain[1]):.1f}$")
-    a1.set_xlabel(r"$\omega$"); a1.set_ylabel(r"$J(\omega)$")
-    a1.set_title("structured spectral density")
-    a1.legend(frameon=False, fontsize=8); a1.grid(alpha=0.25)
-
-    _panel(a2, _TS, exact, curves, "correlation function")
-    _error_inset(a2, _TS, exact, curves, loc=(0.46, 0.60, 0.50, 0.34))
-    fig.tight_layout()
-    out = Path(path or IMG / "bath_structured.png")
-    fig.savefig(out, dpi=140)
-    plt.close(fig)
-    return out
-
-
-def _load_rectifier_example():
-    path = Path(__file__).resolve().parents[1] / "examples" / "xxz_thermal_rectifier.py"
-    spec = importlib.util.spec_from_file_location("xxz_thermal_rectifier", path)
+def _load_example(name):
+    path = ROOT / "examples" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"docs_{name}", path)
     module = importlib.util.module_from_spec(spec)
-    import sys
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
 
-def xxz_thermal_rectifier(path=None):
-    """Full two-bath XXZ transport and convergence suite."""
-    example = _load_rectifier_example()
-    suite = example.run_suite("full")
-    summary = example.summarize(suite)
-    config = suite["config"]
-    if summary["max_bond"] >= config.max_bond:
-        raise RuntimeError("XXZ tutorial reached its hard bond cap")
+def _write_summary(name, text):
+    GENERATED.mkdir(parents=True, exist_ok=True)
+    (GENERATED / f"{name}.md").write_text(text, encoding="utf-8")
 
+
+def _c_disc(density, domain, n_modes, times):
+    from fishbonett.bath.legendre import get_vn_squared
+    frequency, weight = get_vn_squared(density, n_modes, list(domain))
+    return (
+        np.asarray(weight)[None, :] / np.pi
+        * np.exp(-1j * np.outer(times, frequency))
+    ).sum(axis=1)
+
+
+def _panel(axis, times, exact, curves, title):
+    axis.plot(times, exact.real, "-", color="#4C6EF5", lw=2.4,
+              label=r"exact Re $C(t)$")
+    axis.plot(times, exact.imag, "-", color="#E8590C", lw=2.4,
+              label=r"exact Im $C(t)$")
+    stride = slice(None, None, max(1, len(times) // 28))
+    axis.plot(times[stride], curves["auto"].real[stride], "o", ms=5,
+              mfc="none", color="#4C6EF5", label="automatic (Re)")
+    axis.plot(times[stride], curves["auto"].imag[stride], "s", ms=5,
+              mfc="none", color="#E8590C", label="automatic (Im)")
+    axis.set(xlabel="time", ylabel="$C(t)$", title=title)
+    axis.grid(alpha=0.25)
+    axis.legend(loc="upper right", frameon=False, fontsize=8, ncol=2)
+
+
+def _error_inset(axis, times, exact, curves, location=(0.44, 0.44, 0.52, 0.36)):
+    inset = axis.inset_axes(location)
+    scale = abs(exact[0])
+    styles = {
+        "auto": ("#2B8A3E", "-", "automatic"),
+        "few": ("#868e96", "--", "too few modes"),
+        "narrow": ("#C92A2A", ":", "domain too narrow"),
+    }
+    for key, (color, style, label) in styles.items():
+        if key in curves:
+            inset.semilogy(
+                times, np.abs(curves[key] - exact) / scale, style,
+                color=color, lw=1.4, label=label,
+            )
+    inset.set_ylim(1e-4, 2.0)
+    inset.set_xlabel("$t$", fontsize=7)
+    inset.set_ylabel("relative error", fontsize=7)
+    inset.tick_params(labelsize=6)
+    inset.grid(alpha=0.25, which="both")
+    inset.legend(fontsize=6, frameon=False, loc="lower right")
+
+
+def bath_correlation(path=None):
+    """Zero-temperature Ohmic bath and two deliberately degraded grids."""
+    from fishbonett import Bath
     plt = _mpl()
-    fig, axes = plt.subplots(2, 2, figsize=(11.2, 8.0))
-    colors = ("#4C6EF5", "#2B8A3E", "#E8590C")
-    for cut, color in enumerate(colors):
-        axes[0, 0].plot(
-            suite["forward"]["t"],
-            suite["forward"]["expect"][f"current_{cut}"],
-            color=color, label=f"cut {cut}")
-    axes[0, 0].axhline(0, color="#868e96", lw=0.8)
-    axes[0, 0].set(title="forward bias: continuity check",
-                   xlabel="time", ylabel="energy current")
-    axes[0, 0].legend(frameon=False)
+    eta, cutoff = 0.2, 5.0
+    density = lambda omega: eta * omega * np.exp(-omega / cutoff)
+    exact = (eta / np.pi) / (1.0 / cutoff + 1j * _TS) ** 2
+    bath = Bath(J=density, phys_dim=10).resolved(T_MAX)
+    curves = {
+        "auto": _c_disc(density, bath.domain, bath.n_modes, _TS),
+        "few": _c_disc(density, bath.domain, 20, _TS),
+        "narrow": _c_disc(density, (0.0, 10.0), bath.n_modes, _TS),
+    }
+    figure, axis = plt.subplots(figsize=(7.2, 4.6))
+    _panel(axis, _TS, exact, curves,
+           f"Ohmic bath, automatic domain and {bath.n_modes} modes")
+    _error_inset(axis, _TS, exact, curves)
+    figure.tight_layout()
+    output = Path(path or IMG / "bath_correlation.png")
+    figure.savefig(output, dpi=140)
+    plt.close(figure)
+    return output
 
-    for name, color in (("forward", "#C92A2A"),
-                        ("reverse", "#1971C2"),
-                        ("equilibrium", "#868E96")):
-        axes[0, 1].plot(
-            suite[name]["t"], suite[name]["expect"]["current_1"],
-            color=color, label=name)
-    axes[0, 1].axhline(0, color="#868e96", lw=0.8)
-    axes[0, 1].set(title="central current and zero-bias control",
-                   xlabel="time", ylabel="energy current")
-    axes[0, 1].legend(frameon=False)
 
-    x = np.arange(4)
-    for name, color in (("forward", "#C92A2A"),
-                        ("reverse", "#1971C2"),
-                        ("equilibrium", "#868E96")):
-        values = [suite[name]["expect"][f"site_energy_{site}"][-1]
-                  for site in range(4)]
-        axes[1, 0].plot(x, values, "o-", color=color, label=name)
-    axes[1, 0].set(title="wire energy profile at the final sample",
-                   xlabel="spin site", ylabel="local Zeeman energy", xticks=x)
-    axes[1, 0].legend(frameon=False)
+def bath_correlation_finite_t(path=None):
+    """Finite-temperature correlation on the thermofield signed domain."""
+    from fishbonett import Bath, thermalize
+    from scipy.integrate import quad
+    plt = _mpl()
+    eta, cutoff, temperature = 0.2, 5.0, 1.0
+    beta = 1.0 / temperature
+    density = lambda omega: eta * omega * np.exp(-omega / cutoff)
 
-    convergence = summary["convergence"]
-    labels = list(convergence)
-    positions = np.arange(len(labels))
-    forward_error = [convergence[name]["forward_relative"] for name in labels]
-    reverse_error = [convergence[name]["reverse_relative"] for name in labels]
-    axes[1, 1].bar(positions - 0.18, forward_error, 0.36,
-                   color="#C92A2A", label="forward")
-    axes[1, 1].bar(positions + 0.18, reverse_error, 0.36,
-                   color="#1971C2", label="reverse")
-    axes[1, 1].axhline(0.05, color="#2B8A3E", ls="--", label="5% target")
-    axes[1, 1].set(title="final-window numerical sensitivity",
-                   ylabel="relative change", xticks=positions,
-                   xticklabels=labels)
-    axes[1, 1].tick_params(axis="x", rotation=20)
-    axes[1, 1].legend(frameon=False)
-    for axis in axes.flat:
-        axis.grid(alpha=0.22)
-    fig.tight_layout()
-    out = Path(path or IMG / "xxz_thermal_rectifier.png")
-    fig.savefig(out, dpi=140)
-    plt.close(fig)
+    def exact_c(time):
+        real = quad(
+            lambda omega: density(omega) / np.pi
+            / np.tanh(beta * omega / 2.0) * np.cos(omega * time),
+            0, 40 * cutoff, limit=400,
+        )[0]
+        imaginary = -quad(
+            lambda omega: density(omega) / np.pi * np.sin(omega * time),
+            0, 40 * cutoff, limit=400,
+        )[0]
+        return real + 1j * imaginary
 
-    generated = Path(__file__).resolve().parent / "_generated"
-    generated.mkdir(exist_ok=True)
-    rows = [
-        f"| {cut} | {summary['forward_currents'][cut]:.6g} | "
-        f"{summary['reverse_currents'][cut]:.6g} | "
-        f"{summary['equilibrium_currents'][cut]:.6g} |"
-        for cut in range(3)
-    ]
-    convergence_rows = [
-        f"| {name} | {values['forward_relative']:.2%} | "
-        f"{values['reverse_relative']:.2%} |"
-        for name, values in summary["convergence"].items()
-    ]
-    if summary["rectification"] is None:
-        conclusion = (
-            "The stationarity and zero-bias gates are not both satisfied, so these "
-            "finite-time trajectories do **not** establish a thermal-rectification "
-            "ratio. They resolve directional transient heat flow, but a diode claim "
-            "requires a longer, converged pre-recurrence window.")
-    else:
-        conclusion = (
-            f"All reporting gates pass. The converged rectification ratio is "
-            f"$R={summary['rectification']:.3g}$.")
-    report = f"""## Generated numerical result
+    exact = np.array([exact_c(time) for time in _TS])
+    bath = Bath(J=density, temperature=temperature, phys_dim=10).resolved(T_MAX)
+    thermal_density = thermalize(density, beta)
+    curves = {
+        "auto": _c_disc(thermal_density, bath.domain, bath.n_modes, _TS),
+        "few": _c_disc(thermal_density, bath.domain, 20, _TS),
+        "narrow": _c_disc(thermal_density, (-1.0, 10.0), bath.n_modes, _TS),
+    }
+    figure, axis = plt.subplots(figsize=(7.2, 4.6))
+    _panel(axis, _TS, exact, curves,
+           f"Finite-temperature bath, signed domain, {bath.n_modes} modes")
+    _error_inset(axis, _TS, exact, curves)
+    figure.tight_layout()
+    output = Path(path or IMG / "bath_correlation_finiteT.png")
+    figure.savefig(output, dpi=140)
+    plt.close(figure)
+    return output
 
-This table and the figure were regenerated by the documentation build.
 
-| cut | forward | reverse | equal temperature |
-|---:|---:|---:|---:|
-{chr(10).join(rows)}
+def bath_structured(path=None):
+    """Structured density: Ohmic background plus two Brownian peaks."""
+    from fishbonett import Bath
+    from fishbonett.bath.legendre import get_vn_squared
+    from scipy.integrate import quad
+    plt = _mpl()
 
-Relative changes of the final-window central current:
+    def density(omega):
+        omega = np.asarray(omega, float)
+        result = 0.05 * omega * np.exp(-omega / 2.5)
+        for reorganization, damping, centre in ((0.6, 1.2, 6.0),
+                                                 (0.5, 1.0, 13.0)):
+            result += (
+                2 * reorganization * damping * centre**2 * omega
+                / ((centre**2 - omega**2) ** 2 + damping**2 * omega**2)
+            )
+        return result
 
-| check | forward | reverse |
-|---|---:|---:|
-{chr(10).join(convergence_rows)}
+    exact = np.array([
+        quad(lambda omega: density(omega) / np.pi * np.cos(omega * time),
+             0, 60, limit=600)[0]
+        - 1j * quad(lambda omega: density(omega) / np.pi * np.sin(omega * time),
+                    0, 60, limit=600)[0]
+        for time in _TS
+    ])
+    bath = Bath(J=density, phys_dim=10).resolved(T_MAX)
+    curves = {"auto": _c_disc(density, bath.domain, bath.n_modes, _TS)}
+    figure, (left, right) = plt.subplots(1, 2, figsize=(11.4, 4.4))
+    grid = np.linspace(1e-3, float(bath.domain[1]) * 1.05, 900)
+    left.plot(grid, density(grid), color="#4C6EF5", lw=2.0,
+              label=r"$J(\omega)$")
+    frequency, _weight = get_vn_squared(
+        density, bath.n_modes, list(bath.domain),
+    )
+    left.plot(frequency, density(np.asarray(frequency)), "o", ms=3,
+              color="#E8590C", label=f"{bath.n_modes} star modes")
+    left.set(xlabel=r"$\omega$", ylabel=r"$J(\omega)$",
+             title="structured spectral density")
+    left.legend(frameon=False, fontsize=8)
+    left.grid(alpha=0.25)
+    _panel(right, _TS, exact, curves, "correlation function")
+    _error_inset(right, _TS, exact, curves, (0.46, 0.60, 0.50, 0.34))
+    figure.tight_layout()
+    output = Path(path or IMG / "bath_structured.png")
+    figure.savefig(output, dpi=140)
+    plt.close(figure)
+    return output
 
-Peak retained bond dimension: **{summary['max_bond']}** (hard cap {config.max_bond}).
 
-{conclusion}
-"""
-    (generated / "xxz_thermal_rectifier.md").write_text(report, encoding="utf-8")
-    return out
+def vibronic_dimer(path=None):
+    example = _load_example("vibronic_dimer")
+    suite = example.run_profile("docs", announce=True)
+    summary = example.summarize(suite)
+    plt = _mpl()
+    figure, (left, right) = plt.subplots(1, 2, figsize=(11.2, 4.4))
+    for vibration, result in suite["results"].items():
+        population = np.asarray(result.expect["population"])
+        left.plot(result.t, population[:, 1], label=rf"$\omega_0={vibration:g}$")
+    scan = summary["final_acceptor_population"]
+    right.plot(list(scan), list(scan.values()), "o-", color="#6F42C1")
+    left.set(xlabel=r"time ($J^{-1}$)", ylabel="acceptor population",
+             title="vibronic dimer dynamics")
+    horizon = suite["profile"].t_max
+    right.set(xlabel=r"vibration $\omega_0/J$",
+              ylabel=rf"$P_A({horizon:g}/J)$",
+              title="frequency dependence")
+    left.legend(frameon=False)
+    for axis in (left, right):
+        axis.grid(alpha=0.25)
+    figure.tight_layout()
+    output = Path(path or IMG / "vibronic_dimer.png")
+    figure.savefig(output, dpi=140)
+    plt.close(figure)
+    modes = ", ".join(
+        f"{frequency:g}: {values[0]} modes/bath"
+        for frequency, values in summary["resolved_modes"].items()
+    )
+    _write_summary("vibronic_dimer", f"""## Generated result
+
+The documentation profile conserved the one-excitation population to
+**{summary['normalization_error']:.2e}** and retained a peak bond dimension of
+**{summary['max_bond']}**. The TEDOPA layout used {modes}; the frequency domain
+was selected automatically and the documentation profile fixed this mode count
+to keep the build bounded.
+
+The calculation resolves how the transfer changes across the damping-scale and
+near-resonant vibrations. The finite scan is evidence for this model and time
+window, not a universal claim that one vibrational frequency is optimal.
+""")
+    return output
+
+
+def nonadiabatic_spin_boson(path=None):
+    example = _load_example("nonadiabatic_spin_boson")
+    suite = example.run_profile("docs", announce=True)
+    summary = example.summarize(suite)
+    plt = _mpl()
+    figure, (left, right) = plt.subplots(1, 2, figsize=(11.2, 4.4))
+    for label, result in suite["results"].items():
+        left.plot(result.t / np.pi, result.expect["population_up"], label=label)
+    labels = list(summary["max_bond"])
+    right.bar(labels, [summary["max_bond"][label] for label in labels],
+              color=("#4C6EF5", "#E8590C"))
+    left.set(xlabel=r"$t\Delta/\pi$", ylabel=r"$P_\uparrow(t)$",
+             title="strong-coupling relaxation")
+    right.set(ylabel="peak bond dimension",
+              title="profile peak (different horizons)")
+    left.legend(frameon=False)
+    for axis in (left, right):
+        axis.grid(alpha=0.25)
+    figure.tight_layout()
+    output = Path(path or IMG / "nonadiabatic_spin_boson.png")
+    figure.savefig(output, dpi=140)
+    plt.close(figure)
+    difference = summary["max_difference_from_interaction"].get(
+        "schrodinger_chain", float("nan"),
+    )
+    _write_summary("nonadiabatic_spin_boson", f"""## Generated result
+
+The interaction-chain and short Schrödinger-chain overlap calculation differ by
+at most **{difference:.3g}** in the up-state population on their common interval.
+Their peak retained bond dimensions are
+**{summary['max_bond']['interaction']}** and
+**{summary['max_bond']['schrodinger_chain']}**, respectively. These bond values
+must not be read as an equal-time performance comparison because the TDVP check
+ends earlier.
+
+Agreement of two representations is a useful cross-check, but publication-scale
+work should also halve the time step and repeat the local-Fock-space and SVD
+threshold checks in the reference profile.
+""")
+    return output
+
+
+def bridge_electron_transfer(path=None):
+    example = _load_example("bridge_electron_transfer")
+    suite = example.run_profile("docs", announce=True)
+    summary = example.summarize(suite)
+    plt = _mpl()
+    figure, axes = plt.subplots(1, 2, figsize=(11.2, 4.4), sharey=True)
+    colors = {"donor": "#4C6EF5", "bridge": "#E8590C", "acceptor": "#2B8A3E"}
+    for axis, case in zip(axes, ("condon", "noncondon")):
+        result = suite["results"][case]["primary"]
+        for state, color in colors.items():
+            axis.plot(result.t, result.expect[state], color=color, label=state)
+        axis.set(xlabel="time (ps)", title=case)
+        axis.grid(alpha=0.25)
+    axes[0].set_ylabel("population")
+    axes[0].legend(frameon=False)
+    figure.tight_layout()
+    output = Path(path or IMG / "bridge_electron_transfer.png")
+    figure.savefig(output, dpi=140)
+    plt.close(figure)
+    def lifetime_text(value):
+        return f"{value:.3g}" if np.isfinite(value) else "not resolved"
+
+    rows = "\n".join(
+        f"| {case} | {lifetime_text(values['effective_lifetime_ps'])} | "
+        f"{values['peak_bridge_population']:.3g} | "
+        f"{values['final_acceptor_population']:.3g} | "
+        f"{values['normalization_error']:.2e} |"
+        for case, values in summary.items()
+    )
+    _write_summary("bridge_electron_transfer", f"""## Generated result
+
+| coupling model | descriptive donor lifetime (ps) | max bridge population | final acceptor population | normalization error |
+|---|---:|---:|---:|---:|
+{rows}
+
+The non-Condon bath operator permits bath-modulated electronic transfer despite
+small bare electronic couplings. The fitted donor lifetime summarizes the full
+population trace; it is not an isolated elementary $D\to A$ rate because bridge
+occupation and recrossing remain in the dynamics.
+""")
+    return output
+
+
+def two_bath_heat_flow(path=None):
+    example = _load_example("two_bath_heat_flow")
+    suite = example.run_profile("docs", announce=True)
+    summary = example.summarize(suite)
+    plt = _mpl()
+    figure, axes = plt.subplots(1, 2, figsize=(11.2, 4.4))
+    for condition, style in (("nonequilibrium", "-"), ("equilibrium", "--")):
+        case = suite["results"][condition]["primary"]
+        result = case["result"]
+        axes[0].plot(result.t, result.expect["sz"], style, label=condition)
+    case = suite["results"]["nonequilibrium"]["primary"]
+    result = case["result"]
+    axes[1].plot(result.t, case["hot_to_system"], label=r"hot $\to$ system")
+    axes[1].plot(result.t, -case["cold_to_system"], label=r"system $\to$ cold")
+    axes[0].set(xlabel=r"time ($\omega_c^{-1}$)", ylabel=r"$\langle\sigma_z\rangle$",
+                title="junction dynamics")
+    axes[1].set(xlabel=r"time ($\omega_c^{-1}$)", ylabel="energy current",
+                title="directional currents")
+    for axis in axes:
+        axis.grid(alpha=0.25)
+        axis.legend(frameon=False)
+    figure.tight_layout()
+    output = Path(path or IMG / "two_bath_heat_flow.png")
+    figure.savefig(output, dpi=140)
+    plt.close(figure)
+    nonequilibrium = summary["nonequilibrium"]
+    equilibrium = summary["equilibrium"]
+    _write_summary("two_bath_heat_flow", f"""## Generated result
+
+In the final 20% of the documentation run, the hot- and cold-bath currents into
+the system are **{nonequilibrium['mean_hot_to_system']:.4g}** and
+**{nonequilibrium['mean_cold_to_system']:.4g}**. Their residual balance is
+**{nonequilibrium['steady_balance_error']:.3g}**, and the RMS continuity-equation
+residual is **{nonequilibrium['continuity_rms']:.3g}**.
+
+The equal-temperature control has a final-window hot current of
+**{equilibrium['mean_hot_to_system']:.3g}**. A nonzero residual means the finite
+run has not established a steady-state transport claim; extend the reference
+profile and converge it before interpreting the plateau.
+""")
+    return output
 
 
 FIGURES = (
-    bath_correlation, bath_correlation_finite_t, bath_structured,
-    xxz_thermal_rectifier,
+    bath_correlation,
+    bath_correlation_finite_t,
+    bath_structured,
+    vibronic_dimer,
+    nonadiabatic_spin_boson,
+    bridge_electron_transfer,
+    two_bath_heat_flow,
 )
+
+OUTPUTS = {
+    function.__name__: IMG / f"{function.__name__}.png"
+    for function in FIGURES
+}
+OUTPUTS["bath_correlation_finite_t"] = IMG / "bath_correlation_finiteT.png"
 
 
 def build_all(force=False):
-    """Generate every figure into ``docs/img``.
-
-    Skips a figure whose file already exists unless ``force`` is set, so repeated
-    incremental Sphinx builds stay fast.  Failures are reported but never abort the
-    documentation build.
-    """
+    """Generate every figure, propagating failures to Sphinx and CI."""
     IMG.mkdir(parents=True, exist_ok=True)
     written = []
-    for fn in FIGURES:
-        target = IMG / {"bath_correlation": "bath_correlation.png",
-                        "bath_correlation_finite_t": "bath_correlation_finiteT.png",
-                        "bath_structured": "bath_structured.png",
-                        "xxz_thermal_rectifier": "xxz_thermal_rectifier.png"}[fn.__name__]
-        if target.exists() and not force:
+    for function in FIGURES:
+        target = OUTPUTS[function.__name__]
+        summary = GENERATED / f"{function.__name__}.md"
+        tutorial = function.__name__ in {
+            "vibronic_dimer", "nonadiabatic_spin_boson",
+            "bridge_electron_transfer", "two_bath_heat_flow",
+        }
+        if target.exists() and (not tutorial or summary.exists()) and not force:
             continue
-        try:
-            written.append(fn())
-        except Exception as exc:                       # pragma: no cover
-            print(f"[docs/figures] WARNING: {fn.__name__} failed: {exc}")
+        written.append(function(target))
     return written
 
 
 if __name__ == "__main__":
-    for p in build_all(force=True):
-        print("wrote", p)
+    for output in build_all(force=True):
+        print("wrote", output)
