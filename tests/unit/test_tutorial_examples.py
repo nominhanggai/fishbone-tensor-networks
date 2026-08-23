@@ -83,10 +83,23 @@ def test_electron_transfer_units_and_smoke_populations():
     assert module.BATH_CUTOFF_CM == pytest.approx(600.0)
     reorganization = 0.5 * module.BATH_ALPHA * module.BATH_CUTOFF_CM
     assert reorganization == pytest.approx(501.0)
+    assert module.REORGANIZATION_CM == pytest.approx(reorganization)
+    assert module.PROFILES["docs"].variants == (("primary", 6, 1e-4),)
     weak_h, weak_coupling = module._case("weak_diagonal")
     noncondon_h, noncondon_coupling = module._case("noncondon")
     assert np.array_equal(weak_h, noncondon_h)
     assert not np.array_equal(weak_coupling, noncondon_coupling)
+    propagated_h, propagated_coupling = module.propagation_hamiltonian(
+        "noncondon"
+    )
+    expected_counterterm = (
+        module.CM_TO_RAD_PS * reorganization
+        * (propagated_coupling @ propagated_coupling)
+    )
+    assert np.allclose(propagated_h, noncondon_h + expected_counterterm)
+    # M^2 is not diagonal for a non-Condon coupling matrix.  Retaining its
+    # off-diagonal entries is essential to reproduce the same Hamiltonian.
+    assert abs(expected_counterterm[0, 1]) > 0.0
     suite = module.run_profile("smoke")
     assert suite["bath"]["alpha"] == pytest.approx(1.67)
     assert suite["bath"]["cutoff_cm"] == pytest.approx(600.0)
@@ -98,6 +111,7 @@ def test_electron_transfer_units_and_smoke_populations():
     for case in summary:
         assert summary[case]["normalization_error"] < 1e-10
         assert 0.0 <= summary[case]["final_acceptor_population"] <= 1.0
+        assert np.isnan(summary[case]["effective_lifetime_ps"])
 
 
 def test_heat_flow_smoke_uses_distinct_baths_and_obeys_continuity():

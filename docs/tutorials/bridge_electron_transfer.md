@@ -6,10 +6,10 @@ Fig. 2 of [Acharyya, Ovcharenko, and
 Fingerhut](https://doi.org/10.1063/5.0027976)
 ([preprint](https://arxiv.org/abs/2108.11175)) with a tensor-network bath.
 
-The page makes two different numerical claims explicit. The complete program
-below is an automatically resolved-bath *early-time tutorial* that runs to 0.2
-ps. The paper's 2.36 and 2.50 ps donor lifetimes are separate 15 ps validation
-targets and must not be inferred from that short trajectory.
+The complete program below is an automatically resolved-bath *early-time
+tutorial* that runs to 0.2 ps. It shows the onset of population transfer and the
+non-Condon transient. The paper's 2.36 and 2.50 ps donor lifetimes remain
+separate 15 ps validation targets and must not be fitted from this short trace.
 
 ## 1. Physical model
 
@@ -17,7 +17,7 @@ Use the diabatic basis $\{|D\rangle,|B\rangle,|A\rangle\}$ for donor, bridge,
 and acceptor. The Hamiltonian is
 
 $$
-H=H_S+H_B+M\sum_j c_jx_j,
+H=H_S+H_B+M\sum_j c_jx_j+\lambda_R M^2,
 $$
 
 with
@@ -40,6 +40,19 @@ $$
 One collective bath coordinate multiplies the entire matrix $M$. Consequently,
 the site-energy and coupling fluctuations are correlated; this is not a model of
 three independent local baths.
+
+The last term is the reorganization counterterm. This reproduction interprets
+the quoted diabatic energies as the minima of the three displaced bath
+potentials. Fishbone's `SystemBath` represents a raw bilinear Hamiltonian and
+does not guess whether a particular model uses vertical energies or
+potential-minimum energies, so the tutorial adds the counterterm explicitly.
+Omitting it changes the energy landscape: for diagonal
+$M=\operatorname{diag}(2,1,0)$, the bath would lower the donor minimum by
+$4\lambda_R$ and spuriously trap the initial population.
+
+For non-Condon coupling, $M^2$ is itself non-diagonal. The counterterm must
+therefore be evaluated as the full matrix product; shifting only the three
+diagonal energies is not equivalent.
 
 Fig. 2 requires three calculations:
 
@@ -121,6 +134,7 @@ KB_CM_PER_K = 0.6950348009
 TEMPERATURE_K = 300.0
 BATH_ALPHA = 1.67
 BATH_CUTOFF_CM = 600.0
+REORGANIZATION_CM = 0.5 * BATH_ALPHA * BATH_CUTOFF_CM
 
 DT_PS = 0.002
 T_MAX_PS = 0.2
@@ -130,10 +144,11 @@ P_D = np.diag([1.0, 0.0, 0.0])
 P_B = np.diag([0.0, 1.0, 0.0])
 P_A = np.diag([0.0, 0.0, 1.0])
 OBSERVABLES = {"donor": P_D, "bridge": P_B, "acceptor": P_A}
+COLORS = {"donor": "#4C6EF5", "bridge": "#E8590C", "acceptor": "#2B8A3E"}
 
 
 def system_matrices(case):
-    """Return H_S in rad/ps and the dimensionless bath operator M."""
+    """Return the propagation Hamiltonian and dimensionless bath operator M."""
     h_cm = np.diag([0.0, -150.0, -1000.0])
     coupling = np.diag([2.0, 1.0, 0.0])
 
@@ -149,7 +164,13 @@ def system_matrices(case):
     else:
         raise ValueError("unknown calculation")
 
-    return CM_TO_RAD_PS * h_cm, coupling
+    # The paper quotes potential-minimum energies.  SystemBath supplies the
+    # bilinear M X interaction but deliberately adds no model-specific
+    # counterterm, so include lambda_R M^2 here.
+    h_propagation_cm = (
+        h_cm + REORGANIZATION_CM * (coupling @ coupling)
+    )
+    return CM_TO_RAD_PS * h_propagation_cm, coupling
 
 
 def spectral_density(omega_rad_ps):
@@ -202,7 +223,7 @@ def run(case):
         dt=DT_PS,
         t_max=T_MAX_PS,
         method="interaction-chain-trotter-mpo",
-        trunc_eps=1e-3,
+        trunc_eps=1e-4,
         bond_dim=None,
         initial=np.array([1.0, 0.0, 0.0]),
         observables=OBSERVABLES,
@@ -212,15 +233,7 @@ def run(case):
 cases = ("diagonal_reference", "weak_diagonal", "noncondon")
 results = {case: run(case) for case in cases}
 
-titles = {
-    "diagonal_reference": "diagonal, V=22/45",
-    "weak_diagonal": "diagonal, V=2/2",
-    "noncondon": "non-Condon, V=2/2",
-}
-figure, axes = plt.subplots(1, 3, figsize=(12, 3.8), sharey=True)
-
-for axis, case in zip(axes, cases):
-    result = results[case]
+for case, result in results.items():
     populations = {
         name: np.asarray(result.expect[name], dtype=float)
         for name in OBSERVABLES
@@ -232,13 +245,30 @@ for axis, case in zip(axes, cases):
     print("  final acceptor population:", populations["acceptor"][-1])
     print("  peak MPS bond:", np.max(result.max_bond))
 
-    for name, values in populations.items():
-        axis.plot(result.t, values, label=name)
-    axis.set_title(titles[case])
+figure, axes = plt.subplots(1, 2, figsize=(10.8, 4.0), sharey=True)
+plot_cases = ("diagonal_reference", "noncondon")
+titles = ("(a) diagonal, V=22/45", "(b) V=2/2")
+
+for axis, case, title in zip(axes, plot_cases, titles):
+    result = results[case]
+    for name in OBSERVABLES:
+        axis.plot(
+            result.t, result.expect[name], color=COLORS[name], label=name,
+        )
+    if case == "noncondon":
+        control = results["weak_diagonal"]
+        for name in OBSERVABLES:
+            axis.plot(
+                control.t, control.expect[name], "--", color=COLORS[name],
+                alpha=0.7,
+            )
+        axis.plot([], [], "k--", label="weak diagonal control")
+    axis.set_title(title)
     axis.set_xlabel("time (ps)")
 
 axes[0].set_ylabel("population")
 axes[0].legend()
+axes[1].legend()
 figure.tight_layout()
 plt.show()
 ```
@@ -252,7 +282,9 @@ not an arbitrary accuracy preference.
 `SystemBath` keeps the three electronic states on one tensor site. Its coupling
 matrix multiplies one collective bath coordinate, exactly as $M$ does in the
 Hamiltonian. In the non-Condon calculation, the same fluctuation therefore
-changes site energies and the $D$--$B$ and $B$--$A$ couplings.
+changes site energies and the $D$--$B$ and $B$--$A$ couplings. The
+`h_propagation_cm` construction keeps the paper's potential-minimum energy
+convention while using this bilinear API.
 
 `interaction-chain-trotter-mpo` means:
 
@@ -270,20 +302,21 @@ the paper. No bath displacement conditioned on the donor is included.
 
 ## 6. Reading the early dynamics
 
-![Early populations for the two diagonal controls and non-Condon model](../img/bridge_electron_transfer.png)
+![Early donor, bridge, and acceptor populations with the weak-coupling control shown dashed](../img/bridge_electron_transfer.png)
 
 ```{include} ../_generated/bridge_electron_transfer.md
 ```
 
-The weak-diagonal and non-Condon calculations have identical $H_S$. Their
-different early dynamics therefore comes only from the off-diagonal entries of
-$M$. The diagonal reference uses much larger bare electronic couplings and is a
-separate benchmark trajectory.
+The weak-diagonal and non-Condon calculations have identical *bare* $H_S$.
+Their different dynamics comes from the off-diagonal entries of $M$, including
+the corresponding terms required in $\lambda_RM^2$. The diagonal reference uses
+much larger bare electronic couplings and is a separate benchmark trajectory.
 
-At 0.2 ps none of the donor curves has sampled a 2.4 ps decay. The generated
-table consequently reports the lifetimes as unresolved. This is the correct
-interpretation of the documentation figure; fitting it would manufacture a rate
-from an inertial transient.
+The donor loss and compensating bridge/acceptor growth are the population
+transfer. Probability conservation checks that the apparent loss is not tensor
+truncation. At 0.2 ps, however, none of the curves has sampled a 2.4 ps decay;
+the generated table therefore reports the lifetimes as unresolved. Fitting this
+inertial transient would manufacture a rate.
 
 ## 7. Reproducing the reported lifetimes
 
@@ -331,7 +364,7 @@ Before comparing a fitted lifetime with the paper:
 
 1. Compare `DT_PS=0.002`, 0.001, and 0.0005 at common physical times.
 2. Increase `PHYS_DIM` from 6 to 10, 20, and, if needed, 40.
-3. Tighten `trunc_eps` from $10^{-3}$ to $5\times10^{-4}$ while leaving
+3. Tighten `trunc_eps` from $10^{-4}$ to $5\times10^{-5}$ while leaving
    `bond_dim=None`, so discarded SVD weight remains the primary bond control.
 4. Compare the automatically resolved mode count with a larger explicit count
    and verify that the entire population curves are unchanged.
@@ -340,6 +373,15 @@ Before comparing a fitted lifetime with the paper:
    growth.
 7. Fit only after the 15 ps populations themselves are stable under all of the
    above changes.
+
+The time step and SVD threshold must be refined together. An MPO step creates
+new Schmidt values proportional to the step size; if `trunc_eps` is too loose,
+halving `DT_PS` can discard those values before they accumulate and falsely
+suppress transfer. For the 0.2 ps profile at `trunc_eps=1e-4`, the largest
+population change was $1.63\times10^{-3}$ from 2 fs to 1 fs and
+$8.09\times10^{-4}$ from 1 fs to 0.5 fs. At `trunc_eps=1e-3`, the same step
+refinement did not converge, which is why the plotted profile uses the tighter
+threshold with no bond cap.
 
 Agreement of the two fitted lifetimes alone is insufficient: an erroneous bath
 can preserve a rate accidentally while changing bridge and acceptor dynamics.
@@ -353,7 +395,8 @@ control shows that the enhancement is caused by non-Condon fluctuations rather
 than by the weak electronic Hamiltonian itself.
 
 The early-time tutorial demonstrates that mechanism and checks the package
-mapping. Recovery of the numerical values $2.36$ and $2.50$ ps remains a
+mapping, including the energy counterterm needed for this electron-transfer
+convention. Recovery of the numerical values $2.36$ and $2.50$ ps remains a
 long-time convergence result, not a conclusion encoded into the page.
 
 ## 10. Common mistakes
@@ -365,6 +408,9 @@ long-time convergence result, not a conclusion encoded into the page.
 - Using cm$^{-1}$ Hamiltonian entries directly with a ps step changes every
   dynamical timescale.
 - Converting $H_S$ but not $J(\omega)$ and $\beta$ is inconsistent.
+- Omitting $\lambda_RM^2$ interprets the quoted potential-minimum energies as
+  vertical energies and can spuriously localize the donor.
+- Keeping only the diagonal of $M^2$ changes the non-Condon Hamiltonian.
 - Counting negative thermofield frequencies in $\lambda_R$ double-counts
   temperature rather than molecular reorganization.
 - Fitting the 0.2 ps transient cannot recover a 2.5 ps lifetime.

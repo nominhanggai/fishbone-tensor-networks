@@ -19,6 +19,7 @@ KB_CM_PER_K = 0.6950348009
 TEMPERATURE_K = 300.0
 BATH_ALPHA = 1.67
 BATH_CUTOFF_CM = 600.0
+REORGANIZATION_CM = 0.5 * BATH_ALPHA * BATH_CUTOFF_CM
 
 PROJECTORS = {
     "donor": np.diag([1.0, 0.0, 0.0]),
@@ -38,16 +39,17 @@ class Profile:
 
 PROFILES = {
     "smoke": Profile("smoke", 0.008, 0.002, 4, (("primary", 3, 1e-3),)),
-    "docs": Profile("docs", 0.2, 0.002, None, (("primary", 6, 1e-3),)),
+    "docs": Profile("docs", 0.2, 0.002, None, (("primary", 6, 1e-4),)),
     "reference": Profile(
         "reference", 15.0, 0.001, None,
-        (("primary", 20, 1e-3), ("fock", 40, 1e-3),
-         ("svd", 20, 5e-4)),
+        (("primary", 20, 1e-4), ("fock", 40, 1e-4),
+         ("svd", 20, 5e-5)),
     ),
 }
 
 
 def _case(case):
+    """Return the paper's diabatic Hamiltonian and bath-coupling matrix."""
     energies = np.array([0.0, -150.0, -1000.0])
     hamiltonian = np.diag(energies)
     coupling = np.diag([2.0, 1.0, 0.0])
@@ -68,6 +70,19 @@ def _case(case):
     return CM_TO_RAD_PS * hamiltonian, coupling
 
 
+def propagation_hamiltonian(case):
+    """Hamiltonian used with Fishbone's unshifted harmonic bath.
+
+    This reproduction interprets the quoted diabatic energies as the minima of
+    displaced bath potentials.  In the bilinear ``SystemBath`` convention that
+    requires the reorganization counterterm ``lambda_R M^2``.  ``SystemBath``
+    deliberately does not add a model-dependent counterterm itself.
+    """
+    hamiltonian, coupling = _case(case)
+    counterterm = CM_TO_RAD_PS * REORGANIZATION_CM * (coupling @ coupling)
+    return hamiltonian + counterterm, coupling
+
+
 def spectral_density(omega):
     """Ohmic density transformed from cm^-1 to angular ps units."""
     omega_cm = omega / CM_TO_RAD_PS
@@ -79,7 +94,7 @@ def spectral_density(omega):
 
 
 def make_model(case, *, phys_dim, n_modes, domain):
-    hamiltonian, coupling = _case(case)
+    hamiltonian, coupling = propagation_hamiltonian(case)
     beta = 1.0 / (KB_CM_PER_K * TEMPERATURE_K * CM_TO_RAD_PS)
     bath = Bath(
         J=spectral_density,
@@ -127,7 +142,7 @@ def run_profile(profile="smoke", *, announce=False):
         "bath": {
             "alpha": BATH_ALPHA,
             "cutoff_cm": BATH_CUTOFF_CM,
-            "reorganization_cm": 0.5 * BATH_ALPHA * BATH_CUTOFF_CM,
+            "reorganization_cm": REORGANIZATION_CM,
             "domain_cm": tuple(
                 value / CM_TO_RAD_PS for value in resolved_bath.domain
             ),
@@ -144,6 +159,10 @@ def effective_lifetime(result):
     are part of the fitted population trace.
     """
     population = np.asarray(result.expect["donor"], float)
+    # An early non-Condon slip can cross 0.9 without sampling the kinetic decay.
+    # Require substantial depopulation before fitting an exponential lifetime.
+    if np.min(population) > 0.5:
+        return float("nan")
     mask = (population > 0.15) & (population < 0.9)
     if np.count_nonzero(mask) < 3:
         return float("nan")
@@ -158,6 +177,10 @@ def summarize(suite):
         total = sum(np.asarray(primary.expect[name], float) for name in PROJECTORS)
         summary[case] = {
             "effective_lifetime_ps": effective_lifetime(primary),
+            "final_donor_population": float(primary.expect["donor"][-1]),
+            "donor_population_loss": float(
+                1.0 - primary.expect["donor"][-1]
+            ),
             "peak_bridge_population": float(np.max(primary.expect["bridge"])),
             "final_acceptor_population": float(primary.expect["acceptor"][-1]),
             "normalization_error": float(np.max(np.abs(total - 1.0))),
