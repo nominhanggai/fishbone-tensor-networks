@@ -29,6 +29,7 @@ print(d())"`` prints the whole thing.
 from fishbonett.models.result import Result, SimulationCheckpoint
 from fishbonett.models.system_bath import SystemBath
 from fishbonett.models.fishbone import Fishbone, TreeFishbone
+from fishbonett.targets import BathMode
 from fishbonett.models.simulation import SimulationPlan, compile_plan
 from fishbonett.models.registry import (
     MODELS, REPRESENTATIONS, Model, RepresentationSpec, MethodSpec,
@@ -39,7 +40,7 @@ from fishbonett.models.registry import (
 
 __all__ = [
     # model classes
-    "SystemBath", "Fishbone", "TreeFishbone", "Result", "SimulationCheckpoint",
+    "SystemBath", "Fishbone", "TreeFishbone", "BathMode", "Result", "SimulationCheckpoint",
     "SimulationPlan", "compile_plan",
     # the taxonomy
     "MODELS", "REPRESENTATIONS", "Model", "RepresentationSpec", "MethodSpec",
