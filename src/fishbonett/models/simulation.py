@@ -24,6 +24,7 @@ from fishbonett.models.propagate import (
 )
 from fishbonett.models.result import Result
 from fishbonett.randomized import random_seed
+from fishbonett.targets import BathMode
 
 __all__ = ["SimulationPlan", "PLAN_COMPILERS", "compile_plan"]
 
@@ -251,6 +252,7 @@ def _compile_static_tree_plan(model, spec, context):
     """
     from fishbonett.models.fishbone import (
         Fishbone, TreeFishbone, _parse_observable,
+        _resolve_observable_target,
     )
     from fishbonett.states.tree import TreeTensorNetwork
 
@@ -277,8 +279,19 @@ def _compile_static_tree_plan(model, spec, context):
                 tree.de[edge[0]], tree.de[edge[1]])
             for edge, value in graph_couplings.items()
         }
-    parsed = [(name, _parse_observable(value, tree.de, name))
-              for name, value in context.obs_ops.items()]
+    parsed = []
+    observable_targets = {}
+    for name, value in context.obs_ops.items():
+        parsed_value = _resolve_observable_target(
+            _parse_observable(value, tree.de, name),
+            terms.dims, terms.bath_nodes, name,
+        )
+        parsed.append((name, parsed_value))
+        kind, operator, nodes = parsed_value
+        observable_targets[name] = tuple(
+            site for site in range(tree.ns)
+            if operator.shape == (tree.de[site], tree.de[site])
+        ) if kind == "persite" else tuple(nodes)
 
     def execute():
         if context.resume is not None:
@@ -358,15 +371,22 @@ def _compile_static_tree_plan(model, spec, context):
             expect={name: np.real_if_close(values)
                     for name, values in expect.items()},
             rdm=rdm, max_bond=max_bond, method=spec.name,
-            meta={"n_sites": tree.ns}, checkpoint=checkpoint,
+            meta={
+                "n_sites": tree.ns,
+                "bath_branches": tuple(dict(item) for item in terms.bath_branches),
+                "observable_targets": observable_targets,
+            }, checkpoint=checkpoint,
         )
         if not single_system:
             return result
         return Result(
             t=result.t,
-            expect={name: values[:, 0] for name, values in result.expect.items()},
+            expect={
+                name: values[:, 0] if np.ndim(values) == 2 else values
+                for name, values in result.expect.items()
+            },
             rdm=result.rdm[:, 0], max_bond=result.max_bond,
-            method=spec.name,
+            method=spec.name, meta=result.meta, checkpoint=result.checkpoint,
         )
 
     return SimulationPlan(spec, context, execute=execute)
@@ -482,7 +502,9 @@ def _compile_polaron_plan(model, spec, context):
 def _compile_interaction_fishbone_plan(model, spec, context):
     """Independent interaction-chain baths on an electronic comb."""
     from scipy.linalg import expm
-    from fishbonett.models.fishbone import _parse_observable
+    from fishbonett.models.fishbone import (
+        _parse_observable, _resolve_observable_target,
+    )
     from fishbonett.models.result import SimulationCheckpoint, plan_signature
     from fishbonett.representations.interaction import InteractionRepresentation
     from fishbonett.states.tree import TreeTensorNetwork
@@ -496,6 +518,8 @@ def _compile_interaction_fishbone_plan(model, spec, context):
     dims = list(model.de)
     edges = [(site, site + 1) for site in range(system_count - 1)]
     branches = []
+    bath_nodes = {}
+    bath_branches = []
     representation_cache = {}
     # Material for the continuation signature: a checkpoint may only be resumed
     # into the same resolved Hamiltonian, and here that means the same electronic
@@ -528,6 +552,17 @@ def _compile_interaction_fishbone_plan(model, spec, context):
             edges.extend(zip(path[:-1], path[1:]))
             dims.extend([bath.phys_dim] * bath.n_modes)
             branches.append((path, representation))
+            for mode, node in enumerate(nodes):
+                bath_nodes[BathMode(site, index, mode)] = node
+            bath_branches.append({
+                "system_site": site,
+                "bath": index,
+                "representation": "interaction-chain",
+                "first_node": nodes[0],
+                "n_modes": bath.n_modes,
+                "phys_dim": bath.phys_dim,
+                "system_coupling": None,
+            })
             signature_arrays.append(np.asarray(coupled.operator))
             signature_arrays.extend((
                 np.asarray(representation.frequencies),
@@ -645,8 +680,19 @@ def _compile_interaction_fishbone_plan(model, spec, context):
         for site, gate in enumerate(site_quarter):
             apply_site(state, site, gate)
 
-    parsed = [(name, _parse_observable(value, model.de, name))
-              for name, value in context.obs_ops.items()]
+    parsed = []
+    observable_targets = {}
+    for name, value in context.obs_ops.items():
+        parsed_value = _resolve_observable_target(
+            _parse_observable(value, model.de, name),
+            dims, bath_nodes, name,
+        )
+        parsed.append((name, parsed_value))
+        kind, operator, nodes = parsed_value
+        observable_targets[name] = tuple(
+            site for site in range(system_count)
+            if operator.shape == (model.de[site], model.de[site])
+        ) if kind == "persite" else tuple(nodes)
 
     def execute():
         # `elapsed` is physics here, not bookkeeping: the interaction-picture
@@ -702,7 +748,12 @@ def _compile_interaction_fishbone_plan(model, spec, context):
             expect={name: np.real_if_close(values)
                     for name, values in expect.items()},
             rdm=rdm, max_bond=max_bond, method=spec.name,
-            meta={"n_sites": system_count, "representation": "interaction-chain"},
+            meta={
+                "n_sites": system_count,
+                "representation": "interaction-chain",
+                "bath_branches": tuple(dict(item) for item in bath_branches),
+                "observable_targets": observable_targets,
+            },
             checkpoint=checkpoint)
 
     return SimulationPlan(spec, context, execute=execute)

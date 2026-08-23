@@ -13,6 +13,11 @@ dist/
 .coverage
 htmlcov/
 .private/
+/docs/tutorials/lh2_vibronic_transfer.md
+/examples/lh2_vibronic_transfer.py
+/examples/data/lh2_hamiltonian_cm-1.txt
+/examples/data/lh2_vibrations_cm-1.txt
+/tests/unit/test_lh2_tutorial.py
 docs/_build/
 docs/generated/
 docs/_generated/
@@ -30,6 +35,7 @@ env/
 # Simulation output artifacts (data written by example runs)
 *.dat
 examples/**/output/
+/examples/output/
 
 # NOTE: tests/_golden/*.npy are regression fixtures and ARE tracked.
 

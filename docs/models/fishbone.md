@@ -83,6 +83,12 @@ fb = Fishbone(
 The mapping keys attach these baths to system sites 0 and 3. `bind` specifies the
 system operator through which each bath couples.
 
+Bath modes can be measured without counting internal tensor nodes. For example,
+the first represented coordinate of the second bath attached to site 0 is
+`BathMode(system_site=0, bath=1, mode=0)`. See {doc}`observables` for bath-mode
+and mixed system--bath observables and for the representation-dependent meaning
+of `mode`.
+
 ### Cyclic and long-range electronic graphs
 
 The tensor state remains a comb even when the physical electronic Hamiltonian

@@ -34,8 +34,11 @@ from fishbonett.models.registry import (
     unknown_method_error, resolve,
 )
 from fishbonett.system import check_operator
+from fishbonett.targets import BathMode
 
-__all__ = ["TreeFishbone", "Fishbone", "SCHRODINGER_CHAIN_TREE_TEBD"]
+__all__ = [
+    "TreeFishbone", "Fishbone", "BathMode", "SCHRODINGER_CHAIN_TREE_TEBD",
+]
 
 
 def _site_entries(baths, n_sites):
@@ -89,10 +92,18 @@ def _parse_observable(spec, dimensions=None, name="observable"):
                 "(operator, sites)"
             )
         op, where = spec
-        if np.isscalar(where) or isinstance(where, (int, np.integer)):
-            sites = [int(where)]
+        if isinstance(where, BathMode) or (
+                isinstance(where, (int, np.integer))
+                and not isinstance(where, (bool, np.bool_))):
+            sites = [where]
         else:
-            sites = [int(s) for s in where]
+            try:
+                sites = list(where)
+            except TypeError as exc:
+                raise TypeError(
+                    "observable targets must be system-site integers or BathMode "
+                    "objects"
+                ) from exc
         kind, operator = "sites", np.asarray(op)
         return _validate_observable_target(
             kind, operator, sites, dimensions, name
@@ -119,10 +130,28 @@ def _validate_observable_target(kind, operator, sites, dimensions, name):
         return kind, operator, sites
     if not sites:
         raise ValueError(f"{name} must target at least one site")
+    normalized = []
+    for target in sites:
+        if isinstance(target, BathMode):
+            normalized.append(target)
+        elif (isinstance(target, (int, np.integer))
+              and not isinstance(target, (bool, np.bool_))):
+            normalized.append(int(target))
+        else:
+            raise TypeError(
+                f"{name} targets must be system-site integers or BathMode objects"
+            )
+    sites = normalized
     if len(set(sites)) != len(sites):
         raise ValueError(f"{name} cannot target the same site more than once")
-    if any(site < 0 or site >= len(dimensions) for site in sites):
+    system_sites = [
+        target.system_site if isinstance(target, BathMode) else target
+        for target in sites
+    ]
+    if any(site < 0 or site >= len(dimensions) for site in system_sites):
         raise ValueError(f"{name} targets a site outside the system")
+    if any(isinstance(target, BathMode) for target in sites):
+        return kind, operator, sites
     expected = int(np.prod([dimensions[site] for site in sites]))
     if operator.shape != (expected, expected):
         raise ValueError(
@@ -130,6 +159,34 @@ def _validate_observable_target(kind, operator, sites, dimensions, name):
             f"for sites {sites}"
         )
     return kind, operator, sites
+
+
+def _resolve_observable_target(parsed, dimensions, bath_nodes, name):
+    """Resolve semantic targets to tensor nodes and validate the full shape."""
+    kind, operator, targets = parsed
+    if kind == "persite":
+        return parsed
+    nodes = []
+    for target in targets:
+        if isinstance(target, BathMode):
+            try:
+                node = bath_nodes[target]
+            except KeyError as exc:
+                raise ValueError(
+                    f"{name} targets unavailable bath mode {target}"
+                ) from exc
+        else:
+            node = target
+        nodes.append(node)
+    if len(set(nodes)) != len(nodes):
+        raise ValueError(f"{name} resolves to the same tensor node more than once")
+    expected = int(np.prod([dimensions[node] for node in nodes]))
+    if operator.shape != (expected, expected):
+        raise ValueError(
+            f"{name} has shape {operator.shape}, expected {(expected, expected)} "
+            f"for resolved tensor nodes {nodes}"
+        )
+    return kind, operator, nodes
 
 
 def _bind_site_entry(entry, *, single_default):
@@ -347,6 +404,10 @@ class TreeFishbone:
           (``operator`` is ``(D, D)`` with ``D`` = product of the site dimensions
           in that order, e.g. a two-site correlation ``sigma_z (x) sigma_z``).
           For the last two forms ``expect[name]`` is ``(n_steps,)``.
+        * ``(operator, BathMode(...))`` -- an operator on a represented bath
+          mode. ``BathMode`` may also be mixed with system-site integers in a
+          composite target. Its ``mode`` index refers to the selected chain or
+          star representation; operators are not transformed automatically.
 
         ``rdm`` holds the single-site reduced density matrices at each recorded
         time. ``observe_every`` records every Nth integration step (and always the

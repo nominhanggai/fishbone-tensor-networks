@@ -35,6 +35,7 @@ from fishbonett.bath.coupled import bind_bath
 from fishbonett.operators import annihilate, create, number, sigma_z
 from fishbonett.representations._mpo import identity_product, product_sum_mpo
 from fishbonett.system import check_operator
+from fishbonett.targets import BathMode
 
 __all__ = [
     "SchrodingerRepresentation", "LocalTerms", "terms", "chain_terms",
@@ -51,6 +52,8 @@ class LocalTerms:
     site: List[np.ndarray]
     bond: Dict[Tuple[int, int], np.ndarray]
     graph_bond: Dict[Tuple[int, int], np.ndarray] = field(default_factory=dict)
+    bath_nodes: Dict[BathMode, int] = field(default_factory=dict)
+    bath_branches: List[dict] = field(default_factory=list)
 
     def __post_init__(self):
         n_nodes = len(self.dims)
@@ -359,11 +362,37 @@ def terms(sites, edges, baths, t_max=None):
     site_H = [np.asarray(sites[i], complex).copy() for i in range(ns)]
     edge_H = {(i, j): C for (i, j, C) in edges}
     node = ns
+    bath_nodes = {}
+    bath_branches = []
     for i in range(ns):
-        for bath in baths[i]:
+        for bath_index, bath in enumerate(baths[i]):
             bath = bath.resolved(t_max)          # fill automatic domain / n_modes
             coupled = bind_bath(bath, default_operator=sigma_z)
             build = (star_terms if coupled.is_multichannel
                      else chain_terms)
+            first_node = node
             node = build(coupled, i, node, dims, edge_list, site_H, edge_H)
-    return LocalTerms(dims=dims, edges=edge_list, site=site_H, bond=edge_H)
+            representation = (
+                "schrodinger-star" if coupled.is_multichannel
+                else "schrodinger-chain"
+            )
+            system_coupling = None
+            if not coupled.is_multichannel:
+                system_coupling = float(
+                    np.real_if_close(chain_coefficients(coupled.bath).system_coupling)
+                )
+            for mode in range(coupled.bath.n_modes):
+                bath_nodes[BathMode(i, bath_index, mode)] = first_node + mode
+            bath_branches.append({
+                "system_site": i,
+                "bath": bath_index,
+                "representation": representation,
+                "first_node": first_node,
+                "n_modes": coupled.bath.n_modes,
+                "phys_dim": coupled.bath.phys_dim,
+                "system_coupling": system_coupling,
+            })
+    return LocalTerms(
+        dims=dims, edges=edge_list, site=site_H, bond=edge_H,
+        bath_nodes=bath_nodes, bath_branches=bath_branches,
+    )
