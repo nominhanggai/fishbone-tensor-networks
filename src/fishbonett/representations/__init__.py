@@ -20,3 +20,21 @@ the star-to-chain transformation (``interaction-chain``).  Recovering the same
 finite star by diagonalizing a truncated chain is only an equivalent numerical
 route to the discretization.
 """
+
+from fishbonett.representations.interaction import InteractionRepresentation
+from fishbonett.representations.multichannel import (
+    MultichannelInteractionRepresentation,
+)
+from fishbonett.representations.polaron import PolaronRepresentation
+from fishbonett.representations.schrodinger import (
+    LocalTerms,
+    SchrodingerRepresentation,
+)
+
+__all__ = [
+    "InteractionRepresentation",
+    "MultichannelInteractionRepresentation",
+    "PolaronRepresentation",
+    "SchrodingerRepresentation",
+    "LocalTerms",
+]

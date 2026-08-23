@@ -336,7 +336,10 @@ def test_gate_methods_are_second_order_in_dt(model_key, method):
     from fishbonett.operators import sigma_x, sigma_z
 
     J = lambda w: 0.2 * w * np.exp(-w / 5.0)
-    mk_bath = lambda: Bath(J=J, domain=(0.0, 40.0), n_modes=3, phys_dim=4)
+    lower = 0.2 if method.startswith("polaron-") else 0.0
+    mk_bath = lambda: Bath(
+        J=J, domain=(lower, 40.0), n_modes=3, phys_dim=4
+    )
     h = 0.5 * sigma_x
 
     def final_rdm(dt):

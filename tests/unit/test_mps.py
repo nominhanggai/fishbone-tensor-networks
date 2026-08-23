@@ -27,7 +27,7 @@ def test_gpu_request_without_cupy_says_so_and_still_works():
     cpu.split_truncate_theta(theta.copy(), 0, 8, 1e-10)
 
     asked = SystemBathMPS(pd)
-    with pytest.warns(RuntimeWarning, match=r"fishbonett\[gpu\]"):
+    with pytest.warns(RuntimeWarning, match="CuPy wheel matching"):
         asked.split_truncate_theta(theta.copy(), 0, 8, 1e-10, gpu=True)
 
     # the warning is the only difference: the state is the same

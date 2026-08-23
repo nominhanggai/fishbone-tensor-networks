@@ -40,15 +40,23 @@ Off-diagonal elements need two real runs each, combined as::
 import numpy as np
 import copy
 import itertools as it
+from pathlib import Path
 
 
-def read_rho(label, t):
-    """Density matrix at time index ``t`` from ``output/density_mat_<label>.npy``."""
-    r = np.load(f"output/density_mat_{label}.npy")
+def read_rho(label, t, *, directory="output"):
+    """Load one density matrix from ``directory/density_mat_<label>.npy``."""
+    path = Path(directory) / f"density_mat_{label}.npy"
+    r = np.load(path, allow_pickle=False)
+    if r.ndim != 3 or r.shape[1] != r.shape[2]:
+        raise ValueError(f"{path} must contain an array with shape (time, d, d)")
+    if not isinstance(t, (int, np.integer)) or isinstance(t, (bool, np.bool_)):
+        raise TypeError("t must be an integer time index")
+    if t < 0 or t >= len(r):
+        raise IndexError(f"time index {t} is outside {path}")
     return r[t]
 
 
-def map_basis_op(index, t, basis_map):
+def map_basis_op(index, t, basis_map, *, directory="output"):
     """The Liouville basis element ``|i><j|`` propagated to time index ``t``.
 
     Diagonal elements come from a single stored run.  Off-diagonal ones are
@@ -59,27 +67,27 @@ def map_basis_op(index, t, basis_map):
     # print(index, t)
     if index[0] == index[1]:
         id_ = basis_map[index]
-        return read_rho(id_, t)
+        return read_rho(id_, t, directory=directory)
     if index[0] < index[1]:
         id1 = basis_map[index][0]
         id2 = basis_map[index][1]
-        r1 = read_rho(id1, t)
-        r2 = read_rho(id2, t)
+        r1 = read_rho(id1, t, directory=directory)
+        r2 = read_rho(id2, t, directory=directory)
         id3 = basis_map[(index[0], index[0])]
         id4 = basis_map[(index[1], index[1])]
-        r3 = read_rho(id3, t)
-        r4 = read_rho(id4, t)
+        r3 = read_rho(id3, t, directory=directory)
+        r4 = read_rho(id4, t, directory=directory)
         return r1 + 1j * r2 - (1 + 1j) * (r3 + r4) / 2
     if index[0] > index[1]:
         index_ = (index[1], index[0])
         id1 = basis_map[index_][0]
         id2 = basis_map[index_][1]
-        r1 = read_rho(id1, t)
-        r2 = read_rho(id2, t)
+        r1 = read_rho(id1, t, directory=directory)
+        r2 = read_rho(id2, t, directory=directory)
         id3 = basis_map[(index_[0], index_[0])]
         id4 = basis_map[(index_[1], index_[1])]
-        r3 = read_rho(id3, t)
-        r4 = read_rho(id4, t)
+        r3 = read_rho(id3, t, directory=directory)
+        r4 = read_rho(id4, t, directory=directory)
         return r1 - 1j * r2 - (1 - 1j) * (r3 + r4) / 2
 
 
@@ -93,17 +101,24 @@ def transfer_mat(lt_map):
         T: a list of same number of transfer tensors as the dynamical maps.
         T_norm: the corresponding matrix norm of elements in T
     """
-    T1 = lt_map[0]
+    maps = np.asarray(lt_map, complex)
+    if maps.ndim != 3 or maps.shape[0] == 0 or maps.shape[1] != maps.shape[2]:
+        raise ValueError(
+            "lt_map must have shape (n_times, liouville_dim, liouville_dim)"
+        )
+    if not np.all(np.isfinite(maps)):
+        raise ValueError("lt_map must contain only finite values")
+    T1 = maps[0]
     T = [T1]
     T_norm = [np.linalg.norm(T1)]
-    for N in range(1, len(lt_map)):
-        TN = lt_map[N] - np.einsum('Nij,Njk->ik', T, lt_map[0:N][::-1])
+    for N in range(1, len(maps)):
+        TN = maps[N] - np.einsum('Nij,Njk->ik', T, maps[0:N][::-1])
         T.append(TN)
         T_norm.append(np.linalg.norm(TN))
     return T, T_norm
 
 
-def dynamical_maps(t, d, basis_map):
+def dynamical_maps(t, d, basis_map, *, directory="output"):
     """The dynamical map ``E(t)`` as a ``(d^2, d^2)`` Liouville-space matrix.
 
     Column ``(i, j)`` is the propagated basis operator ``|i><j|``, so the whole
@@ -111,9 +126,14 @@ def dynamical_maps(t, d, basis_map):
     ``t``.  Assemble one per time step and hand the list to
     :func:`transfer_mat`.
     """
+    if (not isinstance(d, (int, np.integer)) or isinstance(d, (bool, np.bool_))
+            or d < 1):
+        raise ValueError("d must be a positive integer")
     r = np.zeros([d * d, d * d], dtype=np.complex128)
     for col, index in enumerate(it.product(range(d), repeat=2)):
-        r[:, col] = map_basis_op(index, t, basis_map).reshape(d * d)
+        r[:, col] = map_basis_op(
+            index, t, basis_map, directory=directory
+        ).reshape(d * d)
     return r
 
 
@@ -129,11 +149,30 @@ def predict_density_mat(t, T, r_init):
     simulated history as the memory depth you kept.  Returns the full trajectory
     including the seed.
     """
-    assert t >= len(T) == len(r_init) and len(T) > 0
-    r = copy.deepcopy(r_init)
+    if (not isinstance(t, (int, np.integer)) or isinstance(t, (bool, np.bool_))
+            or t < 1):
+        raise ValueError("t must be a positive integer number of stored steps")
+    transfer = np.asarray(T, complex)
+    initial = np.asarray(r_init, complex)
+    if (transfer.ndim != 3 or transfer.shape[0] == 0
+            or transfer.shape[1] != transfer.shape[2]):
+        raise ValueError("T must contain non-empty square transfer matrices")
+    if (initial.ndim != 3 or len(initial) != len(transfer)
+            or initial.shape[1] * initial.shape[2] != transfer.shape[1]):
+        raise ValueError(
+            "r_init must contain one square density matrix per transfer tensor"
+        )
+    if t < len(transfer):
+        raise ValueError("t must be at least the retained transfer-tensor depth")
+    if not np.all(np.isfinite(transfer)) or not np.all(np.isfinite(initial)):
+        raise ValueError("T and r_init must contain only finite values")
+    r = copy.deepcopy(initial)
     diff = t - len(r_init)
     for i in range(diff):
-        r_relevant = r[:-len(T) - 1:-1]
-        rho = np.einsum('Nij,Njk->ik', T, r_relevant)
+        r_relevant = r[:-len(transfer) - 1:-1]
+        vectors = r_relevant.reshape(len(transfer), -1, 1)
+        rho = np.einsum('Nij,Njk->ik', transfer, vectors).reshape(
+            initial.shape[1:]
+        )
         r = np.append(r, [rho], axis=0)
     return r

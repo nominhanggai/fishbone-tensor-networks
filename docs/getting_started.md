@@ -12,19 +12,19 @@ bath itself.
 
 ```bash
 pip install -e .                 # from a checkout
-pip install -e ".[gpu]"          # optional CuPy GPU truncation
+# GPU: install the CuPy wheel matching your CUDA platform, then fishbonett
 pip install -e ".[rates]"        # optional vegas Monte-Carlo integrator
 pip install -e ".[test,docs]"    # development
 ```
 
-Core dependencies are `numpy`, `scipy` and `opt_einsum`; Python ≥ 3.10 is required.
+Core dependencies are `numpy` and `scipy`; Python ≥ 3.10 is required.
 
-### Why `opt_einsum` is a core dependency
+### Optional faster contractions
 
-The tree and MPO engines contract many-operand tensor networks in their inner
-loop. `opt_einsum` evaluates such a contraction as a sequence of pairwise
-`tensordot`/BLAS calls and supplies reusable contraction paths, so it is a core
-dependency rather than an optional convenience.
+The tree engines contract many-operand tensor networks in their inner loop.
+Installing `fishbonett[speed]` enables `opt_einsum`, which supplies reusable
+contraction paths and is substantially faster for these operations. A NumPy
+fallback is included in the core installation.
 
 ## A first simulation
 
@@ -43,7 +43,7 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
             discretization="tedopa")                # or the default "legendre"
 model = SystemBath(h=sigma_x, coupling=sigma_z, bath=bath)
 
-result = model.run(dt=0.05, t_max=4.0, method="interaction-chain-tree-tdvp2", bond_dim=200,
+result = model.run(dt=0.05, t_max=4.0, method="interaction-chain-tree-tebd", bond_dim=200,
                    observables={"sz": sigma_z})
 
 result.t                 # time grid
@@ -55,7 +55,7 @@ Every `method` name begins with its Hamiltonian representation, followed by the
 integrator; tree tensor-network methods also include `tree`. Examples include
 `interaction-chain-tebd`, `interaction-chain-trotter-mpo`,
 `polaron-chain-tdvp2`, `schrodinger-chain-tdvp2`, and
-`interaction-chain-tree-tdvp2`. Every method uses the same `dt`/`t_max` and returns the same
+`interaction-chain-tree-tebd`. Every method uses the same `dt`/`t_max` and returns the same
 {py:class}`~fishbonett.models.result.Result`, so switching engines is a one-word change.
 See {doc}`methods/index` for the theory and an example behind each one.
 
@@ -86,13 +86,14 @@ seed instead of accumulating — the bond then stays wherever it started. From a
 product state that means bond 1 forever, and the run returns a mean-field answer
 with no warning. `bond_expand` (default `2`) sets the allowance; the bond settles
 near (threshold rank + `bond_expand`), not at `bond_dim`. `bond_expand=0`
-restores strict thresholding, and is mainly useful for reproducing the older
-behaviour.
+selects strict thresholding and is mainly useful for diagnosing whether
+tangent-space expansion affects a calculation.
 
 ### Reproducibility: `seed`
 
 Truncation uses a randomized SVD on large blocks, so it draws random numbers.
-`run(seed=...)` defaults to `0`, which makes a run **bit-for-bit reproducible**:
+`run(seed=...)` defaults to `0`, which makes randomized choices reproducible on
+the same numerical backend:
 an internal optimization should never make an observable depend on when it was
 run. The generator is run-local and never touches NumPy's global random state,
 so seeding a run does not perturb anything else in your process.

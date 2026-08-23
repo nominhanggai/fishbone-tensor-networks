@@ -73,7 +73,7 @@ def main():
     _, sz2, md2 = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp2",
                                 chi_max=40, eps=1e-12, krylov=25)
     _, szd, maxd = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="dtdvp",
-                                 prec=1e-8, D=40, Dplusmax=6, krylov=25)
+                                 prec=1e-8, D=40, krylov=25)
     sz_ex = exact_sz(n_chain, d, V, t)
     print(f"{'t':>6} {'exact':>10} {'TDVP1':>10} {'TDVP2':>10} {'DTDVP':>10}")
     for i in range(0, len(t), 5):

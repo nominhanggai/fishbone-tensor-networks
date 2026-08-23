@@ -1,24 +1,63 @@
 """The propagation call: what every ``run`` has in common.
 
 A ``run`` is one *(model, representation, integrator)* combination
-(:class:`fishbonett.models.registry.Method`) applied to one set of run
+(:class:`fishbonett.models.registry.MethodSpec`) applied to one set of run
 parameters.  :class:`RunCtx` is that second half -- the arguments that are the
 same whichever combination was picked -- so a driver takes ``(spec, ctx)`` and
 nothing else, and dispatch can be a table lookup rather than a chain of ``if``
 statements over method names.
 """
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Mapping, Optional
 
 import numpy as np
 
 from fishbonett.models.result import Result
 
-__all__ = ["RunCtx", "propagate",
+__all__ = ["RunCtx", "resolve_time_grid", "propagate",
            "mps_peak_bond", "tree_peak_bond", "modetree_peak_bond"]
 
 
-@dataclass
+def resolve_time_grid(dt, *, t_max=None, n_steps=None):
+    """Validate a public time specification and return ``(dt, n_steps)``.
+
+    Exactly one of ``t_max`` and ``n_steps`` is required.  A requested ``t_max``
+    must lie on the integration grid; silently rounding it would make the result
+    end at a different physical time than the caller requested.
+    """
+    if (isinstance(dt, (bool, np.bool_))
+            or not isinstance(dt, (int, float, np.number))
+            or not np.isfinite(dt) or dt <= 0):
+        raise ValueError(f"dt must be a finite positive number, got {dt!r}")
+    dt = float(dt)
+    if (t_max is None) == (n_steps is None):
+        raise ValueError("provide exactly one of t_max or n_steps")
+    if n_steps is not None:
+        if (isinstance(n_steps, (bool, np.bool_))
+                or not isinstance(n_steps, (int, np.integer))
+                or n_steps < 1):
+            raise ValueError(
+                f"n_steps must be a positive integer, got {n_steps!r}"
+            )
+        return dt, int(n_steps)
+    if (isinstance(t_max, (bool, np.bool_))
+            or not isinstance(t_max, (int, float, np.number))
+            or not np.isfinite(t_max) or t_max <= 0):
+        raise ValueError(
+            f"t_max must be a finite positive number, got {t_max!r}"
+        )
+    ratio = float(t_max) / dt
+    steps = int(round(ratio))
+    if steps < 1 or not np.isclose(ratio, steps, rtol=1e-12, atol=1e-12):
+        raise ValueError(
+            f"t_max={t_max!r} is not an integer multiple of dt={dt!r}; "
+            "choose a commensurate time step or pass n_steps explicitly"
+        )
+    return dt, steps
+
+
+@dataclass(frozen=True)
 class RunCtx:
     """Everything a driver needs that does not depend on which method ran.
 
@@ -66,6 +105,43 @@ class RunCtx:
     #: this controls what is *reported* while a long run is still going, so a
     #: multi-hour propagation is not silent between observations.
     progress: Any = None
+
+    def __post_init__(self):
+        dt, n_steps = resolve_time_grid(self.dt, n_steps=self.n_steps)
+        object.__setattr__(self, "dt", dt)
+        object.__setattr__(self, "n_steps", n_steps)
+        if self.bond_dim is not None and (
+                isinstance(self.bond_dim, (bool, np.bool_))
+                or not isinstance(self.bond_dim, (int, np.integer))
+                or self.bond_dim < 1):
+            raise ValueError("bond_dim must be a positive integer or None")
+        if (isinstance(self.trunc_eps, (bool, np.bool_))
+                or not np.isfinite(self.trunc_eps) or self.trunc_eps < 0):
+            raise ValueError("trunc_eps must be finite and non-negative")
+        if (isinstance(self.krylov, (bool, np.bool_))
+                or not isinstance(self.krylov, (int, np.integer))
+                or self.krylov < 1):
+            raise ValueError("krylov must be a positive integer")
+        if self.seed is not None and (
+                isinstance(self.seed, (bool, np.bool_))
+                or not isinstance(self.seed, (int, np.integer))):
+            raise ValueError("seed must be an integer or None")
+        if (isinstance(self.observe_every, (bool, np.bool_))
+                or not isinstance(self.observe_every, (int, np.integer))
+                or self.observe_every < 1):
+            raise ValueError("observe_every must be a positive integer")
+        if self.bath_horizon is not None and (
+                not np.isfinite(self.bath_horizon) or self.bath_horizon <= 0):
+            raise ValueError("bath_horizon must be finite and positive")
+        if self.progress is not None and not callable(self.progress):
+            raise TypeError("progress must be callable or None")
+        object.__setattr__(self, "bond_dim", None if self.bond_dim is None
+                           else int(self.bond_dim))
+        object.__setattr__(self, "trunc_eps", float(self.trunc_eps))
+        object.__setattr__(self, "krylov", int(self.krylov))
+        object.__setattr__(self, "observe_every", int(self.observe_every))
+        object.__setattr__(self, "obs_ops", MappingProxyType(dict(self.obs_ops)))
+        object.__setattr__(self, "kw", MappingProxyType(dict(self.kw)))
 
     @property
     def t_max(self):

@@ -21,7 +21,13 @@ def main():
 
     w, v_sq = get_vn_squared(j, 100, domain)
     energies = np.linspace(0.015, 0.03, 10)
-    rate_fgr = np.array([fgr_rate(c_da, e - coup, kbT, w, v_sq) for e in energies])
+    # A finite star is quasiperiodic, so the integral must use a finite window.
+    # Increase this value and verify that the reported rates form a plateau.
+    t_max = 5000.0
+    rate_fgr = np.array([
+        fgr_rate(c_da, e - coup, kbT, w, v_sq, t_max=t_max)
+        for e in energies
+    ])
     rate_marcus = np.array([marcus_rate(c_da, e - coup, kbT, reorg_e) for e in energies])
 
     print(f"{'E (a.u.)':>10} {'FGR rate':>14} {'Marcus rate':>14}")

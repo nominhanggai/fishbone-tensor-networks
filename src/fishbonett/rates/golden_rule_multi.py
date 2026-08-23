@@ -28,18 +28,29 @@ varying ``nitn``/``neval``.  VEGAS requires the optional ``vegas`` package
 (``pip install -e ".[rates]"``), imported lazily so the rest of the module works
 without it.
 
-.. note::
-   The general-order routines build their integrand and nested integration
-   limits as source strings and ``eval`` them, because the dimension is not known
-   until call time.  The evaluated text is constructed entirely from the
-   arguments (no external input), but it does mean an error there surfaces as a
-   confusing traceback inside generated code.
+The general-order routines build their nested integration limits as ordinary
+Python closures.  They do not evaluate generated source code.
 """
+from dataclasses import dataclass
+
 import numpy as np
 from scipy import integrate
 from fishbonett.bath.legendre import get_vn_squared
-from fishbonett.rates.golden_rule import fgr_rate
 import itertools as it
+
+
+@dataclass(frozen=True)
+class MonteCarloEstimate:
+    """A VEGAS estimate with its one-standard-deviation uncertainty."""
+
+    mean: float
+    sdev: float
+
+
+def _path_coupling(couplings, order):
+    """Electronic prefactor for D->A1, ``order`` A1/A2 hops, then return."""
+    c12, c31, c23 = couplings
+    return c12 * c23 ** order * (c31 if order % 2 else c12)
 
 
 def fgr_rate3_correction_order1(c_list, e_list, kbT, _w, s_list, t_max):
@@ -103,7 +114,7 @@ def fgr_rate3_correction_order1(c_list, e_list, kbT, _w, s_list, t_max):
         return [0, t_max]
 
     integral, _ = integrate.nquad(integrand, [range_t3, range_t2], opts={"epsrel": 1e-3})
-    return -2 * c12 ** 2 * c23 * integral
+    return -2 * c12 * c23 * c31 * integral
 
 
 def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
@@ -113,7 +124,7 @@ def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
     limit for deterministic quadrature; for higher orders use
     :func:`fgr_rate3_correction_order2_vegas` or the general-order routines.
     """
-    c12, c31, c23 = c_list
+    c12, _c31, c23 = c_list
     e1, e2, e3 = e_list
     s1, s2, s3 = np.array(s_list)
 
@@ -121,7 +132,6 @@ def fgr_rate3_correction_order2(c_list, e_list, kbT, _w, s_list, t_max):
     s21 = s2 - s1
     s23 = s2 - s3
     s32 = s3 - s2
-    s31 = s3 - s1
 
     w = np.array(_w)
     w_sq = w ** 2
@@ -194,11 +204,11 @@ def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max,
     extra polynomial factor in the integrand; VEGAS then adapts to the
     oscillatory structure over ``nitn`` iterations of ``neval`` samples each.
 
-    Returns the mean estimate only, so **increase ``nitn``/``neval`` and check
-    the result has stabilized** -- the discarded VEGAS error estimate is the usual
-    way to judge that.  Requires the optional ``vegas`` package.
+    Returns :class:`MonteCarloEstimate`, containing both the mean and one-standard-
+    deviation uncertainty. Increase ``nitn``/``neval`` and verify stability.
+    Requires the optional ``vegas`` package.
     """
-    c12, c31, c23 = c_list
+    c12, _c31, c23 = c_list
     e1, e2, e3 = e_list
     s1, s2, s3 = np.array(s_list)
 
@@ -206,7 +216,6 @@ def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max,
     s21 = s2 - s1
     s23 = s2 - s3
     s32 = s3 - s2
-    s31 = s3 - s1
 
     w = np.array(_w)
     w_sq = w ** 2
@@ -229,7 +238,7 @@ def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max,
         prefactor_23 * (-coth * np.cos(w * (y2 - y3 * y2 / t1)) + 1j * np.sin(w * (y2 - y3 * y2 / t1))) +
         prefactor_24 * (-coth * np.cos(w * (y2 - y4 * y3 * y2 / t1 ** 2)) + 1j * np.sin(
             w * (y2 - y4 * y3 * y2 / t1 ** 2))) +
-        prefactor_34 * (-coth * np.cos(w * (y3 - y4 * y3 * y2 / t1 ** 2)) + 1j * np.sin(
+        prefactor_34 * (-coth * np.cos(w * (y3 * y2 / t1 - y4 * y3 * y2 / t1 ** 2)) + 1j * np.sin(
             w * (y3 * y2 / t1 - y4 * y3 * y2 / t1 ** 2)))
         + const_exponent
     )
@@ -248,8 +257,12 @@ def fgr_rate3_correction_order2_vegas(c_list, e_list, kbT, _w, s_list, t_max,
     int_interval = [0, t_max]
     integ = vegas.Integrator([int_interval] * 3)
 
-    result = integ(integrand, nitn=nitn, neval=neval).mean
-    return -2 * c12 ** 2 * c23 ** 2 * result
+    result = integ(integrand, nitn=nitn, neval=neval)
+    scale = -2 * c12 ** 2 * c23 ** 2
+    return MonteCarloEstimate(
+        mean=float(scale * result.mean),
+        sdev=float(abs(scale) * result.sdev),
+    )
 
 
 def fgr_rate3_correction_order_quad(c_list, e_list, kbT, _w, s_list, t1, order):
@@ -258,15 +271,17 @@ def fgr_rate3_correction_order_quad(c_list, e_list, kbT, _w, s_list, t1, order):
     Generalizes :func:`fgr_rate3_correction_order1` / ``_order2``: the state
     sequence alternates A1 <-> A2 for ``order`` excursions before returning to the
     donor, and the integrand plus its ``order+1`` nested integration limits are
-    generated and ``eval``-ed at call time (see the module note).
+    constructed at call time with closures.
 
     Cost grows steeply with ``order`` -- past 2 or 3 prefer
     :func:`fgr_rate3_correction_order_vegas`.  ``t1`` is the outermost time limit
     (``t_max`` in the fixed-order routines).
     """
-    c = c_list
-    s = {1: s_list[0], 2: s_list[1], 3: s_list[2]}
-    E = {1: e_list[0], 2: e_list[1], 3: e_list[2]}
+    c = np.asarray(c_list)
+    s_values = np.asarray(s_list)
+    energy_values = np.asarray(e_list)
+    s = {1: s_values[0], 2: s_values[1], 3: s_values[2]}
+    E = {1: energy_values[0], 2: energy_values[1], 3: energy_values[2]}
     w = np.array(_w)
     w_sq = w ** 2
 
@@ -292,53 +307,39 @@ def fgr_rate3_correction_order_quad(c_list, e_list, kbT, _w, s_list, t1, order):
 
     const_exponent = np.sum(-coth * [delta[t] ** 2 for t in tl], axis=0) / (2 * w_sq * np.pi)
 
-    # Generate exponent
-    exponent = "lambda "
-    for t in tl:
-        exponent += f"t{t},"
-
     pre = {}
-    exponent = exponent[:-1] + ": np.sum("
     for m, n in it.combinations(tl, 2):
         pre[(m, n)] = delta[m] * delta[n] / w_sq / np.pi
-        exponent += f"pre[({m},{n})] * (-coth * np.cos(w * (t{m} - t{n})) + 1j * np.sin(w * (t{m} - t{n}))) +"
 
-    exponent = exponent[:-1] + " + const_exponent)"
+    def integrand(*reverse_times):
+        times = {1: t1}
+        for index, value in zip(range(order + 2, 1, -1), reverse_times):
+            times[index] = value
+        exponent = np.array(const_exponent, complex)
+        for (m, n), factor in pre.items():
+            delta_t = times[m] - times[n]
+            exponent += factor * (
+                -coth * np.cos(w * delta_t) + 1j * np.sin(w * delta_t)
+            )
+        phase = 0.0j
+        for index in tl:
+            left, right = sub_list[index]
+            phase += 1j * times[index] * (E[left] - E[right])
+        coefficient = _path_coupling(c, order)
+        return coefficient * np.real(
+            (-1j) ** (order + 2)
+            * np.exp(phase)
+            * np.exp(np.sum(exponent))
+        )
 
-    time_factor = "np.exp("
-    for t in tl:
-        k, l = sub_list[t]
-        time_factor += f"1j * t{t}*(E[{k}]-E[{l}]) +"
+    ranges = []
+    for index in range(order + 2, 1, -1):
+        if index == 2:
+            ranges.append([0, t1])
+        else:
+            ranges.append(lambda *outer: [0, outer[0]])
 
-    time_factor = time_factor[:-1] + ")"
-
-    args = ",".join([f"t{t}" for t in tl])
-    integrand = "lambda "
-    for t in tl[::-1][:-1]:
-        integrand += f"t{t},"
-    integrand = integrand[:-1] + f": c[0]* c[2]**{order} * c[1] *np.real(\n"
-    integrand += f"(-1j) ** {order + 2} * {time_factor} * np.exp(({exponent})({args}))\n"
-    integrand += ")"
-
-    # generate integration range
-    int_range_str = ""
-    int_range_dict = {}
-    for t in tl[::-1][:-1]:
-        args = ",".join([f"t{i}" for i in range(t - 1, 1, -1)])
-        range_func = f"lambda {args}: [0, t{t - 1}]"
-        print(f"lambda {args}: [0, t{t - 1}]")
-        int_range_dict[t] = eval(f"lambda {args}: [0, t{t - 1}]", {"t1": t1})
-        int_range_str += f"int_range_dict[{t}],"
-
-    int_range_str = int_range_str[:-1]
-
-    integrator = f"integrate.nquad({integrand}, [{int_range_str}], opts={{'epsrel': 1e-4}})"
-
-    integral, _ = eval(integrator, {"E": E, "c": c,
-                                    "t1": t1, "pre": pre, "coth": coth, "w": w,
-                                    "w_sq": w_sq, "const_exponent": const_exponent,
-                                    "integrand": integrand, "int_range_dict": int_range_dict,
-                                    "integrate": integrate, "np": np, "kbT": kbT})
+    integral, _ = integrate.nquad(integrand, ranges, opts={"epsrel": 1e-4})
 
     return -2 * integral
 
@@ -392,7 +393,6 @@ def fgr_rate3_correction_order_vegas(c_list, e_list, kbT, w, s_list, t_max, orde
         Returns:
             float
         """
-        pre = {}
         summand = 0
         for m, n in it.combinations(range(len(t)), 2):
             summand += delta[m] * delta[n] / w_sq / np.pi \
@@ -446,8 +446,12 @@ def fgr_rate3_correction_order_vegas(c_list, e_list, kbT, w, s_list, t_max, orde
     int_interval = [0, t_max]
     integrator = vegas.Integrator([int_interval] * (order + 1))
 
-    integral = integrator(integrand, nitn=nitn, neval=neval).mean
-    return -2 * c[0] * c[2] ** order * c[1] * integral
+    result = integrator(integrand, nitn=nitn, neval=neval)
+    scale = -2 * _path_coupling(c, order)
+    return MonteCarloEstimate(
+        mean=float(scale * result.mean),
+        sdev=float(abs(scale) * result.sdev),
+    )
 
 
 if __name__ == "__main__":

@@ -28,7 +28,6 @@ Selected by the model coupling, not by a ``method`` name: give
 :doc:`/methods/interaction/multichannel`.
 """
 import numpy as np
-from numpy import exp
 
 from fishbonett.bath._coefficients import (
     combined_star_operators, require_resolved,
@@ -194,7 +193,11 @@ class MultichannelInteractionRepresentation:
             d1 = self.pd_boson[i]
             d2 = self.pd_sys
             c1 = annihilate(d1)
-            kc = k.conjugate()
+            # ``k`` is a system operator, not a scalar coefficient.  The
+            # creation term is the Hermitian adjoint of the annihilation term;
+            # element-wise conjugation is only sufficient for real symmetric
+            # coupling operators.
+            kc = k.conjugate().T
             coup = kron(c1, k) + kron(c1.T, kc)
             h2.append((coup, d1, d2))
         d1 = self.pd_boson[0]

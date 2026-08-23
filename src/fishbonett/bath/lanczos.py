@@ -98,8 +98,8 @@ def block_lanczos(A, p, ortho_threshold=1e-14):
     rather than independent.
 
     ``p`` is ``(n, b)`` (or ``(b, n)``; it is transposed if needed) and its columns
-    must be mutually orthogonal to within ``ortho_threshold`` -- this is asserted,
-    because a non-orthogonal seed silently produces the wrong chain.  Returns
+    must be mutually orthogonal to within ``ortho_threshold``; invalid seeds raise
+    :class:`ValueError`, because a non-orthogonal seed produces the wrong chain. Returns
     ``(Sigma, Q)`` as in :func:`lanczos`.
     """
     dtype = np.result_type(np.asarray(A).dtype, np.asarray(p).dtype, float)
@@ -107,6 +107,8 @@ def block_lanczos(A, p, ortho_threshold=1e-14):
     q = np.array(p, dtype=dtype, copy=True)
     if A.ndim != 2 or A.shape[0] != A.shape[1]:
         raise ValueError("A must be a square matrix")
+    if not np.all(np.isfinite(A)) or not np.allclose(A, A.conj().T):
+        raise ValueError("A must be finite and Hermitian")
     n = A.shape[0]
     if q.ndim != 2 or n not in q.shape:
         raise ValueError("p must be a matrix with one dimension equal to A.shape[0]")
@@ -132,25 +134,30 @@ def block_lanczos(A, p, ortho_threshold=1e-14):
                 "block Lanczos seed columns must be mutually orthogonal; "
                 f"columns {i} and {j} overlap by {overlap:g}")
 
-    Q = np.zeros((n, n + 2 * b), dtype=dtype)
-    Q[:, b:2 * b] = q
-    beta = np.zeros((b, b))
+    # Orthonormalize the complete seed block first.  The columns were checked
+    # for pairwise orthogonality above, but QR also makes this robust to their
+    # different norms and fixes the complex-valued case.
+    first, triangular = np.linalg.qr(q, mode="reduced")
+    if np.min(np.abs(np.diag(triangular))) <= ortho_threshold:
+        raise ValueError("block Lanczos seed is rank deficient")
+    blocks = [first]
+    for _ in range(1, n // b):
+        candidate = A @ blocks[-1]
+        # Two full reorthogonalization passes give a stable block Krylov basis.
+        # For Hermitian A the projected matrix is block tridiagonal up to roundoff.
+        for _pass in range(2):
+            for basis in blocks:
+                candidate -= basis @ (basis.conj().T @ candidate)
+        next_block, triangular = np.linalg.qr(candidate, mode="reduced")
+        if np.min(np.abs(np.diag(triangular))) <= ortho_threshold:
+            raise ValueError(
+                "block Lanczos iteration terminated before spanning the space"
+            )
+        blocks.append(next_block)
 
-    for i in range(1, n // b + 1):
-        Y = A @ Q[:, i * b:(i + 1) * b]
-        alpha = Q[:, i * b:(i + 1) * b].T @ Y
-        R = Y - Q[:, i * b:(i + 1) * b] @ alpha - Q[:, (i - 1) * b:i * b] @ beta.T
-
-        q, beta = np.linalg.qr(R)
-        # Full Orthogonlaization
-        basis = Q[:, b:(i + 1) * b]
-        q = q - basis @ (basis.conj().T @ q)
-        Q[:, (i + 1) * b:(i + 2) * b] = q
-
-    Q = Q[:, b:n + b]
-
+    Q = np.concatenate(blocks, axis=1)
     Sigma = Q.conj().T @ A @ Q
-    # print(Q.T@Q)
+    Sigma = 0.5 * (Sigma + Sigma.conj().T)
     return Sigma, Q
 
 

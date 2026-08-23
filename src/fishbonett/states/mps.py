@@ -224,8 +224,8 @@ class SystemBathMPS(TensorNetwork):
         if gpu and not _CUPY:
             warnings.warn(
                 "gpu=True but CuPy is not importable; falling back to the CPU "
-                "path.  Install the extra with `pip install 'fishbonett[gpu]'` "
-                "for GPU truncation.",
+                "path. Install the CuPy wheel matching your CUDA platform to "
+                "enable GPU truncation.",
                 RuntimeWarning, stacklevel=2)
         if gpu and _CUPY:
             self._split_gpu(theta, i, chi_max, eps, eps_lbo)
@@ -239,7 +239,8 @@ class SystemBathMPS(TensorNetwork):
         chi_ll, phys_l, phys_r, chi_rr = theta.shape
         theta = np.reshape(theta, [chi_ll * phys_l, phys_r * chi_rr])
         A, S, B = svd(theta, chi_max, full_matrices=False)
-        chivC = cap_rank(np.sum(S > eps), chi_max)
+        scale = S[0] if S.size and S[0] > 0 else 1.0
+        chivC = cap_rank(np.sum(S > eps * scale), chi_max)
         self._store_split(A, S, B, i, chi_ll, phys_l, phys_r, chi_rr, chivC)
         self.R[i] = np.eye(phys_l)
         self.R[i + 1] = np.eye(phys_r)
@@ -262,11 +263,13 @@ class SystemBathMPS(TensorNetwork):
 
         chi_try = int(self.pre_factor * len(self.S[i + 1])) + 10
         A, S, B = svd(theta, chi_try, full_matrices=False)
-        chivC = min(cap_rank(np.sum(S > eps), chi_max), chi_try)
+        scale = S[0] if S.size and S[0] > 0 else 1.0
+        chivC = min(cap_rank(np.sum(S > eps * scale), chi_max), chi_try)
         while chivC == chi_try and chi_try < min(*theta.shape):
             chi_try = int(round(self.pre_factor * chi_try))
             A, S, B = svd(theta, chi_try, full_matrices=False)
-            chivC = min(cap_rank(np.sum(S > eps), chi_max), chi_try)
+            scale = S[0] if S.size and S[0] > 0 else 1.0
+            chivC = min(cap_rank(np.sum(S > eps * scale), chi_max), chi_try)
 
         self._store_split(A, S, B, i, chi_ll, phys_l, phys_r, chi_rr, chivC)
         if eps_lbo is None:
@@ -306,11 +309,17 @@ class SystemBathMPS(TensorNetwork):
 
         chi_try = int(self.pre_factor * len(self.S[i + 1])) + 10
         A, S, B = _cusvd(theta, chi_try, full_matrices=False)
-        chivC = min(cap_rank(cp.sum(S > eps).item(), chi_max), chi_try)
+        scale = S[0] if S.size and S[0] > 0 else 1.0
+        chivC = min(
+            cap_rank(cp.sum(S > eps * scale).item(), chi_max), chi_try
+        )
         while chivC == chi_try and chi_try < min(*theta.shape):
             chi_try = int(round(self.pre_factor * chi_try))
             A, S, B = _cusvd(theta, chi_try, full_matrices=False)
-            chivC = min(cap_rank(cp.sum(S > eps).item(), chi_max), chi_try)
+            scale = S[0] if S.size and S[0] > 0 else 1.0
+            chivC = min(
+                cap_rank(cp.sum(S > eps * scale).item(), chi_max), chi_try
+            )
         del theta
         _mempool.free_all_blocks()
 

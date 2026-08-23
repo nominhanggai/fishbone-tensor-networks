@@ -111,7 +111,7 @@ def test_ip_mpo_matches_exact():
 def test_dtdvp_grows_bonds_and_tracks_dynamics():
     n_chain, d, V = 3, 5, 1.0
     t, sz, maxd = run_mpo_hamiltonian(_chain(n_chain, d, V), dt=0.10, nsteps=12,
-                                sweep="dtdvp", prec=1e-9, D=40, Dplusmax=6,
+                                sweep="dtdvp", prec=1e-9, D=40,
                                 krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert maxd[-1] >= 1 and np.all(np.isfinite(sz))

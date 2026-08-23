@@ -4,8 +4,8 @@ import pytest
 
 from fishbonett import Bath, SystemBath, Result
 from fishbonett.bath.chain import get_vn_squared, star_transform
-from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.evolve.modetree import annihilate, create, SZ, SX
+from fishbonett.evolve.modetree import SZ, SX
+from fishbonett.operators import annihilate, create, sigma_x, sigma_z
 
 N, D, V = 3, 5, 1.0
 
@@ -77,8 +77,7 @@ def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
                                          ("schrodinger-star-tdvp2", 2),
                                          ("interaction-star-tdvp1", 2),
                                          ("interaction-star-tdvp2", 2),
-                                         ("interaction-chain-tree-tdvp1", 1),
-                                         ("interaction-chain-tree-tdvp2", 1), ("interaction-chain-tree-tebd", 1)])
+                                         ("interaction-chain-tree-tebd", 1)])
 def test_method_matches_exact(method, step):
     model = _model()
     r = model.run(dt=0.05, n_steps=10, method=method, bond_dim=40, trunc_eps=1e-12,
@@ -90,7 +89,7 @@ def test_method_matches_exact(method, step):
 
 def test_result_carries_observables_and_rdm():
     model = _model()
-    r = model.run(dt=0.05, n_steps=8, method="interaction-chain-tree-tdvp2", bond_dim=30,
+    r = model.run(dt=0.05, n_steps=8, method="interaction-chain-tree-tebd", bond_dim=30,
                   observables={"sz": sigma_z, "sx": sigma_x})
     assert set(r.expect) == {"sz", "sx"}
     assert r.rdm.shape == (8, 2, 2)
@@ -100,7 +99,7 @@ def test_result_carries_observables_and_rdm():
 
 def test_tedopa_discretization_runs():
     model = _model(discretization="tedopa")
-    r = model.run(dt=0.05, n_steps=6, method="interaction-chain-tree-tdvp1", bond_dim=30)
+    r = model.run(dt=0.05, n_steps=6, method="interaction-chain-tree-tebd", bond_dim=30)
     assert np.all(np.isfinite(r.expect["sz"]))
 
 
@@ -110,7 +109,7 @@ def test_methods_share_time_grid_and_agree():
     methods = ["interaction-chain-tebd", "interaction-chain-trotter-mpo",
                "schrodinger-chain-tdvp1", "schrodinger-chain-tdvp2", "interaction-chain-tdvp1",
                "interaction-chain-tdvp2", "schrodinger-star-tdvp1", "schrodinger-star-tdvp2",
-               "interaction-chain-tree-tdvp1", "interaction-chain-tree-tdvp2", "interaction-chain-tree-tebd"]
+               "interaction-chain-tree-tebd"]
     results = {m: model.run(dt=0.05, t_max=0.5, method=m, bond_dim=40,
                             trunc_eps=1e-12, observables={"sz": sigma_z})
                for m in methods}
@@ -274,7 +273,7 @@ def test_composite_spin_vibration_system():
 
 
 @pytest.mark.parametrize("method", ["schrodinger-chain-tdvp1", "schrodinger-chain-tdvp2", "interaction-chain-tdvp1",
-                                    "interaction-chain-tree-tdvp1", "interaction-chain-tree-tebd"])
+                                    "interaction-chain-tree-tebd"])
 def test_general_coupling_matches_exact(method):
     """The MPO/tree engines handle a non-sigma_z (sigma_x) coupling, validated vs
     exact diagonalization of the discretized star."""
@@ -288,7 +287,7 @@ def test_general_coupling_matches_exact(method):
     assert np.max(np.abs(r.expect["sz"] - ex)) < 3e-3
 
 
-@pytest.mark.parametrize("method", ["schrodinger-chain-tdvp1", "schrodinger-chain-tdvp2", "interaction-chain-tree-tdvp1",
+@pytest.mark.parametrize("method", ["schrodinger-chain-tdvp1", "schrodinger-chain-tdvp2",
                                     "interaction-chain-tree-tebd"])
 def test_multilevel_system_matches_exact(method):
     """The MPO/tree engines handle a three-level system, validated vs exact."""
@@ -313,7 +312,7 @@ def test_mpo_rejects_non_hermitian_operators():
                   bath=bath).run(dt=0.05, n_steps=2, method="schrodinger-chain-tdvp1")
     with pytest.raises(ValueError):                      # coupling / h dim mismatch
         SystemBath(h=np.eye(3), coupling=sigma_z, bath=bath).run(
-            dt=0.05, n_steps=2, method="interaction-chain-tree-tdvp1")
+            dt=0.05, n_steps=2, method="interaction-chain-tree-tebd")
 
 
 # -- polaron representation -----------------------------------------------------------
@@ -449,8 +448,12 @@ def test_polaron_general_coupling_matches_ip(method):
 
 
 def test_polaron_runs_at_finite_temperature():
-    """The polaron representation handles finite T via T-TEDOPA thermalization."""
-    bath = Bath(J=_J, domain=(-12.0, 12.0), temperature=1.0, n_modes=8, phys_dim=6)
+    """Finite-T polaron propagation works when its IR norm is finite."""
+    super_ohmic = lambda w: 0.02 * w**3 * np.exp(-w / 5.0)
+    bath = Bath(
+        J=super_ohmic, domain=(-12.0, 12.0), temperature=1.0,
+        n_modes=8, phys_dim=6,
+    )
     r = SystemBath(h=0.5 * sigma_x, coupling=sigma_z, bath=bath).run(
             method="polaron-chain-tebd", dt=0.05, n_steps=2, bond_dim=20)
     assert r.t.shape == (2,)

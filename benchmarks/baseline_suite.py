@@ -30,7 +30,7 @@ def measure():
         trunc_eps=1e-8, bond_dim=16, observables={"sz": sigma_z}, seed=0)
     elapsed = perf_counter() - start
     return {
-        "final_sz": float(result.expect["sz"][-1]),
+        "final_sz": float(result.expect["sz"][-1].real),
         "peak_bond": int(np.max(result.max_bond)),
         "krylov_calls": int(_KRY["calls"]),
         "krylov_iterations": int(_KRY["iters"]),

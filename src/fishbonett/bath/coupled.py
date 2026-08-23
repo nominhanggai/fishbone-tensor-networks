@@ -4,7 +4,7 @@
 and associates them with the operators belonging to a physical model.
 ``Bath.coupling`` remains available as a deprecated compatibility input.
 """
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 import warnings
 
 import numpy as np
@@ -40,9 +40,6 @@ class CoupledBath:
 
     bath: object
     operators: tuple
-    _resolved_cache: dict = field(default_factory=dict, init=False, repr=False,
-                                  compare=False)
-
     def __post_init__(self):
         ops = _operators(self.operators)
         if not ops:
@@ -94,12 +91,10 @@ class CoupledBath:
         bath = self.bath.resolved(t_max)
         if bath is self.bath:
             return self
-        key = None if t_max is None else float(t_max)
-        cached = self._resolved_cache.get(key)
-        if cached is None:
-            cached = replace(self, bath=bath)
-            self._resolved_cache[key] = cached
-        return cached
+        # Bath is intentionally a user-editable specification.  Do not cache a
+        # resolved copy here: mutating an automatic domain, mode count, or
+        # spectral-density callable between runs must not return stale physics.
+        return replace(self, bath=bath)
 
 
 def bind_bath(bath, coupling=None, *, default_operator=None,

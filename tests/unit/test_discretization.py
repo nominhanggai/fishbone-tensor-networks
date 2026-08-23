@@ -73,7 +73,7 @@ def test_star_transform_has_one_implementation():
     import inspect
     from fishbonett.evolve import _modetree_driver as driver
 
-    assert next(iter(inspect.signature(driver.run_tree_mpo).parameters)) == (
+    assert next(iter(inspect.signature(driver.run_tree_tebd).parameters)) == (
         "representation")
     src = inspect.getsource(driver)
     assert not any(isinstance(n, ast.ImportFrom) and n.module

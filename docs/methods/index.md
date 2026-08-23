@@ -11,7 +11,7 @@ the same {py:class}`~fishbonett.models.result.Result` contract.
 
 Method names are representation-explicit. A 1D MPS method is named
 `<representation>-<integrator>`; a tree tensor-network method inserts `tree`, as in
-`interaction-chain-tree-tdvp2`. Thus `polaron-chain-tdvp2` states both the
+`interaction-chain-tree-tebd`. Thus `polaron-chain-tdvp2` states both the
 polaron-chain representation and the TDVP2 integrator.
 
 ## The six representations
@@ -66,7 +66,7 @@ same transformed Hamiltonian and both are implemented.
 | `schrodinger-chain` | 1D MPS | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-dtdvp` | {doc}`schrodinger/chain` |
 | `schrodinger-star` | 1D MPS | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2` | {doc}`schrodinger/star_mpo` |
 | `interaction-chain` | 1D MPS | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
-| `interaction-chain` | binary tree tensor network | `interaction-chain-tree-tdvp1`, `interaction-chain-tree-tdvp2`, `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
+| `interaction-chain` | binary tree tensor network | `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
 | `interaction-star` | 1D MPS | `interaction-star-tdvp1`, `interaction-star-tdvp2` | {doc}`interaction/star_mpo` |
 | `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`schrodinger/polaron_chain` |
 | `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`schrodinger/polaron_chain` |
@@ -92,7 +92,7 @@ star-to-chain transform to the matrix-valued mode couplings.
 
 ## Choosing an integrator
 
-- Start with a bond-growing method: `interaction-chain-tree-tdvp2`,
+- Start with a bond-growing method: `interaction-chain-tree-tebd`,
   `interaction-chain-tebd`, or a two-site TDVP
   method.
 - One-site TDVP methods require an explicit `bond_dim`; they cannot grow a bond
@@ -100,8 +100,8 @@ star-to-chain transform to the matrix-valued mode couplings.
 - Time-dependent interaction representations rebuild their numerical operator at
   every step midpoint.
 - The conditional-displacement method `interaction-chain-trotter-mpo` is
-  available because the
-  mode coupling terms commute after the free bath has been removed.
+  available for a single coupling channel because its mode terms commute after
+  the free bath has been removed.
 - Polaron methods require finite
   $\int J(\omega)/\omega^2\,d\omega$ and careful convergence in local Fock
   dimension.

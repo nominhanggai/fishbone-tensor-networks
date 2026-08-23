@@ -54,6 +54,13 @@ class LocalTerms:
 
     def __post_init__(self):
         n_nodes = len(self.dims)
+        if n_nodes == 0:
+            raise ValueError("dims must contain at least one node")
+        if any(isinstance(d, (bool, np.bool_))
+               or not isinstance(d, (int, np.integer)) or d < 1
+               for d in self.dims):
+            raise ValueError("every physical dimension must be a positive integer")
+        self.dims = [int(d) for d in self.dims]
         if len(self.edges) != n_nodes - 1:
             raise ValueError(
                 f"edges must form a tree over {n_nodes} nodes (expected "
@@ -61,6 +68,75 @@ class LocalTerms:
         if len(self.site) != n_nodes:
             raise ValueError(
                 f"site has {len(self.site)} entries, expected {n_nodes}")
+
+        normalized_edges = []
+        seen = set()
+        adjacency = [set() for _ in range(n_nodes)]
+        for edge in self.edges:
+            if (not isinstance(edge, (tuple, list)) or len(edge) != 2
+                    or any(isinstance(x, (bool, np.bool_))
+                           or not isinstance(x, (int, np.integer))
+                           for x in edge)):
+                raise ValueError("every edge must be a pair of integer node indices")
+            left, right = map(int, edge)
+            if left < 0 or right < 0 or left >= n_nodes or right >= n_nodes:
+                raise ValueError(f"edge {(left, right)} is outside the node range")
+            if left == right:
+                raise ValueError(f"edge {(left, right)} is a self-edge")
+            key = tuple(sorted((left, right)))
+            if key in seen:
+                raise ValueError(f"duplicate edge {key}")
+            seen.add(key)
+            adjacency[left].add(right)
+            adjacency[right].add(left)
+            normalized_edges.append((left, right))
+        reached = {0}
+        frontier = [0]
+        while frontier:
+            node = frontier.pop()
+            new = adjacency[node] - reached
+            reached.update(new)
+            frontier.extend(new)
+        if len(reached) != n_nodes:
+            raise ValueError("edges must form one connected tree")
+        self.edges = normalized_edges
+
+        self.site = [
+            check_operator(value, f"site[{i}]", self.dims[i])
+            for i, value in enumerate(self.site)
+        ]
+        normalized_bond = {}
+        for edge in self.edges:
+            if edge not in self.bond:
+                raise ValueError(f"bond has no Hamiltonian for edge {edge}")
+            left, right = edge
+            normalized_bond[edge] = check_operator(
+                self.bond[edge], f"bond[{edge}]",
+                self.dims[left] * self.dims[right],
+            )
+        extras = set(self.bond) - set(self.edges)
+        if extras:
+            raise ValueError(f"bond contains terms for unknown edges {sorted(extras)}")
+        self.bond = normalized_bond
+
+        normalized_graph = {}
+        for edge, value in self.graph_bond.items():
+            if (not isinstance(edge, tuple) or len(edge) != 2
+                    or any(isinstance(x, (bool, np.bool_))
+                           or not isinstance(x, (int, np.integer))
+                           for x in edge)):
+                raise ValueError("graph_bond keys must be integer node pairs")
+            left, right = map(int, edge)
+            if left < 0 or right >= n_nodes or left >= right:
+                raise ValueError(
+                    f"graph_bond edge {(left, right)} must satisfy "
+                    f"0 <= left < right < {n_nodes}"
+                )
+            normalized_graph[(left, right)] = check_operator(
+                value, f"graph_bond[{(left, right)}]",
+                self.dims[left] * self.dims[right],
+            )
+        self.graph_bond = normalized_graph
 
     @property
     def n_nodes(self):
@@ -82,6 +158,11 @@ class LocalTerms:
 
     def as_tuple(self):
         """Return ``(dims, edges, site, bond)`` for tuple-based consumers."""
+        if self.graph_bond:
+            raise ValueError(
+                "this Hamiltonian has non-tree graph couplings; use "
+                "local_terms() so graph_bond is not discarded"
+            )
         return self.dims, self.edges, self.site, self.bond
 
 

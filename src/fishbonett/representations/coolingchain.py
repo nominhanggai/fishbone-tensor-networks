@@ -27,7 +27,7 @@ from fishbonett.contract import contract as einsum
 from fishbonett.bath.chain import get_coupling
 from fishbonett.system import check_operator
 from fishbonett.linalg import kron, expm_gate_sparse
-from fishbonett.operators import temp_factor, annihilate
+from fishbonett.operators import annihilate
 
 from fishbonett.states.mps import SystemBathMPS
 

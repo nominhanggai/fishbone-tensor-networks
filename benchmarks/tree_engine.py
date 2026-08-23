@@ -1,7 +1,7 @@
 """Benchmark: tree tensor-network engine (interaction picture).
 
-Validates the tree-MPO against the direct star Hamiltonian, and the tree-TDVP and
-tree-TEBD propagators against exact diagonalization of a small spin-boson star,
+Validates the tree operator against the direct star Hamiltonian, and the
+balanced-tree TEBD propagator against exact diagonalization of a small spin-boson star,
 and shows the log-depth advantage over a chain.
 
 Run with:  python benchmarks/tree_engine.py
@@ -10,17 +10,13 @@ import numpy as np
 
 from fishbonett import Bath
 from fishbonett.bath.chain import star_transform
-from fishbonett.evolve.modetree import (run_tree_tdvp, run_tree_tdvp2,
-                             run_tree_tebd, build_balanced_tree, build_tree_mpo,
-                             tree_depth, hamiltonian_from_mpo, _hamiltonian_direct,
-                             _resolve_sys, SZ, SX)
-# `anih`/`crea` were imported from modetree, which has never defined them -- this
-# benchmark has been failing at import since before the model/representation restructure.
-# The operators are annihilate/create in fishbonett.operators; the body below uses
-# both spellings, so bind both.
+from fishbonett.evolve._modetree_core import _hamiltonian_direct, _resolve_sys
+from fishbonett.evolve.modetree import (
+    SX, SZ, build_balanced_tree, build_tree_mpo, hamiltonian_from_mpo,
+    run_tree_tebd, tree_depth,
+)
 from fishbonett.operators import annihilate, create
 from fishbonett.representations.interaction import InteractionRepresentation
-anih, crea = annihilate, create
 
 
 def Jb(w):
@@ -81,18 +77,12 @@ def main():
     representation = InteractionRepresentation(
         representation="interaction-chain", h_sys=V * SX,
         coupling=SZ, bath=bath).build()
-    t, sz_t1 = run_tree_tdvp(
-        representation, dt=dt, nsteps=nsteps, D=40)
-    _, sz_t2 = run_tree_tdvp2(
-        representation, dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-13)
-    _, sz_te = run_tree_tebd(
+    t, sz_te = run_tree_tebd(
         representation, dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-12)
     sz_ex = exact_sz(n_chain, d, V, t)
-    print(f"{'t':>6} {'exact':>10} {'TDVP(1s)':>10} {'TDVP(2s)':>10} {'TEBD':>10}")
+    print(f"{'t':>6} {'exact':>10} {'tree TEBD':>10}")
     for i in range(0, nsteps, 4):
-        print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz_t1[i]:>+10.5f} {sz_t2[i]:>+10.5f} {sz_te[i]:>+10.5f}")
-    print(f"max|tree-TDVP(1-site) - exact| = {np.max(np.abs(sz_t1 - sz_ex)):.2e}")
-    print(f"max|tree-TDVP(2-site) - exact| = {np.max(np.abs(sz_t2 - sz_ex)):.2e}")
+        print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz_te[i]:>+10.5f}")
     print(f"max|tree-TEBD        - exact| = {np.max(np.abs(sz_te - sz_ex)):.2e}")
 
     print("\n=== tree depth vs chain length ===")

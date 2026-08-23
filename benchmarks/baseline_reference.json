@@ -1,6 +1,6 @@
 {
-  "final_sz": 0.9720199731739247,
+  "final_sz": 0.972019973264689,
   "krylov_calls": 84,
-  "krylov_iterations": 454,
-  "peak_bond": 6
+  "krylov_iterations": 474,
+  "peak_bond": 9
 }

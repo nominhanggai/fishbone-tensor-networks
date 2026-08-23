@@ -14,12 +14,14 @@ import pytest
 from fishbonett import Bath, SystemBath, Fishbone
 from fishbonett.models import TreeFishbone
 from fishbonett.models import registry as R
-from fishbonett.models.registry import FIXED_BOND_METHODS as _FIXED_BOND_METHODS
+from fishbonett.models.registry import BOND_CAP_REQUIRED_METHODS as _BOND_CAP_REQUIRED_METHODS
 from fishbonett.operators import sigma_x, sigma_z
 
 
 def _J(w):
-    return 0.2 * w * np.exp(-w / 5.0)
+    # Super-Ohmic at the origin so every registered representation, including
+    # the Lang--Firsov polaron, is mathematically defined on the same bath.
+    return 0.008 * w ** 3 * np.exp(-w / 5.0)
 
 
 def _bath(**kw):
@@ -102,15 +104,15 @@ def test_polaron_tdvp2_public_error_names_polaron_chain_replacement():
         model.run(dt=0.02, n_steps=1, method="polaron-tdvp2", bond_dim=8)
 
 
-def test_fixed_bond_methods_are_registry_data():
+def test_bond_cap_requirements_are_registry_data():
     """It was a private set in ``models/system_bath.py`` that tests had to import
     through the underscore.  Which methods cannot grow a bond is taxonomy."""
-    assert R.FIXED_BOND_METHODS == frozenset(
-        n for n, s in R.METHODS.items() if s.fixed_bond)
+    assert R.BOND_CAP_REQUIRED_METHODS == frozenset(
+        n for n, s in R.METHODS.items() if s.requires_bond_cap)
     # the 1-site TDVP variants and the adaptive ones, as before
-    assert "schrodinger-chain-tdvp1" in R.FIXED_BOND_METHODS
-    assert "schrodinger-chain-dtdvp" in R.FIXED_BOND_METHODS
-    assert "interaction-chain-tebd" not in R.FIXED_BOND_METHODS
+    assert "schrodinger-chain-tdvp1" in R.BOND_CAP_REQUIRED_METHODS
+    assert "schrodinger-chain-dtdvp" in R.BOND_CAP_REQUIRED_METHODS
+    assert "interaction-chain-tebd" not in R.BOND_CAP_REQUIRED_METHODS
 
 
 def test_every_model_representation_pair_has_at_least_one_method():
@@ -152,10 +154,10 @@ def test_every_absent_representation_has_a_reason_available():
 
 def test_method_representations_is_a_lossless_projection():
     """The projection records representation only; model ownership is separate."""
-    assert R.METHOD_REPRESENTATIONS["interaction-chain-tree-tdvp2"] == "interaction-chain"
+    assert R.METHOD_REPRESENTATIONS["interaction-chain-tree-tebd"] == "interaction-chain"
     assert R.METHOD_REPRESENTATIONS["interaction-chain-tdvp2"] == "interaction-chain"
     # ...same representation, same model, same integrator -- separated only by state geometry
-    assert R.METHODS["interaction-chain-tree-tdvp2"].state_geometry == "binary-tree"
+    assert R.METHODS["interaction-chain-tree-tebd"].state_geometry == "binary-tree"
     assert R.METHODS["interaction-chain-tdvp2"].state_geometry == "mps"
 
     assert R.METHOD_REPRESENTATIONS["schrodinger-chain-tdvp2"] == "schrodinger-chain"
@@ -218,7 +220,7 @@ def test_each_model_runs_its_own_methods_and_reports_them(model_key):
     default = R.methods_of(model_key, "schrodinger-star")[0] if model_key == "multichannel" else None
     for method in R.methods_of(model_key):
         kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z})
-        if method in _FIXED_BOND_METHODS:  # these require an explicit cap
+        if method in _BOND_CAP_REQUIRED_METHODS:  # these require an explicit cap
             kw["bond_dim"] = 12
         if method == default:
             # the multichannel model is selected by its coupling list, so its Schrodinger
@@ -245,7 +247,7 @@ def test_every_method_reports_max_bond(model_key):
     default = R.methods_of(model_key, "schrodinger-star")[0] if model_key == "multichannel" else None
     for method in R.methods_of(model_key):
         kw = dict(dt=0.02, n_steps=2, observables={"sz": sigma_z})
-        if method in _FIXED_BOND_METHODS:
+        if method in _BOND_CAP_REQUIRED_METHODS:
             kw["bond_dim"] = 12
         r = obj.run(**kw) if method == default else obj.run(method=method, **kw)
         assert r.max_bond is not None, f"{model_key}/{method} reports no max_bond"
@@ -266,7 +268,9 @@ def test_result_shape_contract_matches_its_docstring():
 
     single = SystemBath(h=h, coupling=sigma_z, bath=_bath_pos()).run(
         method="interaction-chain-tebd", **kw)
-    assert single.meta == {}, "a single-system Result carries no n_sites"
+    assert "n_sites" not in single.meta
+    assert single.meta["method"] == "interaction-chain-tebd"
+    assert single.meta["dt"] == kw["dt"]
     assert np.shape(single.rdm) == (2, 2, 2), "(n_steps, d, d)"
     assert np.shape(single.expect["sz"]) == (2,), "(n_steps,)"
 
@@ -277,7 +281,8 @@ def test_result_shape_contract_matches_its_docstring():
                          baths=[_bath_pos(), None, None])),
     ):
         r = obj.run(**kw)
-        assert r.meta == {"n_sites": n_sites}, r.meta
+        assert r.meta["n_sites"] == n_sites
+        assert r.meta["dt"] == kw["dt"]
         assert np.shape(r.rdm) == (2, n_sites, 2, 2), "(n_steps, n_sites, d, d)"
         # a bare per-site operator gives one column per site
         assert np.shape(r.expect["sz"]) == (2, n_sites), "(n_steps, n_sites)"
@@ -430,7 +435,7 @@ def test_interaction_chain_is_what_the_ip_methods_actually_run():
 
     for m in ("interaction-chain-tebd", "interaction-chain-trotter-mpo",
               "interaction-chain-tdvp1", "interaction-chain-tdvp2",
-              "interaction-chain-tree-tdvp1", "interaction-chain-tree-tdvp2", "interaction-chain-tree-tebd"):
+              "interaction-chain-tree-tebd"):
         assert R.METHODS[m].representation == "interaction-chain", m
     # Multichannel exposes the same distinction explicitly.
     assert R.METHODS[R.INTERACTION_CHAIN_TEBD].representation == "interaction-chain"
@@ -464,7 +469,7 @@ def test_axis_errors_name_what_separates_the_candidates():
         sb().run(representation="schrodinger", **kw)
     # ...and one representation spanning two state geometries is too
     with pytest.raises(ValueError, match="ambiguous"):
-        sb().run(representation="interaction-chain", integrator="tdvp2", **kw)
+        sb().run(representation="interaction-chain", **kw)
     # An exact representation still needs enough axes to choose its integrator.
     with pytest.raises(ValueError, match="ambiguous"):
         sb().run(representation="polaron-star", **kw)
@@ -608,10 +613,10 @@ NAME_EXCEPTIONS = {
         ("interaction-chain", "tree", "tebd", "collision"),
     "interaction-chain-fishbone-trotter-mpo":
         ("interaction-chain", "tree", "trotter-mpo", "sibling"),
-    # a real collision, like the tebd one: interaction-chain-tree-tdvp2 is the
-    # binary mode-tree method
+    # A real collision: the canonical ``interaction-chain-tree-tebd`` name is
+    # already the binary mode-tree method.
     "interaction-chain-fishbone-tdvp2":
-        ("interaction-chain", "tree", "tdvp2", "collision"),
+        ("interaction-chain", "tree", "tdvp2", "sibling"),
 }
 
 

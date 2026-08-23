@@ -114,12 +114,29 @@ class Bath:
     coupling: object = None
     discrete_frequencies: tuple = ()
     discrete_couplings: tuple = ()
-    continuum_present: bool = False
+    # A normally constructed Bath describes a continuum.  Discrete-only
+    # constructors set this flag to False explicitly.
+    continuum_present: bool = True
     physical_reorganization: float = None
     compression_error: float = None
     uncompressed_modes: int = None
 
     def __post_init__(self):
+        densities = self.J if isinstance(self.J, (list, tuple)) else (self.J,)
+        if not densities or not all(callable(density) for density in densities):
+            raise TypeError("J must be a callable or a non-empty sequence of callables")
+        if self.domain is not None:
+            if len(self.domain) != 2:
+                raise ValueError("domain must contain exactly (lower, upper)")
+            lower, upper = map(float, self.domain)
+            invalid_width = (
+                lower >= upper if self.continuum_present else lower > upper
+            )
+            if (not np.isfinite(lower) or not np.isfinite(upper)
+                    or invalid_width):
+                relation = "lower < upper" if self.continuum_present else "lower <= upper"
+                raise ValueError(f"domain must be finite with {relation}")
+            self.domain = (lower, upper)
         if (not isinstance(self.phys_dim, (int, np.integer))
                 or isinstance(self.phys_dim, (bool, np.bool_))
                 or self.phys_dim < 1):
@@ -137,6 +154,54 @@ class Bath:
                             ("beta", self.beta)):
             if value is not None and (not np.isfinite(value) or value <= 0):
                 raise ValueError(f"{name} must be finite and positive")
+        if not isinstance(self.thermalized, (bool, np.bool_)):
+            raise TypeError("thermalized must be a boolean")
+        if not isinstance(self.continuum_present, (bool, np.bool_)):
+            raise TypeError("continuum_present must be a boolean")
+        if self.discretization not in {"legendre", "tedopa"}:
+            raise ValueError(
+                "discretization must be either 'legendre' or 'tedopa'"
+            )
+        if (not isinstance(self.m_per, (int, np.integer))
+                or isinstance(self.m_per, (bool, np.bool_)) or self.m_per < 2):
+            raise ValueError("m_per must be an integer of at least 2")
+        self.m_per = int(self.m_per)
+        breaks = tuple(float(value) for value in self.extra_breaks)
+        if not all(np.isfinite(value) for value in breaks):
+            raise ValueError("extra_breaks must contain only finite values")
+        self.extra_breaks = breaks
+
+        frequencies = np.asarray(self.discrete_frequencies, float)
+        couplings = np.asarray(self.discrete_couplings, float)
+        if frequencies.ndim != 1 or couplings.ndim != 1:
+            raise ValueError("discrete frequencies and couplings must be one-dimensional")
+        if frequencies.shape != couplings.shape:
+            raise ValueError("discrete frequencies and couplings must have equal length")
+        invalid_frequency = (
+            frequencies == 0 if self.thermalized else frequencies <= 0
+        )
+        if (np.any(~np.isfinite(frequencies)) or np.any(invalid_frequency)
+                or np.any(~np.isfinite(couplings))):
+            frequency_rule = (
+                "finite and non-zero" if self.thermalized
+                else "finite and positive"
+            )
+            raise ValueError(
+                f"discrete frequencies must be {frequency_rule} and couplings finite"
+            )
+        self.discrete_frequencies = tuple(map(float, frequencies))
+        self.discrete_couplings = tuple(map(float, couplings))
+
+        for name in ("physical_reorganization", "compression_error"):
+            value = getattr(self, name)
+            if value is not None and (not np.isfinite(value) or value < 0):
+                raise ValueError(f"{name} must be finite and non-negative")
+        if self.uncompressed_modes is not None:
+            if (not isinstance(self.uncompressed_modes, (int, np.integer))
+                    or isinstance(self.uncompressed_modes, (bool, np.bool_))
+                    or self.uncompressed_modes < 1):
+                raise ValueError("uncompressed_modes must be a positive integer")
+            self.uncompressed_modes = int(self.uncompressed_modes)
 
     @classmethod
     def vibronic(cls, frequencies, huang_rhys, *, continuum=None,
@@ -166,8 +231,7 @@ class Bath:
         # Zero-strength modes do not belong to the bath measure.  Degenerate
         # lines couple only through one bright linear combination, so combine
         # their Huang--Rhys factors before the star-to-chain Lanczos mapping.
-        # Leaving either case in the grid creates a rank-deficient Krylov space
-        # and used to produce NaNs in otherwise valid molecular input data.
+        # Leaving either case in the grid creates a rank-deficient Krylov space.
         active = huang_rhys > 0
         frequencies = frequencies[active]
         huang_rhys = huang_rhys[active]
@@ -417,12 +481,23 @@ class Bath:
                                  "t_max) or set n_modes explicitly")
             else:
                 from fishbonett.bath.auto import auto_n_modes
-                n_modes = len(discrete_frequency) + auto_n_modes(
-                    self.spectral_density(), domain, t_max,
-                    discretizer=self.discretizer())
+                continuum_modes = max(
+                    auto_n_modes(
+                        density, domain, t_max,
+                        discretizer=self.discretizer(),
+                    )
+                    for density in self.spectral_densities()
+                )
+                n_modes = len(discrete_frequency) + continuum_modes
         if n_modes < len(discrete_frequency):
             raise ValueError(
                 "n_modes cannot be smaller than the thermally represented discrete modes")
+        if (self.continuum_present and len(discrete_frequency)
+                and n_modes == len(discrete_frequency)):
+            raise ValueError(
+                "n_modes must leave at least one represented mode for the "
+                "continuum in addition to the discrete vibronic modes"
+            )
         if domain is self.domain and n_modes == self.n_modes:
             return self
         return replace(self, domain=tuple(domain), n_modes=int(n_modes))
