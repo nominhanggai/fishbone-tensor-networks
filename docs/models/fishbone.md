@@ -83,11 +83,47 @@ fb = Fishbone(
 The mapping keys attach these baths to system sites 0 and 3. `bind` specifies the
 system operator through which each bath couples.
 
+### Cyclic and long-range electronic graphs
+
+The tensor state remains a comb even when the physical electronic Hamiltonian
+contains rings. Supply canonical `(i, j)` keys with `i < j` instead of a linear
+`backbone`:
+
+```python
+fb = Fishbone(
+    sites=sites,
+    couplings={(0, 1): coupling01, (1, 2): coupling12,
+               (0, 2): coupling02},
+    baths={0: bath0, 1: bath1, 2: bath2},
+)
+```
+
+`backbone` and `couplings` are mutually exclusive. For a Frenkel Hamiltonian,
+{py:meth}`~fishbonett.models.fishbone.Fishbone.from_single_excitation` performs
+the mapping to local two-level sites and hopping operators directly. Long-range
+gates use an all-pairs swap network and restore the logical site order before
+bath evolution.
+
+Independent baths also support the interaction-chain representation:
+
+```python
+result = fb.run(
+    dt=0.002, t_max=0.1,
+    representation="interaction-chain",
+    state_geometry="tree",
+    integrator="tebd",
+)
+```
+
+Each bath is independently transformed from star modes to the interaction-picture
+chain. A reversible branch sweep brings the system site next to every represented
+mode without changing which bath belongs to which electronic site.
+
 ## Thermal preparation and continuation
 
 `GibbsPurification` prepares an exact finite-temperature state for a short,
 interacting system backbone and lifts its operators onto physical-plus-ancilla
-supersites. See {doc}`/tutorials/xxz_thermal_rectifier` for a complete example.
+supersites.
 
 Long static-tree runs can return a `result.checkpoint` and resume with
 `run(resume=result.checkpoint, ...)`. Set `bath_horizon` on the first segment to

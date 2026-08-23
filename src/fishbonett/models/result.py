@@ -45,6 +45,9 @@ def _hamiltonian_signature(terms):
         _update_array(digest, value)
     for edge in terms.edges:
         _update_array(digest, terms.bond[tuple(edge)])
+    for edge, value in sorted(getattr(terms, "graph_bond", {}).items()):
+        digest.update(json.dumps(list(map(int, edge))).encode("ascii"))
+        _update_array(digest, value)
     return digest.hexdigest()
 
 

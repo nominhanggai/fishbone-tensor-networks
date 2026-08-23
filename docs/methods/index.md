@@ -83,6 +83,7 @@ integrator determines how that product advances the tensor state.
 | `multichannel` | `interaction-chain` | 1D MPS (`mps`) | `interaction-chain-tebd` |
 | `multichannel` | `interaction-star` | 1D MPS (`mps`) | `interaction-star-tebd` |
 | `comb` | `schrodinger-chain` | comb tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
+| `comb` | `interaction-chain` | comb tensor network (`tree`) | `interaction-chain-fishbone-tebd` |
 | `site-tree` | `schrodinger-chain` | arbitrary tree tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
 
 For multichannel interaction propagation, `interaction-star-tebd` retains the

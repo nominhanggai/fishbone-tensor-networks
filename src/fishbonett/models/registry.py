@@ -265,9 +265,12 @@ def _canonical_method_name(representation, integrator, state_geometry="mps"):
 
 
 def _m(representation, models, engine, driver="", fixed_bond=False,
-       integrator="", state_geometry="mps"):
+       integrator="", state_geometry="mps", qualifier=None):
     integrator = integrator or driver
-    name = _canonical_method_name(representation, integrator, state_geometry)
+    if qualifier is None:
+        name = _canonical_method_name(representation, integrator, state_geometry)
+    else:
+        name = f"{representation}-{qualifier}-{integrator}"
     return Method(name, representation, models, engine, driver, fixed_bond,
                   integrator, state_geometry)
 
@@ -364,6 +367,8 @@ _METHOD_ROWS = [
     # -- the static tree engine: one engine, two representations, three topologies -----
     _m("schrodinger-chain", ("comb", "site-tree"),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
+    _m("interaction-chain", ("comb",), "interaction-fishbone-tebd",
+       integrator="tebd", state_geometry="tree", qualifier="fishbone"),
     _m("schrodinger-star", ("multichannel",),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
     _m("interaction-star", ("multichannel",),
@@ -429,7 +434,6 @@ MODELS = {
         cls="Fishbone",
         gaps={
             "schrodinger-star": _MULTISITE,
-            "interaction-chain": _MULTISITE,
             "interaction-star": _MULTISITE,
             "polaron-chain": _MULTISITE,
             "polaron-star": _MULTISITE,

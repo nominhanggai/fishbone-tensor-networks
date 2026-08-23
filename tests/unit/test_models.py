@@ -63,8 +63,12 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
         assert spec.representation.count("-") == 1
         assert spec.state_geometry in R.STATE_GEOMETRIES, (
             f"{name} names unknown state geometry")
-        state_geometry_tag = "" if spec.state_geometry == "mps" else "tree-"
-        assert name == f"{spec.representation}-{state_geometry_tag}{spec.integrator}"
+        if name == "interaction-chain-fishbone-tebd":
+            assert spec.models == ("comb",)
+            assert spec.state_geometry == "tree"
+        else:
+            state_geometry_tag = "" if spec.state_geometry == "mps" else "tree-"
+            assert name == f"{spec.representation}-{state_geometry_tag}{spec.integrator}"
         # every single-system engine must resolve to one plan compiler
         if set(spec.models) & {"system-bath", "multichannel"}:
             assert callable(PLAN_COMPILERS.get(spec.engine)), (

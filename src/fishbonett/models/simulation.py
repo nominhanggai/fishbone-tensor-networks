@@ -248,7 +248,20 @@ def _compile_static_tree_plan(model, spec, context):
 
     horizon = context.bath_horizon or context.t_max
     terms = tree.local_terms(horizon)
-    site_gates, edge_gates = terms.tebd_gates(context.dt / 2.0)
+    graph_couplings = (model.graph_couplings
+                       if isinstance(model, Fishbone) else None)
+    if graph_couplings is not None:
+        terms.graph_bond.update(graph_couplings)
+    gate_time = context.dt / 4.0 if graph_couplings is not None else context.dt / 2.0
+    site_gates, edge_gates = terms.tebd_gates(gate_time)
+    if graph_couplings is not None:
+        from scipy.linalg import expm
+        graph_gates = {
+            edge: expm(-0.5j * context.dt * value).reshape(
+                tree.de[edge[0]], tree.de[edge[1]],
+                tree.de[edge[0]], tree.de[edge[1]])
+            for edge, value in graph_couplings.items()
+        }
     parsed = [(name, _parse_observable(value))
               for name, value in context.obs_ops.items()]
 
@@ -278,8 +291,18 @@ def _compile_static_tree_plan(model, spec, context):
         max_bond = np.empty(n_records, dtype=int)
         record = 0
         for step in range(context.n_steps):
-            state.step(
-                site_gates, edge_gates, context.bond_dim, context.trunc_eps)
+            if graph_couplings is None:
+                state.step(
+                    site_gates, edge_gates, context.bond_dim, context.trunc_eps)
+            else:
+                from fishbonett.evolve.sitetree import symmetric_graph_step
+                state.step(site_gates, edge_gates,
+                           context.bond_dim, context.trunc_eps)
+                symmetric_graph_step(
+                    state, graph_gates, range(tree.ns),
+                    context.bond_dim, context.trunc_eps)
+                state.step(site_gates, edge_gates,
+                           context.bond_dim, context.trunc_eps)
             if step not in record_step_set:
                 continue
             for site in range(tree.ns):
@@ -434,6 +457,129 @@ def _compile_polaron_plan(model, spec, context):
     )
 
 
+def _compile_interaction_fishbone_plan(model, spec, context):
+    """Independent interaction-chain baths on an electronic comb."""
+    from scipy.linalg import expm
+    from fishbonett.models.fishbone import _parse_observable
+    from fishbonett.representations.interaction import InteractionRepresentation
+    from fishbonett.states.tree import TreeTensorNetwork
+    from fishbonett.evolve.sitetree import (
+        apply_site, symmetric_branch_swap_step, symmetric_graph_step,
+    )
+
+    if context.resume is not None:
+        raise ValueError("interaction-chain Fishbone continuation is not implemented")
+    horizon = context.bath_horizon or context.t_max
+    system_count = model.nc
+    dims = list(model.de)
+    edges = [(site, site + 1) for site in range(system_count - 1)]
+    branches = []
+    representation_cache = {}
+    next_node = system_count
+    for site, entry in enumerate(model.baths):
+        coupled_baths = model._site_baths(entry)
+        if coupled_baths is None:
+            continue
+        if not isinstance(coupled_baths, list):
+            coupled_baths = [coupled_baths]
+        if len(coupled_baths) > 1:
+            raise ValueError(
+                "interaction-chain Fishbone currently supports one independent bath per site")
+        coupled = coupled_baths[0]
+        bath = coupled.bath.resolved(horizon)
+        cache_key = (
+            id(bath), model.de[site], np.asarray(coupled.operator).tobytes())
+        representation = representation_cache.get(cache_key)
+        if representation is None:
+            representation = InteractionRepresentation(
+                representation="interaction-chain",
+                h_sys=np.zeros_like(model.sites[site]),
+                coupling=coupled.operator, bath=bath).build()
+            representation_cache[cache_key] = representation
+        nodes = list(range(next_node, next_node + bath.n_modes))
+        path = [site, *nodes]
+        edges.extend(zip(path[:-1], path[1:]))
+        dims.extend([bath.phys_dim] * bath.n_modes)
+        branches.append((path, representation))
+        next_node += bath.n_modes
+
+    state = TreeTensorNetwork(dims, edges, root=0)
+    helper = model._tree()
+    for site in range(system_count):
+        state.set_physical(site, helper._initial_vec(context.initial, site))
+
+    site_quarter = [expm(-0.25j * context.dt * value)
+                    for value in model.sites]
+    graph = model.graph_couplings
+    if graph is None:
+        graph = {(site, site + 1): model.backbone[site]
+                 for site in range(system_count - 1)
+                 if np.any(model.backbone[site])}
+    graph_quarter = {
+        edge: expm(-0.25j * context.dt * value).reshape(
+            model.de[edge[0]], model.de[edge[1]],
+            model.de[edge[0]], model.de[edge[1]])
+        for edge, value in graph.items()
+    }
+
+    def electronic_half_step():
+        for site, gate in enumerate(site_quarter):
+            apply_site(state, site, gate)
+        if graph_quarter:
+            symmetric_graph_step(
+                state, graph_quarter, range(system_count),
+                context.bond_dim, context.trunc_eps)
+        for site, gate in enumerate(site_quarter):
+            apply_site(state, site, gate)
+
+    parsed = [(name, _parse_observable(value))
+              for name, value in context.obs_ops.items()]
+
+    def execute():
+        record_steps = [step for step in range(context.n_steps)
+                        if (step + 1) % context.observe_every == 0
+                        or step + 1 == context.n_steps]
+        record_set = set(record_steps)
+        n_records = len(record_steps)
+        expect = {
+            name: (np.full((n_records, system_count), np.nan)
+                   if kind == "persite" else np.full(n_records, np.nan))
+            for name, (kind, _operator, _sites) in parsed}
+        rdms = np.empty((n_records, system_count), dtype=object)
+        max_bond = np.empty(n_records, dtype=int)
+        record = 0
+        for step in range(context.n_steps):
+            electronic_half_step()
+            for path, representation in branches:
+                symmetric_branch_swap_step(
+                    state, representation, path, step * context.dt, context.dt,
+                    context.bond_dim, context.trunc_eps)
+            electronic_half_step()
+            if step not in record_set:
+                continue
+            for site in range(system_count):
+                rdms[record, site] = state.rdm(site)
+            for name, (kind, operator, sites) in parsed:
+                if kind == "persite":
+                    for site in range(system_count):
+                        if operator.shape == (model.de[site], model.de[site]):
+                            expect[name][record, site] = np.trace(
+                                rdms[record, site] @ operator).real
+                else:
+                    expect[name][record] = state.expectation(operator, sites)
+            max_bond[record] = tree_peak_bond(state)
+            record += 1
+        rdm = (np.array([[rdms[t, site] for site in range(system_count)]
+                         for t in range(n_records)])
+               if len(set(model.de)) == 1 else rdms)
+        return Result(
+            t=(np.asarray(record_steps) + 1) * context.dt,
+            expect=expect, rdm=rdm, max_bond=max_bond, method=spec.name,
+            meta={"n_sites": system_count, "representation": "interaction-chain"})
+
+    return SimulationPlan(spec, context, execute=execute)
+
+
 #: Engine key -> plan compiler.  Method names occur only in the taxonomy; this
 #: table is the implementation boundary for its coarser engine categories.
 PLAN_COMPILERS = {
@@ -443,6 +589,7 @@ PLAN_COMPILERS = {
     "displacement-mpo": _compile_displacement_plan,
     "polaron-tebd": _compile_polaron_plan,
     "static-tree-tebd": _compile_static_tree_plan,
+    "interaction-fishbone-tebd": _compile_interaction_fishbone_plan,
 }
 
 

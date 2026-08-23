@@ -10,6 +10,7 @@ import numpy as np
 
 from fishbonett.bath.chain import get_bath_nn_paras, star_transform
 from fishbonett.bath.legendre import get_vn_squared
+from fishbonett.bath.lanczos import lanczos
 
 
 def require_resolved(bath):
@@ -84,6 +85,29 @@ class _ChainCoefficients:
 def star_coefficients(bath):
     """Discretize a resolved bath into private independent-mode data."""
     bath = require_resolved(bath)
+    discrete_frequency, discrete_coupling = bath._discrete_star_data()
+    if len(discrete_frequency):
+        continuum_modes = bath.n_modes - len(discrete_frequency)
+        frequency = np.asarray(discrete_frequency, float)
+        coupling = np.asarray(discrete_coupling, float)
+        if continuum_modes:
+            if not bath.continuum_present:
+                raise ValueError("resolved mode count exceeds the discrete vibronic modes")
+            continuum_frequency, continuum_strength, _ = star_transform(
+                bath.spectral_density(), continuum_modes, bath.domain,
+                bath.discretizer())
+            frequency = np.concatenate((frequency, continuum_frequency))
+            coupling = np.concatenate((coupling, continuum_strength))
+        if len(frequency) == 1:
+            transform = np.ones((1, 1))
+        else:
+            tri, vectors = lanczos(np.diag(frequency), coupling)
+            sign = np.sign(vectors[0, :])
+            sign[sign == 0] = 1.0
+            transform = np.ascontiguousarray((vectors @ np.diag(sign)).T)
+        return _StarCoefficients(
+            frequency, coupling[None, :], transform)
+
     densities = bath.spectral_densities()
     if len(densities) == 1:
         frequencies, strengths, transform = star_transform(
@@ -128,6 +152,17 @@ def combined_star_operators(bath, operators):
 def chain_coefficients(bath):
     """Map a resolved single-channel bath to private chain coefficients."""
     bath = require_resolved(bath)
+    discrete_frequency, _ = bath._discrete_star_data()
+    if len(discrete_frequency):
+        star = star_coefficients(bath)
+        coupling = star.couplings[0]
+        if star.n_modes == 1:
+            return _ChainCoefficients(
+                star.frequencies.copy(), np.empty(0), abs(coupling[0]))
+        tri, _ = lanczos(np.diag(star.frequencies), coupling)
+        return _ChainCoefficients(
+            np.diagonal(tri).copy(), np.diagonal(tri, -1).copy(),
+            np.linalg.norm(coupling))
     densities = bath.spectral_densities()
     if len(densities) != 1:
         raise ValueError(
