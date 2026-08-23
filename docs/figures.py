@@ -290,13 +290,24 @@ def bridge_electron_transfer(path=None):
     suite = example.run_profile("docs", announce=True)
     summary = example.summarize(suite)
     plt = _mpl()
-    figure, axes = plt.subplots(1, 2, figsize=(11.2, 4.4), sharey=True)
+    figure, axes = plt.subplots(1, 3, figsize=(15.0, 4.4), sharey=True)
     colors = {"donor": "#4C6EF5", "bridge": "#E8590C", "acceptor": "#2B8A3E"}
-    for axis, case in zip(axes, ("condon", "noncondon")):
+    cases = ("diagonal_reference", "weak_diagonal", "noncondon")
+    titles = {
+        "diagonal_reference": r"diagonal, $V_{DB}/V_{BA}=22/45$",
+        "weak_diagonal": r"diagonal, $V_{DB}/V_{BA}=2/2$",
+        "noncondon": r"non-Condon, $V_{DB}/V_{BA}=2/2$",
+    }
+    display_names = {
+        "diagonal_reference": "diagonal reference",
+        "weak_diagonal": "weak diagonal control",
+        "noncondon": "non-Condon",
+    }
+    for axis, case in zip(axes, cases):
         result = suite["results"][case]["primary"]
         for state, color in colors.items():
             axis.plot(result.t, result.expect[state], color=color, label=state)
-        axis.set(xlabel="time (ps)", title=case)
+        axis.set(xlabel="time (ps)", title=titles[case])
         axis.grid(alpha=0.25)
     axes[0].set_ylabel("population")
     axes[0].legend(frameon=False)
@@ -308,22 +319,28 @@ def bridge_electron_transfer(path=None):
         return f"{value:.3g}" if np.isfinite(value) else "not resolved"
 
     rows = "\n".join(
-        f"| {case} | {lifetime_text(values['effective_lifetime_ps'])} | "
+        f"| {display_names[case]} | "
+        f"{lifetime_text(values['effective_lifetime_ps'])} | "
         f"{values['peak_bridge_population']:.3g} | "
         f"{values['final_acceptor_population']:.3g} | "
         f"{values['normalization_error']:.2e} |"
         for case, values in summary.items()
     )
-    _write_summary("bridge_electron_transfer", f"""## Generated result
+    _write_summary("bridge_electron_transfer", fr"""## Generated result
 
 | coupling model | descriptive donor lifetime (ps) | max bridge population | final acceptor population | normalization error |
 |---|---:|---:|---:|---:|
 {rows}
 
-The non-Condon bath operator permits bath-modulated electronic transfer despite
-small bare electronic couplings. The fitted donor lifetime summarizes the full
-population trace; it is not an isolated elementary $D\to A$ rate because bridge
-occupation and recrossing remain in the dynamics.
+The docs profile used the paper's $\alpha={suite['bath']['alpha']}$,
+$\omega_c={suite['bath']['cutoff_cm']:.0f}\ \mathrm{{cm}}^{{-1}}$ bath and
+{suite['bath']['n_modes']} automatically resolved modes. This 0.2 ps transient
+does not resolve the paper's donor lifetimes. The weak-diagonal panel is the
+fixed-Hamiltonian control needed to identify the non-Condon enhancement.
+
+Any fitted donor lifetime summarizes the full population trace; it is not an
+isolated elementary $D\to A$ rate because bridge occupation and recrossing
+remain in the dynamics.
 """)
     return output
 

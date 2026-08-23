@@ -4,6 +4,7 @@ import pytest
 
 from fishbonett.bath.auto import (reorganization_energy, auto_domain, auto_n_modes,
                                   _reorg_profile)
+from fishbonett.bath.lanczos import lanczos
 from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
 
@@ -55,6 +56,40 @@ def test_auto_n_modes_grows_with_tmax():
     dom = (0.0, 35.0)
     n_short, n_long = auto_n_modes(_ohmic, dom, 0.5), auto_n_modes(_ohmic, dom, 4.0)
     assert 2 < n_short < n_long
+
+
+def test_lanczos_can_return_a_stable_prefix_for_light_cone_estimation():
+    hamiltonian = np.diag([1.0, 1.0])
+    coupling = np.array([1.0, 1.0])
+    with pytest.raises(ValueError, match="terminated before spanning"):
+        lanczos(hamiltonian, coupling)
+    projected, transform = lanczos(
+        hamiltonian, coupling, allow_early_termination=True
+    )
+    assert projected.shape == (1, 1)
+    assert transform.shape == (2, 1)
+
+
+def test_auto_modes_handles_the_published_dba_bath():
+    """The wide, thermally extended DBA density used to break near the end of
+    a large trial Lanczos basis even though its physical light cone was valid."""
+    cm_to_rad_ps = 0.1883651567308853
+    cutoff = 600.0
+    alpha = 1.67
+
+    def density(omega):
+        omega_cm = omega / cm_to_rad_ps
+        return (
+            cm_to_rad_ps * 0.5 * alpha * np.pi * omega_cm
+            * np.exp(-omega_cm / cutoff)
+        )
+
+    beta = 1.0 / (0.6950348009 * 300.0 * cm_to_rad_ps)
+    resolved = Bath(
+        J=density, beta=beta, phys_dim=3, discretization="tedopa"
+    ).resolved(1.0)
+    assert resolved.n_modes > 128
+    assert resolved.domain[0] < 0.0 < resolved.domain[1]
 
 
 def test_bath_resolved_fills_and_keeps():
