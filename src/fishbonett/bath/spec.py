@@ -44,11 +44,22 @@ def thermalize(J, beta):
     stimulated-emission weight, so a thermal bath can be propagated by the same
     zero-temperature machinery.
     """
+    beta = float(beta)
+    if not np.isfinite(beta) or beta <= 0:
+        raise ValueError("beta must be finite and positive")
+
     def Jb(w):
         aw = abs(w)
-        if aw < 1e-12:
-            return 0.0
-        nb = 1.0 / np.expm1(beta * aw)
+        if aw == 0:
+            # The Bose factor diverges at the origin while an Ohmic density
+            # vanishes.  Evaluate their finite product at a scale where expm1
+            # is accurate.  Averaging the two one-sided formulas removes the
+            # vanishing spontaneous-emission term.
+            probe = np.sqrt(np.finfo(float).eps) / max(beta, 1.0)
+            return float(J(probe)) * (
+                1.0 / np.expm1(beta * probe) + 0.5)
+        argument = beta * aw
+        nb = 0.0 if argument > 700.0 else 1.0 / np.expm1(argument)
         j = float(J(aw))
         return j * (nb + 1.0) if w > 0 else j * nb
     return Jb
@@ -108,6 +119,25 @@ class Bath:
     compression_error: float = None
     uncompressed_modes: int = None
 
+    def __post_init__(self):
+        if (not isinstance(self.phys_dim, (int, np.integer))
+                or isinstance(self.phys_dim, (bool, np.bool_))
+                or self.phys_dim < 1):
+            raise ValueError("phys_dim must be a positive integer")
+        self.phys_dim = int(self.phys_dim)
+        if self.n_modes is not None:
+            if (not isinstance(self.n_modes, (int, np.integer))
+                    or isinstance(self.n_modes, (bool, np.bool_))
+                    or self.n_modes < 1):
+                raise ValueError("n_modes must be a positive integer or None")
+            self.n_modes = int(self.n_modes)
+        if self.temperature is not None and self.beta is not None:
+            raise ValueError("provide temperature or beta, not both")
+        for name, value in (("temperature", self.temperature),
+                            ("beta", self.beta)):
+            if value is not None and (not np.isfinite(value) or value <= 0):
+                raise ValueError(f"{name} must be finite and positive")
+
     @classmethod
     def vibronic(cls, frequencies, huang_rhys, *, continuum=None,
                  temperature=None, beta=None, phys_dim=20, domain=None,
@@ -133,6 +163,23 @@ class Bath:
             raise ValueError("Huang-Rhys factors must be non-negative")
         if temperature is not None and beta is not None:
             raise ValueError("provide temperature or beta, not both")
+        # Zero-strength modes do not belong to the bath measure.  Degenerate
+        # lines couple only through one bright linear combination, so combine
+        # their Huang--Rhys factors before the star-to-chain Lanczos mapping.
+        # Leaving either case in the grid creates a rank-deficient Krylov space
+        # and used to produce NaNs in otherwise valid molecular input data.
+        active = huang_rhys > 0
+        frequencies = frequencies[active]
+        huang_rhys = huang_rhys[active]
+        if frequencies.size:
+            unique, inverse = np.unique(frequencies, return_inverse=True)
+            combined = np.zeros(len(unique), float)
+            np.add.at(combined, inverse, huang_rhys)
+            frequencies, huang_rhys = unique, combined
+        elif continuum is None:
+            raise ValueError(
+                "a vibronic bath needs a positive Huang-Rhys factor or a continuum")
+
         strengths = frequencies * np.sqrt(huang_rhys)
         zero = lambda _w: 0.0
         density = continuum if continuum is not None else zero
@@ -145,6 +192,18 @@ class Bath:
                     continuum, (max(0.0, lo), hi))
         elif continuum is not None:
             physical_reorganization = None
+        if continuum is None and n_modes is not None:
+            if (not isinstance(n_modes, (int, np.integer))
+                    or isinstance(n_modes, (bool, np.bool_))):
+                raise ValueError("n_modes must be a positive integer or None")
+            thermalized = bool(kwargs.get("thermalized", False))
+            represented = len(frequencies) * (
+                2 if (temperature is not None or beta is not None)
+                and not thermalized else 1)
+            if int(n_modes) != represented:
+                raise ValueError(
+                    "without a continuum, n_modes must equal the number of "
+                    f"represented vibronic modes ({represented})")
         return cls(
             J=density, domain=domain, n_modes=n_modes, phys_dim=phys_dim,
             temperature=temperature, beta=beta,

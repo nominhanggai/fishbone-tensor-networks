@@ -145,8 +145,8 @@ _NO_MODE_MODE = (
     "This representation keeps the chain hoppings, which are nearest-neighbour "
     "on a 1D MPS but "
     "long-range on that tree (only half of the chain-adjacent pairs are "
-    "tree-adjacent; the rest span up to 2*log2(N) edges -- measured: 10 edges at "
-    "N=32), so the MPO bond grows and the tree loses to the 1D MPS. Reordering "
+    "tree-adjacent and the rest can span logarithmically many edges), so the MPO "
+    "bond grows. Reordering "
     "the leaves to make the chain local just turns the state back into an MPS.")
 
 
@@ -332,7 +332,7 @@ _METHOD_ROWS = [
     # -- system-bath, interaction transformation, on a 1D MPS -------------------------
     # `interaction-chain`, not `-star`: the star-to-chain transform rotates the phases
     # back into the chain modes, so d_n(0) = (|V|, 0, ..., 0) -- the system on c0
-    # alone -- and spreads outward with t.  Measured, not assumed.
+    # alone -- and spreads outward with t.
     _m("interaction-chain", ("system-bath", "multichannel"), "swap-tebd",
        integrator="tebd"),
     _m("interaction-chain", _SB, "displacement-mpo",
@@ -367,8 +367,17 @@ _METHOD_ROWS = [
     # -- the static tree engine: one engine, two representations, three topologies -----
     _m("schrodinger-chain", ("comb", "site-tree"),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
-    _m("interaction-chain", ("comb",), "interaction-fishbone-tebd",
+    _m("interaction-chain", ("comb",), "interaction-fishbone",
        integrator="tebd", state_geometry="tree", qualifier="fishbone"),
+    # The same per-branch H(t), carried by one conditional-displacement operator
+    # instead of a swap network. Branches on different sites commute; several
+    # operators sharing one site are composed symmetrically by the planner.
+    _m("interaction-chain", ("comb",), "interaction-fishbone",
+       integrator="trotter-mpo", state_geometry="tree", qualifier="fishbone"),
+    # ...and the same H(t) again, propagated with the *generator* projected onto
+    # the two-site tangent space rather than with the interval propagator.
+    _m("interaction-chain", ("comb",), "interaction-fishbone",
+       integrator="tdvp2", state_geometry="tree", qualifier="fishbone"),
     _m("schrodinger-star", ("multichannel",),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
     _m("interaction-star", ("multichannel",),

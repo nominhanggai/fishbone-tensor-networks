@@ -1,7 +1,7 @@
-# Fishbone geometries
+# Fishbone models and tensor-network layout
 
-A **fishbone** is a set of electronic sites, each carrying its own bath (or two
-baths — one on each side).  The electronic sites need not form a chain: the
+A **fishbone** is a set of electronic sites, each carrying one or more independent
+baths. The electronic sites need not form a chain: the
 general engine {py:class}`~fishbonett.models.fishbone.TreeFishbone` wires them into
 *any* loop-free tree, and the common 1D chain
 {py:class}`~fishbonett.models.fishbone.Fishbone` is a convenience specialization of it.
@@ -63,9 +63,9 @@ res.expect["sz"]        # (n_steps, n_sites); [t, i] = <sz> on site i at step t
 res.rdm                 # (n_steps, n_sites, d, d)
 ```
 
-A `baths` entry may be one `bath.bind(operator)` object, a `(left, right)` pair
-(two baths per site — the fishbone), or `None`. Bare baths use positional
-`sigma_z`/`sigma_x` defaults; explicit `bath.bind(operator)` values are preferred.
+A `baths` entry may be one `bath.bind(operator)` object, a list of explicitly
+bound baths, or `None`. A single bare bath retains the compatibility
+`sigma_z` default. Lists require `bath.bind(operator)` on every entry.
 
 A mapping makes endpoint attachments readable without counting `None` values:
 
@@ -118,6 +118,51 @@ result = fb.run(
 Each bath is independently transformed from star modes to the interaction-picture
 chain. A reversible branch sweep brings the system site next to every represented
 mode without changing which bath belongs to which electronic site.
+
+The interaction-chain comb offers three integrators, which solve the same H(t) and
+differ only in how a branch's terms reach the state:
+
+| `integrator` | how a branch is advanced | when to use it |
+|---|---|---|
+| `tebd` | the swap sweep above: the electronic index walks down the branch and back, truncating at every bond twice | the default; the only choice for a bath whose coupling operator is not Hermitian |
+| `trotter-mpo` | one conditional-displacement operator per branch, so each bond grows once and a single sweep truncates it back | compare with `tebd` on a short converged run when operator application dominates |
+| `tdvp2` | two-site TDVP along each branch: propagates with the *generator*, projected onto the two-site tangent space | when a generator-based integrator is wanted for its own sake -- **not** for a capped bond, see below |
+
+### Several independent baths on one site
+
+A comb site may carry more than one independent bath, passed as a list. The bath
+Hamiltonian is then the sum of the branch Hamiltonians. Each branch keeps its own
+`phys_dim`, so parts of different character can be sized independently. If two
+branches use noncommuting operators on the same site, their evolution is composed
+with a palindromic second-order split.
+
+```{warning}
+Every bath in a multi-bath list must be bound explicitly, for example
+`[low_frequency.bind(op), vibrations.bind(op)]`. The package rejects an unbound
+list because list position does not define a physical coupling operator.
+```
+
+```{note}
+Splitting a spectral density can improve local Fock-space control, but it may also
+increase the number and width of branch bonds. Compare merged and split forms by
+converging the same observable; a smaller peak bond alone does not determine the
+total contraction cost.
+```
+
+`trotter-mpo` needs the per-site coupling operators to be Hermitian (it is built
+from their eigenbasis). Operators on different sites commute; noncommuting
+operators on the same site are handled by the symmetric branch composition. See
+{doc}`/methods/interaction/trotter_mpo` for the truncated-ladder caveat.
+
+All three integrators are second order in the time step. Validate a calculation by
+halving `dt` and tightening the SVD threshold until the observable is stable.
+
+```{warning}
+One-site TDVP works inside a fixed-bond manifold and never truncates. Two-site
+TDVP instead splits each evolved two-site block with a truncating SVD, so a binding
+`bond_dim` can discard physical weight just as it can in a Trotter calculation.
+Converge the cap independently of the integrator choice.
+```
 
 ## Thermal preparation and continuation
 

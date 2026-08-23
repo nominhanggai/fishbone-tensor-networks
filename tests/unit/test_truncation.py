@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from fishbonett import Bath, SystemBath, Truncation
-from fishbonett.linalg import DEFAULT_EPS, cap_rank
+from fishbonett.linalg import DEFAULT_EPS, cap_rank, eye
 from fishbonett.operators import sigma_x, sigma_z
 
 
@@ -62,6 +62,16 @@ def test_invalid_settings_raise():
         Truncation(eps=-1)
     with pytest.raises(ValueError):
         Truncation(max_bond=0)          # 0 would mean "keep nothing"
+
+
+def test_identity_helper_accepts_documented_dimension_forms():
+    assert eye(None) is None
+    assert eye([]) is None
+    np.testing.assert_array_equal(eye(3), np.eye(3))
+    np.testing.assert_array_equal(eye("2"), np.eye(2))
+    np.testing.assert_array_equal(eye(np.array([2, 3])), np.eye(2, 3))
+    with pytest.raises(TypeError):
+        eye(object())
 
 
 # -- wiring into run() -------------------------------------------------------

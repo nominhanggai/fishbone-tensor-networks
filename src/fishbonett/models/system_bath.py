@@ -225,6 +225,18 @@ class SystemBath:
             **axis_kw)
         if not set(spec.models) & mine:
             raise unknown_method_error(spec.name)
+        allowed_engine_options = set()
+        if spec.engine == "mpo-tdvp":
+            allowed_engine_options.update({"prec", "bond_expand", "Dplusmax"})
+            if spec.representation.startswith("polaron-"):
+                allowed_engine_options.add("initial_bond")
+            else:
+                allowed_engine_options.update({"tol", "eshift"})
+        unknown_options = set(engine_kw) - allowed_engine_options
+        if unknown_options:
+            names = ", ".join(sorted(unknown_options))
+            raise TypeError(
+                f"unexpected run option(s) for {spec.name}: {names}")
         if bond_dim is None and spec.fixed_bond:
             alternatives = _bond_growing_siblings(spec.name) or [
                 "interaction-chain-tebd"]

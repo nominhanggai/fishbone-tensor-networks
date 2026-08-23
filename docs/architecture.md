@@ -90,7 +90,7 @@ models and `bath.bind(operator)` for multi-site models.
 
 One mathematical representation can support several propagation algorithms. For
 example, `interaction-chain` supplies time-dependent Hamiltonian tensors through
-`tdvp_mpo(t)`, interval gates through `tebd_gates(t, dt)`, and its exact
+`tdvp_mpo(t)`, interval gates through `tebd_gates(t, dt)`, and its
 conditional-displacement propagator through `trotter_mpo(t, dt)`. These are
 products of the same represented Hamiltonian.
 
@@ -116,18 +116,12 @@ fixed by the tensor-network geometry:
 | `binary-tree` | `tree` | `interaction-chain-tree-tdvp2` |
 | `tree` | `tree` | `schrodinger-chain-tree-tebd` |
 
-Both tree geometries take the same infix, so a name is **not** in general
-derivable from the axes: `binary-tree` is one system's bath modes on a balanced
-tree, `tree` is the comb / general site tree, and the axes do not distinguish
-them in the name. Where that collides, the name breaks the tie:
-
-- `interaction-chain-tree-tebd` is the `binary-tree` method, so the `comb`
-  method with the same representation and integrator is named
-  **`interaction-chain-fishbone-tebd`**. This is the only such exception.
-
-`tests/unit/test_models.py::test_every_method_name_is_derivable_from_its_axes`
-pins both the rule and that single exception, so a second collision has to be
-named deliberately rather than resolved ad hoc.
+Both tree geometries use `tree` in ordinary method names. The binary-tree method
+`interaction-chain-tree-tebd` and the comb method would otherwise collide, so
+the interaction-chain comb family uses the `fishbone` infix:
+`interaction-chain-fishbone-tebd`,
+`interaction-chain-fishbone-trotter-mpo`, and
+`interaction-chain-fishbone-tdvp2`.
 
 All high-level model classes execute through `SimulationPlan`. `run(seed=...)`
 also scopes randomized linear algebra to that plan without changing NumPy's

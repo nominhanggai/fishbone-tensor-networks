@@ -76,6 +76,33 @@ def _parse_observable(spec):
     return "persite", np.asarray(spec), None
 
 
+def _bind_site_entry(entry, *, single_default):
+    """Normalize one site's bath entry without guessing multi-bath operators."""
+    if entry is None:
+        return []
+    values = [item for item in entry if item is not None] if isinstance(
+        entry, (list, tuple)) else [entry]
+    multiple = len(values) > 1
+    out = []
+    for item in values:
+        if isinstance(item, CoupledBath):
+            out.append(item)
+            continue
+        if multiple and getattr(item, "coupling", None) is None:
+            raise ValueError(
+                "a site with multiple baths must bind every coupling operator "
+                "explicitly, for example [bath1.bind(op1), bath2.bind(op2)]")
+        out.append(bind_bath(item, default_operator=single_default))
+    return out
+
+
+def _reject_engine_options(options):
+    """Multi-site planners currently expose no method-specific run options."""
+    if options:
+        names = ", ".join(sorted(map(str, options)))
+        raise TypeError(f"unexpected run option(s): {names}")
+
+
 class TreeFishbone:
     """Electronic sites wired into an *arbitrary tree*, each with one or more baths.
 
@@ -95,8 +122,9 @@ class TreeFishbone:
         :class:`~fishbonett.bath.spec.Bath`, a list of baths, or ``None``.
         Missing mapping keys mean no bath on that site.  Prefer
         :class:`~fishbonett.bath.coupled.CoupledBath` entries made with
-        ``bath.bind(operator)``.  A bare bath is bound to ``sigma_z`` for
-        compatibility.  Baths may have different settings.
+        ``bath.bind(operator)``.  A single bare bath is bound to ``sigma_z`` for
+        compatibility; every operator must be explicit when a site has several
+        baths. Baths may have different settings.
     """
 
     def __init__(self, sites, edges, baths):
@@ -116,19 +144,8 @@ class TreeFishbone:
             raise ValueError("edges must form a tree over the sites (n_sites-1 edges)")
         self.baths = []
         for entry in _site_entries(baths, self.ns):
-            if entry is None:
-                self.baths.append([])
-            elif isinstance(entry, (list, tuple)):
-                self.baths.append([
-                    item if isinstance(item, CoupledBath)
-                    else bind_bath(item, default_operator=sigma_z)
-                    for item in entry if item is not None
-                ])
-            else:
-                self.baths.append([
-                    entry if isinstance(entry, CoupledBath)
-                    else bind_bath(entry, default_operator=sigma_z)
-                ])
+            self.baths.append(_bind_site_entry(
+                entry, single_default=sigma_z))
 
     def local_terms(self, t_max=None):
         """The static Hamiltonian as a
@@ -181,7 +198,7 @@ class TreeFishbone:
             representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, seed=0, resume=None, bath_horizon=None, progress=None,
-            observe_every=1):
+            observe_every=1, **engine_kw):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
         ``method`` exists for symmetry with
@@ -234,6 +251,7 @@ class TreeFishbone:
             if m not in methods_of(self._MODEL):
                 raise unknown_method_error(m, self._MODEL)
             spec = method_spec(m, self._MODEL)
+        _reject_engine_options(engine_kw)
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
@@ -271,6 +289,7 @@ class TreeFishbone:
             trunc_eps=trunc_eps, obs_ops=observables, initial=initial,
             seed=seed, resume=resume, bath_horizon=bath_horizon,
             observe_every=int(observe_every), progress=progress,
+            kw=engine_kw,
         )
         from fishbonett.models.simulation import compile_plan
         return compile_plan(self, spec, context).run()
@@ -286,10 +305,11 @@ class Fishbone:
     the latter is applied by a reversible swap network. ``baths`` may be a
     sequence with one entry per site or a mapping from site index to entry;
     omitted mapping keys mean no bath.  Each entry is a single :class:`Bath`
-    (one bath -- possibly multichannel), a ``(left, right)`` pair (two baths per
-    site -- the fishbone), or ``None``.  Prefer explicit ``bath.bind(operator)``
-    values.  For compatibility, a bare left bath defaults to ``sigma_z`` and a
-    bare right bath to ``sigma_x``.  ``run`` and the returned :class:`Result` are
+    (one bath -- possibly multichannel), a list of independent baths, or ``None``.
+    Prefer explicit ``bath.bind(operator)`` values. For compatibility, one bare
+    bath defaults to ``sigma_z``; a list requires explicit operators so that a
+    positional default cannot silently change the Hamiltonian. ``run`` and the
+    returned :class:`Result` are
     exactly those of :meth:`fishbonett.models.fishbone.TreeFishbone.run`.
     """
 
@@ -374,20 +394,11 @@ class Fishbone:
 
     @staticmethod
     def _site_baths(entry):
-        """Map a per-site bath spec to the TreeFishbone form, defaulting a
-        left/right pair's couplings to sigma_z / sigma_x when unset."""
+        """Map a per-site bath specification to explicit coupled baths."""
         if entry is None:
             return None
-        if isinstance(entry, (tuple, list)):
-            out = []
-            for pos, b in enumerate(entry):
-                if b is None:
-                    continue
-                out.append(b if isinstance(b, CoupledBath) else bind_bath(
-                    b, default_operator=(sigma_z if pos == 0 else sigma_x)))
-            return out
-        return (entry if isinstance(entry, CoupledBath)
-                else bind_bath(entry, default_operator=sigma_z))
+        out = _bind_site_entry(entry, single_default=sigma_z)
+        return out if isinstance(entry, (tuple, list)) else out[0]
 
     def _tree(self):
         edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]
@@ -412,7 +423,7 @@ class Fishbone:
             representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, seed=0, resume=None, bath_horizon=None, progress=None,
-            observe_every=1):
+            observe_every=1, **engine_kw):
         """Propagate the 1D fishbone through the shared simulation planner. See
         :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout.
@@ -434,6 +445,7 @@ class Fishbone:
             if m not in methods_of(self._MODEL):
                 raise unknown_method_error(m, self._MODEL)
             spec = method_spec(m, self._MODEL)
+        _reject_engine_options(engine_kw)
         if n_steps is None:
             if t_max is None:
                 raise ValueError("provide either t_max or n_steps")
@@ -470,6 +482,7 @@ class Fishbone:
             trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
             seed=seed, resume=resume, bath_horizon=bath_horizon,
             observe_every=int(observe_every), progress=progress,
+            kw=engine_kw,
         )
         from fishbonett.models.simulation import compile_plan
         return compile_plan(self, spec, context).run()

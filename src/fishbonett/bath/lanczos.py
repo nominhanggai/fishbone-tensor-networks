@@ -24,7 +24,7 @@ implementation started from https://github.com/matenure/FastGCN/blob/master/lanc
 import numpy as np
 
 
-def lanczos(A, p):
+def lanczos(A, p, breakdown_tol=None):
     """Tridiagonalize ``A`` in the Krylov basis seeded by ``p``.
 
     Parameters
@@ -43,29 +43,48 @@ def lanczos(A, p):
     Q : (n, n) array
         The orthogonal star -> chain transform.
     """
-    A = np.array(A)
-    q = np.array(p).copy()
+    A = np.asarray(A)
+    q = np.asarray(p).reshape(-1).copy()
+    if A.ndim != 2 or A.shape[0] != A.shape[1]:
+        raise ValueError("A must be a square matrix")
     n = A.shape[0]
-    Q = np.zeros((n, n + 1))
-    Q[:, 0] = q / np.linalg.norm(q)
-    # print(Q[:,0])
-    alpha = 0
-    beta = 0
+    if q.shape != (n,):
+        raise ValueError(f"p must have shape {(n,)}, got {q.shape}")
+    norm = np.linalg.norm(q)
+    if not np.isfinite(norm) or norm == 0:
+        raise ValueError("the Lanczos seed must be finite and nonzero")
+    dtype = np.result_type(A.dtype, q.dtype, float)
+    Q = np.zeros((n, n), dtype=dtype)
+    Q[:, 0] = q / norm
+    beta = 0.0
+    if breakdown_tol is None:
+        scale = max(float(np.linalg.norm(A, ord=2)), 1.0)
+        breakdown_tol = 100 * np.finfo(float).eps * n * scale
 
     for i in range(n):
         if i == 0:
             q = np.dot(A, Q[:, i])
         else:
             q = np.dot(A, Q[:, i]) - beta * Q[:, i - 1]
-        alpha = np.dot(q.T, Q[:, i])
+        alpha = np.vdot(Q[:, i], q)
         q = q - Q[:, i] * alpha
-        q = q - np.dot(Q[:, :i], np.dot(Q[:, :i].T, q))  # full reorthogonalization
+        # A second projection against the complete basis accumulated so far is
+        # inexpensive for bath grids and prevents loss of orthogonality for
+        # strongly graded spectral weights.
+        basis = Q[:, :i + 1]
+        q = q - basis @ (basis.conj().T @ q)
         beta = np.linalg.norm(q)
+        if i + 1 == n:
+            break
+        if not np.isfinite(beta) or beta <= breakdown_tol:
+            raise ValueError(
+                "Lanczos iteration terminated before spanning the bath modes; "
+                "remove zero-coupling modes and combine degenerate frequencies")
         Q[:, i + 1] = q / beta
 
-    Q = Q[:, :n]
-
-    Sigma = np.dot(Q.T, np.dot(A, Q))
+    Sigma = Q.conj().T @ A @ Q
+    Sigma = np.real_if_close(Sigma)
+    Q = np.real_if_close(Q)
     return Sigma, Q
 
 
@@ -83,28 +102,37 @@ def block_lanczos(A, p, ortho_threshold=1e-14):
     because a non-orthogonal seed silently produces the wrong chain.  Returns
     ``(Sigma, Q)`` as in :func:`lanczos`.
     """
-    A = np.array(A)
-    q = np.array(p)
+    dtype = np.result_type(np.asarray(A).dtype, np.asarray(p).dtype, float)
+    A = np.asarray(A, dtype=dtype)
+    q = np.array(p, dtype=dtype, copy=True)
+    if A.ndim != 2 or A.shape[0] != A.shape[1]:
+        raise ValueError("A must be a square matrix")
     n = A.shape[0]
-    b = list(q.shape)
-    b.remove(n)
-    b = b[0]
-    assert n % b == 0 and n >= b >= 1
-    q_shape = q.shape
-    if q_shape[0] < q_shape[1]:
+    if q.ndim != 2 or n not in q.shape:
+        raise ValueError("p must be a matrix with one dimension equal to A.shape[0]")
+    if q.shape[0] != n:
         q = q.T
+    b = q.shape[1]
+    if not (n % b == 0 and n >= b >= 1):
+        raise ValueError("the block width must be positive and divide A.shape[0]")
 
     for i, vec in enumerate(q.T):
-        q[:, i] = vec / np.linalg.norm(vec)
+        norm = np.linalg.norm(vec)
+        if not np.isfinite(norm) or norm == 0:
+            raise ValueError("every block Lanczos seed must be finite and nonzero")
+        q[:, i] = vec / norm
 
     from itertools import combinations
 
     for pair in combinations(range(b), 2):
         i, j = pair
-        print(i, j, q[:, i] @ q[:, j])
-        assert abs(q[:, i] @ q[:, j]) <= ortho_threshold
+        overlap = abs(np.vdot(q[:, i], q[:, j]))
+        if overlap > ortho_threshold:
+            raise ValueError(
+                "block Lanczos seed columns must be mutually orthogonal; "
+                f"columns {i} and {j} overlap by {overlap:g}")
 
-    Q = np.zeros((n, n + 2 * b))
+    Q = np.zeros((n, n + 2 * b), dtype=dtype)
     Q[:, b:2 * b] = q
     beta = np.zeros((b, b))
 
@@ -114,14 +142,14 @@ def block_lanczos(A, p, ortho_threshold=1e-14):
         R = Y - Q[:, i * b:(i + 1) * b] @ alpha - Q[:, (i - 1) * b:i * b] @ beta.T
 
         q, beta = np.linalg.qr(R)
-        print("QR", q[:, 0], R[:, 0])
         # Full Orthogonlaization
-        q = q - np.dot(Q[:, b:(i + 1) * b], np.dot(Q[:, b:(i + 1) * b].T, q))
+        basis = Q[:, b:(i + 1) * b]
+        q = q - basis @ (basis.conj().T @ q)
         Q[:, (i + 1) * b:(i + 2) * b] = q
 
     Q = Q[:, b:n + b]
 
-    Sigma = np.dot(Q.T, np.dot(A, Q))
+    Sigma = Q.conj().T @ A @ Q
     # print(Q.T@Q)
     return Sigma, Q
 

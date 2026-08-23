@@ -3,7 +3,8 @@
 `method="interaction-chain-trotter-mpo"` writes the full system–bath propagator as one exact,
 low-bond conditional-displacement MPO — no Trotter splitting between modes, no
 swap network.  This only works in the interaction picture, where all coupling
-terms commute.  Same physics as {doc}`/methods/interaction/tebd`, ~1.6× faster.
+terms commute. It represents the same interaction-picture Hamiltonian as
+{doc}`/methods/interaction/tebd`.
 
 `interaction-chain-trotter-mpo` propagates the **same interaction representation as {doc}`/methods/interaction/tebd`**, but
 instead of Trotterizing the system–bath coupling into two-site gates and shuttling
@@ -142,10 +143,9 @@ Compared with the swap network of {doc}`/methods/interaction/tebd`, per step:
   share this, but here it is manifest);
 - the entangling operation is applied **all at once** rather than mode by mode.
 
-Measured against the swap network at equal bond dimension it is roughly **1.6×
-faster** per step. Accuracy is comparable: both are second order, and the two agree
-with exact diagonalization at the same rate (the swap network has a slightly
-smaller prefactor).
+Both algorithms are second order. Their relative cost depends on the local Fock
+dimension, bath length, state bond dimensions, and contraction backend, so compare
+them on a short convergence run for the model of interest.
 
 ```{note}
 The bond dimension of the *state* is unchanged — this is the same representation and the
@@ -153,6 +153,59 @@ same physics as `interaction-chain-tebd`, so it carries the same entanglement.
 `interaction-chain-trotter-mpo` changes
 the cost of applying the propagator, not the cost of representing the state.  For a
 method that lowers the state entanglement itself, see {doc}`/methods/schrodinger/polaron_chain`.
+```
+
+### Exactness on a truncated ladder
+
+The factorization above is an identity for a *harmonic* mode. On `phys_dim` Fock
+levels it is not quite: $[b, b^{\dagger}] = I - d\,|d{-}1\rangle\langle d{-}1|$, so
+composing displacements over an interval is not the truncated model's exact
+propagator. The residual has two parts:
+
+- a deviation confined to the **top Fock level**, controlled by raising `phys_dim`
+  like every other truncation error here;
+- a **phase weighted by $a^2$** — the second Magnus term, $[H(s), H(s')]$ being a
+  c-number times $A_s^2$.
+
+The phase is $\mathcal{O}(\Delta t^3)$ per step, so it accumulates as
+$\mathcal{O}(\Delta t^2)$: the same order as the Strang splitting around it, which
+is why it does not degrade the method's order. Its *observability* depends on the
+coupling. If $A_s$'s eigenvalues share a magnitude — $\sigma_z$, with $a = \pm 1$
+and $a^2 = 1$ — the phase is common to both branches and cancels as a global phase.
+For a coupling whose eigenvalues do not, such as the occupation projector the comb
+models use ($a \in \{0, 1\}$), it is a *relative* phase between branches and is
+physical.
+
+## On a comb: one operator per bath branch
+
+`method="interaction-chain-fishbone-trotter-mpo"` is the same construction applied
+to the {doc}`/models/fishbone` comb, where every electronic site carries its own
+bath chain. It is the operator counterpart of
+`interaction-chain-fishbone-tebd`.
+
+Baths attached to different system sites commute, so their propagators factorize
+over sites — the same argument as over modes, one level up:
+
+$$
+U_{\text{bath}}(t, \Delta t) = \prod_{p} \Big[ \sum_a P_a^{(p)} \otimes
+   \bigotimes_n D^{(p)}_n\big(-i\,a\,d^{(p)*}_n(t)\big) \Big].
+$$
+
+Several baths may share one system site. Their coupling operators need not commute;
+the implementation therefore uses a palindromic second-order composition within
+that site's branch group. The electronic Hamiltonian — site energies and the
+backbone couplings — is Strang-split around the complete bath step, exactly as
+$h_{\mathrm{sys}}$ is on a chain.
+
+Because the operator's outer bonds are trivial, applying a branch's MPO grows only
+that branch's own bonds, by $\chi_U$ once, and leaves the backbone untouched. One
+sweep truncates them back. The swap network instead walks the electronic index down
+the branch and back, truncating at every bond twice.
+
+```{warning}
+Changing the branch integrator does not remove physical state entanglement.
+Converge `trunc_eps`, monitor `result.max_bond`, and treat runtime differences as
+model- and hardware-dependent.
 ```
 
 ## General systems
@@ -187,9 +240,17 @@ r.max_bond         # peak bond dimension of the state
 
 ## Notes
 
-- The propagator MPO is rebuilt each step because $d_n(t)$ is time-dependent;
-  building it is $O(N)$ single-mode `expm`s of size `phys_dim`, negligible next to
-  the state update.
+- The propagator MPO is rebuilt each step because $d_n(t)$ is time-dependent, but
+  building it costs no matrix exponentials. Writing $\alpha = r e^{i\phi}$ and
+  using $e^{i\phi n} b^\dagger e^{-i\phi n} = e^{i\phi} b^\dagger$,
+
+  $$
+  \alpha b^\dagger - \alpha^{*} b = r\, e^{i\phi n}\,(b^\dagger - b)\,e^{-i\phi n},
+  $$
+
+  so every displacement is a phase rotation of one *fixed* matrix and a single
+  cached eigendecomposition per `phys_dim` serves the whole run
+  ({py:func}`fishbonett.operators.displacement`).
 - Accepts the same truncation controls as every other method: `trunc_eps` sets the
   accuracy and `bond_dim` is an optional cap (default `None` = unlimited).
 - For the builder see

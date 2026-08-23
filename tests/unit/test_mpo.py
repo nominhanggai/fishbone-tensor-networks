@@ -165,3 +165,102 @@ def test_one_loop_serves_every_tdvp_mpo_and_sweep():
             assert np.all(np.isfinite(sz)), (name, sweep)
             # every sweep reports the peak bond, including the fixed-bond one
             assert maxd.shape == (2,) and np.all(maxd >= 1), (name, sweep)
+
+
+def test_displacement_matches_a_matrix_exponential():
+    """The closed form must equal ``expm`` on the *truncated* generator.
+
+    ``trotter_mpo`` called ``expm`` once per (mode, coupling eigenvalue), every
+    step -- thousands of calls per step on a moderately large comb. The displacement
+    factorizes as a phase rotation of one fixed matrix, so a single cached ``eigh``
+    per dimension replaces all of them; this pins the two against each other,
+    including the boundary cases (alpha = 0, and a magnitude large enough that the
+    truncation matters).
+    """
+    import scipy.linalg as la
+    from fishbonett.operators import displacement
+
+    for dim in (2, 3, 6, 10, 20):
+        lower, raise_ = annihilate(dim), create(dim)
+        for alpha in (0.0, 0.3, -0.7, 0.4j, 0.5 - 0.9j, 2.3 + 1.1j, 1e-9):
+            reference = la.expm(alpha * raise_ - np.conj(alpha) * lower)
+            assert np.allclose(displacement(alpha, dim), reference, atol=1e-12), (
+                f"dim={dim} alpha={alpha}")
+
+    # batched over an array of alphas, and unitary
+    alphas = np.array([[0.1 + 0.2j, 0.0], [-1.3, 0.7j]])
+    batch = displacement(alphas, 7)
+    assert batch.shape == (2, 2, 7, 7)
+    for i in range(2):
+        for j in range(2):
+            assert np.allclose(batch[i, j], la.expm(
+                alphas[i, j] * create(7) - np.conj(alphas[i, j]) * annihilate(7)),
+                atol=1e-12)
+    unitary = displacement(0.8 - 0.3j, 9)
+    assert np.allclose(unitary @ unitary.conj().T, np.eye(9), atol=1e-12)
+
+
+def test_trotter_mpo_is_a_displacement_up_to_a_quadratic_phase():
+    """Pin what the conditional-displacement MPO does and does *not* carry.
+
+    Within eigenbranch ``lambda`` of the coupling, the interval propagator is the
+    displacement the MPO stores times a phase from the second Magnus term.  That
+    term is weighted by ``lambda**2``, so it is:
+
+    * common to every branch -- hence unobservable -- when the eigenvalues share a
+      magnitude, as for ``sigma_z`` (+-1).  This is why it went unnoticed.
+    * a *relative* phase when they do not, as for a projector (0 and 1), which is
+      the coupling the comb models use.
+
+    Either way it is O(dt**3) per step, matching the order of the surrounding
+    Strang splitting, so it is a property to record rather than a defect to fix.
+    Away from the top Fock level the residual is a pure phase, which is what makes
+    that statement checkable at all.
+    """
+    import scipy.linalg as la
+    from fishbonett.operators import sigma_z
+
+    def ordered(rep, mode, lam, t, dt, nsub=400):
+        """Time-ordered reference on one mode; H = conj(c) a^dag + c a."""
+        dim = rep.pd_boson[mode]
+        lower = annihilate(dim)
+        raise_ = lower.conj().T
+        h = dt / nsub
+        out = np.eye(dim, dtype=complex)
+        for k in range(nsub):
+            c = rep.interval_coefficients(t + k * h, h)[mode] / h
+            out = la.expm(-1j * h * lam * (np.conj(c) * raise_ + c * lower)) @ out
+        return out
+
+    keep = 8                      # stay clear of the truncation edge
+    for coupling in (sigma_z, np.array([[1.0, 0.0], [0.0, 0.0]])):
+        bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5.0), domain=(0.0, 40.0),
+                    n_modes=3, phys_dim=12).resolved(1.0)
+        rep = InteractionRepresentation(
+            representation="interaction-chain", h_sys=np.zeros((2, 2), complex),
+            coupling=coupling, bath=bath).build()
+        values, _ = np.linalg.eigh(np.asarray(coupling, float))
+
+        phases = {}
+        for dt in (0.08, 0.04):
+            angles = []
+            for branch, lam in enumerate(values):
+                tensor = rep.trotter_mpo(0.3, dt)[1]
+                stored = tensor[branch, branch if tensor.shape[1] > 1 else 0]
+                residual = (stored @ ordered(rep, 0, lam, 0.3, dt).conj().T
+                            )[:keep, :keep]
+                centre = np.mean(np.diag(residual))
+                # a pure phase: nothing but a multiple of the identity survives
+                assert np.max(np.abs(
+                    residual - centre * np.eye(keep))) < 1e-6, "not a pure phase"
+                angles.append(np.angle(centre))
+            phases[dt] = angles
+
+        relative = [abs(a[1] - a[0]) for a in phases.values()]
+        if len(set(np.round(values ** 2, 12))) == 1:
+            assert max(relative) < 1e-12, (
+                "equal |eigenvalues| must leave no observable relative phase")
+        else:
+            assert relative[0] > 1e-6, "a projector must show a relative phase"
+            # and it must shrink at least as fast as dt**2 per step
+            assert relative[0] / relative[1] > 3.5

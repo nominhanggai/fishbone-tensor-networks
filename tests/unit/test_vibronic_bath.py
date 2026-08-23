@@ -43,6 +43,18 @@ def test_vibronic_star_and_chain_have_same_correlation():
     assert np.allclose(c_chain, c_star, atol=1e-12)
 
 
+def test_zero_strength_and_degenerate_vibronic_lines_are_reduced():
+    bath = Bath.vibronic(
+        [1.0, 2.0, 1.0], [0.1, 0.0, 0.2], phys_dim=4).resolved(1.0)
+    star = star_coefficients(bath)
+    chain = chain_coefficients(bath)
+    assert bath.n_modes == 1
+    np.testing.assert_allclose(star.frequencies, [1.0])
+    np.testing.assert_allclose(star.couplings[0], [np.sqrt(0.3)])
+    assert np.all(np.isfinite(star.transform))
+    assert np.all(np.isfinite(chain.frequencies))
+
+
 def test_correlation_controlled_compression_reports_achieved_error():
     bath = Bath.vibronic(
         np.linspace(1.0, 8.0, 12), np.geomspace(0.2, 1e-4, 12)).resolved(0.3)

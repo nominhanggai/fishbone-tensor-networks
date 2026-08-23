@@ -305,3 +305,83 @@ def test_non_tree_edges_raise():
         TreeFishbone(sites=[sigma_z, sigma_z, sigma_z],
                      edges=[(0, 1)],                          # too few edges (not a tree)
                      baths=[None, None, None])
+
+
+def _dense_path_state(state, path):
+    """Contract a path-shaped tree into a full vector, physical legs in path order."""
+    tensor = state.T[path[0]]
+    acc = np.transpose(tensor, [tensor.ndim - 1,
+                                list(state.order[path[0]]).index(path[1])])
+    for position in range(1, len(path)):
+        node = path[position]
+        legs = list(state.order[node])
+        tensor = state.T[node]
+        phys = tensor.ndim - 1
+        prev = legs.index(path[position - 1])
+        if position + 1 < len(path):
+            block = np.transpose(tensor, [prev, phys, legs.index(path[position + 1])])
+        else:
+            block = np.transpose(tensor, [prev, phys])[..., None]
+        acc = np.tensordot(acc, block, axes=([acc.ndim - 1], [0]))
+    return acc.reshape(-1)
+
+
+def _dense_mpo(mpo):
+    """Contract an MPO into a matrix with legs ``(out..., in...)``."""
+    acc = np.transpose(mpo[0][0], [1, 2, 0])
+    for tensor in mpo[1:]:
+        acc = np.tensordot(acc, tensor, axes=([acc.ndim - 1], [0]))
+        acc = np.moveaxis(acc, -3, -1)
+    acc = acc[..., 0]
+    half = acc.ndim // 2
+    outs, ins = list(range(0, 2 * half, 2)), list(range(1, 2 * half, 2))
+    size = int(np.prod([acc.shape[a] for a in outs]))
+    return np.transpose(acc, outs + ins).reshape(size, size)
+
+
+def test_apply_branch_mpo_applies_exactly_what_it_says():
+    """The branch operator route must equal a dense operator application.
+
+    A one-system-site comb is an MPS, so both the state and the operator contract
+    to dense objects and there is nothing to interpret: this pins the leg fusion,
+    the gauge sweep and the truncation together.  It is the check that makes the
+    comb ``trotter-mpo`` method trustworthy at the tensor-network level, separately
+    from whether the physics it is handed is right.
+    """
+    from fishbonett.evolve.sitetree import apply_branch_mpo, apply_edge
+    from fishbonett.representations.interaction import InteractionRepresentation
+
+    n_modes, dim, d_sys = 4, 5, 2
+    rng = np.random.default_rng(7)
+    bath = Bath(J=_J, domain=(-25.0, 36.0), temperature=1.0, n_modes=n_modes,
+                phys_dim=dim).resolved(1.0)
+    for coupling in (sigma_z, np.array([[1.0, 0.0], [0.0, 0.0]])):
+        rep = InteractionRepresentation(
+            representation="interaction-chain",
+            h_sys=np.zeros((d_sys, d_sys), complex), coupling=coupling,
+            bath=bath).build()
+        dims = [d_sys] + [dim] * n_modes
+        path = list(range(n_modes + 1))
+        state = TreeTensorNetwork(dims, [(k, k + 1) for k in range(n_modes)],
+                                  root=0)
+        state.set_physical(0, np.array([1.0, 0.0], complex))
+        for k in range(n_modes):                     # entangle it first
+            size = dims[k] * dims[k + 1]
+            generator = (rng.normal(size=(size, size))
+                         + 1j * rng.normal(size=(size, size)))
+            gate = expm(0.35 * (generator - generator.conj().T)).reshape(
+                dims[k], dims[k + 1], dims[k], dims[k + 1])
+            state.move_oc_to(k)
+            apply_edge(state, k, k + 1, gate, 64, 1e-14)
+
+        before = _dense_path_state(state, path)
+        mpo = rep.trotter_mpo(0.3, 0.02)
+        reference = _dense_mpo(mpo) @ before
+        apply_branch_mpo(state, mpo, path, 512, 1e-14)
+        after = _dense_path_state(state, path)
+
+        overlap = np.vdot(reference, after)
+        phase = overlap / abs(overlap)
+        assert np.max(np.abs(after - phase * reference)) < 1e-12
+        assert abs(np.linalg.norm(after) - 1.0) < 1e-12
+        assert state.oc == path[0], "the centre must be left on the system node"

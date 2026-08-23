@@ -205,7 +205,8 @@ def _compile_modetree_plan(model, spec, context):
         common = dict(
             init=model.system.initial_vector(context.initial),
             dt=context.dt, nsteps=context.n_steps, D=context.bond_dim,
-            observe=observe, seed=context.seed, **context.kw)
+            observe=observe, seed=context.seed, progress=context.progress,
+            **context.kw)
         if spec.driver == "run_tree_tdvp":
             times, rdms = _tree.run_tree_mpo(
                 representation, sweep="tdvp1", **common)
@@ -472,7 +473,8 @@ def _compile_interaction_fishbone_plan(model, spec, context):
     from fishbonett.representations.interaction import InteractionRepresentation
     from fishbonett.states.tree import TreeTensorNetwork
     from fishbonett.evolve.sitetree import (
-        apply_site, symmetric_branch_swap_step, symmetric_graph_step,
+        apply_branch_mpo, apply_site,
+        symmetric_branch_swap_step, symmetric_graph_step, tdvp_branch_step,
     )
 
     horizon = context.bath_horizon or context.t_max
@@ -493,29 +495,38 @@ def _compile_interaction_fishbone_plan(model, spec, context):
             continue
         if not isinstance(coupled_baths, list):
             coupled_baths = [coupled_baths]
-        if len(coupled_baths) > 1:
-            raise ValueError(
-                "interaction-chain Fishbone currently supports one independent bath per site")
-        coupled = coupled_baths[0]
-        bath = coupled.bath.resolved(horizon)
-        cache_key = (
-            id(bath), model.de[site], np.asarray(coupled.operator).tobytes())
-        representation = representation_cache.get(cache_key)
-        if representation is None:
-            representation = InteractionRepresentation(
-                representation="interaction-chain",
-                h_sys=np.zeros_like(model.sites[site]),
-                coupling=coupled.operator, bath=bath).build()
-            representation_cache[cache_key] = representation
-        nodes = list(range(next_node, next_node + bath.n_modes))
-        path = [site, *nodes]
-        edges.extend(zip(path[:-1], path[1:]))
-        dims.extend([bath.phys_dim] * bath.n_modes)
-        branches.append((path, representation))
-        signature_arrays.append(np.asarray(coupled.operator))
-        signature_scalars.append(
-            f"site={site} modes={bath.n_modes} d={bath.phys_dim}")
-        next_node += bath.n_modes
+        # One branch per independent bath. Operators on the same system site need
+        # not commute, so their propagators are composed symmetrically below.
+        for index, coupled in enumerate(coupled_baths):
+            bath = coupled.bath.resolved(horizon)
+            cache_key = (
+                id(coupled.bath), horizon, model.de[site],
+                np.asarray(coupled.operator).tobytes())
+            representation = representation_cache.get(cache_key)
+            if representation is None:
+                representation = InteractionRepresentation(
+                    representation="interaction-chain",
+                    h_sys=np.zeros_like(model.sites[site]),
+                    coupling=coupled.operator, bath=bath).build()
+                representation_cache[cache_key] = representation
+            nodes = list(range(next_node, next_node + bath.n_modes))
+            path = [site, *nodes]
+            edges.extend(zip(path[:-1], path[1:]))
+            dims.extend([bath.phys_dim] * bath.n_modes)
+            branches.append((path, representation))
+            signature_arrays.append(np.asarray(coupled.operator))
+            signature_arrays.extend((
+                np.asarray(representation.frequencies),
+                np.asarray(representation.star_couplings),
+                np.asarray(representation.star_to_chain),
+            ))
+            label = f"site={site}"
+            if len(coupled_baths) > 1:
+                label += f" branch={index}"
+            signature_scalars.append(
+                f"{label} representation={representation.name} "
+                f"modes={bath.n_modes} d={bath.phys_dim}")
+            next_node += bath.n_modes
 
     site_quarter = [expm(-0.25j * context.dt * value)
                     for value in model.sites]
@@ -550,6 +561,66 @@ def _compile_interaction_fishbone_plan(model, spec, context):
         for site in range(system_count):
             state.set_physical(site, helper._initial_vec(context.initial, site))
 
+    def branch_step(path, representation, when, delta, operator_cache):
+        """Advance one bath branch over ``[when, when + delta]``.
+
+        The comb integrators solve the same H(t) and differ only in how a branch's
+        terms reach the state. ``tebd`` uses a swap network, ``trotter-mpo``
+        applies one conditional-displacement operator, and ``tdvp2`` evolves
+        with the midpoint generator.
+        """
+        if spec.integrator == "trotter-mpo":
+            key = (id(representation), float(when), float(delta), "propagator")
+            operator = operator_cache.get(key)
+            if operator is None:
+                operator = representation.trotter_mpo(when, delta)
+                operator_cache[key] = operator
+            apply_branch_mpo(
+                state, operator, path,
+                context.bond_dim, context.trunc_eps)
+        elif spec.integrator == "tdvp2":
+            # TDVP needs the generator, sampled at the interval midpoint, and in
+            # the tree's forward mode order rather than the 1D drivers' reversed one
+            key = (id(representation), float(when + 0.5 * delta), "generator")
+            operator = operator_cache.get(key)
+            if operator is None:
+                operator = representation.tdvp_mpo(
+                    when + 0.5 * delta, reverse=False)
+                operator_cache[key] = operator
+            tdvp_branch_step(
+                state, operator,
+                path, delta, context.bond_dim, context.trunc_eps,
+                **{"m": context.krylov})
+        else:
+            symmetric_branch_swap_step(
+                state, representation, path, when, delta,
+                context.bond_dim, context.trunc_eps)
+
+    def advance_branches(when):
+        # Branches on different system sites commute. Branches sharing a site
+        # need not: compose each such group as A(dt/2) B(dt/2) ... Z(dt) ...
+        # B(dt/2) A(dt/2), with the second half evaluated on the second time
+        # interval. This restores second-order convergence for arbitrary local
+        # coupling operators.
+        grouped = {}
+        for branch in branches:
+            grouped.setdefault(branch[0][0], []).append(branch)
+        operator_cache = {}
+        for group in grouped.values():
+            if len(group) == 1:
+                path, representation = group[0]
+                branch_step(path, representation, when, context.dt,
+                            operator_cache)
+                continue
+            half = 0.5 * context.dt
+            for path, representation in group[:-1]:
+                branch_step(path, representation, when, half, operator_cache)
+            path, representation = group[-1]
+            branch_step(path, representation, when, context.dt, operator_cache)
+            for path, representation in reversed(group[:-1]):
+                branch_step(path, representation, when + half, half,
+                            operator_cache)
+
     def electronic_half_step():
         for site, gate in enumerate(site_quarter):
             apply_site(state, site, gate)
@@ -582,11 +653,7 @@ def _compile_interaction_fishbone_plan(model, spec, context):
         record = 0
         for step in range(context.n_steps):
             electronic_half_step()
-            for path, representation in branches:
-                symmetric_branch_swap_step(
-                    state, representation, path,
-                    elapsed + step * context.dt, context.dt,
-                    context.bond_dim, context.trunc_eps)
+            advance_branches(elapsed + step * context.dt)
             electronic_half_step()
             if context.progress is not None:
                 context.progress({
@@ -633,7 +700,7 @@ PLAN_COMPILERS = {
     "displacement-mpo": _compile_displacement_plan,
     "polaron-tebd": _compile_polaron_plan,
     "static-tree-tebd": _compile_static_tree_plan,
-    "interaction-fishbone-tebd": _compile_interaction_fishbone_plan,
+    "interaction-fishbone": _compile_interaction_fishbone_plan,
 }
 
 
