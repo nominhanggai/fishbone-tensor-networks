@@ -1,82 +1,113 @@
 # Donor--bridge--acceptor electron transfer
 
-This tutorial propagates electron transfer through a three-state molecular
-bridge. It compares ordinary diagonal energy-gap fluctuations with a
-non-Condon bath operator that also modulates the electronic couplings. The model
-comes from [Acharyya, Ovcharenko, and Fingerhut](https://doi.org/10.1063/5.0027976)
-([preprint](https://arxiv.org/abs/2108.11175)).
+This tutorial tests how fluctuations of electronic couplings can accelerate
+electron transfer through a molecular bridge. It reproduces the model behind
+Fig. 2 of [Acharyya, Ovcharenko, and
+Fingerhut](https://doi.org/10.1063/5.0027976)
+([preprint](https://arxiv.org/abs/2108.11175)) with a tensor-network bath.
 
-The complete program below includes the unit conversion, both Hamiltonians, the
-correlated bath, the initial state, population observables, diagnostics, and
-plotting.
+The page makes two different numerical claims explicit. The complete program
+below is an automatically resolved-bath *early-time tutorial* that runs to 0.2
+ps. The paper's 2.36 and 2.50 ps donor lifetimes are separate 15 ps validation
+targets and must not be inferred from that short trajectory.
 
-## 1. Diabatic states and two coupling models
+## 1. Physical model
 
-Use the ordered basis $\{|D\rangle,|B\rangle,|A\rangle\}$: donor, bridge, and
-acceptor. The common diabatic energies are
+Use the diabatic basis $\{|D\rangle,|B\rangle,|A\rangle\}$ for donor, bridge,
+and acceptor. The Hamiltonian is
 
 $$
-(E_D,E_B,E_A)=(0,-150,-1000)\ {\rm cm}^{-1}.
+H=H_S+H_B+M\sum_j c_jx_j,
 $$
 
-The two cases differ as follows:
+with
 
-| parameter (cm$^{-1}$ where applicable) | Condon | non-Condon |
-|---|---:|---:|
-| $V_{DB}$ | 22 | 2 |
-| $V_{BA}$ | 45 | 2 |
-| $V_{DA}$ | 0 | 0 |
-| diagonal bath operator | $\operatorname{diag}(2,1,0)$ | same |
-| off-diagonal $M_{DB}$ | 0 | 0.17 |
-| off-diagonal $M_{BA}$ | 0 | 0.055 |
+$$
+H_S=
+\begin{pmatrix}
+0 & V_{DB} & 0\\
+V_{DB} & -150 & V_{BA}\\
+0 & V_{BA} & -1000
+\end{pmatrix}\mathrm{cm}^{-1},
+\qquad
+M=\begin{pmatrix}
+2 & C_{12} & 0\\
+C_{12} & 1 & C_{23}\\
+0 & C_{23} & 0
+\end{pmatrix}.
+$$
 
-There is one bath, not three independent baths. Its collective coordinate
-couples through the full matrix $M$, so diagonal and off-diagonal fluctuations
-are correlated.
+One collective bath coordinate multiplies the entire matrix $M$. Consequently,
+the site-energy and coupling fluctuations are correlated; this is not a model of
+three independent local baths.
 
-The zero-temperature density before thermofield thermalization is
+Fig. 2 requires three calculations:
+
+| calculation | $V_{DB}$ | $V_{BA}$ | $C_{12}$ | $C_{23}$ | purpose |
+|---|---:|---:|---:|---:|---|
+| diagonal reference | 22 | 45 | 0 | 0 | ordinary sequential transfer, $\tau\simeq2.36$ ps |
+| weak diagonal control | 2 | 2 | 0 | 0 | fixed-Hamiltonian control, about 100 ps |
+| non-Condon | 2 | 2 | 0.17 | 0.055 | bath-modulated transfer, $\tau\simeq2.50$ ps |
+
+All dimensional entries in the table are in cm$^{-1}$. Comparing only the first
+and third rows shows that small bare electronic couplings can be compensated by
+non-Condon fluctuations. The second row is essential: it isolates the effect of
+$C_{12}$ and $C_{23}$ without changing $H_S$.
+
+## 2. The paper's bath
+
+The positive-frequency spectral density is
 
 $$
 J(\omega)=\frac{\alpha\pi}{2}\omega e^{-\omega/\omega_c},
-\qquad \alpha=10.02,\quad\omega_c=100\ {\rm cm}^{-1}.
+\qquad \alpha=1.67,\qquad \omega_c=600\ \mathrm{cm}^{-1},
 $$
 
-Its reorganization energy is
+at $T=300$ K. Its reorganization energy is
 
 $$
-\lambda=\frac{1}{\pi}\int_0^\infty\frac{J(\omega)}{\omega}\,d\omega
-=\frac{\alpha\omega_c}{2}=501\ {\rm cm}^{-1}.
+\lambda_R=\frac{1}{\pi}\int_0^\infty
+\frac{J(\omega)}{\omega}\,d\omega
+=\frac{\alpha\omega_c}{2}=501\ \mathrm{cm}^{-1}.
 $$
 
-Only positive physical frequencies enter this reorganization-energy integral;
-negative thermofield frequencies encode finite-temperature occupation and must
-not be counted as additional physical modes.
+The individual values of $\alpha$ and $\omega_c$ matter. For example,
+$\alpha=10.02$ and $\omega_c=100$ cm$^{-1}$ give the same reorganization
+energy but a cutoff timescale six times longer. That is a different bath and
+does not reproduce Fig. 2.
 
-## 2. Unit conversion
+Only positive physical frequencies enter $\lambda_R$. `Bath` extends the
+density to a signed thermofield domain internally to represent finite
+temperature; those negative effective frequencies are not additional physical
+reorganization energy.
 
-The package uses $\hbar=1$, so a time measured in ps requires angular
-frequencies in rad ps$^{-1}$. The conversion is
+## 3. Unit conversion
+
+Fishbone uses $\hbar=1$. With time in ps, Hamiltonian entries must therefore be
+angular frequencies in rad ps$^{-1}$:
 
 $$
-1\ {\rm cm}^{-1}=2\pi c\times10^{-12}=0.1883651567\ {\rm rad\ ps}^{-1}.
+q=2\pi c\times10^{-12}
+=0.1883651567\ \frac{\mathrm{rad\ ps}^{-1}}{\mathrm{cm}^{-1}}.
 $$
 
-If $\omega'=q\omega$ with $q=0.1883651567$, the discrete definition
-$J(\omega)=\pi\sum_k g_k^2\delta(\omega-\omega_k)$ implies
+Under $\omega'=q\omega$, the Hamiltonian and spectral density transform as
 
 $$
-J'(\omega')=qJ(\omega'/q).
+H'_S=qH_S,
+\qquad J'(\omega')=qJ(\omega'/q),
+\qquad \beta'=\frac{1}{qk_BT}.
 $$
 
-The Hamiltonian, spectral density, and inverse temperature must all use the same
-conversion. Converting only the system Hamiltonian changes the physical model.
+The factor multiplying $J$ is necessary: a spectral density has one power of
+energy in the package convention. Converting $H_S$ but not $J$ and $\beta$
+would change the physical model.
 
-## 3. Complete runnable transient calculation
+## 4. Complete runnable early-time calculation
 
-This documentation calculation propagates the first 0.2 ps. It is long enough
-to exercise the real strongly coupled Hamiltonian and resolve early bridge
-population, but intentionally too short to estimate the published 2--3 ps
-donor lifetime.
+The following program uses the paper parameters, constructs all three controls,
+asks the TEDOPA light-cone resolver for the bath mode count, checks probability
+conservation, and plots the first 0.2 ps.
 
 ```python
 import numpy as np
@@ -88,6 +119,12 @@ from fishbonett import Bath, SystemBath
 CM_TO_RAD_PS = 2.0 * np.pi * 2.99792458e10 * 1e-12
 KB_CM_PER_K = 0.6950348009
 TEMPERATURE_K = 300.0
+BATH_ALPHA = 1.67
+BATH_CUTOFF_CM = 600.0
+
+DT_PS = 0.002
+T_MAX_PS = 0.2
+PHYS_DIM = 6
 
 P_D = np.diag([1.0, 0.0, 0.0])
 P_B = np.diag([0.0, 1.0, 0.0])
@@ -96,54 +133,74 @@ OBSERVABLES = {"donor": P_D, "bridge": P_B, "acceptor": P_A}
 
 
 def system_matrices(case):
-    """Return H_S in rad/ps and dimensionless bath operator M."""
+    """Return H_S in rad/ps and the dimensionless bath operator M."""
     h_cm = np.diag([0.0, -150.0, -1000.0])
     coupling = np.diag([2.0, 1.0, 0.0])
 
-    if case == "condon":
+    if case == "diagonal_reference":
         h_cm[0, 1] = h_cm[1, 0] = 22.0
         h_cm[1, 2] = h_cm[2, 1] = 45.0
-    elif case == "noncondon":
+    elif case in {"weak_diagonal", "noncondon"}:
         h_cm[0, 1] = h_cm[1, 0] = 2.0
         h_cm[1, 2] = h_cm[2, 1] = 2.0
-        coupling[0, 1] = coupling[1, 0] = 0.17
-        coupling[1, 2] = coupling[2, 1] = 0.055
+        if case == "noncondon":
+            coupling[0, 1] = coupling[1, 0] = 0.17
+            coupling[1, 2] = coupling[2, 1] = 0.055
     else:
-        raise ValueError("case must be 'condon' or 'noncondon'")
+        raise ValueError("unknown calculation")
 
     return CM_TO_RAD_PS * h_cm, coupling
 
 
 def spectral_density(omega_rad_ps):
-    """J in rad/ps, transformed from the published cm^-1 expression."""
+    """Paper's J, transformed from cm^-1 to rad/ps."""
     omega_cm = omega_rad_ps / CM_TO_RAD_PS
-    alpha = 10.02
-    cutoff_cm = 100.0
-    j_cm = (
-        0.5 * alpha * np.pi * omega_cm
-        * np.exp(-omega_cm / cutoff_cm)
+    density_cm = (
+        0.5 * BATH_ALPHA * np.pi * omega_cm
+        * np.exp(-omega_cm / BATH_CUTOFF_CM)
     )
-    return CM_TO_RAD_PS * j_cm
+    return CM_TO_RAD_PS * density_cm
 
 
-def make_model(case):
-    hamiltonian, coupling = system_matrices(case)
-    kbt_rad_ps = KB_CM_PER_K * TEMPERATURE_K * CM_TO_RAD_PS
-    bath = Bath(
-        J=spectral_density,
-        beta=1.0 / kbt_rad_ps,
-        n_modes=12,
-        phys_dim=6,
-        discretization="tedopa",
-        # The signed thermal frequency domain is selected automatically.
-    )
-    return SystemBath(h=hamiltonian, coupling=coupling, bath=bath)
+beta = 1.0 / (
+    KB_CM_PER_K * TEMPERATURE_K * CM_TO_RAD_PS
+)
+
+# Resolve the domain and light-cone mode count once. They depend on the bath and
+# propagation horizon, but not on which of the three system matrices is used.
+resolved = Bath(
+    J=spectral_density,
+    beta=beta,
+    n_modes=None,
+    phys_dim=1,                 # placeholder; resolution does not depend on it
+    discretization="tedopa",
+).resolved(T_MAX_PS)
+
+print("resolved modes:", resolved.n_modes)
+print(
+    "signed domain (cm^-1):",
+    tuple(value / CM_TO_RAD_PS for value in resolved.domain),
+)
 
 
 def run(case):
-    return make_model(case).run(
-        dt=0.005,             # ps
-        t_max=0.2,            # ps: early-time docs profile
+    hamiltonian, coupling = system_matrices(case)
+    bath = Bath(
+        J=spectral_density,
+        beta=beta,
+        domain=resolved.domain,
+        n_modes=resolved.n_modes,
+        phys_dim=PHYS_DIM,
+        discretization="tedopa",
+    )
+    model = SystemBath(
+        h=hamiltonian,
+        coupling=coupling,
+        bath=bath,
+    )
+    return model.run(
+        dt=DT_PS,
+        t_max=T_MAX_PS,
         method="interaction-chain-trotter-mpo",
         trunc_eps=1e-3,
         bond_dim=None,
@@ -152,26 +209,32 @@ def run(case):
     )
 
 
-results = {case: run(case) for case in ("condon", "noncondon")}
+cases = ("diagonal_reference", "weak_diagonal", "noncondon")
+results = {case: run(case) for case in cases}
 
-figure, axes = plt.subplots(1, 2, sharey=True)
-for axis, (case, result) in zip(axes, results.items()):
+titles = {
+    "diagonal_reference": "diagonal, V=22/45",
+    "weak_diagonal": "diagonal, V=2/2",
+    "noncondon": "non-Condon, V=2/2",
+}
+figure, axes = plt.subplots(1, 3, figsize=(12, 3.8), sharey=True)
+
+for axis, case in zip(axes, cases):
+    result = results[case]
     populations = {
-        name: np.asarray(result.expect[name], float)
+        name: np.asarray(result.expect[name], dtype=float)
         for name in OBSERVABLES
     }
-    total = populations["donor"] + populations["bridge"] + populations["acceptor"]
-    normalization_error = np.max(np.abs(total - 1.0))
-
+    total = sum(populations.values())
     print(case)
-    print("  normalization error:", normalization_error)
+    print("  probability error:", np.max(np.abs(total - 1.0)))
     print("  maximum bridge population:", np.max(populations["bridge"]))
     print("  final acceptor population:", populations["acceptor"][-1])
-    print("  peak bond:", np.max(result.max_bond))
+    print("  peak MPS bond:", np.max(result.max_bond))
 
     for name, values in populations.items():
         axis.plot(result.t, values, label=name)
-    axis.set_title(case)
+    axis.set_title(titles[case])
     axis.set_xlabel("time (ps)")
 
 axes[0].set_ylabel("population")
@@ -180,95 +243,130 @@ figure.tight_layout()
 plt.show()
 ```
 
-## 4. How the code represents correlated fluctuations
+`resolved.n_modes` is much larger than 12 for this bath and horizon. That is a
+consequence of the paper's $600$ cm$^{-1}$ cutoff and the signed thermal domain,
+not an arbitrary accuracy preference.
 
-`SystemBath` treats the donor, bridge, and acceptor as one three-level system.
-Its single coupling matrix `coupling` multiplies one collective bath coordinate.
-In the non-Condon case that matrix has both diagonal and off-diagonal entries, so
-the same bath fluctuation that shifts diabatic energies also changes electronic
-couplings.
+## 5. What the API represents
 
-This is different from constructing three independent baths bound to three
-operators. Independent baths have zero cross-correlation and would implement a
-different stochastic model.
+`SystemBath` keeps the three electronic states on one tensor site. Its coupling
+matrix multiplies one collective bath coordinate, exactly as $M$ does in the
+Hamiltonian. In the non-Condon calculation, the same fluctuation therefore
+changes site energies and the $D$--$B$ and $B$--$A$ couplings.
 
-The interaction-chain method first discretizes the thermal star bath, uses the
-free star Hamiltonian to define the interaction picture, and then transforms the
-time-dependent coupling into chain coordinates. The system remains a single
-three-level tensor site; the chain contains only the represented bath modes.
+`interaction-chain-trotter-mpo` means:
 
-## 5. Time-step reasoning
+- construct and thermalize the bath in star form;
+- take the interaction picture with respect to the free star bath;
+- transform the time-dependent star coupling to chain coordinates; and
+- apply the resulting coupling with a Trotter MPO on an MPS.
 
-The largest stated electronic energy difference is 1000 cm$^{-1}$, or about
-188.4 rad ps$^{-1}$. Its oscillation period is approximately
+The free-bath phase is integrated analytically over each step. Nevertheless,
+the noncommuting system and coupling terms still produce Trotter error, so the
+time step must be converged.
 
-$$
-2\pi/188.4\simeq0.033\ {\rm ps}.
-$$
+The initial state is $|D\rangle\langle D|$ with a factorized thermal bath, as in
+the paper. No bath displacement conditioned on the donor is included.
 
-The documentation step of 0.005 ps gives about seven steps per period. This is a
-reasonable transient check, not the final time-step convergence test. The
-reference profile uses 0.001 ps.
+## 6. Reading the early dynamics
 
-## 6. Population, flux, and rate are different quantities
-
-The projectors return $P_D(t)$, $P_B(t)$, and $P_A(t)$. Their derivatives are net
-fluxes. For example,
-
-$$
--\dot P_D=k_{D\to B}P_D-k_{B\to D}P_B+\cdots.
-$$
-
-Therefore neither $-\dot P_D$ nor an electronic coherence is automatically the
-elementary forward rate. Back transfer and bridge recrossing must be separated by
-a kinetic model or an appropriate forward-flux correlation calculation.
-
-For comparison with a reported effective donor lifetime, fit only a long,
-converged interval that is approximately single exponential:
-
-```python
-def effective_lifetime(result):
-    donor = np.asarray(result.expect["donor"], float)
-    # Exclude the initial inertial transient and the low-population noisy tail.
-    mask = (result.t > 0.1) & (donor > 0.15) & (donor < 0.9)
-    if np.count_nonzero(mask) < 3:
-        raise ValueError("trajectory is too short for a lifetime fit")
-    slope, intercept = np.polyfit(result.t[mask], np.log(donor[mask]), 1)
-    if slope >= 0:
-        raise ValueError("selected donor population is not decaying")
-    return -1.0 / slope
-```
-
-This lifetime still summarizes the whole donor--bridge--acceptor dynamics; it is
-not an isolated microscopic $k_{D\to A}$.
-
-## 7. Dynamics and conclusion
-
-![Early donor, bridge, and acceptor populations](../img/bridge_electron_transfer.png)
+![Early populations for the two diagonal controls and non-Condon model](../img/bridge_electron_transfer.png)
 
 ```{include} ../_generated/bridge_electron_transfer.md
 ```
 
-The early-time result shows that the non-Condon bath operator creates appreciable
-bridge response even though its bare electronic couplings are much smaller. The
-0.2 ps figure cannot establish the published donor lifetimes and deliberately
-reports them as unresolved.
+The weak-diagonal and non-Condon calculations have identical $H_S$. Their
+different early dynamics therefore comes only from the off-diagonal entries of
+$M$. The diagonal reference uses much larger bare electronic couplings and is a
+separate benchmark trajectory.
 
-The `reference` profile in `examples/bridge_electron_transfer.py` propagates to
-10 ps with a 0.001 ps step, automatic bath modes, Fock dimensions 20 and 40, and
-SVD thresholds $10^{-3}$ and $5\times10^{-4}$. Only after those comparisons are
-stable should the approximately 2.36 ps and 2.50 ps literature lifetimes be used
-as quantitative validation targets.
+At 0.2 ps none of the donor curves has sampled a 2.4 ps decay. The generated
+table consequently reports the lifetimes as unresolved. This is the correct
+interpretation of the documentation figure; fitting it would manufacture a rate
+from an inertial transient.
 
-## 8. Common mistakes
+## 7. Reproducing the reported lifetimes
 
-- Using cm$^{-1}$ Hamiltonian entries directly with a ps time step changes every
-  dynamical time scale.
-- Transforming $H_S$ but not $J(\omega)$ and $\beta$ is an inconsistent unit
-  conversion.
-- Adding negative thermofield frequencies to the physical reorganization-energy
-  integral double-counts temperature rather than molecular reorganization.
-- Calling a short-time population derivative “the forward rate” ignores backward
-  and bridge-mediated fluxes.
-- Treating the 0.2 ps docs profile as converged kinetics confuses an executable
-  tutorial with the much more expensive reference calculation.
+The paper plots approximately 15 ps and reports single-exponential donor
+lifetimes of 2.36 ps for the diagonal reference and 2.50 ps for the non-Condon
+case. The example provides a manual reference profile with that horizon:
+
+```bash
+python examples/bridge_electron_transfer.py --profile reference \
+  --output examples/output/bridge_electron_transfer_reference.npz
+```
+
+That profile is intentionally unsuitable for a documentation build: the bath
+light cone approaches one thousand modes at 15 ps and it repeats the calculation
+with larger Fock spaces and a tighter SVD threshold.
+
+For a converged long trajectory, a descriptive lifetime can be extracted from
+the approximately exponential portion of $P_D(t)$:
+
+```python
+def effective_lifetime(result):
+    donor = np.asarray(result.expect["donor"], dtype=float)
+    mask = (donor < 0.9) & (donor > 0.15)
+    if np.count_nonzero(mask) < 3:
+        raise ValueError("the donor decay is not resolved")
+    slope, intercept = np.polyfit(result.t[mask], np.log(donor[mask]), 1)
+    if slope >= 0.0:
+        raise ValueError("the selected donor population is not decaying")
+    return -1.0 / slope
+```
+
+This lifetime characterizes the full donor--bridge--acceptor population trace.
+It is not an elementary $k_{D\to A}$: bridge occupation, back transfer, and
+recrossing are all folded into the fit.
+
+A transfer-tensor extrapolation can reduce the long-time cost only after all
+nine electronic dynamical-map columns have been simulated and the transfer
+tensor norm has decayed within the directly simulated memory window. A transfer
+tensor built from the donor trajectory alone is not a valid reduced dynamical
+map.
+
+## 8. Required convergence checks
+
+Before comparing a fitted lifetime with the paper:
+
+1. Compare `DT_PS=0.002`, 0.001, and 0.0005 at common physical times.
+2. Increase `PHYS_DIM` from 6 to 10, 20, and, if needed, 40.
+3. Tighten `trunc_eps` from $10^{-3}$ to $5\times10^{-4}$ while leaving
+   `bond_dim=None`, so discarded SVD weight remains the primary bond control.
+4. Compare the automatically resolved mode count with a larger explicit count
+   and verify that the entire population curves are unchanged.
+5. Verify the signed frequency-domain tails by increasing their coverage.
+6. Confirm probability conservation and inspect `result.max_bond` for continuing
+   growth.
+7. Fit only after the 15 ps populations themselves are stable under all of the
+   above changes.
+
+Agreement of the two fitted lifetimes alone is insufficient: an erroneous bath
+can preserve a rate accidentally while changing bridge and acceptor dynamics.
+
+## 9. Physical conclusion
+
+The paper's comparison is striking because adding the off-diagonal bath
+operator restores low-picosecond transfer even when both bare electronic
+couplings are reduced from tens of cm$^{-1}$ to 2 cm$^{-1}$. The weak-diagonal
+control shows that the enhancement is caused by non-Condon fluctuations rather
+than by the weak electronic Hamiltonian itself.
+
+The early-time tutorial demonstrates that mechanism and checks the package
+mapping. Recovery of the numerical values $2.36$ and $2.50$ ps remains a
+long-time convergence result, not a conclusion encoded into the page.
+
+## 10. Common mistakes
+
+- Preserving $\lambda_R$ while changing $\alpha$ and $\omega_c$ does not preserve
+  the bath correlation function.
+- Omitting the weak-diagonal control prevents a fixed-Hamiltonian attribution of
+  the non-Condon enhancement.
+- Using cm$^{-1}$ Hamiltonian entries directly with a ps step changes every
+  dynamical timescale.
+- Converting $H_S$ but not $J(\omega)$ and $\beta$ is inconsistent.
+- Counting negative thermofield frequencies in $\lambda_R$ double-counts
+  temperature rather than molecular reorganization.
+- Fitting the 0.2 ps transient cannot recover a 2.5 ps lifetime.
+- Calling $-\dot P_D$ a forward rate ignores bridge-mediated back flux and
+  recrossing.

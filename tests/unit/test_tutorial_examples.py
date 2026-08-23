@@ -79,10 +79,23 @@ def test_electron_transfer_units_and_smoke_populations():
     module = _load("bridge_electron_transfer")
     expected_conversion = 0.1883651567308853
     assert module.CM_TO_RAD_PS == pytest.approx(expected_conversion)
-    reorganization = 0.5 * 10.02 * 100.0
+    assert module.BATH_ALPHA == pytest.approx(1.67)
+    assert module.BATH_CUTOFF_CM == pytest.approx(600.0)
+    reorganization = 0.5 * module.BATH_ALPHA * module.BATH_CUTOFF_CM
     assert reorganization == pytest.approx(501.0)
-    summary = module.summarize(module.run_profile("smoke"))
-    for case in ("condon", "noncondon"):
+    weak_h, weak_coupling = module._case("weak_diagonal")
+    noncondon_h, noncondon_coupling = module._case("noncondon")
+    assert np.array_equal(weak_h, noncondon_h)
+    assert not np.array_equal(weak_coupling, noncondon_coupling)
+    suite = module.run_profile("smoke")
+    assert suite["bath"]["alpha"] == pytest.approx(1.67)
+    assert suite["bath"]["cutoff_cm"] == pytest.approx(600.0)
+    assert suite["bath"]["n_modes"] == 4
+    summary = module.summarize(suite)
+    assert tuple(summary) == (
+        "diagonal_reference", "weak_diagonal", "noncondon"
+    )
+    for case in summary:
         assert summary[case]["normalization_error"] < 1e-10
         assert 0.0 <= summary[case]["final_acceptor_population"] <= 1.0
 

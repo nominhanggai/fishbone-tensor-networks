@@ -24,7 +24,7 @@ implementation started from https://github.com/matenure/FastGCN/blob/master/lanc
 import numpy as np
 
 
-def lanczos(A, p, breakdown_tol=None):
+def lanczos(A, p, breakdown_tol=None, *, allow_early_termination=False):
     """Tridiagonalize ``A`` in the Krylov basis seeded by ``p``.
 
     Parameters
@@ -34,14 +34,22 @@ def lanczos(A, p, breakdown_tol=None):
     p : (n,) array
         The seed vector -- the star couplings.  The chain is built outward from
         it, so chain site 0 is the mode the system actually couples to.
+    allow_early_termination : bool
+        If true, return the Krylov basis accumulated before a numerical or exact
+        breakdown.  The returned matrices then have shape ``(r, r)`` and
+        ``(n, r)`` with ``r < n``.  This is useful for estimating a bath light
+        cone, where only the resolved prefix is needed.  Full chain mappings keep
+        the default false and reject a rank-deficient star grid.
 
     Returns
     -------
     Sigma : (n, n) array
         ``Q^T A Q``, tridiagonal: ``diagonal`` is the chain on-site energies and
-        the first sub/super-diagonal the mode-mode hoppings.
+        the first sub/super-diagonal the mode-mode hoppings.  With an allowed
+        early termination its shape is ``(r, r)``.
     Q : (n, n) array
-        The orthogonal star -> chain transform.
+        The orthogonal star -> chain transform.  With an allowed early
+        termination its shape is ``(n, r)``.
     """
     A = np.asarray(A)
     q = np.asarray(p).reshape(-1).copy()
@@ -50,6 +58,8 @@ def lanczos(A, p, breakdown_tol=None):
     n = A.shape[0]
     if q.shape != (n,):
         raise ValueError(f"p must have shape {(n,)}, got {q.shape}")
+    if not isinstance(allow_early_termination, (bool, np.bool_)):
+        raise TypeError("allow_early_termination must be a boolean")
     norm = np.linalg.norm(q)
     if not np.isfinite(norm) or norm == 0:
         raise ValueError("the Lanczos seed must be finite and nonzero")
@@ -77,6 +87,9 @@ def lanczos(A, p, breakdown_tol=None):
         if i + 1 == n:
             break
         if not np.isfinite(beta) or beta <= breakdown_tol:
+            if allow_early_termination:
+                Q = Q[:, :i + 1]
+                break
             raise ValueError(
                 "Lanczos iteration terminated before spanning the bath modes; "
                 "remove zero-coupling modes and combine degenerate frequencies")

@@ -1,4 +1,4 @@
-"""Donor--bridge--acceptor electron transfer with non-Condon fluctuations.
+"""Fig. 2 donor--bridge--acceptor model with non-Condon fluctuations.
 
 The parameters follow Acharyya, Ovcharenko, and Fingerhut, J. Chem. Phys. 153,
 185101 (2020), DOI:10.1063/5.0027976. Energies are specified in inverse
@@ -17,6 +17,8 @@ from fishbonett import Bath, SystemBath
 CM_TO_RAD_PS = 2.0 * np.pi * 2.99792458e10 * 1e-12
 KB_CM_PER_K = 0.6950348009
 TEMPERATURE_K = 300.0
+BATH_ALPHA = 1.67
+BATH_CUTOFF_CM = 600.0
 
 PROJECTORS = {
     "donor": np.diag([1.0, 0.0, 0.0]),
@@ -36,9 +38,9 @@ class Profile:
 
 PROFILES = {
     "smoke": Profile("smoke", 0.008, 0.002, 4, (("primary", 3, 1e-3),)),
-    "docs": Profile("docs", 0.2, 0.005, 12, (("primary", 6, 1e-3),)),
+    "docs": Profile("docs", 0.2, 0.002, None, (("primary", 6, 1e-3),)),
     "reference": Profile(
-        "reference", 10.0, 0.001, None,
+        "reference", 15.0, 0.001, None,
         (("primary", 20, 1e-3), ("fock", 40, 1e-3),
          ("svd", 20, 5e-4)),
     ),
@@ -49,29 +51,34 @@ def _case(case):
     energies = np.array([0.0, -150.0, -1000.0])
     hamiltonian = np.diag(energies)
     coupling = np.diag([2.0, 1.0, 0.0])
-    if case == "condon":
+    if case == "diagonal_reference":
         hamiltonian[0, 1] = hamiltonian[1, 0] = 22.0
         hamiltonian[1, 2] = hamiltonian[2, 1] = 45.0
-    elif case == "noncondon":
+    elif case in {"weak_diagonal", "noncondon"}:
         hamiltonian[0, 1] = hamiltonian[1, 0] = 2.0
         hamiltonian[1, 2] = hamiltonian[2, 1] = 2.0
-        coupling[0, 1] = coupling[1, 0] = 0.17
-        coupling[1, 2] = coupling[2, 1] = 0.055
+        if case == "noncondon":
+            coupling[0, 1] = coupling[1, 0] = 0.17
+            coupling[1, 2] = coupling[2, 1] = 0.055
     else:
-        raise ValueError("case must be 'condon' or 'noncondon'")
+        raise ValueError(
+            "case must be 'diagonal_reference', 'weak_diagonal', or "
+            "'noncondon'"
+        )
     return CM_TO_RAD_PS * hamiltonian, coupling
 
 
 def spectral_density(omega):
     """Ohmic density transformed from cm^-1 to angular ps units."""
-    cutoff_cm = 100.0
-    alpha = 10.02
     omega_cm = omega / CM_TO_RAD_PS
-    density_cm = 0.5 * alpha * np.pi * omega_cm * np.exp(-omega_cm / cutoff_cm)
+    density_cm = (
+        0.5 * BATH_ALPHA * np.pi * omega_cm
+        * np.exp(-omega_cm / BATH_CUTOFF_CM)
+    )
     return CM_TO_RAD_PS * density_cm
 
 
-def make_model(case, *, phys_dim, n_modes):
+def make_model(case, *, phys_dim, n_modes, domain):
     hamiltonian, coupling = _case(case)
     beta = 1.0 / (KB_CM_PER_K * TEMPERATURE_K * CM_TO_RAD_PS)
     bath = Bath(
@@ -79,6 +86,7 @@ def make_model(case, *, phys_dim, n_modes):
         beta=beta,
         phys_dim=phys_dim,
         n_modes=n_modes,
+        domain=domain,
         discretization="tedopa",
     )
     return SystemBath(h=hamiltonian, coupling=coupling, bath=bath)
@@ -86,14 +94,25 @@ def make_model(case, *, phys_dim, n_modes):
 
 def run_profile(profile="smoke", *, announce=False):
     config = PROFILES[profile] if isinstance(profile, str) else profile
+    beta = 1.0 / (KB_CM_PER_K * TEMPERATURE_K * CM_TO_RAD_PS)
+    resolved_bath = Bath(
+        J=spectral_density,
+        beta=beta,
+        phys_dim=1,
+        n_modes=config.n_modes,
+        discretization="tedopa",
+    ).resolved(config.t_max_ps)
     results = {}
-    for case in ("condon", "noncondon"):
+    for case in ("diagonal_reference", "weak_diagonal", "noncondon"):
         results[case] = {}
         for label, phys_dim, trunc_eps in config.variants:
             if announce:
                 print(f"[{config.name}] {case}/{label}: starting")
             results[case][label] = make_model(
-                case, phys_dim=phys_dim, n_modes=config.n_modes,
+                case,
+                phys_dim=phys_dim,
+                n_modes=resolved_bath.n_modes,
+                domain=resolved_bath.domain,
             ).run(
                 dt=config.dt_ps,
                 t_max=config.t_max_ps,
@@ -103,7 +122,19 @@ def run_profile(profile="smoke", *, announce=False):
                 initial=np.array([1.0, 0.0, 0.0]),
                 observables=PROJECTORS,
             )
-    return {"profile": config, "results": results}
+    return {
+        "profile": config,
+        "bath": {
+            "alpha": BATH_ALPHA,
+            "cutoff_cm": BATH_CUTOFF_CM,
+            "reorganization_cm": 0.5 * BATH_ALPHA * BATH_CUTOFF_CM,
+            "domain_cm": tuple(
+                value / CM_TO_RAD_PS for value in resolved_bath.domain
+            ),
+            "n_modes": resolved_bath.n_modes,
+        },
+        "results": results,
+    }
 
 
 def effective_lifetime(result):
@@ -148,7 +179,14 @@ def summarize(suite):
 def save_suite(suite, path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {}
+    bath = suite["bath"]
+    payload = {
+        "bath_alpha": np.array(bath["alpha"]),
+        "bath_cutoff_cm": np.array(bath["cutoff_cm"]),
+        "bath_reorganization_cm": np.array(bath["reorganization_cm"]),
+        "bath_domain_cm": np.asarray(bath["domain_cm"]),
+        "bath_n_modes": np.array(bath["n_modes"]),
+    }
     for case, variants in suite["results"].items():
         for label, result in variants.items():
             prefix = f"{case}_{label}"
@@ -168,6 +206,7 @@ def main(argv=None):
     suite = run_profile(args.profile, announce=True)
     if args.output:
         save_suite(suite, args.output)
+    print("resolved bath:", suite["bath"])
     print(summarize(suite))
     return suite
 

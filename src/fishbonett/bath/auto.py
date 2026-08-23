@@ -195,16 +195,24 @@ def auto_n_modes(sd, domain, t_max, *, buffer=10, rel_threshold=1e-3, n_t=80,
                 "negative/non-finite coupling weights"
             )
         Vn = np.sqrt(v_sq / np.pi)
-        _, P = lanczos(np.diag(freq), Vn)               # star -> chain (Lanczos)
+        # A large Gaussian star can become numerically rank deficient only at
+        # the far end of its Krylov basis.  Automatic resolution needs the
+        # light-cone prefix, not an artificial completion of every trial mode,
+        # so retain the stable prefix and enlarge the probe below if the front
+        # reaches its edge.  Production chain construction remains strict.
+        _, P = lanczos(
+            np.diag(freq), Vn, allow_early_termination=True
+        )                                                # star -> chain (Lanczos)
         coefT = np.ascontiguousarray(P.T)
-        dmax = np.zeros(n_big)
+        resolved_probe = coefT.shape[0]
+        dmax = np.zeros(resolved_probe)
         for t in np.linspace(0.0, t_max, n_t):
             dmax = np.maximum(dmax, np.abs(coefT @ (Vn * np.exp(-1j * freq * t))))
         peak = dmax.max()
         sig = np.where(dmax > rel_threshold * peak)[0] if peak > 0 else np.array([0])
         j_max = int(sig.max()) if len(sig) else 0
         n = j_max + 1 + buffer
-        if n < n_big:                                  # front is contained in n_big
+        if n < resolved_probe:                         # front is contained in probe
             return int(n)
         if n_big >= n_max:
             warnings.warn(
@@ -214,5 +222,5 @@ def auto_n_modes(sd, domain, t_max, *, buffer=10, rel_threshold=1e-3, n_t=80,
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return int(n_max)
+            return int(resolved_probe)
         n_big = min(2 * n_big, n_max)
