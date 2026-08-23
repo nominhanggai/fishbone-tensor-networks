@@ -89,17 +89,26 @@ def test_electron_transfer_units_and_smoke_populations():
     noncondon_h, noncondon_coupling = module._case("noncondon")
     assert np.array_equal(weak_h, noncondon_h)
     assert not np.array_equal(weak_coupling, noncondon_coupling)
-    propagated_h, propagated_coupling = module.propagation_hamiltonian(
+    propagated_h, propagated_coupling = module.quapi_equivalent_hamiltonian(
         "noncondon"
     )
-    expected_counterterm = (
+    expected_renormalization = (
         module.CM_TO_RAD_PS * reorganization
         * (propagated_coupling @ propagated_coupling)
     )
-    assert np.allclose(propagated_h, noncondon_h + expected_counterterm)
-    # M^2 is not diagonal for a non-Condon coupling matrix.  Retaining its
-    # off-diagonal entries is essential to reproduce the same Hamiltonian.
-    assert abs(expected_counterterm[0, 1]) > 0.0
+    assert np.allclose(
+        propagated_h, noncondon_h + expected_renormalization
+    )
+    # The QUAPI calculation is performed after diagonalizing M.  Applying the
+    # local lambda D^2 term there and rotating back must give lambda M^2; taking
+    # only the diagonal of M^2 would depend on the chosen electronic basis.
+    eigenvalues, eigenvectors = np.linalg.eigh(propagated_coupling)
+    rotated_renormalization = (
+        module.CM_TO_RAD_PS * reorganization
+        * eigenvectors @ np.diag(eigenvalues ** 2) @ eigenvectors.conj().T
+    )
+    assert np.allclose(rotated_renormalization, expected_renormalization)
+    assert abs(expected_renormalization[0, 1]) > 0.0
     suite = module.run_profile("smoke")
     assert suite["bath"]["alpha"] == pytest.approx(1.67)
     assert suite["bath"]["cutoff_cm"] == pytest.approx(600.0)
