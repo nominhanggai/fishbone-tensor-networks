@@ -282,7 +282,7 @@ def test_electron_transfer_tomography_spans_liouville_space():
 
 def test_heat_flow_smoke_uses_distinct_baths_and_obeys_continuity():
     module = _load("two_bath_heat_flow")
-    assert module.ALPHA == pytest.approx(0.025)
+    assert module.ALPHA == pytest.approx(0.1)
     suite = module.run_profile("smoke")
     assert module.CONDITION_LABELS == {
         "temperature_biased": "temperature-biased run",

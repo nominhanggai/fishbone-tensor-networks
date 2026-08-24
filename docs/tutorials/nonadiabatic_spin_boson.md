@@ -11,6 +11,19 @@ axis, through $t\Delta/\pi=1$. The `reference` profile in
 `examples/nonadiabatic_spin_boson.py` extends the same calculation to the
 paper's full endpoint, $t\Delta/\pi=5$.
 
+```{admonition} Orientation
+:class: note
+
+- **Level:** intermediate; read {doc}`vibronic_dimer` first if interaction-chain
+  notation is new.
+- **You will learn:** how to reproduce strong-coupling spin relaxation and
+  separate bath-domain, mode-count, Fock-space, and tensor truncation checks.
+- **Cost:** the default smoke profile takes seconds; the 200-mode documentation
+  run is a substantial CPU calculation, and the 600-mode reference profile is
+  a manual production run.
+- **Output:** spin-up population and retained bond dimension.
+```
+
 ## Model and observable
 
 The zero-bias spin--boson Hamiltonian is
@@ -53,8 +66,8 @@ $\delta t=1.25\times10^{-2}/\Delta$, SVD threshold $10^{-3}$, and a maximum
 bond dimension of 1000. The shortened calculation on this page uses 200 modes
 through $t\Delta/\pi=1$; the manual full-horizon profile uses 600. Both use ten
 oscillator states per mode, the reported time step, and the reported SVD
-threshold. The maximum bond is left unrestricted so the threshold, rather than
-an artificial ceiling, determines the retained rank.
+threshold. The maximum bond is left unrestricted so the threshold determines
+the retained rank without an artificial ceiling.
 
 The paper writes the continuum on a finite interval $[\Omega_0,\Omega_1]$ but
 does not report numerical endpoints. The package calculation therefore states
@@ -198,19 +211,19 @@ the displayed interval. A 24-mode calculation can still show close agreement
 between two representations of that same finite bath while deviating
 substantially from Figure 8, so the paper comparison is an independent check.
 
-## Common mistakes and convergence checks
+## Common mistakes and benchmark-specific convergence
 
 Do not infer continuum convergence from agreement between two representations
 of the same short finite bath. Do not compare their peak bonds unless the time
-horizon, timestep, local basis, and truncation rule are also identical. When
-refining this calculation, change one control at a time:
+horizon, timestep, local basis, and truncation rule are also identical. Use the
+coupled timestep/SVD workflow in {doc}`convergence`, then add the checks specific
+to this benchmark:
 
 1. raise `phys_dim` to test the oscillator basis;
 2. raise `n_modes` at fixed `domain` to test quadrature resolution;
 3. expand `domain` while increasing `n_modes` to maintain resolution;
-4. halve `DT` and tighten `trunc_eps` together, because more steps also mean
-   more SVD truncations; and
-5. compare the full population trajectory, not only normalization or peak bond.
+4. compare the full population trajectory with the digitized Figure 8 curve,
+   not only normalization or peak bond.
 
 The manual command
 
@@ -221,3 +234,8 @@ python examples/nonadiabatic_spin_boson.py --profile reference
 uses the 600-mode paper-length controls through $t\Delta/\pi=5$. It is kept out of
 the documentation build because the longer tensor-network propagation should
 not determine routine documentation build time.
+
+For a chemically structured environment with the same interaction-chain
+representation, return to {doc}`vibronic_dimer`. To see how short reduced
+dynamics can be extended beyond the direct tensor-network window, continue to
+{doc}`bridge_electron_transfer`.
