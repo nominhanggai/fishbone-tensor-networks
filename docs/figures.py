@@ -3,7 +3,7 @@
 Figures and numerical summaries are build artifacts. ``docs/conf.py`` invokes
 ``build_all`` so a documentation build runs the same profiled calculations that
 the tutorial text describes. CI may call ``build_selected`` in parallel before
-Sphinx starts; ``build_all`` then generates only the missing figures.
+Sphinx starts; ``build_all`` then generates missing or stale figures.
 """
 
 from argparse import ArgumentParser
@@ -41,6 +41,21 @@ def _load_example(name):
 def _write_summary(name, text):
     GENERATED.mkdir(parents=True, exist_ok=True)
     (GENERATED / f"{name}.md").write_text(text, encoding="utf-8")
+
+
+def _input_mtime(name):
+    """Newest source timestamp that can affect a generated figure."""
+    inputs = [Path(__file__)]
+    example = ROOT / "examples" / f"{name}.py"
+    if example.exists():
+        inputs.append(example)
+    inputs.extend((ROOT / "src" / "fishbonett").rglob("*.py"))
+    return max(path.stat().st_mtime_ns for path in inputs)
+
+
+def _outputs_are_current(name, outputs):
+    """Return whether every generated output is at least as new as its inputs."""
+    return min(path.stat().st_mtime_ns for path in outputs) >= _input_mtime(name)
 
 
 def _c_disc(density, domain, n_modes, times):
@@ -622,8 +637,9 @@ def build_selected(names, force=False):
         targets = (target, *EXTRA_OUTPUTS.get(name, ()))
         summary = GENERATED / f"{name}.md"
         tutorial = name in _TUTORIAL_FIGURES
-        if (all(item.exists() for item in targets)
-                and (not tutorial or summary.exists()) and not force):
+        outputs = (*targets, *((summary,) if tutorial else ()))
+        if (all(item.exists() for item in outputs)
+                and _outputs_are_current(name, outputs) and not force):
             continue
         written.append(function(target))
     return written
