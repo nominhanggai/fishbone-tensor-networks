@@ -75,8 +75,6 @@ def _exact_general(h, O, obs_op, ts, nm, dph, domain, sd, init):
                                          ("interaction-chain-tdvp2", 2),
                                          ("schrodinger-star-tdvp1", 2),
                                          ("schrodinger-star-tdvp2", 2),
-                                         ("interaction-star-tdvp1", 2),
-                                         ("interaction-star-tdvp2", 2),
                                          ("interaction-chain-tree-tebd", 1)])
 def test_method_matches_exact(method, step):
     model = _model()
@@ -145,8 +143,8 @@ def test_spinboson_multichannel_routes_to_star():
 
 
 def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
-    """The two multichannel representations describe the same shared-mode star, so they must
-    agree with each other and with exact diagonalization.  This is the check that
+    """The multichannel representations describe the same shared-mode star, so they must
+    agree with exact diagonalization. This is the check that
     the interaction-picture builder is wired up with the *same* temperature and
     discretization conventions as the static one -- it uses the T-TEDOPA signed
     density rather than the builder's own kelvin-unit thermofield doubling."""
@@ -162,19 +160,16 @@ def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
     kw = dict(dt=0.01, n_steps=20, bond_dim=80, trunc_eps=1e-12, observables=obs)
     r_static = model.run(**kw)
     r_ip = model.run(method="interaction-chain-tebd", **kw)
-    r_ip_star = model.run(method="interaction-star-tebd", **kw)
-    # Three representations of one shared-mode star: the static schrodinger-star,
-    # and the interaction picture kept in the star modes (`interaction-star-tebd`)
-    # or rotated on to a Lanczos chain (`interaction-chain-tebd`).  The chain seed
-    # is one channel, which is legitimate here only because the interaction picture
-    # leaves no mode-mode terms -- see representations/multichannel.py.
+    # Two representations of one shared-mode star: the static schrodinger-star
+    # and the interaction picture rotated on to a Lanczos chain. The chain seed is
+    # one channel, which is legitimate because the interaction picture leaves no
+    # mode-mode terms -- see representations/multichannel.py.
     #
     # The static one is `schrodinger-star-tree-tebd`, not the multi-site models'
     # `schrodinger-chain-tree-tebd`: same engine, but those chain-map their baths
     # statically and this cannot, since the channels share one set of modes.
     assert r_static.method == "schrodinger-star-tree-tebd"
     assert r_ip.method == "interaction-chain-tebd"
-    assert r_ip_star.method == "interaction-star-tebd"
 
     # exact diagonalization of the same shared-mode star
     freq, g = None, []
@@ -207,8 +202,6 @@ def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
                 (U @ (np.exp(-1j * E * t) * c)).reshape(2, -1)), O).real
             for t in r_ip.t])
         assert np.max(np.abs(r_ip.expect[name] - ref)) < 3e-3, f"ip vs exact ({name})"
-        assert np.max(np.abs(r_ip_star.expect[name] - ref)) < 3e-3, (
-            f"ip-star vs exact ({name})")
         assert np.max(np.abs(r_static.expect[name] - ref)) < 3e-3, f"static vs exact ({name})"
 
 
@@ -242,7 +235,7 @@ def test_composite_spin_vibration_system():
     assert r.rdm.shape == (10, 2 * dv, 2 * dv)
 
     builder = Builder(
-        representation="interaction-star",
+        representation="interaction-chain",
         h_sys=h_sys, coupling=coup,
         bath=bath,
     ).build()

@@ -137,10 +137,7 @@ def test_multichannel_default_tree_is_schrodinger_not_interaction():
     representations = R.MODELS["multichannel"].representations
     assert R.SCHRODINGER_STAR_TREE_TEBD in representations["schrodinger-star"]
     assert R.INTERACTION_CHAIN_TEBD in representations["interaction-chain"]
-    assert R.INTERACTION_STAR_TEBD in representations["interaction-star"]
-    assert R.SCHRODINGER_STAR_TREE_TEBD not in representations.get("interaction-star", ())
-    assert set(representations) == {
-        "schrodinger-star", "interaction-chain", "interaction-star"}
+    assert set(representations) == {"schrodinger-star", "interaction-chain"}
 
     mc = Bath(J=[_J, _J], domain=(0.0, 40.0),
               n_modes=3, phys_dim=4)
@@ -339,15 +336,17 @@ def test_run_takes_the_axes_directly():
         sb.run(representation="polaron", integrator="tebd", **kw)
 
 
-def test_six_complete_representations_are_registered():
-    """All six names are complete public choices and all are implemented.
+def test_five_complete_representations_are_registered():
+    """All five names are complete public choices and all are implemented.
 
     In particular, ``interaction-chain`` means star discretization, free-star
     interaction transformation, then star-to-chain transformation.  The
     ``polaron-star`` representation retains the per-mode Lang--Firsov
     displacements."""
-    grid = {f"{p}-{b}" for p in ("schrodinger", "interaction", "polaron")
-            for b in ("chain", "star")}
+    grid = {
+        "schrodinger-chain", "schrodinger-star", "interaction-chain",
+        "polaron-chain", "polaron-star",
+    }
     assert set(R.REPRESENTATIONS) == grid
     assert set(R.MODELS["system-bath"].representations) == grid
     assert {s.representation for s in R.METHODS.values()} == grid
@@ -373,21 +372,22 @@ def test_interaction_chain_is_what_the_ip_methods_actually_run():
               "interaction-chain-tdvp1", "interaction-chain-tdvp2",
               "interaction-chain-tree-tebd"):
         assert R.METHODS[m].representation == "interaction-chain", m
-    # Multichannel exposes the same distinction explicitly.
     assert R.METHODS[R.INTERACTION_CHAIN_TEBD].representation == "interaction-chain"
-    assert R.METHODS[R.INTERACTION_STAR_TEBD].representation == "interaction-star"
-    assert R.METHODS["interaction-star-tdvp2"].representation == "interaction-star"
 
 
-def test_the_two_interaction_representations_agree():
-    """Interaction-chain and interaction-star trajectories agree."""
-    h, kw = 0.5 * sigma_x, dict(dt=0.02, n_steps=20, bond_dim=40,
-                                trunc_eps=1e-10, observables={"sz": sigma_z})
-    def run(m):
-        sb = SystemBath(h=h, coupling=sigma_z, bath=_bath_pos())
-        return np.asarray(sb.run(method=m, **kw).expect["sz"])
-    chain, star = run("interaction-chain-tdvp2"), run("interaction-star-tdvp2")
-    assert np.abs(chain - star).max() < 1e-3, np.abs(chain - star).max()
+def test_interaction_star_is_not_public():
+    from fishbonett.representations.interaction import InteractionRepresentation
+
+    assert "interaction-star" not in R.REPRESENTATIONS
+    assert not any("interaction-star" in name for name in R.METHODS)
+    with pytest.raises(ValueError, match="interaction-chain"):
+        InteractionRepresentation(
+            representation="interaction-star", h_sys=0.5 * sigma_x,
+            coupling=sigma_z, bath=_bath_pos())
+    with pytest.raises(ValueError):
+        SystemBath(
+            h=0.5 * sigma_x, coupling=sigma_z, bath=_bath_pos()
+        ).run(dt=0.02, n_steps=1, method="interaction-star-tdvp2")
 
 
 def test_axis_errors_name_what_separates_the_candidates():
@@ -575,5 +575,5 @@ def test_no_gaps_does_not_mean_every_integrator_exists():
     have = {(s.representation, s.integrator) for s in R.METHODS.values()}
     assert ("interaction-chain", "trotter-mpo") in have
     for rep in ("schrodinger-chain", "schrodinger-star", "polaron-chain",
-                "polaron-star", "interaction-star"):
+                "polaron-star"):
         assert (rep, "trotter-mpo") not in have, rep

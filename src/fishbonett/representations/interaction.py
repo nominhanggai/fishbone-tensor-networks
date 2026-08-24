@@ -1,14 +1,13 @@
-"""Star and chain interaction representations of a harmonic bath.
+"""Chain interaction representation of a harmonic bath.
 
 The construction follows the mathematical order directly:
 
 1. discretize the bath into independent star modes ``a_k``;
 2. rotate with respect to ``sum_k omega_k a_k^dag a_k``;
-3. retain the star operators for ``interaction-star``, or apply the
-   star-to-chain transform for ``interaction-chain``.
+3. apply the star-to-chain transform to obtain ``interaction-chain``.
 
-Consequently the star coefficients are ``g_k exp(-i omega_k t)`` and the chain
-coefficients are ``d_n(t) = sum_k U[n,k] g_k exp(-i omega_k t)``.  Diagonalizing
+Consequently the chain coefficients are
+``d_n(t) = sum_k U[n,k] g_k exp(-i omega_k t)``. Diagonalizing
 a finite chain can recover the same star quadrature, but that is a numerical
 discretization route rather than the definition of this representation.
 
@@ -49,27 +48,25 @@ def _swap_gate_pairs(hamiltonians, factor=1):
 
 
 class InteractionRepresentation:
-    """The ``interaction-star`` or ``interaction-chain`` Hamiltonian.
+    """The ``interaction-chain`` Hamiltonian.
 
     Parameters
     ----------
     representation
-        Exactly ``"interaction-star"`` or ``"interaction-chain"``.
+        Exactly ``"interaction-chain"``.
     h_sys, coupling
         Hermitian system Hamiltonian and coupling operator.
     bath
         Resolved bath specification. The representation discretizes it into a
-        finite star and applies the star-to-chain transform when requested.
+        finite star and applies the star-to-chain transform.
     """
 
-    names = frozenset({"interaction-star", "interaction-chain"})
+    names = frozenset({"interaction-chain"})
     static = False
 
     def __init__(self, *, representation, h_sys, coupling, bath):
         if representation not in self.names:
-            raise ValueError(
-                "representation must be 'interaction-star' or "
-                "'interaction-chain'")
+            raise ValueError("representation must be 'interaction-chain'")
         self.name = representation
         self.h_sys = check_operator(h_sys, "h_sys")
         self.pd_sys = self.h_sys.shape[0]
@@ -92,11 +89,11 @@ class InteractionRepresentation:
         return len(self.dimensions)
 
     def build(self):
-        """Prepare the finite star data and optional star-to-chain transform."""
+        """Prepare the finite star data and star-to-chain transform."""
         star = star_coefficients(self.bath)
         if star.n_channels != 1:
             raise ValueError("an interaction representation requires one channel")
-        if self.name == "interaction-chain" and star.transform is None:
+        if star.transform is None:
             raise ValueError(
                 "interaction-chain requires a star-to-chain transform")
         self.frequencies = star.frequencies
@@ -106,8 +103,6 @@ class InteractionRepresentation:
 
     def _express(self, star_values):
         values = np.asarray(star_values, complex)
-        if self.name == "interaction-star":
-            return values
         return self.star_to_chain @ values
 
     def coefficients(self, t):

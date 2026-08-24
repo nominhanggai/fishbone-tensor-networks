@@ -26,7 +26,7 @@ def measure():
     krylov_statistics(reset=True)
     start = perf_counter()
     result = model.run(
-        dt=0.04, n_steps=6, method="interaction-star-tdvp2",
+        dt=0.04, n_steps=6, method="interaction-chain-tdvp2",
         trunc_eps=1e-8, bond_dim=16, observables={"sz": sigma_z}, seed=0)
     elapsed = perf_counter() - start
     return {

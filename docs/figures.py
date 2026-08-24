@@ -16,6 +16,7 @@ import numpy as np
 
 DOCS = Path(__file__).resolve().parent
 ROOT = DOCS.parent
+sys.path.insert(0, str(ROOT / "src"))
 IMG = DOCS / "img"
 GENERATED = DOCS / "_generated"
 T_MAX = 4.0

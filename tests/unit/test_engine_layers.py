@@ -93,5 +93,5 @@ def test_transformed_representations_do_not_import_propagation_layers():
         offenders = {n for n in _imports(module) if n.startswith(forbidden_prefixes)}
         assert not offenders, f"{module.__name__} imports {sorted(offenders)}"
 
-    # the sweep must actually have covered the six public representations
+    # the sweep must actually have covered every public representation module
     assert {"interaction", "multichannel", "polaron", "schrodinger"} <= checked

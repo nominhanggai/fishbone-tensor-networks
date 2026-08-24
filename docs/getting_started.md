@@ -149,7 +149,7 @@ A run is four independent choices:
 | axis | values | what it is |
 |---|---|---|
 | `model` | `system-bath`, `multichannel`, `comb`, `site-tree` | what is coupled to what |
-| `representation` | six exact names, below | how `H` is written down |
+| `representation` | five exact names, below | how `H` is written down |
 | `state_geometry` | `mps`, `binary-tree`, `tree` | 1D MPS, binary tree tensor network, or general tree tensor network |
 | `integrator` | `tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo` | how a step is taken |
 
@@ -162,11 +162,12 @@ Supported Hamiltonian representations are:
 | transformation | chain representation | star representation |
 |---|---|---|
 | **Schrödinger** | `schrodinger-chain` | `schrodinger-star` |
-| **interaction** | `interaction-chain` | `interaction-star` |
+| **interaction** | `interaction-chain` | — |
 | **polaron** | `polaron-chain` | `polaron-star` |
 
-The star and chain forms are related by an orthogonal transform and describe the
-same finite bath at different tensor-network cost. Partial names such as
+The Schrödinger and polaron star/chain pairs are related by an orthogonal
+transform. The interaction representation always includes the final
+star-to-chain transformation. Partial names such as
 `representation="schrodinger"` are rejected; use an exact name.
 
 Every model, the representations it admits, and the reason each absent combination is absent —

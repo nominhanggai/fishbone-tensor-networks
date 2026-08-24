@@ -28,7 +28,7 @@ def test_bath_is_the_only_public_discretization_input():
         representation="schrodinger-chain", h_sys=sigma_x,
         coupling=sigma_z, bath=bath)
     interaction = InteractionRepresentation(
-        representation="interaction-star", h_sys=sigma_x,
+        representation="interaction-chain", h_sys=sigma_x,
         coupling=sigma_z, bath=bath).build()
     polaron_bath = Bath(J=_J, domain=(0.2, 40.0), n_modes=3, phys_dim=4)
     polaron = PolaronRepresentation(
@@ -52,7 +52,7 @@ def test_low_level_representation_requires_a_resolved_bath():
     bath = Bath(J=_J, domain=(0.0, 40.0), n_modes=None, phys_dim=4)
     with pytest.raises(ValueError, match=r"bath\.resolved\(t_max\)"):
         InteractionRepresentation(
-            representation="interaction-star", h_sys=sigma_x,
+            representation="interaction-chain", h_sys=sigma_x,
             coupling=sigma_z, bath=bath)
 
 
@@ -96,7 +96,7 @@ def test_one_density_can_be_shared_by_several_model_channels():
     )
 
     representation = MultichannelInteractionRepresentation(
-        representation="interaction-star", h_sys=0.5 * sigma_x,
+        representation="interaction-chain", h_sys=0.5 * sigma_x,
         coupling=[sigma_z, sigma_x], bath=_bath()).build()
     assert representation.coup_mat_np.shape == (3, 2, 2)
 

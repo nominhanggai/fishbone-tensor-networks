@@ -170,7 +170,6 @@ def test_progress_payload_is_consistent_across_engines(method):
     "interaction-chain-tebd",
     "interaction-chain-trotter-mpo",
     "interaction-chain-tdvp2",
-    "interaction-star-tdvp2",
     "schrodinger-chain-tdvp2",
     "schrodinger-star-tdvp2",
     "polaron-chain-tebd",

@@ -87,11 +87,11 @@ def test_tdvp2_matches_exact_and_grows_bonds():
 
 
 def test_ip_mpo_matches_exact():
-    """Interaction-picture star MPO (time-dependent, rebuilt each step) vs the same
+    """Interaction-chain MPO (time-dependent, rebuilt each step) vs the same
     exact dynamics.  Looser tol: the IP midpoint rule is O(dt^2) in time."""
     n_chain, d, V = 3, 5, 1.0
     representation = InteractionRepresentation(
-        representation="interaction-star",
+        representation="interaction-chain",
         h_sys=V * SX, coupling=SZ,
         bath=_bath(n_chain, d)).build()
     assert not representation.static, "the interaction MPO must be rebuilt"
@@ -149,11 +149,11 @@ def test_one_loop_serves_every_tdvp_mpo_and_sweep():
     """
     n_chain, d, V = 3, 4, 1.0
     interaction = InteractionRepresentation(
-        representation="interaction-star",
+        representation="interaction-chain",
         h_sys=V * SX, coupling=SZ,
         bath=_bath(n_chain, d)).build()
     representations = {"chain": _chain(n_chain, d, V),
-                       "interaction-star": interaction}
+                       "interaction-chain": interaction}
     for name, representation in representations.items():
         for sweep in ("tdvp1", "tdvp2", "dtdvp"):
             t, sz, maxd = run_mpo_hamiltonian(representation, dt=0.05, nsteps=2, sweep=sweep,

@@ -16,7 +16,7 @@ H = H_{\mathrm{sys}} + \sum_k \omega_k\, a_k^\dagger a_k
 $$
 
 with the mode frequencies $\omega_k$ and couplings $g_k$ read straight off the
-discretization.  Unlike {doc}`/methods/interaction/star_mpo`, the free-bath term
+discretization. Unlike {doc}`/methods/interaction/tdvp`, the free-bath term
 $\sum_k \omega_k a_k^\dagger a_k$ is kept, so $H$ is static and the MPO is assembled
 once and reused for every step.
 

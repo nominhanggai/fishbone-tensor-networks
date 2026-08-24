@@ -250,7 +250,7 @@ def _compile_tdvp_representation(model, spec, context, coupled):
         representation = _schrodinger_representation(
             model, coupled, spec.representation)
         return representation, _tdvp_hooks(context, spec.driver)
-    if spec.representation in {"interaction-chain", "interaction-star"}:
+    if spec.representation == "interaction-chain":
         representation, _phys_dims = _interaction_representation(
             model, coupled, spec.representation)
         return representation, _tdvp_hooks(context, spec.driver)

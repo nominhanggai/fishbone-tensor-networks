@@ -68,13 +68,10 @@ def test_interaction_representation_starts_from_a_finite_star():
         eth.star_to_chain @ eth.star_to_chain.T,
         np.eye(n_boson), atol=1e-10)
 
-    star = InteractionRepresentation(
-        representation="interaction-star",
-        h_sys=eth.h_sys, coupling=eth.coupling,
-        bath=bath).build()
+    star_values = eth.star_couplings * np.exp(-1j * eth.frequencies * 0.37)
     np.testing.assert_allclose(
         eth.coefficients(0.37),
-        eth.star_to_chain @ star.coefficients(0.37))
+        eth.star_to_chain @ star_values)
 
 
 def test_star_transform_has_one_implementation():
@@ -110,7 +107,7 @@ def test_shared_mode_star_is_the_one_multichannel_discretization():
     bath = Bath(
         J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3)
     representation = MultichannelInteractionRepresentation(
-        representation="interaction-star", h_sys=0.5 * sigma_z,
+        representation="interaction-chain", h_sys=0.5 * sigma_z,
         coupling=[sigma_z, sigma_x], bath=bath).build()
     freq, coup_mat = representation.freq, representation.coup_mat_np
 
@@ -139,7 +136,7 @@ def test_shared_mode_star_is_the_one_multichannel_discretization():
     # measure-adapted nodes are per-density, so they cannot be shared
     with pytest.raises(ValueError, match="legendre"):
         MultichannelInteractionRepresentation(
-            representation="interaction-star", h_sys=0.5 * sigma_z,
+            representation="interaction-chain", h_sys=0.5 * sigma_z,
             coupling=[sigma_z, sigma_x],
             bath=Bath(
                 J=[Ja, Jb], domain=(0.0, 30.0), n_modes=4, phys_dim=3,

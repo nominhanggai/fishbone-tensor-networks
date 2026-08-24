@@ -4,7 +4,7 @@ A run is specified by four axes::
 
     model     what is coupled to what      system-bath | multichannel | comb | site-tree
     representation  how H is written         schrodinger-chain | schrodinger-star
-                                             | interaction-chain | interaction-star
+                                             | interaction-chain
                                              | polaron-chain | polaron-star
     state_geometry  tensor-network state        mps | binary-tree | tree
     integrator  how a step is taken        tebd | tdvp1 | tdvp2 | dtdvp | trotter-mpo
@@ -43,8 +43,7 @@ __all__ = ["Model", "RepresentationSpec", "MethodSpec", "MODELS", "REPRESENTATIO
            "combinations", "METHOD_REPRESENTATIONS",
            "methods_by_representation", "representation_label", "describe_taxonomy",
            "unknown_method_error", "SCHRODINGER_CHAIN_TREE_TEBD",
-           "SCHRODINGER_STAR_TREE_TEBD", "INTERACTION_CHAIN_TEBD",
-           "INTERACTION_STAR_TEBD"]
+           "SCHRODINGER_STAR_TREE_TEBD", "INTERACTION_CHAIN_TEBD"]
 
 
 # -- representations ------------------------------------------------------------------
@@ -79,12 +78,6 @@ REPRESENTATIONS = {
         "star coupling is transformed to chain coordinates. The coefficients "
         "d_n(t) start on the first chain coordinate and spread with time; no "
         "mode-mode Hamiltonian terms remain.",
-        static=False, mode_decoupled=True),
-    "interaction-star": RepresentationSpec(
-        "interaction-star", "interaction star representation",
-        "The finite star is put in the interaction picture with respect to its "
-        "free bath Hamiltonian and left in star coordinates. Mode k couples as "
-        "V_k exp(-i w_k t). It is unitarily equivalent to interaction-chain.",
         static=False, mode_decoupled=True),
     "polaron-chain": RepresentationSpec(
         "polaron-chain", "polaron chain representation",
@@ -124,9 +117,9 @@ _NO_MODE_MODE = (
 class Model:
     """A physical setup containing only its coupling topology.
 
-    ``gaps`` maps an absent representation key to the reason it is absent. All six
-    names describe valid Hamiltonians; gaps record model-specific implementation
-    work, not impossible combinations.
+    ``gaps`` maps an absent representation key to the reason it is absent. The
+    names describe public Hamiltonian representations; gaps record
+    model-specific implementation work, not impossible combinations.
     """
     key: str
     label: str
@@ -212,8 +205,6 @@ SCHRODINGER_STAR_TREE_TEBD = _canonical_method_name(
     "schrodinger-star", "tebd", "tree")
 INTERACTION_CHAIN_TEBD = _canonical_method_name(
     "interaction-chain", "tebd")
-INTERACTION_STAR_TEBD = _canonical_method_name(
-    "interaction-star", "tebd")
 
 
 _SB = ("system-bath",)
@@ -242,10 +233,6 @@ _METHOD_ROWS = [
     _m("interaction-chain", _SB, "mpo-tdvp",
        "tdvp1", requires_bond_cap=True),
     _m("interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
-    # -- ...the same rotation left in the star modes --------------------------
-    _m("interaction-star", _SB, "mpo-tdvp",
-       "tdvp1", requires_bond_cap=True),
-    _m("interaction-star", _SB, "mpo-tdvp", "tdvp2"),
     # -- ...and the chain representation on a balanced binary tree ---------------------
     _m("interaction-chain", _SB, "modetree",
        "run_tree_tebd", integrator="tebd", state_geometry="binary-tree"),
@@ -277,8 +264,6 @@ _METHOD_ROWS = [
        integrator="tdvp2", state_geometry="tree", qualifier="fishbone"),
     _m("schrodinger-star", ("multichannel",),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
-    _m("interaction-star", ("multichannel",),
-       "swap-tebd", integrator="tebd"),
 ]
 
 _method_names = [spec.name for spec in _METHOD_ROWS]
@@ -317,7 +302,7 @@ MODELS = {
     "system-bath": Model(
         key="system-bath", label="system-bath",
         blurb="One system site coupled to one bath through one coupling operator. "
-              "It supports all six representations, both single-system tensor-network "
+              "It supports all public representations, both single-system tensor-network "
               "geometries and the full integrator family. The schrodinger-chain, "
               "schrodinger-star and interaction-chain representations describe the "
               "Hamiltonian, while interaction-chain supports two state geometries.",
@@ -341,7 +326,6 @@ MODELS = {
         cls="Fishbone",
         gaps={
             "schrodinger-star": _MULTISITE,
-            "interaction-star": _MULTISITE,
             "polaron-chain": _MULTISITE,
             "polaron-star": _MULTISITE,
         }),
@@ -356,7 +340,6 @@ MODELS = {
         gaps={
             "schrodinger-star": _MULTISITE,
             "interaction-chain": _MULTISITE,
-            "interaction-star": _MULTISITE,
             "polaron-chain": _MULTISITE,
             "polaron-star": _MULTISITE,
         }),
