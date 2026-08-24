@@ -1,4 +1,4 @@
-"""Direct unit tests for the canonical TEBD engine (fishbonett.states.mps)."""
+"""Direct unit tests for the MPS state used by ``fishbonett.evolve.tebd``."""
 
 import numpy as np
 import pytest

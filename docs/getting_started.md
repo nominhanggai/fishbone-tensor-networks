@@ -177,10 +177,10 @@ is whatever the code actually offers:
 :language: text
 ```
 
-## Low-level engines
+## Low-level state and evolution API
 
 For finer control the underlying layers are available directly. The high-level
-high-level API compiles `Bath`, constructs a representation, asks it for the numerical
+API compiles `Bath`, constructs a representation, asks it for the numerical
 product needed by the integrator, and then propagates:
 
 ```python

@@ -476,8 +476,8 @@ class Fishbone:
     """
 
     #: The model this class realizes -- ``comb`` rather than ``site-tree``, so
-    #: error messages name the class the user actually reached for, even though
-    #: the two share an engine.
+    #: error messages name the class the user actually reached for. Both models
+    #: use the site-tree propagation path.
     _MODEL = "comb"
 
     def __init__(self, sites, baths, backbone=None, *, couplings=None):
