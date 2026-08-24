@@ -288,69 +288,125 @@ threshold checks in the reference profile.
 def bridge_electron_transfer(path=None):
     example = _load_example("bridge_electron_transfer")
     suite = example.run_profile("docs", announce=True)
-    summary = example.summarize(suite)
+    early_summary = example.summarize(suite)
+    validation = example.long_validation()
     plt = _mpl()
-    figure, axes = plt.subplots(1, 2, figsize=(10.8, 4.4), sharey=True)
+    figure, axes = plt.subplots(
+        2, 2, figsize=(11.2, 7.0), sharex="col",
+        gridspec_kw={"height_ratios": (2.4, 1.0)},
+    )
     colors = {"donor": "#4C6EF5", "bridge": "#E8590C", "acceptor": "#2B8A3E"}
     cases = ("diagonal_reference", "noncondon")
     titles = {
         "diagonal_reference": r"(a) diagonal, $V_{DB}/V_{BA}=22/45$",
-        "noncondon": r"(b) $V_{DB}/V_{BA}=2/2$",
+        "noncondon": r"(b) non-Condon, $V_{DB}/V_{BA}=2/2$",
     }
     display_names = {
         "diagonal_reference": "diagonal reference",
         "weak_diagonal": "weak diagonal control",
         "noncondon": "non-Condon",
     }
-    for axis, case in zip(axes, cases):
-        result = suite["results"][case]["primary"]
-        for state, color in colors.items():
-            axis.plot(result.t, result.expect[state], color=color, label=state)
-        if case == "noncondon":
-            control = suite["results"]["weak_diagonal"]["primary"]
-            for state, color in colors.items():
-                axis.plot(
-                    control.t, control.expect[state], "--", color=color,
-                    alpha=0.75,
-                )
-            axis.plot(
-                [], [], "--", color="#495057", label="weak diagonal control",
+    for column, case in enumerate(cases):
+        result = validation["results"][case]
+        top, residual_axis = axes[:, column]
+        for state_index, (state, color) in enumerate(colors.items()):
+            top.plot(
+                result["t"], result["populations"][:, state_index],
+                color=color, lw=1.8, label=state,
             )
-        axis.set(xlabel="time (ps)", title=titles[case])
-        axis.grid(alpha=0.25)
-    axes[0].set_ylabel("population")
-    axes[0].legend(frameon=False)
-    axes[1].legend(frameon=False)
+            top.plot(
+                result["paper_t"][::10],
+                result["paper_populations"][::10, state_index],
+                "o", ms=3.8, mfc="white", mec=color, mew=1.0,
+            )
+            residual_axis.plot(
+                result["paper_t"], result["residual"][:, state_index],
+                color=color, lw=1.3,
+            )
+        top.set(title=titles[case], ylim=(-0.025, 1.025))
+        top.text(
+            0.97, 0.58,
+            rf"$\tau_{{\rm TN}}={result['fit']['lifetime_ps']:.2f}$ ps"
+            "\n"
+            rf"$\tau_{{\rm paper}}={result['paper_fit']['lifetime_ps']:.2f}$ ps",
+            transform=top.transAxes, ha="right", va="center", fontsize=9,
+        )
+        residual_axis.axhline(0.0, color="#495057", lw=0.8)
+        residual_axis.set(
+            xlabel="time (ps)", ylabel="simulation - paper",
+            ylim=(-0.015, 0.015),
+        )
+        for axis in (top, residual_axis):
+            axis.grid(alpha=0.25)
+    axes[0, 0].set_ylabel("population")
+    axes[0, 0].legend(frameon=False, ncol=3, loc="upper right")
+    axes[0, 1].plot([], [], "-", color="#495057", label="tensor network + TTM")
+    axes[0, 1].plot(
+        [], [], "o", ms=4, mfc="white", mec="#495057",
+        label="digitized paper Fig. 2",
+    )
+    axes[0, 1].legend(frameon=False, loc="upper right")
     figure.tight_layout()
     output = Path(path or IMG / "bridge_electron_transfer.png")
-    figure.savefig(output, dpi=140)
+    figure.savefig(output, dpi=160)
     plt.close(figure)
-    def lifetime_text(value):
-        return f"{value:.3g}" if np.isfinite(value) else "not resolved"
 
-    rows = "\n".join(
+    validation_rows = "\n".join(
         f"| {display_names[case]} | "
-        f"{lifetime_text(values['effective_lifetime_ps'])} | "
-        f"{values['final_donor_population']:.3g} | "
+        f"{values['lifetime_ps']:.3f} | "
+        f"{values['paper_curve_lifetime_ps']:.3f} | "
+        f"{values['reported_lifetime_ps']:.2f} | "
+        f"{values['population_rmse']:.4f} | "
+        f"{values['max_population_error']:.4f} | "
+        f"{values['last_transfer_norm']:.2e} |"
+        for case, values in validation["summary"].items()
+    )
+    early_rows = "\n".join(
+        f"| {display_names[case]} | "
         f"{values['donor_population_loss']:.3g} | "
         f"{values['peak_bridge_population']:.3g} | "
         f"{values['final_acceptor_population']:.3g} | "
         f"{values['normalization_error']:.2e} |"
-        for case, values in summary.items()
+        for case, values in early_summary.items()
     )
+    diagonal_validation = validation["summary"]["diagonal_reference"]
+    noncondon_validation = validation["summary"]["noncondon"]
     _write_summary("bridge_electron_transfer", fr"""## Generated result
 
-| coupling model | descriptive donor lifetime (ps) | final donor | donor loss | max bridge | final acceptor | normalization error |
+### Fifteen-picosecond paper comparison
+
+| coupling model | tensor-network lifetime (ps) | digitized-curve lifetime (ps) | paper label (ps) | all-population RMSE | maximum error | final transfer-tensor norm |
 |---|---:|---:|---:|---:|---:|---:|
-{rows}
+{validation_rows}
+
+The solid curves in the generated figure are the 15 ps transfer-tensor
+propagation; open circles are vector-path data extracted from the paper's Fig. 2.
+Residuals compare all three populations at every 0.05 ps digitization point.
+The same $A\exp(-t/\tau)+C$ model was fitted independently to the calculated and
+digitized donor curves. Its fit to the digitized curves recovers the lifetimes
+printed in the paper, so the comparison is not based only on copying those two
+labels.
+
+A 0.12 ps transfer kernel predicts the held-out end of the direct trajectory
+with maximum population errors of
+**{diagonal_validation['heldout_population_error']:.2e}** and
+**{noncondon_validation['heldout_population_error']:.2e}**. The reconstructed
+short maps preserve trace to **{max(diagonal_validation['direct_map_trace_error'], noncondon_validation['direct_map_trace_error']):.2e}**;
+their most negative Choi eigenvalue is
+**{min(diagonal_validation['direct_map_minimum_choi_eigenvalue'], noncondon_validation['direct_map_minimum_choi_eigenvalue']):.2e}**, which measures the small non-CP error introduced by independently truncating the tomography runs.
+
+### Direct 0.2 ps documentation run
+
+| coupling model | donor loss | max bridge | final acceptor | normalization error |
+|---|---:|---:|---:|---:|
+{early_rows}
 
 The docs profile used the paper's $\alpha={suite['bath']['alpha']}$,
 $\omega_c={suite['bath']['cutoff_cm']:.0f}\ \mathrm{{cm}}^{{-1}}$ bath and
-{suite['bath']['n_modes']} automatically resolved modes. The donor loss and
-compensating bridge/acceptor growth show population transfer, but this 0.2 ps
-transient does not resolve the paper's donor lifetimes. Dashed curves in panel
-(b) are the weak-diagonal fixed-Hamiltonian control; solid curves include the
-non-Condon bath coupling.
+{suite['bath']['n_modes']} automatically resolved modes. This independently
+regenerated short run checks that the current propagation code retains the
+published model's early population transfer; the checked-in short dynamical
+maps make the longer validation affordable in CI.
 
 Any fitted donor lifetime summarizes the full population trace; it is not an
 isolated elementary $D\to A$ rate because bridge occupation and recrossing
