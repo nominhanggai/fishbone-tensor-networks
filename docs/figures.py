@@ -20,6 +20,14 @@ IMG = DOCS / "img"
 GENERATED = DOCS / "_generated"
 T_MAX = 4.0
 _TS = np.linspace(0.0, T_MAX, 400)
+_REFERENCE_INPUTS = {
+    "vibronic_dimer": ("dijkstra_2015_fig5_quantum_dynamics.csv",),
+    "nonadiabatic_spin_boson": ("nuomin_2022_fig8_ic10.csv",),
+    "bridge_electron_transfer": (
+        "bridge_electron_transfer_ttm_maps.npz",
+        "acharyya_2021_fig2_populations.csv",
+    ),
+}
 
 
 def _mpl():
@@ -50,8 +58,10 @@ def _input_mtime(name):
     if example.exists():
         inputs.append(example)
     reference_data = ROOT / "examples" / "reference_data"
-    if reference_data.exists():
-        inputs.extend(reference_data.rglob("*"))
+    inputs.extend(
+        reference_data / filename
+        for filename in _REFERENCE_INPUTS.get(name, ())
+    )
     inputs.extend((ROOT / "src" / "fishbonett").rglob("*.py"))
     return max(path.stat().st_mtime_ns for path in inputs if path.is_file())
 
@@ -619,6 +629,7 @@ OUTPUTS = {
     for function in FIGURES
 }
 OUTPUTS["bath_correlation_finite_t"] = IMG / "bath_correlation_finiteT.svg"
+OUTPUTS["vibronic_dimer"] = IMG / "vibronic_dimer_dynamics.svg"
 EXTRA_OUTPUTS = {
     "bridge_electron_transfer": (IMG / "bridge_electron_transfer_memory.svg",),
 }
