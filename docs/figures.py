@@ -580,10 +580,16 @@ def two_bath_heat_flow(path=None):
     summary = example.summarize(suite)
     plt = _mpl()
     figure, axes = plt.subplots(1, 2, figsize=(11.2, 4.4))
-    for condition, style in (("nonequilibrium", "-"), ("equilibrium", "--")):
+    conditions = (
+        ("nonequilibrium", "temperature-biased run", "-"),
+        ("equilibrium", "equal-temperature control", "--"),
+    )
+    for condition, legend_label, style in conditions:
         case = suite["results"][condition]["primary"]
         result = case["result"]
-        axes[0].plot(result.t, result.expect["sz"], style, label=condition)
+        axes[0].plot(
+            result.t, result.expect["sz"], style, label=legend_label,
+        )
     case = suite["results"]["nonequilibrium"]["primary"]
     result = case["result"]
     axes[1].plot(result.t, case["hot_to_system"], label=r"hot $\to$ system")
