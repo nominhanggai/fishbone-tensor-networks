@@ -1,49 +1,80 @@
-# Strong-coupling nonadiabatic spin--boson dynamics [MPO and TDVP]
+# Strong-coupling nonadiabatic spin--boson dynamics [interaction-chain Trotter MPO]
 
-This tutorial calculates the population relaxation of a two-state system in a
-hot, strongly coupled bath. It is based on the benchmark of
-[Nuomin, Beratan, and Zhang](https://arxiv.org/abs/2111.14308) and demonstrates
-how two Hamiltonian representations can be used as an internal numerical
-cross-check.
+This tutorial reconstructs the nonadiabatic spin--boson benchmark in Figure 8
+of [Nuomin, Beratan, and Zhang](https://arxiv.org/abs/2111.14308). It is a useful
+stress test because the bath is both hot and strongly coupled: convergence is
+controlled by the bath discretization, oscillator basis, tensor-network
+truncation, and time step, not by the smoothness of the population curve.
 
-Everything needed to run the calculation and interpret the returned arrays is
-included below.
+The documentation calculation covers the first fifth of the published time
+axis, through $t\Delta/\pi=1$. The `reference` profile in
+`examples/nonadiabatic_spin_boson.py` extends the same calculation to the
+paper's full endpoint, $t\Delta/\pi=5$.
 
-## 1. Benchmark Hamiltonian
+## Model and observable
+
+The zero-bias spin--boson Hamiltonian is
 
 $$
 H = \Delta\sigma_x
-  + \sigma_z\sum_k g_k(a_k+a_k^\dagger)
-  + \sum_k\omega_k a_k^\dagger a_k,
+  + \sigma_z\int h(\omega)(a_\omega+a_\omega^\dagger)\,d\omega
+  + \int \omega a_\omega^\dagger a_\omega\,d\omega,
 $$
 
-with $\Delta=1$ and
+with the Drude spectral density
 
 $$
-J(\omega)=\frac{\eta\omega_c\omega}{\omega_c^2+\omega^2},
-\qquad \eta=4,\quad \omega_c=4,\quad T=4.
+J(\omega)=h(\omega)^2
+ = \frac{\eta\omega_c\omega}{\omega_c^2+\omega^2}.
 $$
 
-The system begins in the $+1$ eigenstate of $\sigma_z$. We record
+Taking $\Delta=1$, Figure 8 uses
+
+$$
+\eta=4,\qquad \omega_c=4,\qquad T=4.
+$$
+
+The initial state is $|\uparrow\rangle$ and the plotted quantity is
 
 $$
 P_\uparrow(t)=\left\langle\frac{I+\sigma_z}{2}\right\rangle.
 $$
 
-The large $\eta$ and temperature make this a useful nonperturbative test: a
-smooth-looking curve from a weak-coupling approximation is not an adequate
-reference.
+At finite temperature the package uses a thermofield spectral density on a
+signed frequency interval. The oscillator state remains a vacuum product state;
+thermal absorption is carried by the negative-frequency part of the transformed
+bath.
 
-## 2. Complete runnable comparison
+## Numerical settings
 
-The interaction-chain trajectory covers $t\Delta/\pi\simeq1$. The
-Schrödinger-chain TDVP trajectory covers the first quarter of that interval as a
-build-time cross-check. Both use exactly the same system Hamiltonian, spectral
-density, discretized domain, and initial state.
+The paper reports 200 bath modes, oscillator cutoff 10, time step
+$\delta t=1.25\times10^{-2}/\Delta$, SVD threshold $10^{-3}$, and a maximum
+bond dimension of 1000. This tutorial uses the same mode count, ten oscillator
+states per mode, time step, and SVD threshold. The maximum bond is left
+unrestricted so the threshold, rather than an artificial ceiling, determines
+the retained rank.
+
+The paper writes the continuum on a finite interval $[\Omega_0,\Omega_1]$ but
+does not report numerical endpoints. The package calculation therefore states
+its additional discretization choice explicitly:
 
 ```python
-import numpy as np
+domain=(-16.0, 80.0)
+```
+
+Increasing the mode count at fixed domain checks the quadrature resolution;
+expanding the domain checks the frequency cutoff. These are distinct tests.
+
+## Complete runnable calculation
+
+Run this code from the repository root so it can also load the vector-path
+samples extracted from the paper's Figure 8.
+
+```python
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 from fishbonett import Bath, SystemBath
 from fishbonett.operators import sigma_x, sigma_z
@@ -53,36 +84,34 @@ DELTA = 1.0
 ETA = 4.0
 OMEGA_C = 4.0
 TEMPERATURE = 4.0
-DT = 0.025
+DT = 0.0125
 
 
 def spectral_density(omega):
     return ETA * OMEGA_C * omega / (OMEGA_C**2 + omega**2)
 
 
-def make_model():
-    bath = Bath(
-        J=spectral_density,
-        beta=1.0 / TEMPERATURE,
-        domain=(-16.0, 80.0),
-        n_modes=24,
-        phys_dim=6,
-        discretization="tedopa",
-    )
-    return SystemBath(
-        h=DELTA * sigma_x,
-        coupling=sigma_z,
-        bath=bath,
-    )
+bath = Bath(
+    J=spectral_density,
+    beta=1.0 / TEMPERATURE,
+    domain=(-16.0, 80.0),
+    n_modes=200,
+    phys_dim=10,
+    discretization="tedopa",
+)
 
+model = SystemBath(
+    h=DELTA * sigma_x,
+    coupling=sigma_z,
+    bath=bath,
+)
 
 population_up = 0.5 * (np.eye(2) + sigma_z)
+n_steps = int(np.ceil(np.pi / DT))
 
-# round() is explicit because pi is not an integer multiple of DT.
-interaction_steps = int(round(np.pi / DT))
-interaction = make_model().run(
+result = model.run(
     dt=DT,
-    n_steps=interaction_steps,
+    n_steps=n_steps,
     method="interaction-chain-trotter-mpo",
     trunc_eps=1e-3,
     bond_dim=None,
@@ -90,135 +119,103 @@ interaction = make_model().run(
     observables={"population_up": population_up},
 )
 
-# A shorter independent representation check suitable for a docs build.
-schrodinger_steps = int(round(0.25 * np.pi / DT))
-schrodinger = make_model().run(
-    dt=DT,
-    n_steps=schrodinger_steps,
-    method="schrodinger-chain-tdvp2",
-    trunc_eps=1e-3,
-    bond_dim=None,
-    initial="up",
-    observables={"population_up": population_up},
+population = np.asarray(result.expect["population_up"], float)
+scaled_time = result.t / np.pi
+
+paper = np.genfromtxt(
+    Path("examples/reference_data/nuomin_2022_fig8_ic10.csv"),
+    delimiter=",",
+    names=True,
 )
+mask = paper["t_delta_over_pi"] <= scaled_time[-1] + 1e-6
+paper_time = paper["t_delta_over_pi"][mask]
+paper_population = paper["population_up"][mask]
 
-p_interaction = np.asarray(interaction.expect["population_up"], float)
-p_schrodinger = np.asarray(schrodinger.expect["population_up"], float)
-
-# Both runs use the same DT, so their first samples refer to the same times.
-n_overlap = min(len(p_interaction), len(p_schrodinger))
-max_difference = np.max(np.abs(
-    p_interaction[:n_overlap] - p_schrodinger[:n_overlap]
-))
-
-print("maximum difference on common interval:", max_difference)
-print("interaction peak bond:", np.max(interaction.max_bond))
-print("Schrodinger peak bond:", np.max(schrodinger.max_bond))
-
-plt.plot(
-    interaction.t / np.pi,
-    p_interaction,
-    label="interaction chain",
+simulation_at_paper_times = np.interp(
+    paper_time,
+    np.r_[0.0, scaled_time],
+    np.r_[1.0, population],
 )
-plt.plot(
-    schrodinger.t / np.pi,
-    p_schrodinger,
-    "--",
-    label="Schrodinger chain (overlap check)",
+residual = simulation_at_paper_times - paper_population
+
+print("final scaled time:", scaled_time[-1])
+print("final population:", population[-1])
+print("paper-curve RMSE:", np.sqrt(np.mean(residual**2)))
+print("maximum paper-curve error:", np.max(np.abs(residual)))
+print("peak bond dimension:", np.max(result.max_bond))
+
+figure, (left, right) = plt.subplots(1, 2, figsize=(10, 4))
+left.plot(scaled_time, population, label="fishbonett")
+left.plot(
+    paper_time,
+    paper_population,
+    "o",
+    markerfacecolor="none",
+    label="Figure 8 IC10",
 )
-plt.xlabel(r"$t\Delta/\pi$")
-plt.ylabel(r"$P_\uparrow(t)$")
-plt.legend()
-plt.tight_layout()
+left.set(xlabel=r"$t\Delta/\pi$", ylabel=r"$P_\uparrow(t)$")
+left.legend()
+
+right.plot(scaled_time, result.max_bond)
+right.set(xlabel=r"$t\Delta/\pi$", ylabel="retained bond dimension")
+figure.tight_layout()
 plt.show()
 ```
 
-## 3. Why construct a fresh model for each run?
+The CSV contains samples of the converged IC10 vector path in the arXiv figure;
+it is not raw numerical data supplied by the authors. Comparing the complete
+curve is more informative than matching a single endpoint.
 
-`run` does not intentionally mutate the declarative `Bath`, but constructing two
-models makes the comparison unambiguous: both simulations start from a new
-product state, resolve the same bath specification, and use no tensor state left
-over from the other method.
+## What the method represents
 
-The finite-temperature bath is represented on a signed thermofield frequency
-axis. `beta=1/T=0.25` is in the same inverse-energy units as the Hamiltonian. The
-TEDOPA discretizer adapts its quadrature to the bath measure instead of applying
-uniform-weight Gauss--Legendre quadrature.
+The bath is discretized in star modes first. The interaction picture is taken
+with respect to the diagonal free star bath, after which the time-dependent
+couplings are transformed from star to chain coordinates. At $t=0$ the coupling
+is localized at the first chain mode and then travels outward.
 
-The Drude tail decays slowly. An automatic domain covering 99.9% of its
-reorganization energy is consequently very wide and produces hundreds of modes
-for this horizon. The documentation calculation states its finite window and
-mode count rather than hiding that cost. The reference calculation removes this
-shortcut and is the one to use for cutoff convergence.
+`interaction-chain` names this Hamiltonian representation.
+`trotter-mpo` names the integrator: for one Hermitian coupling operator, the
+mode-coupling terms commute and their conditional-displacement propagator has a
+compact MPO form.
 
-## 4. What differs between the two methods?
+The paper applies the same interaction-chain Hamiltonian with a swap-gate TEBD
+scheme. This tutorial instead uses the package's Trotter MPO, so the population
+comparison tests the represented dynamics; it is not a reproduction of the
+paper's timing or bond-dimension comparison between algorithms.
 
-Both methods approximate the same physical Hamiltonian, but represent it
-differently.
+## Result and interpretation
 
-### Interaction-chain Trotter MPO
-
-The free star bath is used to define the interaction picture. The resulting
-time-dependent system--bath coupling is transformed from star to chain
-coordinates. `trotter-mpo` applies the commuting single-channel bath coupling as
-a conditional-displacement MPO. The state therefore does not carry free-bath
-evolution as entanglement.
-
-### Schrödinger-chain TDVP2
-
-The chain frequencies and nearest-neighbour hoppings remain explicitly in a
-static Hamiltonian MPO. Two-site TDVP evolves a pair of tensors and splits it by
-SVD, allowing the bond to grow. This is a genuinely independent representation
-and integrator, which makes agreement more meaningful than comparing two output
-paths through the same propagator.
-
-The peak bonds printed by the example must not be interpreted as a fair timing
-comparison: the TDVP run intentionally ends earlier.
-
-## 5. Result layout and numerical tests
-
-For `SystemBath`, a named observable produces a one-dimensional array:
-
-```python
-interaction.t.shape                       # (interaction_steps,)
-interaction.expect["population_up"].shape # (interaction_steps,)
-interaction.rdm.shape                     # (interaction_steps, 2, 2)
-interaction.max_bond.shape                # (interaction_steps,)
-```
-
-Check the following independently:
-
-1. **Representation agreement.** Compare only equal times, as the code does.
-2. **Time step.** Halve `DT` and compare values at common physical times.
-3. **Fock dimension.** Repeat with `phys_dim=10`, 20, and 40.
-4. **SVD threshold.** Tighten `trunc_eps` from $10^{-3}$ to $5\times10^{-4}$.
-5. **Bath resolution.** Expand the finite domain and mode count, or use the
-   automatic reference profile.
-
-Changing all five at once cannot identify the source of a difference.
-
-## 6. Dynamics and conclusion
-
-![Strong-coupling population dynamics and retained bond dimensions](../img/nonadiabatic_spin_boson.svg)
+![Spin population compared with Figure 8 and the retained bond dimension](../img/nonadiabatic_spin_boson.svg)
 
 ```{include} ../_generated/nonadiabatic_spin_boson.md
 ```
 
-The two representations agree closely during their common interval while the
-interaction-chain trajectory resolves the subsequent nonmonotonic relaxation.
-That agreement is a strong implementation check, not a complete convergence
-study. The `reference` profile in
-`examples/nonadiabatic_spin_boson.py` propagates to $5\pi/\Delta$, halves the
-step, increases the local Fock space, uses automatic bath resolution, and adds a
-Schrödinger-star comparison.
+The population falls rapidly from one and then relaxes more slowly toward the
+unbiased value $1/2$. The agreement with the published curve is quantitative on
+the displayed interval. A 24-mode calculation can still show close agreement
+between two representations of that same finite bath while deviating
+substantially from Figure 8, so the paper comparison is an independent check.
 
-## 7. Common mistakes
+## Common mistakes and convergence checks
 
-- Passing `t_max=5*np.pi` with `dt=0.025` is rejected because the values are not
-  commensurate. Pass an explicit rounded `n_steps`, as above.
-- Comparing arrays by index is valid here only because both runs use the same
-  step and starting time. In general, interpolate onto common physical times.
-- A small peak bond does not prove accuracy; local Fock truncation and bath
-  discretization can dominate while the bond remains small.
-- One-site TDVP uses a fixed-bond manifold and requires an explicit bond cap.
-  This tutorial uses two-site TDVP so `trunc_eps` can control adaptive growth.
+Do not infer continuum convergence from agreement between two representations
+of the same short finite bath. Do not compare their peak bonds unless the time
+horizon, timestep, local basis, and truncation rule are also identical. When
+refining this calculation, change one control at a time:
+
+1. raise `phys_dim` to test the oscillator basis;
+2. raise `n_modes` at fixed `domain` to test quadrature resolution;
+3. expand `domain` while increasing `n_modes` to maintain resolution;
+4. halve `DT` and tighten `trunc_eps` together, because more steps also mean
+   more SVD truncations; and
+5. compare the full population trajectory, not only normalization or peak bond.
+
+The manual command
+
+```bash
+python examples/nonadiabatic_spin_boson.py --profile reference
+```
+
+uses the same paper-matched controls through $t\Delta/\pi=5$. It is kept out of
+the documentation build because the longer tensor-network propagation should
+not determine routine documentation build time.

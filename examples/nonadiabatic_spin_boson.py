@@ -1,8 +1,9 @@
 """Strong-coupling nonadiabatic spin--boson dynamics.
 
 This is the high-temperature benchmark of Nuomin, Beratan, and Zhang
-(arXiv:2111.14308): Delta=1, eta=4, omega_c=4, and T=4. The default profile is
-a four-step engine check; use ``--profile docs`` for the resolved comparison.
+(arXiv:2111.14308): Delta=1, eta=4, omega_c=4, and T=4. The documentation
+profile follows the numerical settings of Fig. 8 through t*Delta/pi = 1; the
+manual reference profile covers the full published interval.
 """
 
 from argparse import ArgumentParser
@@ -20,6 +21,9 @@ METHODS = {
     "schrodinger_chain": "schrodinger-chain-tdvp2",
     "schrodinger_star": "schrodinger-star-tdvp2",
 }
+
+REFERENCE_DATA = Path(__file__).resolve().parent / "reference_data"
+PAPER_FIG8_DATA = REFERENCE_DATA / "nuomin_2022_fig8_ic10.csv"
 
 
 @dataclass(frozen=True)
@@ -41,12 +45,12 @@ PROFILES = {
         ("interaction",),
     ),
     "docs": Profile(
-        "docs", np.pi, 0.025, 6, 24, (-16.0, 80.0), 1e-3,
-        ("interaction", "schrodinger_chain"), 0.25 * np.pi,
+        "docs", np.pi, 0.0125, 10, 200, (-16.0, 80.0), 1e-3,
+        ("interaction",),
     ),
     "reference": Profile(
-        "reference", 5.0 * np.pi, 0.0125, 20, None, None, 5e-4,
-        ("interaction", "schrodinger_chain", "schrodinger_star"),
+        "reference", 5.0 * np.pi, 0.0125, 10, 200, (-16.0, 80.0), 1e-3,
+        ("interaction",),
     ),
 }
 
@@ -83,7 +87,7 @@ def run_profile(profile="smoke", *, announce=False):
         )
         results[label] = make_model(config).run(
             dt=config.dt,
-            n_steps=int(round(horizon / config.dt)),
+            n_steps=int(np.ceil(horizon / config.dt)),
             method=METHODS[label],
             trunc_eps=config.trunc_eps,
             bond_dim=None,
@@ -91,6 +95,15 @@ def run_profile(profile="smoke", *, announce=False):
             observables={"population_up": 0.5 * (np.eye(2) + sigma_z)},
         )
     return {"profile": config, "results": results}
+
+
+def load_paper_figure8(path=PAPER_FIG8_DATA):
+    """Return vector-path samples of the published converged IC10 curve."""
+    table = np.genfromtxt(path, delimiter=",", names=True)
+    return {
+        "t_delta_over_pi": np.asarray(table["t_delta_over_pi"], float),
+        "population_up": np.asarray(table["population_up"], float),
+    }
 
 
 def summarize(suite):
@@ -105,8 +118,23 @@ def summarize(suite):
         comparisons[label] = float(np.max(np.abs(
             values[:overlap] - primary[:overlap]
         )))
+    paper = load_paper_figure8()
+    paper_mask = paper["t_delta_over_pi"] <= (
+        results["interaction"].t[-1] / np.pi + 1e-6
+    )
+    paper_t = paper["t_delta_over_pi"][paper_mask]
+    paper_population = paper["population_up"][paper_mask]
+    simulated_at_paper_times = np.interp(
+        paper_t,
+        np.r_[0.0, results["interaction"].t / np.pi],
+        np.r_[1.0, primary],
+    )
+    residual = simulated_at_paper_times - paper_population
     return {
         "final_population_up": float(primary[-1]),
+        "paper_curve_rmse": float(np.sqrt(np.mean(residual ** 2))),
+        "paper_curve_max_error": float(np.max(np.abs(residual))),
+        "paper_points_compared": int(len(paper_t)),
         "max_bond": {label: int(np.max(result.max_bond))
                      for label, result in results.items()},
         "max_difference_from_interaction": comparisons,

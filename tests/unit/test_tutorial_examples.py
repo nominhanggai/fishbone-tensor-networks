@@ -29,7 +29,7 @@ def _load(name):
 
 
 @pytest.mark.parametrize("name", TUTORIALS)
-def test_tutorial_profiles_have_fast_default_and_automatic_resolved_runs(name):
+def test_tutorial_profiles_have_fast_defaults_and_refinement_profiles(name):
     module = _load(name)
     assert tuple(module.PROFILES) == ("smoke", "docs", "reference")
     smoke = module.PROFILES["smoke"]
@@ -39,7 +39,9 @@ def test_tutorial_profiles_have_fast_default_and_automatic_resolved_runs(name):
     smoke_step = getattr(smoke, "dt", getattr(smoke, "dt_ps", None))
     assert round(smoke_horizon / smoke_step) == 4
     assert docs.n_modes is None or docs.n_modes >= 12
-    assert reference.n_modes is None
+    if reference.n_modes is not None:
+        assert docs.n_modes is not None
+        assert reference.n_modes >= docs.n_modes
 
 
 @pytest.mark.parametrize("name", TUTORIALS)
@@ -67,7 +69,7 @@ def test_vibronic_dimer_smoke_conserves_the_excitation():
     assert summary["resolved_modes"] == {8.0: (4,)}
 
 
-def test_vibronic_dimer_uses_the_papers_single_gap_bath():
+def test_vibronic_dimer_represents_one_gap_coordinate():
     module = _load("vibronic_dimer")
     model = module.make_model(8.0, module.PROFILES["smoke"])
     assert len(model.baths[0]) == 1
@@ -75,7 +77,13 @@ def test_vibronic_dimer_uses_the_papers_single_gap_bath():
     assert np.array_equal(model.baths[0][0].operator, module.OCCUPIED)
     assert module.PROFILES["docs"].t_max == 20.0
     assert module.PROFILES["docs"].n_modes is None
-    assert module.FIGURE_5_ENDPOINTS == {4.0: 0.27, 8.0: 0.67}
+    paper = module.load_paper_figure5()
+    assert tuple(paper.dtype.names) == (
+        "tJ", "omega4_acceptor", "omega8_acceptor",
+    )
+    assert paper["tJ"][[0, -1]].tolist() == [0.0, 20.0]
+    assert paper["omega4_acceptor"][-1] == pytest.approx(0.27537883)
+    assert paper["omega8_acceptor"][-1] == pytest.approx(0.66989632)
 
 
 def test_nonadiabatic_smoke_population_is_physical():

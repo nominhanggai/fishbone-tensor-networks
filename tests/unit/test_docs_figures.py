@@ -57,3 +57,12 @@ def test_stale_tutorial_figure_is_regenerated(tmp_path, monkeypatch):
     assert summary.read_text(encoding="utf-8") == "new summary"
     assert figures.build_selected([name]) == []
     assert calls == [output]
+
+
+def test_reference_data_are_figure_inputs():
+    figures = _load_figures()
+    reference = (
+        ROOT / "examples" / "reference_data"
+        / "dijkstra_2015_fig5_quantum_dynamics.csv"
+    )
+    assert figures._input_mtime("vibronic_dimer") >= reference.stat().st_mtime_ns
