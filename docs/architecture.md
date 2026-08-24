@@ -37,7 +37,7 @@ tensor state + integrator          TEBD / TDVP on a 1D MPS or tree tensor networ
 Result                             times, RDMs, expectations, bond diagnostics
 ```
 
-Dependencies point downward. In particular, the six public representation
+Dependencies point downward. In particular, the five public representation
 builders do not import TEBD, TDVP, MPO drivers, or tensor-network state classes.
 The planner requests the numerical product required by the resolved integrator
 directly from the representation.
@@ -50,8 +50,8 @@ The finite star is the starting point for the interaction construction:
    $(\omega_k,g_k,a_k)$;
 2. take the interaction representation with respect to
    $H_B=\sum_k\omega_k a_k^\dagger a_k$;
-3. retain $a_k$ for `interaction-star`, or apply the star-to-chain transform
-   $b_n=\sum_k U_{nk}a_k$ for `interaction-chain`.
+3. apply the star-to-chain transform
+   $b_n=\sum_k U_{nk}a_k$ to obtain `interaction-chain`.
 
 Thus
 

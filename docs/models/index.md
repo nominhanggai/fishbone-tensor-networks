@@ -32,7 +32,7 @@ shared = SystemBath(h=H, coupling=[O1, O2], bath=multichannel_bath)
 ```
 
 Use `method=` or the four public axes to choose propagation. See
-{doc}`/methods/index` for all six representation names and their methods.
+{doc}`/methods/index` for all five representation names and their methods.
 
 ```{toctree}
 :maxdepth: 1

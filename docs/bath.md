@@ -253,9 +253,8 @@ $g_k$, and an orthogonal transform. This is a way to generate a finite star
 discretization. The interaction construction then starts from that star:
 
 1. absorb the free-star evolution into $g_ke^{-i\omega_kt}$;
-2. keep those modes for `interaction-star`, or apply the star-to-chain transform
-   for `interaction-chain`. This transform is the inverse of the preceding
-   finite-chain diagonalization.
+2. apply the star-to-chain transform for `interaction-chain`. This transform is
+   the inverse of the preceding finite-chain diagonalization.
 
 Consequently, chain diagonalization is not the definition of
 `interaction-chain`. It is one way to prepare the finite star from which the

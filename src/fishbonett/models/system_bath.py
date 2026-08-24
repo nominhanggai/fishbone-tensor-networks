@@ -132,13 +132,13 @@ class SystemBath:
 
         Select a run with the four public axes::
 
-            sb.run(dt=..., t_max=..., representation="interaction-star",
+            sb.run(dt=..., t_max=..., representation="interaction-chain",
                    state_geometry="mps",
                    integrator="tdvp2")
 
         ``model`` specifies what is coupled to what. ``representation`` specifies
         how ``H`` is written: ``"schrodinger-chain"``,
-        ``"schrodinger-star"``, ``"interaction-chain"``, ``"interaction-star"``,
+        ``"schrodinger-star"``, ``"interaction-chain"``,
         ``"polaron-chain"``, or ``"polaron-star"``. ``state_geometry`` is the
         tensor-network geometry (``"mps"``/``"binary-tree"``/``"tree"``), and
         ``integrator`` how a step is taken (``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
@@ -166,7 +166,7 @@ class SystemBath:
 
         Supported models:
 
-        * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all six
+        * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all five
           representations.  *schrodinger-chain*
           (``schrodinger-chain-tdvp1 | schrodinger-chain-tdvp2 |
           schrodinger-chain-dtdvp``) and *schrodinger-star*
@@ -183,9 +183,8 @@ class SystemBath:
           *polaron-chain* (``polaron-chain-tebd``,
           ``polaron-chain-tdvp1/tdvp2/dtdvp``) -- static *and* low-entanglement; needs
           ``int J/w^2`` finite (gapped or super-ohmic).  The corresponding star
-          representations use ``interaction-star-tdvp1/2`` and
-          ``polaron-star-tdvp1/2/dtdvp``.  Finite temperature works via T-TEDOPA
-          thermalization.
+          polaron representation uses ``polaron-star-tdvp1/2/dtdvp``.  Finite
+          temperature works via T-TEDOPA thermalization.
         * **multichannel** -- one bath through several couplings on shared modes.
           Selected by giving ``SystemBath(coupling=...)`` a *list* of coupling
           operators.

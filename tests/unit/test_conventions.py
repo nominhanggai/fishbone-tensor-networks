@@ -34,7 +34,7 @@ def test_reorganization_energy_reference_value():
     assert np.isclose(got, 2.0 * lam / np.pi, rtol=1e-5)
 
 
-def test_interaction_picture_matches_star_equation_at_t_zero():
+def test_interaction_chain_matches_transformed_star_equation_at_t_zero():
     from fishbonett.representations.interaction import InteractionRepresentation
 
     density = lambda w: 0.2 * w * np.exp(-w / 5.0)
@@ -42,10 +42,11 @@ def test_interaction_picture_matches_star_equation_at_t_zero():
         J=density, domain=(0.0, 30.0), n_modes=4, phys_dim=3
     )
     representation = InteractionRepresentation(
-        representation="interaction-star", h_sys=np.zeros((2, 2)),
+        representation="interaction-chain", h_sys=np.zeros((2, 2)),
         coupling=np.diag([1.0, -1.0]), bath=bath).build()
     # Eq. (3) of Nuomin et al., arXiv:2212.06099: annihilation terms carry
-    # g_k exp(-i omega_k t), so at t=0 they are exactly the discrete g_k.
+    # g_k exp(-i omega_k t). The chain representation then applies U.
     np.testing.assert_allclose(
         representation.coefficients(0.0),
-        representation.star_couplings, atol=1e-14)
+        representation.star_to_chain @ representation.star_couplings,
+        atol=1e-14)

@@ -32,8 +32,8 @@ def test_suite_imports_the_current_checkout():
 
 def test_complex_multichannel_local_hamiltonian_is_hermitian():
     representation = MultichannelInteractionRepresentation.from_signed_star(
-        [2, 3], [sigma_y], [1.0], h_sys=np.zeros((2, 2)),
-        representation="interaction-star",
+        [2, 3], [sigma_z + sigma_y], [1.0], h_sys=np.zeros((2, 2)),
+        representation="interaction-chain",
     ).build()
 
     hamiltonian, _, _ = representation.two_site_hamiltonians(0.2, 0.1)[0]

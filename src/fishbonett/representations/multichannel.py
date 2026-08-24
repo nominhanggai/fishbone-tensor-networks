@@ -41,7 +41,7 @@ from fishbonett.operators import temp_factor, annihilate
 from fishbonett.representations.interaction import _swap_gate_pairs
 
 class MultichannelInteractionRepresentation:
-    """Multichannel ``interaction-star`` or ``interaction-chain`` Hamiltonian.
+    """Multichannel ``interaction-chain`` Hamiltonian.
 
     Generalizes :class:`~fishbonett.representations.interaction.InteractionRepresentation` to a
     matrix-valued coupling -- several coupling channels ``A_k`` share one bath (any
@@ -134,10 +134,8 @@ class MultichannelInteractionRepresentation:
 
     def _setup(self, pd, coup_mat, freq, h_sys, H_add, representation):
         """Shared state for both constructors: ``freq``/``coup_mat`` are final."""
-        if representation not in {"interaction-star", "interaction-chain"}:
-            raise ValueError(
-                "representation must be 'interaction-star' or "
-                "'interaction-chain'")
+        if representation != "interaction-chain":
+            raise ValueError("representation must be 'interaction-chain'")
         self.name = representation
         self.H_add = [] if H_add is None else H_add
         self.pd_sys = pd[0]
@@ -174,9 +172,8 @@ class MultichannelInteractionRepresentation:
     def two_site_hamiltonians(self, t, delta, include_system=True):
         """Two-site coupling Hamiltonians over ``[t, t+delta]``.
 
-        Returns ``[(h, d_boson, d_sys), ...]``: for each mode in the selected
-        star or chain order, the
-        matrix-valued interaction-picture coupling summed over channels,
+        Returns ``[(h, d_boson, d_sys), ...]``. For each mode in chain order,
+        ``h`` is the matrix-valued interaction-picture coupling summed over channels,
         ``kron(b, D_n) + kron(b^dag, D_n*)`` with ``D_n`` the channel-weighted
         coupling matrix.  With ``include_system`` the system term
         ``delta * h_sys`` is added to the site nearest the system.  Any extra
@@ -249,11 +246,6 @@ class MultichannelInteractionRepresentation:
         (where distant modes are weakly coupled through the hoppings) -- here it
         simply discards bath modes.
         """
-        if self.name == "interaction-star":
-            self.coef = np.eye(len(self.freq))
-            self.chain_freq = self.freq.copy()
-            return self
-
         # `diag(freq)` is real symmetric, so the Krylov vectors are real: take the
         # real part of the seed explicitly rather than letting numpy discard the
         # imaginary one silently.  Only the seed's *direction* matters (see above),

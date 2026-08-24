@@ -10,15 +10,14 @@ model -> representation -> state_geometry -> integrator
 result = sb.run(
     dt=0.02,
     t_max=2.0,
-    representation="interaction-star",
+    representation="interaction-chain",
     state_geometry="mps",
     integrator="tdvp2",
 )
 ```
 
-The supported Hamiltonian representations are
-`schrodinger-chain`, `schrodinger-star`, `interaction-chain`,
-`interaction-star`, `polaron-chain`, or `polaron-star`.
+The supported Hamiltonian representations are `schrodinger-chain`,
+`schrodinger-star`, `interaction-chain`, `polaron-chain`, or `polaron-star`.
 
 ## Models and planning
 

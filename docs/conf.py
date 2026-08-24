@@ -3,10 +3,13 @@ import sys
 from importlib.metadata import version as _version
 from pathlib import Path
 
+_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_root / "src"))
+
 # Figures are build artefacts, not repository content: regenerate them (into the
 # gitignored docs/img/) before the build so any checkout -- local, CI or RTD --
 # renders against freshly computed data.  See docs/figures.py.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(_root / "docs"))
 import figures as _figures  # noqa: E402
 
 _figures.build_all()
