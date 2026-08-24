@@ -19,8 +19,9 @@ QUAPI-to-explicit-bath Hamiltonian conversion introduced there.
 
 ## From 0.15 ps direct dynamics to 15 ps
 
-A direct 15 ps interaction-chain calculation asks the automatic light-cone
-resolver for nearly one thousand modes and develops large MPS bonds. The bath
+A direct 15 ps interaction-chain calculation resolved with TEDOPA's automatic
+light-cone criterion requires nearly one thousand modes and develops large MPS
+bonds. The bath
 memory reported for Fig. 2 is only about 0.10--0.12 ps, so it is more efficient
 to calculate the complete reduced dynamical map through 0.15 ps and then use
 the transfer-tensor method (TTM).

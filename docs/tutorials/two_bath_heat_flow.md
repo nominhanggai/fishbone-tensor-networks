@@ -126,7 +126,7 @@ the derivative and tensor-network evolution are approximate.
 
 The following program runs the biased junction and its
 equal-temperature control, measures the two currents, checks energy continuity,
-and writes a dynamics figure. The settings are deliberately small enough for a
+and writes a dynamics figure. The settings are small enough for a
 documentation example; the convergence procedure is given below.
 
 ```python
