@@ -1,4 +1,4 @@
-# Strong-coupling nonadiabatic spin--boson dynamics
+# Strong-coupling nonadiabatic spin--boson dynamics [MPO and TDVP]
 
 This tutorial calculates the population relaxation of a two-state system in a
 hot, strongly coupled bath. It is based on the benchmark of
@@ -199,7 +199,7 @@ Changing all five at once cannot identify the source of a difference.
 
 ## 6. Dynamics and conclusion
 
-![Strong-coupling population dynamics and retained bond dimensions](../img/nonadiabatic_spin_boson.png)
+![Strong-coupling population dynamics and retained bond dimensions](../img/nonadiabatic_spin_boson.svg)
 
 ```{include} ../_generated/nonadiabatic_spin_boson.md
 ```

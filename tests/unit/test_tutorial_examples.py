@@ -162,6 +162,18 @@ def test_electron_transfer_reference_maps_reproduce_paper_dynamics():
         assert summary["paper_curve_lifetime_ps"] == pytest.approx(
             expected_lifetime, rel=0.01
         )
+        convergence = result["memory_convergence"]
+        assert convergence["cutoff_ps"][0] == pytest.approx(0.04)
+        assert convergence["cutoff_ps"][-1] == pytest.approx(0.15)
+        assert convergence["max_population_difference"][-1] == pytest.approx(0.0)
+        at_012 = np.flatnonzero(np.isclose(
+            convergence["cutoff_ps"], 0.12
+        ))[0]
+        assert convergence["max_population_difference"][at_012] < 0.002
+        assert abs(
+            convergence["donor_lifetime_ps"][at_012]
+            - convergence["donor_lifetime_ps"][-1]
+        ) < 0.02
 
 
 def test_electron_transfer_tomography_spans_liouville_space():
