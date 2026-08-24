@@ -2,24 +2,32 @@
 
 One container for both shapes of result, because the *model* decides the shape:
 
-===================  ==========================  ==============================
-field                single-system models         multi-site models
-===================  ==========================  ==============================
-``expect[name]``     ``(n_steps,)``              ``(n_steps, n_sites)`` for a
-                                                 per-site spec, ``(n_steps,)``
-                                                 for a single- or multi-site one
-``rdm``              ``(n_steps, d, d)``         ``(n_steps, n_sites, d, d)``,
-                                                 or an object array when site
-                                                 dimensions differ
-``max_bond``         peak bond per step          same
-``method``           the method that ran         same
-``meta``             method and settings         method, settings, ``n_sites``
-``checkpoint``       currently ``None``          resumable tree state for
-                                                 supported tree methods
-===================  ==========================  ==============================
+.. list-table::
+   :header-rows: 1
+
+   * - field
+     - single-system models
+     - multi-site models
+   * - ``expect[name]``
+     - ``(n_records,)``
+     - ``(n_records, n_sites)`` for a per-site specification; otherwise
+       ``(n_records,)``
+   * - ``rdm``
+     - ``(n_records, d, d)``
+     - ``(n_records, n_sites, d, d)``, or an object array for unequal dimensions
+   * - ``max_bond``
+     - peak bond per record
+     - peak bond per record
+   * - ``method`` and ``meta``
+     - selected method and settings
+     - selected method, settings, and site information
+   * - ``checkpoint``
+     - resumable state when the method supports it
+     - resumable state when the method supports it
 
 ``system-bath`` and ``multichannel`` are single-system; ``comb`` and ``site-tree``
-are multi-site.  See :mod:`fishbonett.models.registry`.
+are multi-site. ``n_records`` equals ``n_steps`` unless ``observe_every`` is
+greater than one. See :mod:`fishbonett.models.registry`.
 """
 from dataclasses import dataclass, field
 import hashlib
@@ -216,11 +224,17 @@ class SimulationCheckpoint:
 
 @dataclass
 class Result:
-    """Result of a propagation."""
+    """Uniform result returned by every high-level ``run`` method.
+
+    The leading dimension of ``t``, each observable, ``max_bond`` and ``rdm`` is
+    the number of recorded samples. It equals ``n_steps`` by default and is
+    smaller when ``observe_every > 1``. See the module table for the remaining
+    single-system and multi-site dimensions.
+    """
     t: np.ndarray
-    expect: dict                      # observable name -> array over time
-    max_bond: np.ndarray = None       # peak bond dimension per step (adaptive)
-    rdm: np.ndarray = None            # spin reduced density matrix per step (T,2,2)
+    expect: dict[str, np.ndarray]
+    max_bond: np.ndarray | None = None
+    rdm: np.ndarray | None = None
     method: str = ""
-    meta: dict = field(default_factory=dict)
-    checkpoint: SimulationCheckpoint = None
+    meta: dict[str, object] = field(default_factory=dict)
+    checkpoint: SimulationCheckpoint | None = None

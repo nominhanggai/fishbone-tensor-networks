@@ -11,7 +11,7 @@ from time import perf_counter
 import numpy as np
 
 from fishbonett import Bath, SystemBath
-from fishbonett.evolve._tdvp_kernels import _KRY
+from fishbonett.evolve.tdvp import krylov_statistics
 from fishbonett.operators import sigma_x, sigma_z
 
 REFERENCE = Path(__file__).with_name("baseline_reference.json")
@@ -23,7 +23,7 @@ def measure():
         h=0.5 * sigma_x, coupling=sigma_z,
         bath=Bath(
             J=density, domain=(0.0, 30.0), n_modes=4, phys_dim=5))
-    _KRY.update(calls=0, iters=0)
+    krylov_statistics(reset=True)
     start = perf_counter()
     result = model.run(
         dt=0.04, n_steps=6, method="interaction-star-tdvp2",
@@ -32,8 +32,8 @@ def measure():
     return {
         "final_sz": float(result.expect["sz"][-1].real),
         "peak_bond": int(np.max(result.max_bond)),
-        "krylov_calls": int(_KRY["calls"]),
-        "krylov_iterations": int(_KRY["iters"]),
+        "krylov_calls": int(krylov_statistics()["calls"]),
+        "krylov_iterations": int(krylov_statistics()["iters"]),
         "seconds": elapsed,
     }
 

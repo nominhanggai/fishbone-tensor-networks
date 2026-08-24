@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fishbonett.bath.chain import get_bath_nn_paras, star_transform
+from fishbonett.bath.chain import get_bath_nn_parameters, star_transform
 from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.lanczos import lanczos
 
@@ -167,7 +167,7 @@ def chain_coefficients(bath):
     if len(densities) != 1:
         raise ValueError(
             "a shared multichannel bath has no single scalar chain mapping")
-    frequencies, couplings = get_bath_nn_paras(
+    frequencies, couplings = get_bath_nn_parameters(
         densities[0], bath.n_modes, list(bath.domain),
         discretizer=bath.discretizer())
     couplings = np.asarray(couplings, float)

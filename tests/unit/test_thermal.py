@@ -52,7 +52,7 @@ def test_site_indexed_bath_mapping_is_explicit_and_validated():
     chain = Fishbone(
         sites=[sigma_z, sigma_z, sigma_z],
         baths={0: left, 2: right})
-    assert chain.baths == [left, None, right]
+    assert chain.baths == [[left], [], [right]]
 
     tree = TreeFishbone(
         sites=[sigma_z, sigma_z, sigma_z],

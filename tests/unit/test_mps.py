@@ -1,8 +1,11 @@
 """Direct unit tests for the canonical TEBD engine (fishbonett.states.mps)."""
-import warnings
 
 import numpy as np
 import pytest
+import scipy.linalg
+
+from fishbonett.contract import contract as einsum
+from fishbonett.states.mps import SystemBathMPS
 
 
 def test_gpu_request_without_cupy_says_so_and_still_works():
@@ -35,13 +38,6 @@ def test_gpu_request_without_cupy_says_so_and_still_works():
         assert np.array_equal(a, b)
     for a, b in zip(cpu.S, asked.S):
         assert np.array_equal(a, b)
-import pytest
-import scipy.linalg
-from fishbonett.contract import contract as einsum
-
-from fishbonett.states.mps import SystemBathMPS
-
-
 def _random_gate(d1, d2, rng, dt=0.05):
     h = rng.rand(d1 * d2, d1 * d2)
     h = h + h.T

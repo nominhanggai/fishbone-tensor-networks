@@ -28,11 +28,11 @@ from fishbonett.representations.schrodinger import terms as schrodinger_terms
 from fishbonett.bath.coupled import CoupledBath, bind_bath
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
-from fishbonett.models.propagate import RunCtx, resolve_time_grid
-from fishbonett.models.registry import (
-    SCHRODINGER_CHAIN_TREE_TEBD, method_spec, methods_of,
-    unknown_method_error, resolve,
+from fishbonett.models.propagate import (
+    RunCtx, _resolve_continuation, _resolve_sampling_options,
+    resolve_time_grid,
 )
+from fishbonett.models.registry import SCHRODINGER_CHAIN_TREE_TEBD, resolve
 from fishbonett.system import check_operator
 from fishbonett.targets import BathMode
 
@@ -216,19 +216,50 @@ def _reject_engine_options(options):
         raise TypeError(f"unexpected run option(s): {names}")
 
 
-def _run_sampling_options(observe_every, bath_horizon):
-    """Validate multi-site recording and automatic-bath horizon settings."""
-    if (isinstance(observe_every, (bool, np.bool_))
-            or not isinstance(observe_every, (int, np.integer))
-            or observe_every < 1):
-        raise ValueError("observe_every must be a positive integer")
-    if bath_horizon is not None:
-        if (isinstance(bath_horizon, (bool, np.bool_))
-                or not isinstance(bath_horizon, (int, float, np.number))
-                or not np.isfinite(bath_horizon) or bath_horizon <= 0):
-            raise ValueError("bath_horizon must be finite and positive")
-        bath_horizon = float(bath_horizon)
-    return int(observe_every), bath_horizon
+def _run_multisite_model(
+    physical_model, *, dt, t_max, n_steps, method, model,
+    representation, state_geometry, integrator, trunc, bond_dim,
+    trunc_eps, observables, initial, krylov, seed, resume, bath_horizon,
+    progress, observe_every, engine_kw,
+):
+    """Shared public-run prelude for ``Fishbone`` and ``TreeFishbone``."""
+    axis_kw = {
+        "model": model,
+        "representation": representation,
+        "state_geometry": state_geometry,
+        "integrator": integrator,
+    }
+    axes_given = any(value is not None for value in axis_kw.values())
+    if method is None and not axes_given:
+        method = SCHRODINGER_CHAIN_TREE_TEBD
+    normalized_method = (
+        None if method is None else method.lower().replace("_", "-")
+    )
+    spec = resolve(
+        {physical_model._MODEL}, method=normalized_method, **axis_kw
+    )
+    _reject_engine_options(engine_kw)
+    dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
+    trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+    observe_every, bath_horizon = _resolve_sampling_options(
+        observe_every, bath_horizon
+    )
+    bath_horizon = _resolve_continuation(
+        resume=resume, initial=initial, method=spec.name, dt=dt,
+        n_steps=n_steps, bath_horizon=bath_horizon, supports_resume=True,
+    )
+    if observables is None:
+        observables = ({"sz": sigma_z, "sx": sigma_x}
+                       if all(d == 2 for d in physical_model.de) else {})
+    context = RunCtx(
+        dt=dt, n_steps=n_steps, bond_dim=trunc.max_bond,
+        trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
+        krylov=krylov, seed=seed, resume=resume,
+        bath_horizon=bath_horizon, observe_every=observe_every,
+        progress=progress, kw=engine_kw,
+    )
+    from fishbonett.models.simulation import compile_plan
+    return compile_plan(physical_model, spec, context).run()
 
 
 class TreeFishbone:
@@ -368,11 +399,11 @@ class TreeFishbone:
     _MODEL = "site-tree"
 
     def run(self, *, dt, t_max=None, n_steps=None,
-            method=SCHRODINGER_CHAIN_TREE_TEBD,
-            representation=None, state_geometry=None, integrator=None,
+            method=None, model=None, representation=None,
+            state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial=None, seed=0, resume=None, bath_horizon=None, progress=None,
-            observe_every=1, **engine_kw):
+            initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
+            progress=None, observe_every=1, **engine_kw):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
         ``method`` exists for symmetry with
@@ -415,60 +446,15 @@ class TreeFishbone:
         used for automatic bath resolution; make it cover all continuation
         segments. A returned ``result.checkpoint`` resumes through ``resume=`` and
         is rejected if the resolved Hamiltonian changes."""
-        axes_given = any(value is not None for value in
-                         (representation, state_geometry, integrator))
-        if axes_given:
-            if method != SCHRODINGER_CHAIN_TREE_TEBD:
-                raise ValueError("give either method= or representation/state_geometry/integrator")
-            spec = resolve(
-                {self._MODEL}, representation=representation,
-                state_geometry=state_geometry, integrator=integrator)
-            m = spec.name
-        else:
-            m = method.lower().replace("_", "-")
-            if m not in methods_of(self._MODEL):
-                raise unknown_method_error(m, self._MODEL)
-            spec = method_spec(m, self._MODEL)
-        _reject_engine_options(engine_kw)
-        dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
-        trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
-        observe_every, bath_horizon = _run_sampling_options(
-            observe_every, bath_horizon
+        return _run_multisite_model(
+            self, dt=dt, t_max=t_max, n_steps=n_steps, method=method,
+            model=model, representation=representation,
+            state_geometry=state_geometry, integrator=integrator, trunc=trunc,
+            bond_dim=bond_dim, trunc_eps=trunc_eps,
+            observables=observables, initial=initial, krylov=krylov, seed=seed,
+            resume=resume, bath_horizon=bath_horizon, progress=progress,
+            observe_every=observe_every, engine_kw=engine_kw,
         )
-        if resume is not None:
-            from fishbonett.models.result import SimulationCheckpoint
-            if not isinstance(resume, SimulationCheckpoint):
-                raise TypeError("resume must be a SimulationCheckpoint")
-            if initial is not None:
-                raise ValueError("initial and resume cannot be supplied together")
-            if resume.method != m:
-                raise ValueError(
-                    f"checkpoint method is {resume.method!r}, requested {m!r}")
-            if bath_horizon is None:
-                bath_horizon = resume.bath_horizon
-            elif not np.isclose(bath_horizon, resume.bath_horizon):
-                raise ValueError("bath_horizon cannot change when resuming")
-            if resume.elapsed + n_steps * dt > bath_horizon + 1e-12:
-                raise ValueError(
-                    "continuation exceeds the checkpoint bath_horizon; rerun the "
-                    "initial segment with a horizon covering the complete time")
-        elif bath_horizon is None:
-            bath_horizon = n_steps * dt
-        elif bath_horizon + 1e-12 < n_steps * dt:
-            raise ValueError("bath_horizon must cover the requested propagation")
-        bond_dim, trunc_eps = trunc.max_bond, trunc.eps
-        if observables is None:
-            observables = {"sz": sigma_z, "sx": sigma_x} if all(
-                d == 2 for d in self.de) else {}
-        context = RunCtx(
-            dt=dt, n_steps=n_steps, bond_dim=bond_dim,
-            trunc_eps=trunc_eps, obs_ops=observables, initial=initial,
-            seed=seed, resume=resume, bath_horizon=bath_horizon,
-            observe_every=observe_every, progress=progress,
-            kw=engine_kw,
-        )
-        from fishbonett.models.simulation import compile_plan
-        return compile_plan(self, spec, context).run()
 
 # -- 1D fishbone: a specialization of TreeFishbone to a linear backbone -------
 class Fishbone:
@@ -501,7 +487,10 @@ class Fishbone:
         if self.nc == 0:
             raise ValueError("sites must contain at least one Hamiltonian")
         self.de = [h.shape[0] for h in self.sites]
-        self.baths = _site_entries(baths, self.nc)
+        self.baths = [
+            _bind_site_entry(entry, single_default=sigma_z)
+            for entry in _site_entries(baths, self.nc)
+        ]
         if couplings is not None and backbone is not None:
             raise ValueError("provide either backbone or couplings, not both")
         self.graph_couplings = None
@@ -575,10 +564,12 @@ class Fishbone:
     @staticmethod
     def _site_baths(entry):
         """Map a per-site bath specification to explicit coupled baths."""
-        if entry is None:
+        if not entry:
             return None
-        out = _bind_site_entry(entry, single_default=sigma_z)
-        return out if isinstance(entry, (tuple, list)) else out[0]
+        if isinstance(entry, (list, tuple)) and all(
+                isinstance(item, CoupledBath) for item in entry):
+            return list(entry)
+        return _bind_site_entry(entry, single_default=sigma_z)
 
     def _tree(self):
         edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]
@@ -602,68 +593,23 @@ class Fishbone:
         return self.local_terms(t_max).as_tuple()
 
     def run(self, *, dt, t_max=None, n_steps=None,
-            method=SCHRODINGER_CHAIN_TREE_TEBD,
-            representation=None, state_geometry=None, integrator=None,
+            method=None, model=None, representation=None,
+            state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial=None, seed=0, resume=None, bath_horizon=None, progress=None,
-            observe_every=1, **engine_kw):
+            initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
+            progress=None, observe_every=1, **engine_kw):
         """Propagate the 1D fishbone through the shared simulation planner. See
         :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout.
 
         ``method`` is validated against the ``comb`` model before delegating, so
         an unsupported one names ``comb`` rather than ``site-tree``."""
-        axes_given = any(value is not None for value in
-                         (representation, state_geometry, integrator))
-        if axes_given:
-            if method != SCHRODINGER_CHAIN_TREE_TEBD:
-                raise ValueError(
-                    "give either method= or representation/state_geometry/integrator")
-            spec = resolve(
-                {self._MODEL}, representation=representation,
-                state_geometry=state_geometry, integrator=integrator)
-            m = spec.name
-        else:
-            m = method.lower().replace("_", "-")
-            if m not in methods_of(self._MODEL):
-                raise unknown_method_error(m, self._MODEL)
-            spec = method_spec(m, self._MODEL)
-        _reject_engine_options(engine_kw)
-        dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
-        trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
-        observe_every, bath_horizon = _run_sampling_options(
-            observe_every, bath_horizon
+        return _run_multisite_model(
+            self, dt=dt, t_max=t_max, n_steps=n_steps, method=method,
+            model=model, representation=representation,
+            state_geometry=state_geometry, integrator=integrator, trunc=trunc,
+            bond_dim=bond_dim, trunc_eps=trunc_eps,
+            observables=observables, initial=initial, krylov=krylov, seed=seed,
+            resume=resume, bath_horizon=bath_horizon, progress=progress,
+            observe_every=observe_every, engine_kw=engine_kw,
         )
-        if resume is not None:
-            from fishbonett.models.result import SimulationCheckpoint
-            if not isinstance(resume, SimulationCheckpoint):
-                raise TypeError("resume must be a SimulationCheckpoint")
-            if initial is not None:
-                raise ValueError("initial and resume cannot be supplied together")
-            if resume.method != m:
-                raise ValueError(
-                    f"checkpoint method is {resume.method!r}, requested {m!r}")
-            if bath_horizon is None:
-                bath_horizon = resume.bath_horizon
-            elif not np.isclose(bath_horizon, resume.bath_horizon):
-                raise ValueError("bath_horizon cannot change when resuming")
-            if resume.elapsed + n_steps * dt > bath_horizon + 1e-12:
-                raise ValueError(
-                    "continuation exceeds the checkpoint bath_horizon; rerun the "
-                    "initial segment with a horizon covering the complete time")
-        elif bath_horizon is None:
-            bath_horizon = n_steps * dt
-        elif bath_horizon + 1e-12 < n_steps * dt:
-            raise ValueError("bath_horizon must cover the requested propagation")
-        if observables is None:
-            observables = ({"sz": sigma_z, "sx": sigma_x}
-                           if all(d == 2 for d in self.de) else {})
-        context = RunCtx(
-            dt=dt, n_steps=n_steps, bond_dim=trunc.max_bond,
-            trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
-            seed=seed, resume=resume, bath_horizon=bath_horizon,
-            observe_every=observe_every, progress=progress,
-            kw=engine_kw,
-        )
-        from fishbonett.models.simulation import compile_plan
-        return compile_plan(self, spec, context).run()

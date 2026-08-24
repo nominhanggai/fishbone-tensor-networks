@@ -11,13 +11,17 @@ See :mod:`fishbonett.models.registry` for supported representation,
 state-geometry, and integrator combinations.
 """
 from fishbonett.linalg import Truncation
-from fishbonett.system import System, check_operator
+from fishbonett.system import System
 from fishbonett.bath.coupled import bind_bath
-from fishbonett.models.propagate import RunCtx, resolve_time_grid
+from fishbonett.models.propagate import (
+    RunCtx, _resolve_continuation, _resolve_sampling_options,
+    resolve_time_grid,
+)
 from fishbonett.models import registry
 from fishbonett.models.registry import (
     BOND_CAP_REQUIRED_METHODS, methods_of, unknown_method_error,
 )
+from fishbonett.targets import BathMode
 
 __all__ = ["SystemBath"]
 
@@ -41,6 +45,36 @@ def _bond_growing_siblings(method):
         if name not in BOND_CAP_REQUIRED_METHODS
     }
     return sorted(siblings)
+
+
+def _normalize_observables(observables, system_dim):
+    """Validate single-system observables without discarding bath targets."""
+    from fishbonett.models.fishbone import _parse_observable
+
+    normalized = {}
+    for name, value in observables.items():
+        kind, operator, targets = _parse_observable(
+            value, [system_dim], f"observables[{name!r}]"
+        )
+        if kind == "persite":
+            normalized[name] = operator
+            continue
+        if len(targets) != 1:
+            raise ValueError(
+                "SystemBath observables target one system or bath mode at a time"
+            )
+        target = targets[0]
+        if isinstance(target, BathMode):
+            if target.system_site != 0 or target.bath != 0:
+                raise ValueError(
+                    "SystemBath has only system_site=0 and bath=0"
+                )
+            normalized[name] = (operator, target)
+        elif target == 0:
+            normalized[name] = operator
+        else:
+            raise ValueError("SystemBath has only system site 0")
+    return normalized
 
 
 class SystemBath:
@@ -94,7 +128,8 @@ class SystemBath:
     def run(self, *, dt, t_max=None, n_steps=None, method=None,
             model=None, representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial="up", krylov=25, seed=0, progress=None, **engine_kw):
+            initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
+            progress=None, observe_every=1, **engine_kw):
         """Propagate and return a :class:`Result`.
 
         .. rubric:: Method selection
@@ -127,6 +162,11 @@ class SystemBath:
         ``"interaction-chain-tdvp2"`` selects ``(interaction-chain, mps, tdvp2)``.
         Do not combine ``method=`` with individual axis arguments.
         ``describe_taxonomy()`` prints the available combinations.
+
+        With no method or axes, a single-channel model defaults to
+        ``"interaction-chain-tree-tebd"``. A multichannel model defaults to its
+        registry-defined method. Pass a method explicitly in published scripts
+        so the numerical representation remains visible in the input.
 
         Supported models:
 
@@ -169,15 +209,17 @@ class SystemBath:
         ``bond_dim`` is an *optional* safety cap; the default ``None`` means
         **unlimited**, i.e. the bond grows to whatever ``trunc_eps`` requires
         (``result.max_bond`` reports what was actually used).  Fixed-bond methods
-        (``schrodinger-chain-tdvp1``, ``interaction-chain-tdvp1``,
-        ``polaron-chain-tdvp1``, ``schrodinger-chain-dtdvp``) cannot grow their
-        own bonds and therefore *require* an explicit cap.
+        One-site TDVP methods evolve on a fixed bond manifold and therefore
+        require ``bond_dim``. Dynamic TDVP can grow its manifold, but also
+        requires ``bond_dim`` as a finite memory ceiling.
 
-        ``observables`` maps a name to a ``(d, d)`` operator on the (single) system;
-        ``result.expect[name]`` is then that expectation over time, shape
-        ``(n_steps,)``.  The default measures ``sigma_z``/``sigma_x`` for a
-        two-level system (and nothing for a larger system -- pass ``observables``).
-        ``result.rdm`` is the system reduced density matrix per step.
+        ``observables`` maps a name to either a ``(d, d)`` operator on the
+        system or ``(operator, BathMode(0, 0, mode))`` on a represented bath
+        mode. ``result.expect[name]`` has one value per recorded time. The
+        default measures ``sigma_z``/``sigma_x`` for a two-level system (and
+        nothing for a larger system). ``result.rdm`` is the system reduced
+        density matrix. ``observe_every`` controls recording without changing
+        integration; ``bath_horizon`` controls automatic bath resolution.
         """
         if "geometry" in engine_kw:
             raise TypeError(
@@ -191,18 +233,15 @@ class SystemBath:
                 "representation= value instead")
         dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+        observe_every, bath_horizon = _resolve_sampling_options(
+            observe_every, bath_horizon
+        )
         bond_dim, trunc_eps = trunc.max_bond, trunc.eps
         # a general system has no canonical observables, so it gets the RDM only
         obs_ops = observables if observables is not None else self.system.observables()
         if not hasattr(obs_ops, "items"):
             raise TypeError("observables must be a mapping from names to operators")
-        obs_ops = {
-            name: check_operator(
-                operator, f"observables[{name!r}]", self.system.dim,
-                hermitian=False,
-            )
-            for name, operator in obs_ops.items()
-        }
+        obs_ops = _normalize_observables(obs_ops, self.system.dim)
 
         axis_kw = dict(
             model=model, representation=representation,
@@ -256,9 +295,15 @@ class SystemBath:
                 "explicitly. To let trunc_eps choose an uncapped bond instead, "
                 "use: " + ", ".join(alternatives)
             )
+        bath_horizon = _resolve_continuation(
+            resume=resume, initial=initial, method=spec.name, dt=dt,
+            n_steps=n_steps, bath_horizon=bath_horizon,
+            supports_resume=spec.engine == "static-tree-tebd",
+        )
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
-                     krylov=krylov, seed=seed, kw=engine_kw,
+                     krylov=krylov, seed=seed, kw=engine_kw, resume=resume,
+                     bath_horizon=bath_horizon, observe_every=observe_every,
                      progress=progress)
         # Local import keeps the physical model independent of every concrete
         # representation and evolution engine until a run is actually compiled.

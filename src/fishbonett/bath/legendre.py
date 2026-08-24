@@ -32,7 +32,7 @@ def get_recursion(n, j, domain, g=1, ncap=20000):  # j=weight function
     coefficients analytically at lower cost.
     """
     import fishbonett.bath.recurrence as rc
-    alphaL, sqrt_betaL = rc.recurrenceCoefficients(
+    alphaL, sqrt_betaL = rc.recurrence_coefficients(
         n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
     )
     j = lambda x: j(x) * np.pi
@@ -75,7 +75,7 @@ def get_vn_squared(j, n: int, domain):
 
     Returns ``(freq, V_squared)``.  This is the reference signature every
     discretizer follows: pass a compatible callable as the ``discretizer``
-    argument of :func:`fishbonett.bath.chain.get_bath_nn_paras` to swap in the
+    argument of :func:`fishbonett.bath.chain.get_bath_nn_parameters` to swap in the
     measure-adapted TEDOPA star instead.
     """
     alpha, beta = get_legendre_recursion(n, domain)

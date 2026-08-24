@@ -138,13 +138,14 @@ def symmetric_swap_step(state, representation, t0, dt, n, chi_max, eps, **kw):
     through ``tebd_gates(t, half_dt)``, so they are rebuilt twice per step --
     once per half-interval.
 
-    The ordering is palindromic: the first half-interval's gates sweep inward,
-    the second half-interval's sweep back out, and the two innermost (bond-0)
-    applications straddle the midpoint, one from each half.  Reusing the *same*
-    half-step gates for both would break time symmetry and drop the step to first
-    order in ``dt``.  ``tebd_gates`` returns ``(U1, U2)`` where ``U2`` is the
-    leg-transposed variant used by the swapped sweeps, so the two un-swapped
-    bond-0 updates must both take a ``U1``.
+    The ordering is palindromic: the first half-interval sweeps the system
+    outward, the two un-swapped applications on the outermost bond ``n-1``
+    straddle the midpoint, and the second half-interval sweeps the system back
+    inward. Reusing the *same* half-step gates for both halves would break time
+    symmetry and drop the step to first order in ``dt``. ``tebd_gates`` returns
+    ``(U1, U2)`` where ``U2`` is the leg-transposed variant used while sweeping
+    inward; both outermost un-swapped updates use ``U1`` because that bond has
+    not exchanged its two physical legs.
     """
     hdt = dt / 2.0
     u_in, _ = representation.tebd_gates(t0, hdt)

@@ -11,10 +11,8 @@ import figures as _figures  # noqa: E402
 
 _figures.build_all()
 
-# The model/representation/propagator table is generated the same way and for the same
-# reason: it is registry data, and a copy pasted into a page goes stale.  (One
-# already has -- the hand-written table in docs/models/index.md predates two
-# combinations the registry gained.)  getting_started.md literal-includes this.
+# The model/representation/propagator table is registry data, so generate it
+# from the registry and literal-include it from getting_started.md.
 from fishbonett.models.registry import describe_taxonomy  # noqa: E402
 
 _generated = Path(__file__).resolve().parent / "_generated"

@@ -237,13 +237,15 @@ $$
 $$
 
 so $(\epsilon_n,t_n)$ are the chain on-site energies and hoppings. This is
-{py:func}`fishbonett.bath.chain.get_bath_nn_paras`, built on
+{py:func}`fishbonett.bath.chain.get_bath_nn_parameters`, built on
 {py:mod}`fishbonett.bath.recurrence`.
 
 ```python
-from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.bath.chain import get_bath_nn_parameters
 
-eps_i, t_i = get_bath_nn_paras(bath.spectral_density(), n=40, domain=(-25, 36))
+eps_i, t_i = get_bath_nn_parameters(
+    bath.spectral_density(), n=40, domain=(-25, 36)
+)
 ```
 
 A finite chain can be diagonalized to obtain frequencies $\omega_k$, couplings
@@ -286,11 +288,12 @@ peaked = Bath(J=my_peaked_density, domain=(0, 40), n_modes=40, phys_dim=20,
 ```
 
 ```{note}
-The name is `"tedopa"`, not `"tedopa"`: *both* settings are
-orthogonal-polynomial methods (Legendre polynomials are orthogonal too), so that
-would not name the difference.  What distinguishes this one is that it uses $J$ as
-the weight function, which is exactly TEDOPA.  `ORTHPOL` is the external Fortran
-package the scheme was originally taken from; `fishbonett` does not depend on it.
+The name `"tedopa"` identifies the measure-adapted quadrature; `"legendre"`
+identifies the uniform-measure Gauss--Legendre alternative. Both are
+orthogonal-polynomial methods. What distinguishes TEDOPA here is that it uses
+$J$ as the weight function. `ORTHPOL` is the external Fortran package from which
+an earlier implementation obtained recurrence coefficients; `fishbonett` does
+not depend on it.
 ```
 
 See {py:mod}`fishbonett.bath.tedopa`; the `discretization` choice is threaded all

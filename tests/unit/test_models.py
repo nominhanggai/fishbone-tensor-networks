@@ -11,7 +11,7 @@ import re
 import numpy as np
 import pytest
 
-from fishbonett import Bath, SystemBath, Fishbone
+from fishbonett import Bath, CoupledBath, SystemBath, Fishbone
 from fishbonett.models import TreeFishbone
 from fishbonett.models import registry as R
 from fishbonett.models.registry import BOND_CAP_REQUIRED_METHODS as _BOND_CAP_REQUIRED_METHODS
@@ -152,6 +152,15 @@ def test_every_absent_representation_has_a_reason_available():
             assert why, f"model {key!r} cannot explain why it has no {representation!r} representation"
 
 
+def test_why_not_rejects_unknown_taxonomy_values():
+    with pytest.raises(KeyError, match="unknown model"):
+        R.why_not("not-a-model", "interaction-chain")
+    with pytest.raises(KeyError, match="unknown representation"):
+        R.why_not("system-bath", "not-a-representation")
+    with pytest.raises(KeyError, match="unknown state_geometry"):
+        R.why_not("system-bath", state_geometry="not-a-geometry")
+
+
 def test_method_representations_is_a_lossless_projection():
     """The projection records representation only; model ownership is separate."""
     assert R.METHOD_REPRESENTATIONS["interaction-chain-tree-tebd"] == "interaction-chain"
@@ -212,6 +221,21 @@ def _run_for(model_key):
     if model_key == "site-tree":
         return TreeFishbone(sites=[h], edges=[], baths=[_bath()]), None
     raise AssertionError(model_key)
+
+
+def test_multisite_baths_have_one_normalized_public_shape():
+    coupled = _bath().bind(sigma_z)
+    fishbone = Fishbone(
+        sites=[sigma_x, sigma_x], baths=[coupled, None],
+    )
+    tree = TreeFishbone(
+        sites=[sigma_x, sigma_x], edges=[(0, 1)], baths=[coupled, None],
+    )
+    for model in (fishbone, tree):
+        assert len(model.baths) == 2
+        assert isinstance(model.baths[0], list)
+        assert isinstance(model.baths[0][0], CoupledBath)
+        assert model.baths[1] == []
 
 
 @pytest.mark.parametrize("model_key", sorted(R.MODELS))

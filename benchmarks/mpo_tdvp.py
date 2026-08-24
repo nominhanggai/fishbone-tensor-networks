@@ -9,7 +9,7 @@ Run with:  python benchmarks/mpo_tdvp.py
 import numpy as np
 
 from fishbonett import Bath
-from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.bath.chain import get_bath_nn_parameters
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian, SX, SZ
 from fishbonett.operators import annihilate, create, number
 from fishbonett.representations.schrodinger import SchrodingerRepresentation
@@ -37,7 +37,7 @@ def embed(op, site, dims):
 
 def exact_sz(n_chain, d, V, ts):
     bath = make_bath(n_chain, d)
-    eps_c, couplings = get_bath_nn_paras(
+    eps_c, couplings = get_bath_nn_parameters(
         bath.spectral_density(), n_chain, list(bath.domain),
         discretizer=bath.discretizer())
     t_c, c0 = couplings[1:], couplings[0]
@@ -69,11 +69,11 @@ def main():
         representation="schrodinger-chain", h_sys=V * SX, coupling=SZ,
         bath=make_bath(n_chain, d))
     t, sz1, _ = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp1",
-                              D=40, krylov=25)
+                              bond_dim=40, krylov=25)
     _, sz2, md2 = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp2",
-                                chi_max=40, eps=1e-12, krylov=25)
+                                bond_dim=40, trunc_eps=1e-12, krylov=25)
     _, szd, maxd = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="dtdvp",
-                                 prec=1e-8, D=40, krylov=25)
+                                 prec=1e-8, bond_dim=40, krylov=25)
     sz_ex = exact_sz(n_chain, d, V, t)
     print(f"{'t':>6} {'exact':>10} {'TDVP1':>10} {'TDVP2':>10} {'DTDVP':>10}")
     for i in range(0, len(t), 5):

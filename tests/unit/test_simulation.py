@@ -153,6 +153,85 @@ def test_binary_tree_reports_progress_each_step():
     assert [item["step"] for item in updates] == [0, 1]
     assert [item["t"] for item in updates] == pytest.approx([0.02, 0.04])
     assert all(item["bond"] >= 1 for item in updates)
+    assert all(set(item) == {
+        "step", "n_steps", "t", "bond", "rdm", "state"
+    } for item in updates)
+
+
+@pytest.mark.parametrize("method", [
+    "interaction-chain-tree-tebd",
+    "interaction-chain-tebd",
+    "interaction-chain-trotter-mpo",
+    "interaction-chain-tdvp2",
+    "interaction-star-tdvp2",
+    "schrodinger-chain-tdvp2",
+    "schrodinger-star-tdvp2",
+    "polaron-chain-tebd",
+    "polaron-chain-tdvp2",
+    "polaron-star-tdvp2",
+])
+def test_system_bath_mode_observable_and_sampling_contract(method):
+    from fishbonett import Bath, SystemBath
+    from fishbonett.operators import annihilate, sigma_x, sigma_z
+    from fishbonett.targets import BathMode
+
+    dimension = 3
+    destroy = annihilate(dimension)
+    number = destroy.conj().T @ destroy
+    model = SystemBath(
+        h=0.3 * sigma_x, coupling=sigma_z,
+        bath=Bath.vibronic(
+            [1.0, 2.0], [0.1, 0.05], phys_dim=dimension
+        ),
+    )
+    result = model.run(
+        dt=0.01, n_steps=3, method=method, bond_dim=16,
+        trunc_eps=1e-8, observe_every=2,
+        observables={"mode_0_number": (number, BathMode(0, 0, 0))},
+    )
+    np.testing.assert_allclose(result.t, [0.02, 0.03])
+    assert result.expect["mode_0_number"].shape == (2,)
+    assert np.all(result.expect["mode_0_number"] >= -1e-12)
+    assert result.meta["observe_every"] == 2
+
+
+def test_system_bath_rejects_an_unavailable_bath_mode():
+    from fishbonett import Bath, SystemBath
+    from fishbonett.operators import annihilate, sigma_x, sigma_z
+    from fishbonett.targets import BathMode
+
+    destroy = annihilate(3)
+    model = SystemBath(
+        h=sigma_x, coupling=sigma_z,
+        bath=Bath.vibronic([1.0], [0.1], phys_dim=3),
+    )
+    with pytest.raises(ValueError, match="resolved bath has 1 modes"):
+        model.run(
+            dt=0.01, n_steps=1, method="interaction-chain-tebd",
+            observables={
+                "missing": (destroy.conj().T @ destroy, BathMode(0, 0, 1))
+            },
+        )
+
+
+def test_mps_bath_measurement_respects_forward_and_reversed_layouts():
+    from fishbonett.models.simulation import _measure_mps_bath
+
+    number = np.diag([0.0, 1.0, 2.0])
+
+    def product(local_index, dimension):
+        tensor = np.zeros((1, 1, dimension), complex)
+        tensor[0, 0, local_index] = 1.0
+        return tensor
+
+    tensors = [product(0, 2), product(1, 3), product(2, 3)]
+    observables = {"mode_0": (number, 0), "mode_1": (number, 1)}
+    forward = _measure_mps_bath(tensors, observables)
+    reversed_layout = _measure_mps_bath(
+        tensors, observables, reverse_modes=True
+    )
+    assert forward == {"mode_0": 1.0, "mode_1": 2.0}
+    assert reversed_layout == {"mode_0": 2.0, "mode_1": 1.0}
 
 
 def test_run_seed_is_reproducible_and_does_not_touch_global_rng():
@@ -249,7 +328,6 @@ def test_resumed_comb_rejects_a_different_hamiltonian(tmp_path):
     """A checkpoint may only continue into the model that produced it, and it
     survives a pickle-free round trip through disk."""
     import numpy as np
-    from fishbonett.models import Fishbone
     from fishbonett.models.result import SimulationCheckpoint
 
     model, initial, occupied = _comb_vibronic_model()

@@ -17,18 +17,24 @@ so the representations and models do not each re-derive it.
 ======================  ========================================================
 """
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 __all__ = ["System", "check_operator"]
 
 
-def check_operator(op, name, dim=None, hermitian=True):
+def check_operator(
+    op: ArrayLike, name: str, dim: int | None = None, hermitian: bool = True,
+) -> np.ndarray:
     """Validate and return one operator as a complex ``(d, d)`` array.
 
-    Raises :class:`ValueError` naming ``name`` when the operator is not square, not
-    of dimension ``dim`` (when given), or not Hermitian (when required).  Used by
-    the representation builders, which take ``h_sys``/``coupling`` as loose arrays.
+    Raises :class:`ValueError` naming ``name`` when the operator is not square,
+    not of dimension ``dim`` (when given), or not Hermitian (when required).
+    The returned copy is read-only so a model's validated Hamiltonian cannot be
+    mutated behind its cached representations; make an explicit copy before
+    editing it.
     """
     a = np.array(op, dtype=complex, copy=True)
     if a.ndim != 2 or a.shape[0] == 0 or a.shape[0] != a.shape[1]:
@@ -63,9 +69,9 @@ class System:
         state of ``h``), or an explicit state vector.  Normalized on use.
     """
 
-    h: np.ndarray
-    coupling: object
-    initial: object = "up"
+    h: ArrayLike
+    coupling: ArrayLike | Sequence[ArrayLike]
+    initial: str | ArrayLike = "up"
 
     #: Filled in by ``__post_init__``; the system's Hilbert-space dimension.
     dim: int = field(init=False)
@@ -86,7 +92,14 @@ class System:
     @property
     def is_multichannel(self):
         """True when the bath couples through several operators at once."""
-        return isinstance(self.coupling, (list, tuple))
+        if not isinstance(self.coupling, (list, tuple)):
+            return False
+        if len(self.coupling) == 0:
+            return True
+        try:
+            return np.asarray(self.coupling).ndim != 2
+        except ValueError:
+            return True
 
     def initial_vector(self, initial=None):
         """The initial state as a normalized ``(dim,)`` complex vector.

@@ -78,7 +78,8 @@ def main():
         representation="interaction-chain", h_sys=V * SX,
         coupling=SZ, bath=bath).build()
     t, sz_te = run_tree_tebd(
-        representation, dt=dt, nsteps=nsteps, D=40, trunc_eps=1e-12)
+        representation, dt=dt, nsteps=nsteps, bond_dim=40,
+        trunc_eps=1e-12)
     sz_ex = exact_sz(n_chain, d, V, t)
     print(f"{'t':>6} {'exact':>10} {'tree TEBD':>10}")
     for i in range(0, nsteps, 4):

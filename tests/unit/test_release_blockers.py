@@ -94,10 +94,25 @@ def test_tdvp2_does_not_invent_an_unrequested_bond_cap(monkeypatch):
 
     monkeypatch.setattr(_tdvp_driver, "tdvp2sweep", fake_sweep)
     _tdvp_driver.run_mpo_hamiltonian(
-        Representation(), dt=0.1, nsteps=1, sweep="tdvp2", D=None,
-        chi_max=None, observe=lambda _state: np.eye(2),
+        Representation(), dt=0.1, nsteps=1, sweep="tdvp2",
+        bond_dim=None, observe=lambda _state: np.eye(2),
     )
     assert received == [None]
+
+
+def test_tdvp_rejects_inert_dynamic_threshold():
+    class Representation:
+        static = True
+        dimensions = (2, 2)
+
+        @staticmethod
+        def tdvp_mpo(_time):
+            return None
+
+    with pytest.raises(TypeError, match="only used by the dtdvp"):
+        _tdvp_driver.run_mpo_hamiltonian(
+            Representation(), dt=0.1, nsteps=1, sweep="tdvp2", prec=1e-6,
+        )
 
 
 @pytest.mark.parametrize("kwargs", [
@@ -129,6 +144,16 @@ def test_system_rejects_nonfinite_operators_and_zero_initial_state():
     system = System(sigma_x, sigma_z)
     with pytest.raises(ValueError, match="non-zero"):
         system.initial_vector([0.0, 0.0])
+
+
+def test_list_matrix_is_one_coupling_not_two_channels():
+    system = System(sigma_x.tolist(), sigma_z.tolist())
+    assert not system.is_multichannel
+    assert system.coupling.shape == (2, 2)
+
+    coupled = Bath.vibronic([1.0], [0.1]).bind(sigma_z.tolist())
+    assert not coupled.is_multichannel
+    assert coupled.operator.shape == (2, 2)
 
 
 @pytest.mark.parametrize("representation", ["polaron-star", "polaron-chain"])

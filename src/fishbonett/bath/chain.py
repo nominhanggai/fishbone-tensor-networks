@@ -8,7 +8,7 @@ three-term recurrence coefficients ``(alpha_j, beta_j)`` *are* the chain's on-si
 energies and hoppings.  That is :func:`get_coupling`.
 
 The same chain can also be reached by way of a star, and
-:func:`get_bath_nn_paras` takes that route: build an ``n``-point quadrature of the
+:func:`get_bath_nn_parameters` takes that route: build an ``n``-point quadrature of the
 density (:mod:`fishbonett.bath.legendre` or :mod:`fishbonett.bath.tedopa`), then
 tridiagonalize it with Lanczos (:mod:`fishbonett.bath.lanczos`).  The two agree
 because the operations are inverse: diagonalizing ("starizing") an ``n``-site chain
@@ -24,7 +24,7 @@ the tensors those parameters end up in.
 
 ===============================  ================================================
 :func:`get_coupling`             ``(w_list, k_list)`` straight from the recurrence
-:func:`get_bath_nn_paras`        the same, via a star + Lanczos tridiagonalization
+:func:`get_bath_nn_parameters`   the same, via a star + Lanczos tridiagonalization
 ===============================  ================================================
 
 Both return ``(w_list, k_list)``: the chain on-site energies ``w_j`` and the
@@ -37,10 +37,10 @@ from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.lanczos import lanczos
 import fishbonett.bath.recurrence as rc
 
-__all__ = ["get_bath_nn_paras", "get_coupling", "star_transform"]
+__all__ = ["get_bath_nn_parameters", "get_coupling", "star_transform"]
 
 
-def get_bath_nn_paras(sd, n, domain, discretizer=None):
+def get_bath_nn_parameters(sd, n, domain, discretizer=None):
     """Nearest-neighbour (chain) bath parameters, via a star.
 
     Builds an ``n``-point quadrature of ``sd`` and Lanczos-tridiagonalizes it into a
@@ -75,9 +75,9 @@ def star_transform(sd, n, domain, discretizer=None):
     couplings ``d_j(t) = coefT @ (Vn * exp(-i freq t))`` from it every step.
 
     It lives here rather than in a representation because it is bath machinery -- the same
-    star/Lanczos pair as :func:`get_bath_nn_paras`, returning the transform matrix
-    instead of discarding it.  Two representations need it (the chain-geometry star MPO and
-    the mode-tree engine), and they had a copy each.
+    star/Lanczos pair as :func:`get_bath_nn_parameters`, returning the transform
+    matrix instead of discarding it. The interaction-chain representation and
+    binary-tree state geometry both consume this transform.
     """
     disc = discretizer if discretizer is not None else get_vn_squared
     freq, v_sq = disc(sd, n, list(domain))
@@ -94,14 +94,14 @@ def get_coupling(sd, n, domain, g=1, ncap=20000, discretizer=None):
     The classical TEDOPA route: the recurrence coefficients ``(alpha, beta)`` of
     the polynomials orthogonal under the measure ``sd`` *are* the chain on-site
     energies and hoppings, with no explicit star in between.  Returns
-    ``(w_list, k_list)`` in the same layout as :func:`get_bath_nn_paras`.
+    ``(w_list, k_list)`` in the same layout as :func:`get_bath_nn_parameters`.
 
     ``g`` rescales the frequency axis and ``discretizer`` selects the quadrature.
 
     ``ncap`` is accepted for API compatibility and ignored. Discretization
     accuracy is set by ``n``; changing ``ncap`` has no effect.
     """
-    alphaL, betaL = rc.recurrenceCoefficients(
+    alphaL, betaL = rc.recurrence_coefficients(
         n - 1, lb=domain[0], rb=domain[1], j=sd, g=g, ncap=ncap,
         discretizer=discretizer,
     )

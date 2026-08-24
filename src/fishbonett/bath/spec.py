@@ -25,6 +25,7 @@ picks the mode count from the light cone of the propagation time.  Both are
 resolved by :meth:`Bath.resolved`, which ``run()`` calls for you.
 """
 from dataclasses import dataclass, replace
+from collections.abc import Callable, Sequence
 
 import numpy as np
 
@@ -87,7 +88,9 @@ class Bath:
     phys_dim : int
         The local boson Hilbert-space dimension of each mode.
     temperature, beta : float, optional
-        Temperature (or inverse temperature) for thermalization.
+        Positive temperature (or inverse temperature) for thermalization. Omit
+        both for zero temperature; ``temperature=0`` is rejected so it cannot be
+        mistaken for a finite-temperature thermofield calculation.
     thermalized : bool
         Set True if ``J`` is already the thermalized density.
     discretization : {'legendre', 'tedopa'}
@@ -101,25 +104,25 @@ class Bath:
         conflicting duplicate is rejected. A list denotes channels sharing one
         mode grid and therefore requires ``'legendre'``.
     """
-    J: object
-    domain: tuple = None
-    n_modes: int = None
+    J: Callable[[float], float] | Sequence[Callable[[float], float]]
+    domain: tuple[float, float] | None = None
+    n_modes: int | None = None
     phys_dim: int = 20
-    temperature: float = None
-    beta: float = None
+    temperature: float | None = None
+    beta: float | None = None
     thermalized: bool = False
     discretization: str = "legendre"
     extra_breaks: tuple = ()
     m_per: int = 60
-    coupling: object = None
-    discrete_frequencies: tuple = ()
-    discrete_couplings: tuple = ()
+    coupling: np.ndarray | Sequence[np.ndarray] | None = None
+    discrete_frequencies: tuple[float, ...] = ()
+    discrete_couplings: tuple[float, ...] = ()
     # A normally constructed Bath describes a continuum.  Discrete-only
     # constructors set this flag to False explicitly.
     continuum_present: bool = True
-    physical_reorganization: float = None
-    compression_error: float = None
-    uncompressed_modes: int = None
+    physical_reorganization: float | None = None
+    compression_error: float | None = None
+    uncompressed_modes: int | None = None
 
     def __post_init__(self):
         densities = self.J if isinstance(self.J, (list, tuple)) else (self.J,)
@@ -315,6 +318,11 @@ class Bath:
 
     def correlation(self, times):
         """Correlation function of the resolved finite star representation."""
+        if self.domain is None or self.n_modes is None:
+            raise ValueError(
+                "correlation requires a resolved bath; call bath.resolved(t_max) "
+                "or provide both domain and n_modes"
+            )
         from fishbonett.bath._coefficients import star_coefficients
         star = star_coefficients(self)
         times = np.asarray(times, float)
