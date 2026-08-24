@@ -14,8 +14,8 @@ jobs:
     name: static checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python -m pip install ruff
@@ -30,9 +30,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install package with test extras
@@ -46,17 +46,13 @@ jobs:
         run: pytest -q
 
   test-opt-einsum:
-    # `speed` is the configuration the docs recommend, and until this job existed
-    # the unit suite never ran with it: the matrix above installs only [test], so
-    # every CI run exercised the NumPy fallback and nothing exercised opt_einsum.
-    # The two agree to within one ULP (measured across the whole method table), and
-    # test_both_contraction_backends_agree pins that -- but it skips unless both
-    # backends are present, so without this job it never actually ran anywhere.
+    # Exercise the recommended speed backend and the NumPy fallback in the same
+    # environment so backend differences are isolated from dependency changes.
     name: tests (opt_einsum)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install package with the speed extra
@@ -66,8 +62,6 @@ jobs:
       - name: Run test suite on the opt_einsum backend
         run: pytest -q
       - name: Run test suite on the NumPy backend for comparison
-        # Same install, both paths -- so a divergence shows up as one job failing
-        # two ways rather than as a mystery difference between jobs.
         run: pytest -q
         env:
           FISHBONETT_EINSUM: numpy
@@ -76,8 +70,8 @@ jobs:
     name: declared minimum dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.10"
       - name: Install declared dependency floors
@@ -90,8 +84,8 @@ jobs:
     name: build and inspect distributions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Build wheel and source distribution
@@ -104,24 +98,19 @@ jobs:
           python -m pip install --force-reinstall dist/*.whl
           cd "$(mktemp -d)"
           python -c "import fishbonett; print(fishbonett.__version__)"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: distributions
           path: dist/*
 
   smoke:
-    # The unit suite does not import examples/ or benchmarks/, so nothing was
-    # stopping them from rotting.  benchmarks/tree_engine.py did: it had been
-    # failing at import for some time, in three independent ways, each a caller
-    # left behind by an earlier API generalization.  Nobody noticed because
-    # nothing ran it.  These are also the only checks that validate the engines
-    # against exact diagonalization outside the test suite, so they are worth
-    # keeping alive.
+    # Keep runnable examples and exact-diagonalization benchmarks in the release
+    # gate even though they are not imported by the unit suite.
     name: examples + benchmarks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install package
@@ -139,8 +128,6 @@ jobs:
             echo "::endgroup::"
           done
       - name: Run the benchmarks
-        # They print measured errors against exact diagonalization; a non-zero exit
-        # means one of them stopped working, which is what this job is for.
         run: |
           set -e
           for f in benchmarks/*.py; do
@@ -149,25 +136,62 @@ jobs:
             echo "::endgroup::"
           done
 
-  docs:
-    name: docs (build + figures)
+  docs-figures:
+    name: tutorial figure (${{ matrix.figure }})
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        figure:
+          - vibronic_dimer
+          - nonadiabatic_spin_boson
+          - bridge_electron_transfer
+          - two_bath_heat_flow
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install package with docs extras
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[docs,speed]
-      - name: Build docs (regenerates the figures, warnings are errors)
-        # docs/conf.py calls docs/figures.py, so the figures in docs/img are
-        # produced here rather than committed to the repository.
+      - name: Generate tutorial figure
+        run: python docs/figures.py --figure "${{ matrix.figure }}"
+      - name: Upload generated figure and summary
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-figure-${{ matrix.figure }}
+          path: |
+            docs/img/*.svg
+            docs/_generated/*.md
+          if-no-files-found: error
+
+  docs:
+    name: docs (strict build)
+    needs: docs-figures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install package with docs extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[docs,speed]
+      - name: Download generated tutorial figures
+        uses: actions/download-artifact@v6
+        with:
+          pattern: docs-figure-*
+          path: docs
+          merge-multiple: true
+      - name: Build docs (generates remaining figures; warnings are errors)
         run: python -m sphinx -b html -W --keep-going docs docs/_build/html
       - name: Upload rendered docs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docs-html
           path: docs/_build/html

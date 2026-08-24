@@ -2,9 +2,11 @@
 
 Figures and numerical summaries are build artifacts. ``docs/conf.py`` invokes
 ``build_all`` so a documentation build runs the same profiled calculations that
-the tutorial text describes.
+the tutorial text describes. CI may call ``build_selected`` in parallel before
+Sphinx starts; ``build_all`` then generates only the missing figures.
 """
 
+from argparse import ArgumentParser
 import importlib.util
 from pathlib import Path
 import sys
@@ -597,20 +599,29 @@ OUTPUTS["bath_correlation_finite_t"] = IMG / "bath_correlation_finiteT.svg"
 EXTRA_OUTPUTS = {
     "bridge_electron_transfer": (IMG / "bridge_electron_transfer_memory.svg",),
 }
+_FIGURE_BY_NAME = {function.__name__: function for function in FIGURES}
+_TUTORIAL_FIGURES = {
+    "vibronic_dimer", "nonadiabatic_spin_boson",
+    "bridge_electron_transfer", "two_bath_heat_flow",
+}
 
 
-def build_all(force=False):
-    """Generate every figure, propagating failures to Sphinx and CI."""
+def build_selected(names, force=False):
+    """Generate selected named figures and their numerical summaries."""
     IMG.mkdir(parents=True, exist_ok=True)
     written = []
-    for function in FIGURES:
-        target = OUTPUTS[function.__name__]
-        targets = (target, *EXTRA_OUTPUTS.get(function.__name__, ()))
-        summary = GENERATED / f"{function.__name__}.md"
-        tutorial = function.__name__ in {
-            "vibronic_dimer", "nonadiabatic_spin_boson",
-            "bridge_electron_transfer", "two_bath_heat_flow",
-        }
+    for name in names:
+        try:
+            function = _FIGURE_BY_NAME[name]
+        except KeyError as exc:
+            available = ", ".join(sorted(_FIGURE_BY_NAME))
+            raise ValueError(
+                f"unknown documentation figure {name!r}; available: {available}"
+            ) from exc
+        target = OUTPUTS[name]
+        targets = (target, *EXTRA_OUTPUTS.get(name, ()))
+        summary = GENERATED / f"{name}.md"
+        tutorial = name in _TUTORIAL_FIGURES
         if (all(item.exists() for item in targets)
                 and (not tutorial or summary.exists()) and not force):
             continue
@@ -618,6 +629,22 @@ def build_all(force=False):
     return written
 
 
-if __name__ == "__main__":
-    for output in build_all(force=True):
+def build_all(force=False):
+    """Generate every missing figure, propagating failures to Sphinx and CI."""
+    return build_selected(_FIGURE_BY_NAME, force=force)
+
+
+def main(argv=None):
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--figure", action="append", choices=sorted(_FIGURE_BY_NAME),
+        help="generate one named figure; repeat for multiple figures",
+    )
+    args = parser.parse_args(argv)
+    names = args.figure or list(_FIGURE_BY_NAME)
+    for output in build_selected(names, force=True):
         print("wrote", output)
+
+
+if __name__ == "__main__":
+    main()
