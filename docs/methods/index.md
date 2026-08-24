@@ -68,8 +68,8 @@ same transformed Hamiltonian and both are implemented.
 | `interaction-chain` | 1D MPS | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/star_mpo` |
 | `interaction-chain` | binary tree tensor network | `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
 | `interaction-star` | 1D MPS | `interaction-star-tdvp1`, `interaction-star-tdvp2` | {doc}`interaction/star_mpo` |
-| `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`schrodinger/polaron_chain` |
-| `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`schrodinger/polaron_chain` |
+| `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`polaron` |
+| `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`polaron` |
 
 The two `interaction-chain` rows use the same Hamiltonian on different tensor
 graphs. The representation supplies the requested numerical product, while the
@@ -131,7 +131,7 @@ table.
 
 schrodinger/chain
 schrodinger/star_mpo
-schrodinger/polaron_chain
+polaron
 interaction/tebd
 interaction/trotter_mpo
 interaction/star_mpo

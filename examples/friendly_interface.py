@@ -1,9 +1,8 @@
 """The high-level interface: spin-boson and fishbone dynamics in a few lines.
 
-The low-level engines require the user to hand-write a TEBD/TDVP sweep loop (see
-the other examples).  The :class:`~fishbonett.models.SystemBath` and
-:class:`~fishbonett.models.Fishbone` classes wrap that away: declare the
-bath(s) and system, then call ``run`` once.
+Declare the bath(s) and physical system with
+:class:`~fishbonett.models.SystemBath` or
+:class:`~fishbonett.models.Fishbone`, then call ``run`` once.
 
 Run with:  python examples/friendly_interface.py
 """
@@ -42,9 +41,10 @@ def fishbone():
         baths=[(bath(sigma_z), bath(sigma_x))] * 3,          # two baths per site
         backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2,      # nearest-neighbour
     )
-    # trunc_eps sets the accuracy: an interior two-bath site is a high-degree tree
-    # tensor, so an over-tight eps inflates its bonds for negligible accuracy gain.
-    res = fb.run(dt=0.02, t_max=0.2, bond_dim=30, trunc_eps=1e-7,
+    # trunc_eps controls accuracy; bond_dim is only a safety cap in this short demo.
+    res = fb.run(dt=0.02, t_max=0.2,
+                 method="interaction-chain-fishbone-tebd",
+                 bond_dim=30, trunc_eps=1e-4,
                  observables={"sz": sigma_z})
     print("  <sz>(t_end) per site:", np.round(res.expect["sz"][-1], 4))
 

@@ -26,8 +26,7 @@ from fishbonett.evolve._tdvp_sweeps import (
 )
 from fishbonett.evolve._tdvp_driver import run_mpo_hamiltonian
 
-# Canonical public spellings.  The kernel modules retain their compact historical
-# names internally so this API cleanup does not obscure the contraction formulas.
+# Public PEP 8 names for the internal contraction kernels.
 apply_h0 = _apply_h0
 apply_h1 = _apply_h1
 apply_h2 = _apply_h2

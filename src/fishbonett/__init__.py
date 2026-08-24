@@ -82,8 +82,8 @@ Public API
   :class:`~fishbonett.models.fishbone.TreeFishbone`.
 * **State ansaetze:** :class:`~fishbonett.states.mps.SystemBathMPS` for a 1D MPS
   and :class:`~fishbonett.states.tree.TreeTensorNetwork` for a general tree.
-* **Representations and numerical products:** the interaction, polaron,
-  multichannel, and cooling-chain builders in :mod:`fishbonett.representations`.
+* **Representations and numerical products:** the Schrödinger, interaction,
+  polaron, and multichannel builders in :mod:`fishbonett.representations`.
   See :doc:`the methods guide </methods/index>` for compatible propagators.
 * **Bath discretization:**
   :func:`~fishbonett.bath.chain.get_bath_nn_parameters`,

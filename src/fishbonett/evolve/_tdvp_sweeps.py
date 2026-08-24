@@ -91,21 +91,10 @@ def applyH2(theta, mpo_left, mpo_right, left_env, right_env):
 def _split2(theta, chi_max, eps, ortho, expand=DEFAULT_BOND_EXPAND):
     """SVD a two-site centre and put the centre on the requested side.
 
-    ``expand`` admits that many Schmidt directions *beyond* the ones the ``eps``
-    threshold already keeps, which is what lets a bond grow at all.
-
-    Without it two-site TDVP cannot bootstrap out of a product state.  The
-    entangling component a step creates is O(coupling * dt); when that is below
-    ``eps`` it is discarded, so the next step regenerates the same O(dt) seed
-    from a product state instead of accumulating to O(t).  The bond then locks
-    at 1 forever and the run silently returns a mean-field answer -- measured at
-    5.5e-2 error with the default ``eps=1e-4``, against 5.4e-4 for one-site TDVP
-    on the same MPO.  Retaining a couple of sub-threshold directions gives the
-    dynamics somewhere to grow into; once populated they exceed the threshold
-    and are kept on their own merit.
-
-    The overhead is bounded: the bond settles at (threshold rank + ``expand``),
-    not at ``chi_max``.
+    ``expand`` retains that many Schmidt directions beyond the threshold rank.
+    These directions allow entanglement to grow from a product state when its
+    first-step Schmidt values are below ``eps``. The retained rank is bounded by
+    the threshold rank plus ``expand`` and by ``chi_max``.
     """
     dl, dr, d_left, d_right = theta.shape
     matrix = np.transpose(theta, (0, 2, 3, 1)).reshape(
@@ -211,10 +200,9 @@ def tdvp1sweep_dynamic(dt2, tensors, mpo, Afull, FRs, *, prec=1e-3,
                        **krylov):
     """Adaptive TDVP using a two-site tangent space and SVD rank selection.
 
-    ``prec`` is this integrator's spelling of the truncation threshold and
-    ``expand`` the bond-expansion allowance; see :func:`_split2`.  The allowance
-    matters most here: growing the bond adaptively is the whole point of this
-    sweep, and without it a run started from a product state cannot grow at all.
+    ``prec`` is this integrator's truncation threshold and ``expand`` is the
+    bond-expansion allowance; see :func:`_split2`. A positive allowance lets a
+    product-state input grow new bond sectors.
     """
     threshold = float(prec)
     state, env = tdvp2sweep(

@@ -10,8 +10,6 @@ Hamiltonian and materialize the numerical products supported by it: ``tdvp_mpo``
 ``trotter_mpo``, or ``tebd_gates``.  They do not advance an MPS or tree;
 :mod:`fishbonett.evolve` consumes those products and advances the corresponding
 tensor-network state.
-The ``coolingchain`` module provides a low-level stateful utility outside the
-public method registry.
 
 For the interaction representations the construction is explicit: discretize
 the bath as independent star modes, rotate with respect to their diagonal free

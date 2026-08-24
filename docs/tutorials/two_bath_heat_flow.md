@@ -37,7 +37,8 @@ J_b(\omega)=2\pi\alpha\omega\,\Theta(\omega_c-\omega).
 $$
 
 We use $\omega_c=1$ as the unit of energy (and therefore $\omega_c^{-1}$
-as the unit of time), $\omega_0=0.2$, and $\alpha=0.1$. The transport run has
+as the unit of time), $\omega_0=0.2$, and $\alpha=0.025$ for each reservoir.
+The transport run has
 $\beta_h=2$ and $\beta_c=100$. A second run with
 $\beta_h=\beta_c=100$ is a zero-temperature-bias control.
 
@@ -69,7 +70,7 @@ from fishbonett.operators import annihilate, sigma_x, sigma_y, sigma_z
 # omega_c sets the energy unit; times are consequently in omega_c^{-1}.
 OMEGA_C = 1.0
 OMEGA_0 = 0.2
-ALPHA = 0.1
+ALPHA = 0.025
 PHYS_DIM = 5
 
 

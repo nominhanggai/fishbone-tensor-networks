@@ -76,9 +76,7 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
     environments = None
     observations, peak_bonds = [], []
     krylov_options = {"m": krylov, "tol": tol, "eshift": eshift}
-    # Both two-site sweeps share the allowance: ``dtdvp`` is ``tdvp2sweep`` with
-    # ``prec`` as its threshold, so leaving it out there would silently ignore the
-    # knob for the one integrator whose whole purpose is adaptive bond growth.
+    # Both two-site sweeps use the same rank-expansion allowance.
     expand = DEFAULT_BOND_EXPAND if bond_expand is None else int(bond_expand)
     for step in range(nsteps):
         if not representation.static:
@@ -99,8 +97,6 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
         observations.append(measure(state))
         peak_bonds.append(max(bonddims(state)))
         if progress is not None:
-            # Reported every step so a long run is never silent between
-            # observations; `verbose` remains the quick stdout form.
             progress({"step": step, "n_steps": nsteps,
                       "t": dt * (step + 1), "bond": peak_bonds[-1],
                       "rdm": observations[-1], "state": state})

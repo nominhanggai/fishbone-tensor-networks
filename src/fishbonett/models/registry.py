@@ -28,7 +28,7 @@ representation on an MPS and a binary tree tensor network, respectively.
 :data:`METHODS` records each supported combination and its implementation engine.
 :mod:`fishbonett.models.simulation` compiles a selected row into a prepared plan.
 
-At the propagator level, the Schroedinger chain currently supports MPO/TDVP. The
+The Schrödinger-chain representation uses static MPO/TDVP propagation. The
 conditional-displacement MPO of ``interaction-chain-trotter-mpo`` exists only in
 the interaction representation, because outside it the coupling does not commute
 with the free-bath term.
@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from typing import Mapping, Tuple
 
 __all__ = ["Model", "RepresentationSpec", "MethodSpec", "MODELS", "REPRESENTATIONS", "METHODS",
-           "STATE_GEOMETRIES", "APPLICATIONS", "BOND_CAP_REQUIRED_METHODS",
+           "STATE_GEOMETRIES", "BOND_CAP_REQUIRED_METHODS",
            "why_not", "models_of", "representations_of",
            "methods_of", "all_methods", "model", "method_spec", "resolve",
            "combinations", "METHOD_REPRESENTATIONS",
@@ -62,56 +62,42 @@ class RepresentationSpec:
 REPRESENTATIONS = {
     "schrodinger-chain": RepresentationSpec(
         "schrodinger-chain", "Schrodinger chain representation",
-        "Nothing rotated out, bath chain-mapped.  H is time-independent and its MPO "
-        "is built once, so TDVP conserves energy -- but the state carries the full "
-        "system-bath correlation, giving the largest bond dimensions.  The chain's "
-        "nearest-neighbour hoppings are what an MPS is good at, and the system "
-        "touches only c0.",
+        "The finite bath is mapped from star to chain in the Schrodinger picture. "
+        "The Hamiltonian is static and nearest-neighbour on an MPS, with the "
+        "system coupled only to the first chain mode.",
         static=True, mode_decoupled=False),
     "schrodinger-star": RepresentationSpec(
         "schrodinger-star", "Schrodinger star representation",
-        "Nothing rotated out, no chain mapping: every mode couples straight to the "
-        "system.  No mode-mode terms, but no locality for the MPS to exploit "
-        "either.  Static, so still one MPO built once.",
+        "The finite star remains in the Schrodinger picture. Every bath mode "
+        "couples directly to the system, the modes do not couple to one another, "
+        "and the Hamiltonian is static.",
         static=True, mode_decoupled=True),
     "interaction-chain": RepresentationSpec(
         "interaction-chain", "interaction chain representation",
-        "A finite star is put in the interaction representation with respect to "
-        "its free Hamiltonian, then its time-dependent coupling is transformed "
-        "star-to-chain.  What is lost is locality, not existence -- the coupling "
-        "d_n(t) starts concentrated on c0 "
-        "at t=0 and spreads outward, so this is 'no longer a chain' in the only "
-        "sense that matters to an MPS.  Entanglement is much smaller than the "
-        "Schrodinger representation's, but H is time-dependent, so gates/MPOs are "
-        "rebuilt "
-        "every step.  For a single coupling channel the mode terms commute, which "
-        "makes the conditional-displacement propagator possible.",
+        "The bath is discretized as a finite star and put in the interaction "
+        "picture with respect to the free star bath. The resulting time-dependent "
+        "star coupling is transformed to chain coordinates. The coefficients "
+        "d_n(t) start on the first chain coordinate and spread with time; no "
+        "mode-mode Hamiltonian terms remain.",
         static=False, mode_decoupled=True),
     "interaction-star": RepresentationSpec(
         "interaction-star", "interaction star representation",
-        "The same rotation as interaction-chain, left in the star modes instead of "
-        "being rotated back: the coupling of mode k is simply V_k e^{-i w_k t}.  "
-        "It is unitarily equivalent to interaction-chain. Their tensor-network "
-        "costs can differ because the time-dependent coupling vectors differ. The "
-        "multichannel model exposes both forms using one common orthogonal transform "
-        "for its matrix-valued star couplings.",
+        "The finite star is put in the interaction picture with respect to its "
+        "free bath Hamiltonian and left in star coordinates. Mode k couples as "
+        "V_k exp(-i w_k t). It is unitarily equivalent to interaction-chain.",
         static=False, mode_decoupled=True),
     "polaron-chain": RepresentationSpec(
         "polaron-chain", "polaron chain representation",
-        "The static part of the coupling is absorbed into a bath displacement, "
-        "leaving a free chain plus a dressed tunneling term.  Static like the "
-        "Schrodinger representation *and* low-entanglement like the interaction "
-        "representation; needs int J/w^2 finite.  Populations are "
-        "representation-invariant, "
-        "coherences must be un-dressed.  The J/w^2 reweighting is what localizes "
-        "the displacement on c0.",
+        "A Lang-Firsov transformation absorbs the diagonal coupling into a chain "
+        "displacement and dresses the system tunnelling. The representation is "
+        "static and requires a finite integral of J(w)/w^2. Laboratory "
+        "coherences require the inverse observable transformation.",
         static=True, mode_decoupled=False),
     "polaron-star": RepresentationSpec(
         "polaron-star", "polaron star representation",
-        "The textbook Lang-Firsov transform, which is *defined* per star mode: "
-        "prod_k D_k(g_k sigma_z / w_k).  Perfectly well defined -- it is the chain "
-        "version that uses the J/w^2 transformation to localize the collective "
-        "displacement onto c0.",
+        "A Lang-Firsov transformation displaces each finite-star mode by its "
+        "coupling divided by its frequency. The representation is static and "
+        "requires a finite integral of J(w)/w^2.",
         static=True, mode_decoupled=True),
 }
 
@@ -120,30 +106,17 @@ REPRESENTATIONS = {
 #: (``interaction-chain-tdvp1``) and a balanced tree
 #: (``interaction-chain-tree-tebd``).
 STATE_GEOMETRIES = {
-    "mps": "a 1D MPS: system at site 0, modes 1..N in a line.",
-    "binary-tree": "a binary tree tensor network with the system at the root, "
-                   "keeping the high-bond region O(log N) edges deep instead of O(N).",
-    "tree": "a general tree tensor network whose model determines whether the "
-            "physical graph is a comb, star, or arbitrary loop-free tree.",
+    "mps": "a one-dimensional matrix product state, with the system at site 0",
+    "binary-tree": "a balanced binary tree tensor network with the system at the root",
+    "tree": "a general tree tensor network determined by the multi-site model",
 }
 
 
-#: Why the binary tree needs a representation with no mode-mode terms
-#: (:attr:`RepresentationSpec.mode_decoupled`). The tree is useful because nothing
-#: couples mode to mode, so every mode hangs off the system independently and the
-#: only question is how deep the bonds are.
-#:
-#: Note this is about the *representation*, not the structure --
-#: ``interaction-chain`` qualifies (it rotates ``H_B`` away entirely) and is
-#: what the ``tree-*`` methods use.
+#: A binary-tree tensor network requires a represented Hamiltonian without
+#: mode-mode terms. ``interaction-chain`` qualifies because the free bath has
+#: been removed in the interaction picture.
 _NO_MODE_MODE = (
-    "the balanced binary tree pays off only when there are no mode-mode terms.  "
-    "This representation keeps the chain hoppings, which are nearest-neighbour "
-    "on a 1D MPS but "
-    "long-range on that tree (only half of the chain-adjacent pairs are "
-    "tree-adjacent and the rest can span logarithmically many edges), so the MPO "
-    "bond grows. Reordering "
-    "the leaves to make the chain local just turns the state back into an MPS.")
+    "the binary-tree geometry requires a representation without mode-mode terms")
 
 
 # -- models ------------------------------------------------------------------
@@ -195,7 +168,7 @@ class MethodSpec:
     #: which plan-compiler group in :mod:`fishbonett.models.simulation` realizes
     #: it.  This is an implementation key, not an axis.
     engine: str
-    #: the entry point in :mod:`fishbonett.evolve`, where there is a single one
+    #: Entry point in :mod:`fishbonett.evolve`.
     driver: str = ""
     #: 1-site TDVP cannot grow a bond and adaptive tangent expansion needs a ceiling, so
     #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
@@ -208,43 +181,6 @@ class MethodSpec:
     integrator: str = ""
     #: The tensor-network state graph -- see :data:`STATE_GEOMETRIES`.
     state_geometry: str = "mps"
-
-    @property
-    def application(self):
-        """How H's **interaction graph** is realized on the state's graph.
-
-        Derived, not declared: it is a *consequence* of the other axes.  A representation can
-        make ``H`` non-local relative to the state -- the interaction transformation couples
-        every mode to the system, a star, while the state is a 1D MPS -- and this
-        records what pays for that.  See :data:`APPLICATIONS`.
-
-        Keys on :attr:`RepresentationSpec.mode_decoupled`, **not** on the structure:
-        ``interaction-chain-tebd`` still needs a swap network, because it is rotating
-        out ``H_B`` that spreads the coupling over every mode, not the choice of
-        modes to write it in.
-        """
-        if self.integrator != "tebd" or self.state_geometry == "binary-tree":
-            return "operator"
-        if (self.state_geometry == "mps"
-                and REPRESENTATIONS[self.representation].mode_decoupled):
-            return "swap"
-        return "local"
-
-
-#: The values :attr:`MethodSpec.application` takes.
-#:
-#: This is derived from the representation, state geometry, and integrator. The
-#: representation decides which terms exist; the application records how those
-#: terms act on the selected tensor-network graph.
-APPLICATIONS = {
-    "local": "interaction edges are state edges -- gates apply in place",
-    "swap": "a star realized on a 1D MPS: the system site is walked past every mode "
-            "and back each step, so a step costs O(N) swaps on top of the gates",
-    "operator": "no gate layout -- a single low-bond operator (an MPO on a 1D MPS, "
-                "a bond-K tree operator on a tree) carries the long-range terms "
-                "natively, so the interaction graph never has to match the state's",
-}
-
 
 def _canonical_method_name(representation, integrator, state_geometry="mps"):
     """Derive a method name from its representation and algorithm.
@@ -278,36 +214,6 @@ INTERACTION_CHAIN_TEBD = _canonical_method_name(
     "interaction-chain", "tebd")
 INTERACTION_STAR_TEBD = _canonical_method_name(
     "interaction-star", "tebd")
-
-
-# Removed spellings from before method names stated their full representation.
-# They are error-message hints only; they are deliberately not accepted aliases.
-_RENAMED_METHODS = {
-    "mpo-tdvp1": "schrodinger-chain-tdvp1",
-    "mpo-tdvp2": "schrodinger-chain-tdvp2",
-    "mpo-dtdvp": "schrodinger-chain-dtdvp",
-    "mpo-star-tdvp1": "schrodinger-star-tdvp1",
-    "mpo-star-tdvp2": "schrodinger-star-tdvp2",
-    "tebd": "interaction-chain-tebd",
-    "trotter-mpo": "interaction-chain-trotter-mpo",
-    "mpo-ip-tdvp1": "interaction-chain-tdvp1",
-    "mpo-ip-tdvp2": "interaction-chain-tdvp2",
-    "mpo-ip-star-tdvp1": "interaction-star-tdvp1",
-    "mpo-ip-star-tdvp2": "interaction-star-tdvp2",
-    "tree-tdvp": "interaction-chain-tree-tebd",
-    "tree-tdvp2": "interaction-chain-tree-tebd",
-    "tree-tebd": "interaction-chain-tree-tebd",
-    "interaction-chain-tree-tdvp1": "interaction-chain-tree-tebd",
-    "interaction-chain-tree-tdvp2": "interaction-chain-tree-tebd",
-    "polaron": "polaron-chain-tebd",
-    "polaron-tdvp1": "polaron-chain-tdvp1",
-    "polaron-tdvp2": "polaron-chain-tdvp2",
-    "polaron-dtdvp": "polaron-chain-dtdvp",
-    "tree-tebd-static": "schrodinger-chain-tree-tebd",
-    "multichannel-static": "schrodinger-star-tree-tebd",
-    "multichannel-ip": "interaction-chain-tebd",
-    "multichannel-ip-star": "interaction-star-tebd",
-}
 
 
 _SB = ("system-bath",)
@@ -518,8 +424,8 @@ def resolve(model_keys, *, method=None, **axes):
     physical object supplies the compatible model.  The four axes can also be
     given directly.  Method names begin with their exact representation, so
     ``"interaction-chain-tdvp2"`` selects ``(interaction-chain, mps, tdvp2)``
-    for a system-bath model.  This is one lookup either way, and mixing the two
-    spellings is rejected rather than silently resolved.
+    for a system-bath model. Mixing ``method=`` with individual axes is an
+    error.
 
     Representation names are explicit: use ``interaction-chain`` rather than a
     partial name such as ``interaction``.
@@ -530,16 +436,6 @@ def resolve(model_keys, *, method=None, **axes):
     unknown_models = model_keys - set(MODELS)
     if unknown_models:
         raise ValueError(f"unknown model key(s): {', '.join(sorted(unknown_models))}")
-    if "geometry" in axes:
-        raise TypeError(
-            "'geometry' is no longer a public axis; use state_geometry")
-    renamed_state_geometries = {"path": "mps", "comb-tree": "tree"}
-    state_geometry = axes.get("state_geometry")
-    if state_geometry in renamed_state_geometries:
-        replacement = renamed_state_geometries[state_geometry]
-        raise ValueError(
-            f"state_geometry={state_geometry!r} was renamed; use "
-            f"state_geometry={replacement!r}")
     unknown = set(axes) - set(_AXES)
     if unknown:
         raise TypeError(f"unknown axis {sorted(unknown)}; the axes are "
@@ -615,16 +511,8 @@ def model(key):
     try:
         return MODELS[key]
     except KeyError:
-        extra = ""
-        if key in ("chain", "star"):
-            extra = (f"  ({key!r} is half of a *representation*, not a model -- the representations "
-                     f"are {', '.join(k for k in REPRESENTATIONS if k.endswith(key))}.)")
-        elif key == "mode-tree":
-            extra = ("  ('mode-tree' was a tensor-network state geometry, not a "
-                     "model -- use model='system-bath', "
-                     "state_geometry='binary-tree'.)")
         raise KeyError(f"unknown model {key!r}; available: "
-                       f"{', '.join(sorted(MODELS))}.{extra}") from None
+                       f"{', '.join(sorted(MODELS))}") from None
 
 
 def models_of(method):
@@ -717,12 +605,6 @@ def unknown_method_error(method, model_key=None):
     so explicitly -- the common mistake is asking a multi-site model for a
     single-system method.
     """
-    replacement = _RENAMED_METHODS.get(method)
-    if replacement is not None:
-        return ValueError(
-            f"method {method!r} was renamed to {replacement!r} so its exact "
-            "Hamiltonian representation is explicit")
-
     owners = models_of(method)
     if owners and model_key is not None and model_key not in owners:
         return ValueError(

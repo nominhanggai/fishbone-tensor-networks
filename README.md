@@ -9,11 +9,10 @@ It turns continuous spectral densities into finite baths and propagates the
 combined system-bath wavefunction with matrix-product-state (MPS) or tree tensor
 network methods.
 
-The high-level API covers a single system with one or several coupling channels,
-as well as multi-site models in which baths are attached to selected sites. The
-available Hamiltonian representations include Schrödinger, interaction, and
-polaron forms in star or chain modes. Propagation uses TEBD, MPO application, or
-TDVP, depending on the selected representation and tensor-network geometry.
+The high-level API covers a single system with one or several coupling channels
+and multi-site models with baths attached to selected sites. Hamiltonians may use
+Schrödinger, interaction, or polaron representations in star or chain modes.
+Propagation uses TEBD, Trotter MPOs, or TDVP where supported.
 
 ## Install
 
@@ -37,9 +36,9 @@ contraction backend.
 
 ## First simulation
 
-This example propagates a two-level system in a zero-temperature Ohmic bath. The
-TEDOPA discretizer chooses the frequency interval and number of modes from the
-requested propagation time.
+This example propagates a two-level system in a zero-temperature Ohmic bath.
+Automatic bath resolution chooses the frequency interval and mode count for the
+requested propagation time; TEDOPA then discretizes that interval.
 
 ```python
 import numpy as np
@@ -75,9 +74,9 @@ print(result.max_bond)
 
 `trunc_eps` is the main tensor-network accuracy control. `bond_dim=None` leaves
 the maximum bond dimension unrestricted; set a finite value only when a hard
-memory limit is needed. `Result` uses the same layout for every high-level
-method, so representations and integrators can be compared without changing the
-analysis code.
+memory limit is needed. Fixed-bond and dynamically expanding TDVP methods require
+a finite cap. `Result` uses the same layout for every high-level method, so
+representations and integrators can be compared without changing analysis code.
 
 ## Models and methods
 
@@ -87,6 +86,9 @@ analysis code.
 | One system, shared bath modes with several coupling operators | `SystemBath` | Correlated multichannel noise |
 | A one-dimensional backbone with baths on its sites | `Fishbone` | Electron and excitation-energy transfer |
 | Any loop-free network of system sites and baths | `TreeFishbone` | Branched molecular or transport models |
+
+For `Fishbone` and `TreeFishbone`, attach each bath explicitly with
+`bath.bind(system_operator)` so the coupled site and operator are unambiguous.
 
 A method name states the Hamiltonian representation and integrator, for example:
 
@@ -107,9 +109,9 @@ print(describe_taxonomy())
 ```
 
 Baths may use explicit `domain` and `n_modes` values for convergence studies, or
-leave both unset for automatic resolution. Finite temperature is represented by
-thermofield doubling. Both measure-adapted TEDOPA and Gauss-Legendre star
-discretizations are implemented in NumPy and SciPy.
+leave both unset for automatic resolution. Finite temperature uses the T-TEDOPA
+signed-frequency construction. Both measure-adapted TEDOPA and Gauss-Legendre
+star discretizations are implemented in NumPy and SciPy.
 
 ## Documentation and examples
 
@@ -136,13 +138,13 @@ python -m sphinx -b html -W --keep-going docs docs/_build/html
 ## Development
 
 ```bash
-python -m ruff check src
+python -m pip install -e ".[dev,docs]"
+python -m ruff check src tests examples benchmarks docs/figures.py conftest.py
 pytest
+python -m sphinx -b html -W --keep-going docs docs/_build/html
 ```
 
 ## Citation and license
 
 Citation metadata is provided in [`CITATION.cff`](CITATION.cff). The package is
-released under the [MIT License](LICENSE).
-
-The package name *fishbone* is used by courtesy of Mr. Song Feng-Feng.
+distributed under the [MIT License](LICENSE).

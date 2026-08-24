@@ -161,11 +161,8 @@ class RunCtx:
     resume: Any = None
     bath_horizon: Optional[float] = None
     observe_every: int = 1
-    #: Optional ``callable(info)`` invoked after **every** step with the stable
-    #: payload documented above. Separate from
-    #: ``observe_every``, which controls what is *recorded* into the Result:
-    #: this controls what is *reported* while a long run is still going, so a
-    #: multi-hour propagation is not silent between observations.
+    #: Optional ``callable(info)`` invoked after every integration step with the
+    #: payload documented above. This is independent of ``observe_every``.
     progress: Any = None
 
     def __post_init__(self):

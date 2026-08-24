@@ -97,13 +97,7 @@ def test_star_transform_has_one_implementation():
 
 
 def test_shared_mode_star_is_the_one_multichannel_discretization():
-    """One star construction, used by both multichannel paths.
-
-    The Schroedinger representation and the interaction-picture model each used to
-    discretize the channels themselves, in two copies of the same loop.  They must
-    place the modes on *one* grid or the two representations stop being comparable, so the
-    construction belongs to the bath.
-    """
+    """All multichannel representations must use one shared star grid."""
     from fishbonett import Bath
     from fishbonett.bath.legendre import get_vn_squared
     from fishbonett.operators import sigma_x, sigma_z

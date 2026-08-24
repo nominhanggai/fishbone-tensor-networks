@@ -64,8 +64,7 @@ res.rdm                 # (n_steps, n_sites, d, d)
 ```
 
 A `baths` entry may be one `bath.bind(operator)` object, a list of explicitly
-bound baths, or `None`. A single bare bath retains the compatibility
-`sigma_z` default. Lists require `bath.bind(operator)` on every entry.
+bound baths, or `None`. Every bath requires an explicit operator.
 
 A mapping makes endpoint attachments readable without counting `None` values:
 

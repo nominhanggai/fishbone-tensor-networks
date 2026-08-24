@@ -30,8 +30,8 @@ __all__ = ["randomized_svd", "random_seed", "EXACT_BELOW"]
 EXACT_BELOW = 128
 
 
-# ``numpy.random`` preserves the historical response to ``np.random.seed``.
-# A simulation can override it locally without mutating process-global state.
+# The NumPy global generator makes ``np.random.seed`` effective when no run-local
+# generator is active.
 _ACTIVE_RNG = ContextVar("fishbonett_rng", default=np.random)
 
 

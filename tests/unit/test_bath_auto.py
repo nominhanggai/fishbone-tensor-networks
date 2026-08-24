@@ -71,8 +71,7 @@ def test_lanczos_can_return_a_stable_prefix_for_light_cone_estimation():
 
 
 def test_auto_modes_handles_the_published_dba_bath():
-    """The wide, thermally extended DBA density used to break near the end of
-    a large trial Lanczos basis even though its physical light cone was valid."""
+    """Automatic resolution handles the wide, thermal DBA density."""
     cm_to_rad_ps = 0.1883651567308853
     cutoff = 600.0
     alpha = 1.67

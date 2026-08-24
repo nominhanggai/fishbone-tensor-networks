@@ -47,12 +47,14 @@ bath.
 
 ## Numerical settings
 
-The paper reports 200 bath modes, oscillator cutoff 10, time step
+For the full Figure 8 calculation, the bond-index plots in Figure 9 show a
+600-mode bath chain. The paper also reports oscillator cutoff 10, time step
 $\delta t=1.25\times10^{-2}/\Delta$, SVD threshold $10^{-3}$, and a maximum
-bond dimension of 1000. This tutorial uses the same mode count, ten oscillator
-states per mode, time step, and SVD threshold. The maximum bond is left
-unrestricted so the threshold, rather than an artificial ceiling, determines
-the retained rank.
+bond dimension of 1000. The shortened calculation on this page uses 200 modes
+through $t\Delta/\pi=1$; the manual full-horizon profile uses 600. Both use ten
+oscillator states per mode, the reported time step, and the reported SVD
+threshold. The maximum bond is left unrestricted so the threshold, rather than
+an artificial ceiling, determines the retained rank.
 
 The paper writes the continuum on a finite interval $[\Omega_0,\Omega_1]$ but
 does not report numerical endpoints. The package calculation therefore states
@@ -216,6 +218,6 @@ The manual command
 python examples/nonadiabatic_spin_boson.py --profile reference
 ```
 
-uses the same paper-matched controls through $t\Delta/\pi=5$. It is kept out of
+uses the 600-mode paper-length controls through $t\Delta/\pi=5$. It is kept out of
 the documentation build because the longer tensor-network propagation should
 not determine routine documentation build time.

@@ -25,7 +25,7 @@ from collections.abc import Mapping
 import numpy as np
 
 from fishbonett.representations.schrodinger import terms as schrodinger_terms
-from fishbonett.bath.coupled import CoupledBath, bind_bath
+from fishbonett.bath.coupled import CoupledBath
 from fishbonett.linalg import Truncation
 from fishbonett.operators import sigma_x, sigma_z
 from fishbonett.models.propagate import (
@@ -189,23 +189,20 @@ def _resolve_observable_target(parsed, dimensions, bath_nodes, name):
     return kind, operator, nodes
 
 
-def _bind_site_entry(entry, *, single_default):
-    """Normalize one site's bath entry without guessing multi-bath operators."""
+def _bind_site_entry(entry):
+    """Normalize one site's explicitly bound bath entry."""
     if entry is None:
         return []
     values = [item for item in entry if item is not None] if isinstance(
         entry, (list, tuple)) else [entry]
-    multiple = len(values) > 1
     out = []
     for item in values:
-        if isinstance(item, CoupledBath):
-            out.append(item)
-            continue
-        if multiple and getattr(item, "coupling", None) is None:
+        if not isinstance(item, CoupledBath):
             raise ValueError(
-                "a site with multiple baths must bind every coupling operator "
-                "explicitly, for example [bath1.bind(op1), bath2.bind(op2)]")
-        out.append(bind_bath(item, default_operator=single_default))
+                "every multi-site bath must bind its coupling operator, for "
+                "example bath.bind(operator)"
+            )
+        out.append(item)
     return out
 
 
@@ -278,12 +275,10 @@ class TreeFishbone:
     baths : sequence or mapping
         A sequence with one entry per site, or a mapping from system-site index
         to bath entry.  Each entry is a single
-        :class:`~fishbonett.bath.spec.Bath`, a list of baths, or ``None``.
-        Missing mapping keys mean no bath on that site.  Prefer
-        :class:`~fishbonett.bath.coupled.CoupledBath` entries made with
-        ``bath.bind(operator)``.  A single bare bath is bound to ``sigma_z`` for
-        compatibility; every operator must be explicit when a site has several
-        baths. Baths may have different settings.
+        :class:`~fishbonett.bath.coupled.CoupledBath`, a list of coupled baths,
+        or ``None``. Missing mapping keys mean no bath on that site. Create each
+        coupled bath with ``bath.bind(operator)``. Baths may have different
+        settings.
     """
 
     def __init__(self, sites, edges, baths):
@@ -338,8 +333,7 @@ class TreeFishbone:
             raise ValueError("edges must form one connected tree over the sites")
         self.baths = []
         for entry in _site_entries(baths, self.ns):
-            self.baths.append(_bind_site_entry(
-                entry, single_default=sigma_z))
+            self.baths.append(_bind_site_entry(entry))
 
     def local_terms(self, t_max=None):
         """The static Hamiltonian as a
@@ -468,9 +462,7 @@ class Fishbone:
     sequence with one entry per site or a mapping from site index to entry;
     omitted mapping keys mean no bath.  Each entry is a single :class:`Bath`
     (one bath -- possibly multichannel), a list of independent baths, or ``None``.
-    Prefer explicit ``bath.bind(operator)`` values. For compatibility, one bare
-    bath defaults to ``sigma_z``; a list requires explicit operators so that a
-    positional default cannot silently change the Hamiltonian. ``run`` and the
+    Bind every bath explicitly with ``bath.bind(operator)``. ``run`` and the
     returned :class:`Result` are
     exactly those of :meth:`fishbonett.models.fishbone.TreeFishbone.run`.
     """
@@ -488,8 +480,7 @@ class Fishbone:
             raise ValueError("sites must contain at least one Hamiltonian")
         self.de = [h.shape[0] for h in self.sites]
         self.baths = [
-            _bind_site_entry(entry, single_default=sigma_z)
-            for entry in _site_entries(baths, self.nc)
+            _bind_site_entry(entry) for entry in _site_entries(baths, self.nc)
         ]
         if couplings is not None and backbone is not None:
             raise ValueError("provide either backbone or couplings, not both")
@@ -569,7 +560,7 @@ class Fishbone:
         if isinstance(entry, (list, tuple)) and all(
                 isinstance(item, CoupledBath) for item in entry):
             return list(entry)
-        return _bind_site_entry(entry, single_default=sigma_z)
+        return _bind_site_entry(entry)
 
     def _tree(self):
         edges = [(i, i + 1, self.backbone[i]) for i in range(self.nc - 1)]

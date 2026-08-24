@@ -243,8 +243,9 @@ def vibronic_dimer(path=None):
         population = np.asarray(result.expect["population"])
         column = f"omega{int(vibration)}_acceptor"
         axis.plot(
-            result.t, population[:, 1], lw=2.0,
-            color="#4C6EF5", label="fishbonett",
+            np.concatenate(([0.0], result.t)),
+            np.concatenate(([0.0], population[:, 1])), lw=2.0,
+            color="#4C6EF5", label="interaction-chain tensor network",
         )
         axis.plot(
             paper["tJ"], paper[column], "o", ms=4.2, mfc="none",
@@ -264,7 +265,7 @@ def vibronic_dimer(path=None):
         bbox_to_anchor=(0.5, 1.01),
     )
     figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.91))
-    output = Path(path or IMG / "vibronic_dimer.svg")
+    output = Path(path or IMG / "vibronic_dimer_centered_gap.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     modes = ", ".join(
@@ -286,10 +287,11 @@ The documentation profile conserved the one-excitation population to
 **{summary['max_bond']}**. Comparison with 41 samples derived from each published
 Figure 5 curve gives {comparisons}.
 
-The agreement is not uniform: the $4J$ trajectory is close, whereas the $8J$
-calculation transfers too quickly in the middle of the interval. The tutorial
-therefore presents this as a documented reconstruction and not as an exact
-reproduction of the HEOM result.
+The comparison uses the centered energy-gap operator and reports the full-curve
+error rather than selecting a visually favorable endpoint. The tensor-network
+and HEOM calculations use different numerical representations, so the remaining
+difference is interpreted only after timestep, local-dimension, and SVD
+convergence checks.
 
 Both the signed thermal frequency domain and the interaction-chain light cone
 were resolved automatically. The resulting TEDOPA layouts were {modes}. This
@@ -344,10 +346,11 @@ curve on this interval, the population RMSE is
 **{summary['paper_curve_max_error']:.4f}**. The peak retained bond dimension is
 **{summary['max_bond']['interaction']}**.
 
-The calculation uses 200 bath modes, ten oscillator states per mode, time step
-$0.0125/\Delta$, and SVD threshold $10^{{-3}}$, matching the numerical controls
-reported for Fig. 8. The finite frequency window is stated separately in the
-tutorial because the paper does not report its numerical endpoints.
+This shortened interval uses 200 bath modes. The full reference profile uses
+the 600-mode chain displayed in the paper's bond-index plot. Both use ten
+oscillator states per mode, time step $0.0125/\Delta$, and SVD threshold
+$10^{{-3}}$. The finite frequency window is stated separately in the tutorial
+because the paper does not report its numerical endpoints.
 """)
     return output
 
@@ -629,7 +632,7 @@ OUTPUTS = {
     for function in FIGURES
 }
 OUTPUTS["bath_correlation_finite_t"] = IMG / "bath_correlation_finiteT.svg"
-OUTPUTS["vibronic_dimer"] = IMG / "vibronic_dimer_dynamics.svg"
+OUTPUTS["vibronic_dimer"] = IMG / "vibronic_dimer_centered_gap.svg"
 EXTRA_OUTPUTS = {
     "bridge_electron_transfer": (IMG / "bridge_electron_transfer_memory.svg",),
 }

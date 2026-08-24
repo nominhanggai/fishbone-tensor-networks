@@ -18,6 +18,7 @@ from fishbonett.spectral_densities import brownian
 
 
 OCCUPIED = np.diag([0.0, 1.0])
+GAP_OPERATOR = OCCUPIED - 0.5 * np.eye(2)
 UNOCCUPIED = np.array([1.0, 0.0])
 EXCITED = np.array([0.0, 1.0])
 
@@ -38,10 +39,10 @@ PROFILES = {
     # Figure 5 of Dijkstra et al. reports these trajectories through tJ=20.
     # Automatic mode resolution is essential here: short fixed chains reflect
     # into the system before the benchmark endpoint.
-    "docs": Profile("docs", 20.0, 0.025, (4.0, 8.0), 12, None, 1e-3),
+    "docs": Profile("docs", 20.0, 0.025, (4.0, 8.0), 12, None, 1e-4),
     "reference": Profile(
         "reference", 20.0, 0.0125,
-        tuple(np.arange(1.0, 10.0 + 0.5, 1.0)), 16, None, 5e-4,
+        tuple(np.arange(1.0, 10.0 + 0.5, 1.0)), 16, None, 5e-5,
     ),
 }
 
@@ -73,12 +74,13 @@ def make_bath(vibration, profile):
 def make_model(vibration, profile):
     """Biased dimer coupled to one Brownian gap-fluctuation coordinate.
 
-    The paper describes coupling the molecular energy difference to a Brownian
-    coordinate but does not print an operator matrix.  Here ``OCCUPIED`` on the
-    donor implements E_D -> E_D + X, and hence (E_D - E_A) -> (E_D - E_A) + X.
+    In the one-excitation sector, ``GAP_OPERATOR`` on the donor is
+    ``diag(1/2, -1/2)`` in the ``(|D>, |A>)`` basis. This is the centered
+    energy-difference coupling used by the paper's Brownian-oscillator HEOM
+    calculation.
     """
     electronic = np.array([[8.0, -1.0], [-1.0, 0.0]])
-    baths = {0: make_bath(vibration, profile).bind(OCCUPIED)}
+    baths = {0: make_bath(vibration, profile).bind(GAP_OPERATOR)}
     return Fishbone.from_single_excitation(electronic, baths=baths)
 
 
@@ -117,7 +119,9 @@ def summarize(suite):
         final_population[vibration] = float(population[-1, 1])
         column = f"omega{int(vibration)}_acceptor"
         if column in (paper.dtype.names or ()):
-            calculated = np.interp(paper["tJ"], result.t, population[:, 1])
+            times = np.concatenate(([0.0], result.t))
+            acceptor = np.concatenate(([0.0], population[:, 1]))
+            calculated = np.interp(paper["tJ"], times, acceptor)
             difference = calculated - paper[column]
             paper_curve_rmse[vibration] = float(np.sqrt(np.mean(difference**2)))
             paper_curve_max_error[vibration] = float(np.max(np.abs(difference)))

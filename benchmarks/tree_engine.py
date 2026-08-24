@@ -57,10 +57,8 @@ def main():
     print("=== tree-MPO vs direct star Hamiltonian ===")
     rng = np.random.default_rng(0)
     V, eps = 0.7, 0.4
-    # build_tree_mpo used to take the two-level scalars (V, eps); it takes the
-    # system Hamiltonian and coupling *operators* since they were generalized to
-    # any dimension.  _resolve_sys builds exactly the pair those scalars meant,
-    # which keeps this comparison against _hamiltonian_direct honest.
+    # Use the same system Hamiltonian and coupling for the tree operator and the
+    # direct reference Hamiltonian.
     Hs, O, _v, _ds = _resolve_sys(None, None, None, V, eps)
     for n in (1, 2, 3, 4, 5):
         dcoup = rng.standard_normal(n) + 1j * rng.standard_normal(n)

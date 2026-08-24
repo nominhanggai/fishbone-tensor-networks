@@ -4,8 +4,8 @@ title: "fishbonett: Tensor-network dynamics of vibronic open quantum systems"
 abstract: >-
   A Python package for tensor-network simulations of open quantum systems coupled
   to harmonic baths. It supports matrix-product-state and tree tensor network
-  geometries, multiple Hamiltonian representations, and TEBD, MPO, and TDVP
-  propagation.
+  geometries, multiple Hamiltonian representations, and TEBD, Trotter-MPO, and
+  TDVP integrators.
 type: software
 authors:
   - family-names: Nuomin

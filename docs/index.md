@@ -14,10 +14,10 @@ H = H_{\mathrm{sys}} + O \otimes \sum_k g_k (b_k + b_k^{\dagger})
 $$
 
 an arbitrary Hermitian system Hamiltonian $H_{\mathrm{sys}}$ coupled through an
-arbitrary Hermitian operator $O$ to a bath specified only by its spectral density
-$J(\omega)$ (and a temperature). Everything else — discretizing the bath, mapping
-it to a chain, choosing a representation, propagating, reading observables — is what this
-package does.
+arbitrary Hermitian operator $O$ to a bath specified by its spectral density
+$J(\omega)$ and, optionally, a temperature. The package discretizes the bath,
+constructs the selected representation and tensor-network state, propagates it,
+and records observables.
 
 ## How to read this
 
@@ -36,12 +36,12 @@ The main sections are meant to be read in this order, though each stands alone:
 4. **{doc}`conventions`** — units, spectral-density normalization, phase signs,
    temperature, and the reference checks that keep representations consistent.
 5. **{doc}`methods/index`** — the propagation methods: for each model, the exact
-   representation and the integrator (TEBD, exact MPO propagator, TDVP), with the
+   representation and the integrator (TEBD, Trotter MPO, or TDVP), with the
    theory behind each.
 6. **{doc}`architecture`** — the ownership and dependency boundaries used by the
    implementation.
-7. **{doc}`licensing`** — the scope of the MIT license and third-party
-   provenance retained by the distribution.
+7. **{doc}`licensing`** — the MIT license, algorithm citations, and numerical
+   provenance.
 
 {doc}`api` is the generated reference for every public module.
 
@@ -80,8 +80,8 @@ api
 - **Self-contained.** TEDOPA discretization and chain mapping are implemented in
   the package — no external Fortran dependencies — with an optional CuPy GPU
   backend and an optional `opt_einsum` fast path.
-- Also included: chain cooling, the fishbone tree tensor network, golden-rule /
-  Marcus rate theory, and Boys-localization diabatization.
+- Also included: golden-rule and Marcus rate theory, transfer tensors, and
+  Boys-localization diabatization.
 
 ## Indices
 

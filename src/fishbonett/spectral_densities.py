@@ -40,9 +40,6 @@ def sd_back_zero_temp(w):
     return sd_back(S1, s1, w, w1) + sd_back(S2, s2, w, w2) + sd_back(S3, s3, w, w3)
 
 
-sd_zero_temp_prime = sd_back_zero_temp        # historical alias
-
-
 def lorentzian(eta, w, lambd=5245., omega=77.):
     """Lorentzian (single underdamped mode); parameters from dx.doi.org/10.1021/jp400462f."""
     return 0.5 * lambd * (omega ** 2) * eta * w / ((w ** 2 - omega ** 2) ** 2 + (eta ** 2) * (w ** 2))

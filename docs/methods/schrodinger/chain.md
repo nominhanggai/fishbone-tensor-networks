@@ -5,7 +5,7 @@
 once — TDVP conserves energy.  The cost: the state carries the full system–bath
 correlation, so bond dimensions are larger than in the other representations.  For lower
 entanglement at the same cost, see the
-{doc}`polaron chain </methods/schrodinger/polaron_chain>`.
+{doc}`polaron chain </methods/polaron>`.
 
 These three methods integrate the **Schrödinger equation** for the full TEDOPA
 chain, with the Hamiltonian represented exactly as a matrix-product operator and
@@ -91,7 +91,7 @@ They differ only in how the bond dimension is handled:
   `prec`, up to `bond_dim`. It avoids maintaining a separate enlarged-environment
   algorithm while retaining automatic bond growth.  It is the same two-site sweep
   as `tdvp2` with `prec` in place of `trunc_eps`, so `bond_expand` applies here
-  too and matters more: adaptive growth is the whole point of this integrator.
+  too and is essential because this integrator grows the bond adaptively.
 
 The implementation follows the tangent-space projector splitting described by
 Haegeman *et al.*, *Phys. Rev. B* **94**, 165116 (2016). Local exponential

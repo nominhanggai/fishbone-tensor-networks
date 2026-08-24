@@ -92,12 +92,7 @@ def _min_python():
 
 
 def test_sources_parse_against_the_oldest_supported_python():
-    """Nothing may use syntax newer than ``requires-python`` allows.
-
-    CI catches this, but only after a full matrix run, and only for whoever pushes.
-    A developer on a recent interpreter can write newer syntax and see nothing wrong
-    locally.  ``ast`` can check it directly, in a fraction of a second.
-    """
+    """All Python sources must parse at the declared minimum version."""
     floor = _min_python()
     # the check must be capable of failing, or it proves nothing
     with pytest.raises(SyntaxError):
@@ -119,11 +114,7 @@ def test_sources_parse_against_the_oldest_supported_python():
 
 
 def test_declared_python_support_is_consistent():
-    """``requires-python``, the classifiers and the CI matrix must agree.
-
-    Three places say which interpreters are supported; nothing was checking that
-    they say the same thing.
-    """
+    """``requires-python``, classifiers, and the CI matrix must agree."""
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     ci_path = ROOT / ".github" / "workflows" / "ci.yml"
     if not ci_path.exists():
@@ -147,6 +138,15 @@ def _prose_files():
     return [p for p in out if "generated" not in p.parts]
 
 
+def test_vibronic_tutorial_uses_centered_gap_figure():
+    """The tutorial references exactly the centered-gap plot."""
+    tutorial = (DOCS / "tutorials" / "vibronic_dimer.md").read_text(
+        encoding="utf-8",
+    )
+    figures = re.findall(r"\.\./img/(vibronic_dimer[^)\s]+\.svg)", tutorial)
+    assert figures == ["vibronic_dimer_centered_gap.svg"]
+
+
 def _source_docstrings():
     """Yield source docstrings with their file and line number."""
     for path in SRC.rglob("*.py"):
@@ -162,8 +162,8 @@ def _source_docstrings():
                 yield path, getattr(node, "lineno", 1), value
 
 
-def test_docs_do_not_contain_refactor_commentary():
-    """Published prose describes the current API, not the refactor that produced it."""
+def test_published_prose_has_no_development_commentary():
+    """Published prose describes only the current package."""
     banned = (
         "there is no second public category",
         "single source of truth",
@@ -193,17 +193,11 @@ def test_docs_do_not_contain_refactor_commentary():
             if phrase in lowered:
                 line = start + lowered[:lowered.index(phrase)].count("\n")
                 found.append(f"{path.relative_to(ROOT)}:{line}: {phrase}")
-    assert not found, "refactor commentary in published documentation:\n  " + "\n  ".join(found)
+    assert not found, "development commentary in published prose:\n  " + "\n  ".join(found)
 
 
 def test_doc_code_blocks_import_things_that_exist():
-    """Every ``from fishbonett... import X`` in a doc snippet must resolve.
-
-    Doc examples rot silently when things are renamed, and a lot was renamed in the
-    model/representation restructure.  This caught ``docs/bath.md`` importing ``thermalize``
-    from ``fishbonett.models``, where it has never lived -- anyone copying that
-    snippet got an ImportError.
-    """
+    """Every ``from fishbonett... import X`` in a doc snippet must resolve."""
     import importlib
 
     bad = []

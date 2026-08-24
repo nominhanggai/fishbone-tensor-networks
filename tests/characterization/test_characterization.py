@@ -1,14 +1,4 @@
-"""Numerical regression ("characterization") tests.
-
-Golden observable arrays were captured from the pre-refactor code (see
-``scenario.py``).  These tests re-run the identical scenario against the current
-code and assert the physical observables are unchanged, which is what guards the
-"unify + preserve" refactor of the TEBD engine and helpers.
-
-The ``_run`` import lines are the single place that tracks where the model/engine
-classes live; they are updated as modules are relocated during the refactor,
-while the golden *values* stay fixed.
-"""
+"""Golden-value tests for a deterministic multichannel propagation."""
 import os
 
 import numpy as np
@@ -26,10 +16,19 @@ def _load(name):
 
 def _run(name):
     from fishbonett.operators import sigma_x, sigma_z, number
+    from fishbonett.representations.multichannel import (
+        MultichannelInteractionRepresentation,
+    )
     from fishbonett.states.mps import SystemBathMPS
-    from fishbonett.representations.multichannel import MultichannelInteractionRepresentation as SystemBath
-    return run_multichannel_ic(SystemBath, SystemBathMPS, sigma_x, sigma_z, number,
-                               lbo=(name == "lbo"))
+
+    return run_multichannel_ic(
+        MultichannelInteractionRepresentation,
+        SystemBathMPS,
+        sigma_x,
+        sigma_z,
+        number,
+        lbo=(name == "lbo"),
+    )
 
 
 @pytest.mark.parametrize("name", ["plain", "lbo"])

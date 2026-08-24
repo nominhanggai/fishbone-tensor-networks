@@ -10,11 +10,6 @@ def test_distribution_declares_mit_license():
     assert 'license-files = ["LICENSE"]' in metadata
 
 
-def test_removed_submission_manuscript_does_not_return():
-    assert not (ROOT / "paper" / "paper.md").exists()
-    assert not (ROOT / "paper" / "paper.bib").exists()
-
-
 # Scientific citations are part of the implementation documentation and must
 # remain attached to the algorithms they define.
 CITED = {

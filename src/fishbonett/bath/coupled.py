@@ -1,11 +1,5 @@
-"""Binding between a bath specification and its system coupling operators.
-
-``CoupledBath`` keeps environment properties in :class:`~fishbonett.bath.Bath`
-and associates them with the operators belonging to a physical model.
-``Bath.coupling`` remains available as a deprecated compatibility input.
-"""
+"""Binding between a bath specification and its system coupling operators."""
 from dataclasses import dataclass, replace
-import warnings
 from collections.abc import Sequence
 
 import numpy as np
@@ -111,15 +105,8 @@ class CoupledBath:
 def bind_bath(
     bath: Bath | CoupledBath,
     coupling: ArrayLike | Sequence[ArrayLike] | None = None,
-    *,
-    default_operator: ArrayLike | None = None,
-    validate_legacy: bool = False,
 ) -> CoupledBath:
-    """Return a :class:`CoupledBath` from explicit or deprecated input.
-
-    ``coupling`` is the model-owned value. If ``validate_legacy`` is true and the
-    deprecated ``Bath.coupling`` field is also populated, both must agree.
-    """
+    """Return a :class:`CoupledBath` with an explicit coupling."""
     if isinstance(bath, CoupledBath):
         if coupling is not None:
             supplied = _operators(coupling)
@@ -129,25 +116,9 @@ def bind_bath(
                     "and the values differ")
         return bath
 
-    legacy = bath.coupling
-    if legacy is not None:
-        warnings.warn(
-            "Bath.coupling is deprecated and will be removed in a future major "
-            "release; pass CoupledBath objects to Fishbone/TreeFishbone or use "
-            "bath.bind(operator)",
-            DeprecationWarning, stacklevel=2)
-    chosen = coupling
-    if chosen is None:
-        chosen = legacy if legacy is not None else default_operator
-    if chosen is None:
+    if coupling is None:
         raise ValueError(
-            "no system-bath coupling operator was supplied; bind the Bath to an "
-            "operator or set the compatibility Bath.coupling field")
-    if validate_legacy and legacy is not None:
-        model_ops, legacy_ops = _operators(chosen), _operators(legacy)
-        if not _same_operators(model_ops, legacy_ops):
-            raise ValueError(
-                "coupling is specified twice with different values: "
-                "SystemBath(coupling=...) owns the model coupling; remove "
-                "Bath.coupling or make it identical during migration")
-    return CoupledBath(bath=bath, operators=_operators(chosen))
+            "no system-bath coupling operator was supplied; use "
+            "bath.bind(operator)"
+        )
+    return CoupledBath(bath=bath, operators=_operators(coupling))

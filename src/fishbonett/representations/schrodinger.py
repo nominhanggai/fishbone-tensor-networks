@@ -32,7 +32,7 @@ from fishbonett.bath._coefficients import (
     star_coefficients,
 )
 from fishbonett.bath.coupled import bind_bath
-from fishbonett.operators import annihilate, create, number, sigma_z
+from fishbonett.operators import annihilate, create, number
 from fishbonett.representations._mpo import identity_product, product_sum_mpo
 from fishbonett.system import check_operator
 from fishbonett.targets import BathMode
@@ -291,7 +291,7 @@ def chain_terms(bath, site, next_node, dims, edges, site_H, edge_H):
     ``k[0]`` sits on the ``(site, c_0)`` edge and the mode-mode hoppings ``k[m]`` on
     the edges after it.  Returns the next free node id.
     """
-    coupled = bind_bath(bath, default_operator=sigma_z)
+    coupled = bind_bath(bath)
     coefficients = chain_coefficients(coupled.bath)
     d = coupled.bath.phys_dim
     a, ad, x, numb = bath_ops(d)
@@ -367,7 +367,7 @@ def terms(sites, edges, baths, t_max=None):
     for i in range(ns):
         for bath_index, bath in enumerate(baths[i]):
             bath = bath.resolved(t_max)          # fill automatic domain / n_modes
-            coupled = bind_bath(bath, default_operator=sigma_z)
+            coupled = bind_bath(bath)
             build = (star_terms if coupled.is_multichannel
                      else chain_terms)
             first_node = node
