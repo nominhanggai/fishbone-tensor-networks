@@ -198,7 +198,12 @@ def _contract_mpo(nodes, nid):
 
 
 def hamiltonian_from_mpo(nodes, root, n_modes, d):
-    """Materialize a small tree operator as a dense validation matrix."""
+    """Materialize a small tree operator as a dense validation matrix.
+
+    ``n_modes`` and ``d`` remain accepted positionally for the validation-call
+    interface; the dimensions are inferred from ``nodes`` and those two values
+    are otherwise unused.
+    """
     operator, _ = _contract_mpo(nodes, root)
     physical_nodes = [root] + [
         node.id for node in sorted(

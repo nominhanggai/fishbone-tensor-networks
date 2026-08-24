@@ -108,6 +108,7 @@ Hamiltonian. They do not advance tensor-network states.
    :recursive:
 
    fishbonett.operators
+   fishbonett.contract
    fishbonett.linalg
    fishbonett.randomized
    fishbonett.spectral_densities

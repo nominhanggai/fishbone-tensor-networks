@@ -2,8 +2,9 @@
 
 The model is the Brownian-oscillator dimer used by Dijkstra et al.
 (arXiv:1309.4910). Run the inexpensive engine check with
-``python examples/vibronic_dimer.py``. The ``docs`` and ``reference`` profiles
-increase only numerical resolution and propagation time.
+``python examples/vibronic_dimer.py``. The ``docs`` profile reproduces the two
+quantum benchmark trajectories at omega/J = 4 and 8; the manual ``reference``
+profile scans the vibrational frequency more finely.
 """
 
 from argparse import ArgumentParser
@@ -34,16 +35,23 @@ class Profile:
 
 PROFILES = {
     "smoke": Profile("smoke", 0.04, 0.01, (8.0,), 3, 4, 1e-3),
-    "docs": Profile("docs", 10.0, 0.05, (4.0, 8.0), 8, 24, 1e-3),
+    # Figure 5 of Dijkstra et al. reports these trajectories through tJ=20.
+    # Automatic mode resolution is essential here: short fixed chains reflect
+    # into the system before the benchmark endpoint.
+    "docs": Profile("docs", 20.0, 0.025, (4.0, 8.0), 12, None, 1e-3),
     "reference": Profile(
-        "reference", 20.0, 0.001,
-        tuple(np.arange(2.0, 10.0 + 0.25, 0.5)), 20, None, 5e-4,
+        "reference", 20.0, 0.0125,
+        tuple(np.arange(1.0, 10.0 + 0.5, 1.0)), 16, None, 5e-4,
     ),
 }
 
+# Approximate values read from the published Figure 5. They are visual
+# cross-checks, not machine-readable data supplied by the authors.
+FIGURE_5_ENDPOINTS = {4.0: 0.27, 8.0: 0.67}
+
 
 def make_bath(vibration, profile):
-    """Return one independent Brownian bath in units where the coupling is one."""
+    """Return the Brownian bath for the fluctuating donor-acceptor gap."""
     density = lambda omega: brownian(
         omega, lam=0.2, gam=2.0 / 3.0, w0=vibration,
     )
@@ -57,9 +65,15 @@ def make_bath(vibration, profile):
 
 
 def make_model(vibration, profile):
-    """Biased dimer with an independent occupancy bath on each molecule."""
+    """Biased dimer whose donor energy is coupled to one Brownian bath.
+
+    In the one-excitation sector, fluctuating the donor energy relative to the
+    acceptor is precisely a fluctuation of the molecular energy difference used
+    in the paper's quantum model.  A second independent bath at the same
+    reorganization energy would double the gap-fluctuation spectral power.
+    """
     electronic = np.array([[8.0, -1.0], [-1.0, 0.0]])
-    baths = [make_bath(vibration, profile).bind(OCCUPIED) for _ in range(2)]
+    baths = {0: make_bath(vibration, profile).bind(OCCUPIED)}
     return Fishbone.from_single_excitation(electronic, baths=baths)
 
 
@@ -84,7 +98,7 @@ def run_profile(profile="smoke", *, announce=False):
 
 
 def summarize(suite):
-    """Numerical diagnostics and the final acceptor population scan."""
+    """Numerical diagnostics and comparison with published Figure 5 endpoints."""
     results = suite["results"]
     final_population = {}
     normalization_error = 0.0
@@ -103,6 +117,11 @@ def summarize(suite):
         )
     return {
         "final_acceptor_population": final_population,
+        "figure_5_absolute_error": {
+            frequency: abs(final_population[frequency] - target)
+            for frequency, target in FIGURE_5_ENDPOINTS.items()
+            if frequency in final_population
+        },
         "normalization_error": normalization_error,
         "max_bond": max_bond,
         "resolved_modes": resolved_modes,

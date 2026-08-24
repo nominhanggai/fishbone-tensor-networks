@@ -24,13 +24,23 @@ def _numpy_contract(subscripts, *operands, **kwargs):
 
 
 if _force == "numpy":
-    contract = _numpy_contract
+    _contract_impl = _numpy_contract
     BACKEND = "numpy"
 else:
     try:
         from opt_einsum import contract as _oe_contract  # noqa: F401
-        contract = _oe_contract
+        _contract_impl = _oe_contract
         BACKEND = "opt_einsum"
     except ImportError:
-        contract = _numpy_contract
+        _contract_impl = _numpy_contract
         BACKEND = "numpy"
+
+
+def contract(subscripts, *operands, **kwargs):
+    """Contract tensors with the selected NumPy or ``opt_einsum`` backend.
+
+    The accepted arguments are those of :func:`numpy.einsum`, including the
+    interleaved integer-label form.
+    :data:`BACKEND` reports which implementation will execute the contraction.
+    """
+    return _contract_impl(subscripts, *operands, **kwargs)

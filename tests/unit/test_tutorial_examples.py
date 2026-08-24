@@ -64,7 +64,18 @@ def test_vibronic_dimer_smoke_conserves_the_excitation():
     module = _load("vibronic_dimer")
     summary = module.summarize(module.run_profile("smoke"))
     assert summary["normalization_error"] < 1e-10
-    assert summary["resolved_modes"] == {8.0: (4, 4)}
+    assert summary["resolved_modes"] == {8.0: (4,)}
+
+
+def test_vibronic_dimer_uses_the_papers_single_gap_bath():
+    module = _load("vibronic_dimer")
+    model = module.make_model(8.0, module.PROFILES["smoke"])
+    assert len(model.baths[0]) == 1
+    assert model.baths[1] == []
+    assert np.array_equal(model.baths[0][0].operator, module.OCCUPIED)
+    assert module.PROFILES["docs"].t_max == 20.0
+    assert module.PROFILES["docs"].n_modes is None
+    assert module.FIGURE_5_ENDPOINTS == {4.0: 0.27, 8.0: 0.67}
 
 
 def test_nonadiabatic_smoke_population_is_physical():

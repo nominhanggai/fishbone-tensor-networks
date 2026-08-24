@@ -68,7 +68,9 @@ Core dependencies: `numpy` and `scipy` only. `opt_einsum` is an optional
 contraction backend (`[speed]`). It is on par with `numpy.einsum` for the MPS /
 MPO engines but gives a large speedup for the **tree / TTN engines** (whose
 multi-operand kernels numpy evaluates unoptimised), so install `[speed]` if you
-use `tree-*` methods. Requires Python ≥ 3.10.
+use `tree-*` methods. Set `FISHBONETT_EINSUM=numpy` before importing `fishbonett`
+to force the NumPy backend for benchmarking or backend comparisons. Requires
+Python ≥ 3.10.
 
 ## Quick start
 
