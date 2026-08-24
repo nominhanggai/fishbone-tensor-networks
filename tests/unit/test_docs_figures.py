@@ -66,3 +66,27 @@ def test_reference_data_are_figure_inputs():
         / "dijkstra_2015_fig5_quantum_dynamics.csv"
     )
     assert figures._input_mtime("vibronic_dimer") >= reference.stat().st_mtime_ns
+
+
+def test_unrelated_reference_data_do_not_stale_a_figure(tmp_path, monkeypatch):
+    figures = _load_figures()
+    reference_dir = tmp_path / "examples" / "reference_data"
+    source_dir = tmp_path / "src" / "fishbonett"
+    reference_dir.mkdir(parents=True)
+    source_dir.mkdir(parents=True)
+    target = reference_dir / "dijkstra_2015_fig5_quantum_dynamics.csv"
+    unrelated = reference_dir / "nuomin_2022_fig8_ic10.csv"
+    target.write_text("target", encoding="utf-8")
+    unrelated.write_text("unrelated", encoding="utf-8")
+    (tmp_path / "examples" / "vibronic_dimer.py").write_text(
+        "", encoding="utf-8",
+    )
+    (source_dir / "module.py").write_text("", encoding="utf-8")
+
+    target_time = time.time_ns() + 1_000_000_000
+    unrelated_time = target_time + 1_000_000_000
+    os.utime(target, ns=(target_time, target_time))
+    os.utime(unrelated, ns=(unrelated_time, unrelated_time))
+    monkeypatch.setattr(figures, "ROOT", tmp_path)
+
+    assert figures._input_mtime("vibronic_dimer") == target_time

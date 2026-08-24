@@ -220,7 +220,7 @@ the population trajectory and endpoint, not by probability conservation alone.
 
 ## 5. Dynamics and conclusion
 
-![Acceptor dynamics compared point by point with two published Figure 5 curves](../img/vibronic_dimer.svg)
+![Acceptor dynamics compared point by point with two published Figure 5 curves](../img/vibronic_dimer_dynamics.svg)
 
 ```{include} ../_generated/vibronic_dimer.md
 ```
