@@ -23,7 +23,7 @@ both preserve it.
 
 ## Use the SVD threshold as the primary cutoff
 
-Set `bond_dim=None` or a deliberately generous safety cap and control
+Set `bond_dim=None` or a generous safety cap and control
 compression with `trunc_eps`. If the maximum bond repeatedly reaches a finite
 cap, the result is bond-limited and tightening `trunc_eps` cannot help.
 
@@ -76,12 +76,16 @@ positive-frequency contributions to the physical reorganization energy.
 
 The shared tests above do not replace physics-specific validation:
 
-- population transfer: compare every state population and any paper reference;
-- transfer tensors: converge the direct dynamical maps and retained memory;
+- population transfer: compare every state population and any paper reference,
+  as in {doc}`vibronic_dimer`;
+- transfer tensors: converge the direct dynamical maps and retained memory, as
+  in {doc}`bridge_electron_transfer_validation`;
 - heat current: check both directional currents, energy continuity, a
-  zero-temperature-bias control, and absence of finite-chain recurrence;
+  zero-temperature-bias control, and absence of finite-chain recurrence, as in
+  {doc}`two_bath_heat_flow`;
 - laboratory coherences in transformed representations: transform the
-  observable back before comparison.
+  observable back before comparison, as illustrated by the representation
+  comparison in {doc}`nonadiabatic_spin_boson`.
 
 ## Report enough information to reproduce the result
 

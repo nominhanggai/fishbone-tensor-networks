@@ -285,7 +285,7 @@ artifacts before the benchmark endpoint.
 The manual `reference` profile in `examples/vibronic_dimer.py` scans integer
 frequencies from $J$ through $10J$ with refined settings. It can be used to
 investigate the two maxima in the frequency scan, but the validated comparison
-on this page is deliberately limited to the two trajectories shown above.
+on this page is limited to the two trajectories shown above.
 
 ## 6. Common mistakes
 
