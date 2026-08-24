@@ -17,7 +17,8 @@ python examples/interaction_picture_spin_boson.py
 | [`two_bath_heat_flow.py`](two_bath_heat_flow.py) | Heat flow through a two-level junction, measured from explicit system--bath correlations. |
 
 The four scientific tutorials accept `--profile smoke|docs|reference`. The
-default smoke profile preserves the physical Hamiltonian but performs only a
-four-step engine check. Documentation builds use the docs profile; reference
-profiles are deliberately manual because they use refined settings and broader
-parameter scans.
+default `smoke` profile preserves the physical Hamiltonian but performs only a
+four-step API check. The `docs` profile selects the controls used for the
+plotted tutorial trajectory. The `reference` profile extends the time horizon
+or refines the timestep, Fock dimension, SVD threshold, or parameter grid as
+specified on the corresponding tutorial page.

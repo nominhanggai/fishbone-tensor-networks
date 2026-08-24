@@ -61,6 +61,38 @@ def test_tutorial_pages_are_self_contained(name):
     assert any("matplotlib" in program for program in programs)
 
 
+def test_tutorial_prose_describes_numerics_not_build_policy():
+    """User-facing numerical choices must not be justified by build mechanics."""
+    paths = [
+        *(ROOT / "docs" / "tutorials").glob("*.md"),
+        ROOT / "docs" / "figures.py",
+        ROOT / "examples" / "README.md",
+        ROOT / "examples" / "reference_data" / "README.md",
+    ]
+    prohibited = (
+        "documentation build",
+        "documentation run",
+        "documentation calculation",
+        "manual production",
+        "affordable in ci",
+        "not stored in commits",
+        "should not determine routine",
+    )
+    for path in paths:
+        text = path.read_text(encoding="utf-8").lower()
+        for phrase in prohibited:
+            assert phrase not in text, f"{path}: remove {phrase!r}"
+
+
+def test_nonadiabatic_tutorial_defines_its_600_mode_calculation():
+    page = (
+        ROOT / "docs" / "tutorials" / "nonadiabatic_spin_boson.md"
+    ).read_text(encoding="utf-8")
+    assert "means 600 bath sites" in page
+    assert "complete signed interval into those 600 modes" in page
+    assert "1,257 steps" in page
+
+
 @pytest.mark.parametrize(
     ("name", "label_attributes"),
     (

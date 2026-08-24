@@ -7,7 +7,7 @@ QUAPI-to-explicit-bath Hamiltonian conversion introduced there.
 ```{admonition} Orientation
 :class: note
 
-- **Level:** advanced validation and publication workflow.
+- **Level:** advanced numerical validation.
 - **You will learn:** how nine physical initial states reconstruct a qutrit
   dynamical map, how transfer tensors extend it, and how retained memory is
   tested.
@@ -19,12 +19,11 @@ QUAPI-to-explicit-bath Hamiltonian conversion introduced there.
 
 ## From 0.15 ps direct dynamics to 15 ps
 
-A direct 15 ps interaction-chain calculation resolved with TEDOPA's automatic
-light-cone criterion requires nearly one thousand modes and develops large MPS
-bonds. The bath
-memory reported for Fig. 2 is only about 0.10--0.12 ps, so it is more efficient
-to calculate the complete reduced dynamical map through 0.15 ps and then use
-the transfer-tensor method (TTM).
+For the stated spectral density and temperature, TEDOPA's light-cone criterion
+selects 977 bath sites for a direct 15 ps interaction-chain calculation, which
+also develops large MPS bonds. The bath memory reported for Fig. 2 is only about
+0.10--0.12 ps, so the calculation constructs the complete reduced dynamical map
+through 0.15 ps and then applies the transfer-tensor method (TTM).
 
 For a three-state system the map has $3^2=9$ columns. The example propagates the
 three basis states and the real and imaginary superpositions
@@ -39,8 +38,8 @@ $\mathcal E_t(|i\rangle\langle j|)$. Propagating only the donor initial state
 would not determine a dynamical map and would not support a valid TTM
 extrapolation.
 
-The inexpensive half of the reference calculation is completely reproducible
-from the stored short maps:
+The included 0.15 ps dynamical maps are sufficient to reproduce the 15 ps TTM
+continuation, donor-lifetime fits, paper residuals, and memory-kernel study:
 
 ```python
 from pathlib import Path
@@ -203,8 +202,8 @@ figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
 plt.show()
 ```
 
-To regenerate those maps instead of loading them, run the expensive tomography
-profile explicitly:
+To regenerate both nine-column dynamical maps instead of loading them, run the
+tomography calculation explicitly:
 
 ```bash
 python examples/bridge_electron_transfer.py \
@@ -214,9 +213,9 @@ python examples/bridge_electron_transfer.py \
 That command performs 18 tensor-network simulations: nine initial states for
 each of the two coupling models. It uses `dt=0.002 ps`, a 0.15 ps direct window,
 95 automatically resolved TEDOPA modes, local Fock dimension 6, SVD threshold
-$10^{-4}$, and no maximum bond cap. Documentation builds load the resulting
-short maps but redo the TTM propagation, fitting, residual calculation, and
-figure generation.
+$10^{-4}$, and no maximum bond cap. Saving these maps separates the direct
+tensor-network propagation from the subsequent TTM propagation, fitting,
+residual calculation, and memory-kernel analysis.
 
 The donor population is fitted to
 
@@ -250,11 +249,12 @@ The following checks have been performed for this validation:
 - At $10^{-4}$ SVD threshold, changing the step from 2 fs to 3.33 fs changes
   any population by at most 0.0044 in the diagonal calculation and 0.0051 in
   the non-Condon calculation over the first 0.2 ps. A 4 fs step increases these
-  changes to 0.0078 and 0.0089 and retains larger bonds, so it is not the
-  preferred reference step.
+  changes to 0.0078 and 0.0089 and retains larger bonds. The stored maps
+  therefore use the 2 fs step.
 - At the looser $10^{-3}$ threshold, increasing the Fock dimension from 6 to 10
-  changed early populations by less than $5.6\times10^{-4}$. This is useful
-  evidence but is not a substitute for repeating the check at $10^{-4}$.
+  changed early populations by less than $5.6\times10^{-4}$. This bounds the
+  Fock-space error only at that looser threshold; the same comparison remains
+  to be repeated at $10^{-4}$.
 - The final transfer-tensor norms after 0.15 ps are about
   $1.4\times10^{-4}$ and $1.5\times10^{-4}$. Holding out the end of the direct
   map showed that a 0.12 ps kernel predicts the remaining direct trajectory to
@@ -267,16 +267,18 @@ The following checks have been performed for this validation:
   from the digitized paper curves.
 - The reconstructed dynamical maps preserve trace to $3.4\times10^{-16}$. Their
   most negative Choi eigenvalue is $-2.4\times10^{-5}$, a small non-CP error
-  from independently truncating the tomography trajectories that should also
-  decrease in the tighter-threshold publication check.
+  from independently truncating the tomography trajectories. Regenerating all
+  nine columns at a tighter SVD threshold tests whether that eigenvalue moves
+  toward zero.
 - The 15 ps propagated density matrices preserve trace to $1.1\times10^{-11}$
   and remain positive to numerical precision.
 
-For a final publication benchmark, also regenerate the complete nine-column
-maps at Fock dimension 10, tighten the SVD threshold to $5\times10^{-5}$, and
-repeat at a smaller timestep. Follow the coupled timestep/SVD procedure in
-{doc}`convergence`. The full population residuals, not only the fitted
-lifetimes, should remain stable under each refinement.
+To reduce the remaining numerical uncertainty, regenerate the complete
+nine-column maps at Fock dimension 10, tighten the SVD threshold to
+$5\times10^{-5}$, and repeat at a timestep below 2 fs. Follow the coupled
+timestep/SVD procedure in {doc}`convergence`. Accept the refinement only if the
+complete population residuals, fitted lifetimes, map trace error, and minimum
+Choi eigenvalue are stable together.
 
 Return to {doc}`bridge_electron_transfer` for the physical interpretation and
 the concise tutorial workflow.

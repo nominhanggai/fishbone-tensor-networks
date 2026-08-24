@@ -38,8 +38,7 @@ python examples/bridge_electron_transfer.py \
   --generate-reference-maps examples/output/dba_ttm_maps.npz
 ```
 
-to recompute the maps. The output directory is ignored because this reference
-calculation is intentionally too expensive for a documentation build. The
-small checked-in maps allow CI to repeat the transfer-tensor extrapolation,
-fits, and pointwise comparison without treating a pre-rendered figure as a
-scientific result.
+to recompute the maps. The output directory is ignored so a new calculation
+does not overwrite the supplied reference archive. The saved maps can then be
+passed to the transfer-tensor propagation, lifetime fits, memory-kernel study,
+and pointwise comparison with the digitized paper curves.

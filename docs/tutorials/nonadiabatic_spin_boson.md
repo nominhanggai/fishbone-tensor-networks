@@ -6,10 +6,10 @@ stress test because the bath is both hot and strongly coupled: convergence is
 controlled by the bath discretization, oscillator basis, tensor-network
 truncation, and time step, not by the smoothness of the population curve.
 
-The documentation calculation covers the first fifth of the published time
-axis, through $t\Delta/\pi=1$. The `reference` profile in
-`examples/nonadiabatic_spin_boson.py` extends the same calculation to the
-paper's full endpoint, $t\Delta/\pi=5$.
+The plotted calculation uses a 200-mode TEDOPA chain and covers the first fifth
+of the published time axis, through $t\Delta/\pi=1$. The `reference` profile in
+`examples/nonadiabatic_spin_boson.py` uses 600 bath modes and extends the
+trajectory to the paper's endpoint, $t\Delta/\pi=5$.
 
 ```{admonition} Orientation
 :class: note
@@ -18,9 +18,9 @@ paper's full endpoint, $t\Delta/\pi=5$.
   notation is new.
 - **You will learn:** how to reproduce strong-coupling spin relaxation and
   separate bath-domain, mode-count, Fock-space, and tensor truncation checks.
-- **Cost:** the default smoke profile takes seconds; the 200-mode documentation
-  run is a substantial CPU calculation, and the 600-mode reference profile is
-  a manual production run.
+- **Cost:** the four-step `smoke` profile takes seconds. The plotted 200-mode
+  calculation advances 252 steps; the 600-mode calculation advances 1,257
+  steps and can require substantial CPU time and memory.
 - **Output:** spin-up population and retained bond dimension.
 ```
 
@@ -61,13 +61,18 @@ bath.
 ## Numerical settings
 
 For the full Figure 8 calculation, the bond-index plots in Figure 9 show a
-600-mode bath chain. The paper also reports oscillator cutoff 10, time step
+600-mode bath chain. Here, “600 modes” means 600 bath sites in the TEDOPA chain;
+the two-level system is one additional MPS site. The finite-temperature mapping
+discretizes the complete signed interval into those 600 modes, not into 600
+positive- plus 600 negative-frequency modes.
+
+The paper also reports oscillator cutoff 10, time step
 $\delta t=1.25\times10^{-2}/\Delta$, SVD threshold $10^{-3}$, and a maximum
-bond dimension of 1000. The shortened calculation on this page uses 200 modes
-through $t\Delta/\pi=1$; the manual full-horizon profile uses 600. Both use ten
-oscillator states per mode, the reported time step, and the reported SVD
-threshold. The maximum bond is left unrestricted so the threshold determines
-the retained rank without an artificial ceiling.
+bond dimension of 1000. The plotted calculation uses 200 bath modes through
+$t\Delta/\pi=1$; the `reference` profile uses 600 through $t\Delta/\pi=5$.
+Both assign ten oscillator states to every bath mode, use the reported time
+step and SVD threshold, and leave the maximum bond unrestricted so the SVD
+threshold determines the retained rank.
 
 The paper writes the continuum on a finite interval $[\Omega_0,\Omega_1]$ but
 does not report numerical endpoints. The package calculation therefore states
@@ -225,15 +230,18 @@ to this benchmark:
 4. compare the full population trajectory with the digitized Figure 8 curve,
    not only normalization or peak bond.
 
-The manual command
+The longer calculation is selected explicitly:
 
 ```bash
 python examples/nonadiabatic_spin_boson.py --profile reference
 ```
 
-uses the 600-mode paper-length controls through $t\Delta/\pi=5$. It is kept out of
-the documentation build because the longer tensor-network propagation should
-not determine routine documentation build time.
+The `reference` profile discretizes `domain=(-16, 80)` into 600 TEDOPA bath
+modes and advances 1,257 steps of size $0.0125/\Delta$ to
+$t\Delta/\pi=5$. Each bath mode has local dimension 10, the SVD threshold is
+$10^{-3}$, and no maximum bond dimension is imposed. Compare its complete
+population curve with the 200-mode result before drawing conclusions about the
+published time interval.
 
 For a chemically structured environment with the same interaction-chain
 representation, return to {doc}`vibronic_dimer`. To see how short reduced

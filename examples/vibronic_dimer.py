@@ -3,8 +3,9 @@
 The model is the Brownian-oscillator dimer used by Dijkstra et al.
 (arXiv:1309.4910). Run the inexpensive engine check with
 ``python examples/vibronic_dimer.py``. The ``docs`` profile reconstructs the
-two quantum benchmark trajectories at omega/J = 4 and 8; the manual
-``reference`` profile scans the vibrational frequency more finely.
+two quantum benchmark trajectories at omega/J = 4 and 8. The ``reference``
+profile scans the ten integer frequencies from omega/J = 1 through 10 with a
+smaller timestep, larger local Fock space, and tighter SVD threshold.
 """
 
 from argparse import ArgumentParser
@@ -39,8 +40,8 @@ class Profile:
 PROFILES = {
     "smoke": Profile("smoke", 0.04, 0.01, (8.0,), 3, 4, 1e-3),
     # Figure 5 of Dijkstra et al. reports these trajectories through tJ=20.
-    # Automatic mode resolution is essential here: short fixed chains reflect
-    # into the system before the benchmark endpoint.
+    # Automatic mode resolution keeps the first chain-boundary reflection later
+    # than the benchmark endpoint t*J = 20.
     "docs": Profile("docs", 20.0, 0.025, (4.0, 8.0), 12, None, 1e-4),
     "reference": Profile(
         "reference", 20.0, 0.0125,
@@ -146,7 +147,7 @@ def summarize(suite):
 
 
 def save_suite(suite, path):
-    """Save plain numerical arrays; figures remain documentation build artifacts."""
+    """Save the trajectory and convergence diagnostics as numerical arrays."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {}

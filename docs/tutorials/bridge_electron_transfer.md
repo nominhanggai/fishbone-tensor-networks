@@ -20,10 +20,11 @@ Fingerhut](https://doi.org/10.1063/5.0027976)
 ```
 
 The program below performs an automatically resolved 0.2 ps calculation. It
-then explains how a 0.15 ps reduced dynamical map supports the 15 ps
-transfer-tensor result shown on this page. Map tomography, executable
-long-time reconstruction, and memory-kernel convergence are kept in the
-companion {doc}`bridge_electron_transfer_validation` appendix.
+then explains how reduced dynamical maps calculated through 0.15 ps generate
+the donor, bridge, and acceptor populations through 15 ps. The companion
+{doc}`bridge_electron_transfer_validation` appendix gives the nine-state map
+tomography, executable long-time reconstruction, and memory-kernel convergence
+test.
 
 ## Physical model
 
@@ -148,8 +149,8 @@ would change the physical model.
 ## Complete runnable early-time calculation
 
 The following program uses the paper parameters, constructs all three controls,
-asks the TEDOPA light-cone resolver for the bath mode count, checks probability
-conservation, and plots the first 0.2 ps.
+uses the TEDOPA light-cone criterion to determine the bath mode count, checks
+probability conservation, and plots the first 0.2 ps.
 
 ```python
 import numpy as np
@@ -301,9 +302,10 @@ figure.tight_layout()
 plt.show()
 ```
 
-`resolved.n_modes` is much larger than 12 for this bath and horizon. That is a
-consequence of the paper's $600$ cm$^{-1}$ cutoff and the signed thermal domain,
-not an arbitrary accuracy preference.
+For these parameters, `resolved.n_modes` is 120: the MPS contains one qutrit
+system site followed by 120 bath sites. The mode count follows from the 0.2 ps
+light-cone horizon, the $600$ cm$^{-1}$ bath cutoff, and the signed thermal
+domain.
 
 ## What the API represents
 
@@ -355,23 +357,24 @@ calculations still have identical $H_S$ in the paper's convention; their
 different dynamics comes from the off-diagonal entries of $M$. The diagonal
 reference uses larger electronic couplings and is a separate benchmark.
 
-The curves should not be expected to coincide point for point yet. The paper
-used a continuous-bath MACGIC-QUAPI calculation converged by reducing its
-Trotter step while increasing the influence-functional memory. Here, the short
-dynamical maps use a finite 95-mode TEDOPA bath, local Fock dimension 6, a 2 fs
-step, and an SVD threshold of $10^{-4}$. Those settings reproduce the paper to
-within about one percent, but they are documentation-scale and not yet the
-common numerical limit of the two methods. The plotted paper curves are
-vector-path samples, not the authors' raw data; their population sums
-differ from one by as much as 0.006.
+The maximum pointwise population difference is 0.010--0.011. The paper used a
+continuous-bath MACGIC-QUAPI calculation converged by reducing its Trotter step
+while increasing the influence-functional memory. The transfer-tensor result
+instead starts from a finite 95-mode TEDOPA bath with local Fock dimension 6, a
+2 fs step, and SVD threshold $10^{-4}$. The residual can therefore contain
+finite-bath, Fock-space, timestep, SVD-truncation, and map-digitization errors;
+the checks in the validation appendix do not yet isolate a common converged
+limit of the two algorithms. The plotted paper curves are vector-path samples,
+not the authors' raw data, and their population sums differ from one by as much
+as 0.006.
 
 ## How the 15 ps result is obtained
 
-Direct propagation to 15 ps would require nearly one thousand automatically
-resolved modes. Instead, nine short initial-state calculations reconstruct the
-reduced dynamical map $\mathcal E_t$ through 0.15 ps. The transfer tensors are
-defined recursively from those maps and retain the bath memory needed to
-continue the reduced state.
+For the stated spectral density and temperature, resolving a direct 15 ps
+propagation selects 977 bath modes. Instead, nine initial-state calculations
+reconstruct the reduced dynamical map $\mathcal E_t$ through 0.15 ps. The
+transfer tensors are defined recursively from those maps and retain the bath
+memory needed to continue the reduced state.
 
 A donor trajectory alone is insufficient: a three-state system needs all
 $3^2=9$ map columns. The calculation uses the three basis states plus real and

@@ -1,9 +1,9 @@
 """Strong-coupling nonadiabatic spin--boson dynamics.
 
 This is the high-temperature benchmark of Nuomin, Beratan, and Zhang
-(arXiv:2111.14308): Delta=1, eta=4, omega_c=4, and T=4. The documentation
-profile follows the numerical settings of Fig. 8 through t*Delta/pi = 1; the
-manual reference profile covers the full published interval.
+(arXiv:2111.14308): Delta=1, eta=4, omega_c=4, and T=4. The ``docs`` profile
+uses 200 bath modes through t*Delta/pi = 1; the ``reference`` profile uses 600
+bath modes through the published endpoint t*Delta/pi = 5.
 """
 
 from argparse import ArgumentParser

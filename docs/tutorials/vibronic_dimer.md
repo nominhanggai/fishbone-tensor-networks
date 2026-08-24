@@ -11,8 +11,9 @@ molecules whose electronic energies are far from resonance.
 - **Level:** first tutorial; assumes a general open-quantum-systems background.
 - **You will learn:** how a structured vibration is attached to one molecular
   site, propagated, and compared with a published population curve.
-- **Cost:** the default smoke profile takes seconds; the two-trajectory
-  documentation profile commonly takes tens of minutes or longer on a CPU.
+- **Cost:** the four-step `smoke` profile takes seconds. The plotted calculation
+  propagates two automatically resolved bath chains for 800 steps each and
+  commonly takes tens of minutes or longer on a CPU.
 - **Output:** donor and acceptor populations through $tJ=20$.
 ```
 
@@ -246,9 +247,9 @@ with its automatically selected mode count and local Fock dimension.
 
 The paper reports one Matsubara frequency, hierarchy depth 6, and HEOM timestep
 $0.001/J$. Those are HEOM controls and do not translate directly into bond or
-Fock dimensions. The documentation calculation instead uses:
+Fock dimensions. The tensor-network calculation plotted below uses:
 
-| control | documentation run | manual refinement |
+| control | plotted calculation | refinement calculation |
 |---|---:|---:|
 | timestep | `0.025` | `0.0125` |
 | local Fock dimension | `12` | `16` |
@@ -270,10 +271,10 @@ the chain boundary beyond $tJ=20$.
 ```
 
 The resonant $8J$ vibration moves population rapidly and approaches a large
-acceptor population, whereas the $4J$ case transfers more slowly. The generated
-summary reports errors over 41 points along each published curve instead of
-checking only the final value. These pointwise errors, together with the peak
-bond dimension, are the acceptance criteria for the documentation profile.
+acceptor population, whereas the $4J$ case transfers more slowly. The numerical
+summary reports errors at 41 times along each published curve. Those pointwise
+errors and the peak bond dimension diagnose the plotted calculation more
+strongly than agreement at one endpoint.
 
 The centered gap operator is fixed by an independent HEOM reconstruction of
 the published calculation; it is not fitted to the plotted data. The
@@ -282,10 +283,12 @@ A donor projector can appear closer for one curve while solving a different
 factorized-initial-state problem. A short fixed chain also develops finite-size
 artifacts before the benchmark endpoint.
 
-The manual `reference` profile in `examples/vibronic_dimer.py` scans integer
-frequencies from $J$ through $10J$ with refined settings. It can be used to
-investigate the two maxima in the frequency scan, but the validated comparison
-on this page is limited to the two trajectories shown above.
+The `reference` profile in `examples/vibronic_dimer.py` scans the ten integer
+frequencies from $J$ through $10J$. It propagates each automatically resolved
+chain to $tJ=20$ with timestep $0.0125/J$, local Fock dimension 16, SVD
+threshold $5\times10^{-5}$, and no maximum bond cap. The plotted pointwise
+comparison uses only the $4J$ and $8J$ trajectories for which Figure 5 provides
+population curves.
 
 ## 6. Common mistakes
 
