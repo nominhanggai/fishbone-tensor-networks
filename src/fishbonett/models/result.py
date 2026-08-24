@@ -82,16 +82,15 @@ def plan_signature(dims, edges, arrays=(), scalars=()):
 
 @dataclass(frozen=True)
 class SimulationCheckpoint:
-    """A resumable tree tensor state and its compatibility metadata.
+    """A resumable tree tensor state and its validation metadata.
 
     Checkpoints are valid only for the same fully resolved Hamiltonian.  They can
     be kept in memory or stored as a pickle-free NPZ archive with :meth:`save`.
 
-    Both tree plans produce one: the static comb/site-tree, and the
-    interaction-picture comb.  The latter also stores ``elapsed``, which is not
-    bookkeeping there but physics -- its couplings ``d_n(t)`` are functions of
-    absolute time, so a continuation that restarted the clock at zero would evolve
-    a different Hamiltonian while looking perfectly healthy.
+    Both tree plans produce one: the static comb/site-tree and the
+    interaction-picture comb. The latter stores ``elapsed`` because its couplings
+    ``d_n(t)`` depend on absolute time; resetting the clock would change the
+    continued Hamiltonian.
     """
 
     tensors: tuple

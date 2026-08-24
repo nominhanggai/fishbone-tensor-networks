@@ -67,7 +67,7 @@ must not apply a second thermofield factor.
 - Unit tests check factors of $\pi$, the zero-frequency phase limit, Hermiticity,
   and the `Bath`-to-representation boundary.
 - Small exact-diagonalization tests compare equivalent representations and integrators.
-- `tests/characterization/all_methods_golden.py` checks every registry method
-  before and after a structural change.
+- The multichannel characterization test compares a fixed propagation with
+  committed golden observables.
 - `benchmarks/baseline_suite.py` records stable work metrics (Krylov calls and
   iterations, peak bond) and a reference observable; wall time is diagnostic.

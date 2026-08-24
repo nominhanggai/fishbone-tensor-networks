@@ -68,12 +68,9 @@ def test_automatic_resolution_is_fresh_per_run_horizon():
     assert coupled.bath.n_modes is None
 
 
-def test_legacy_coupling_emits_a_migration_warning():
-    bath = Bath(J=_J, coupling=sigma_z, domain=(0.0, 40.0),
-                n_modes=3, phys_dim=4)
-    with pytest.warns(DeprecationWarning, match="Bath.coupling is deprecated"):
-        coupled = bath.bind()
-    np.testing.assert_array_equal(coupled.operator, sigma_z)
+def test_bath_binding_requires_an_explicit_operator():
+    with pytest.raises(TypeError, match="coupling"):
+        _bath().bind()
 
 
 def test_model_owned_multichannel_couplings_need_no_bath_duplicate():
@@ -102,25 +99,6 @@ def test_one_density_can_be_shared_by_several_model_channels():
         representation="interaction-star", h_sys=0.5 * sigma_x,
         coupling=[sigma_z, sigma_x], bath=_bath()).build()
     assert representation.coup_mat_np.shape == (3, 2, 2)
-
-
-def test_conflicting_legacy_and_model_couplings_are_rejected():
-    bath = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x],
-                domain=(0.0, 40.0), n_modes=3, phys_dim=4)
-
-    with pytest.warns(DeprecationWarning, match="Bath.coupling is deprecated"):
-        with pytest.raises(ValueError, match="specified twice"):
-            SystemBath(h=0.5 * sigma_x,
-                       coupling=[sigma_x, sigma_x], bath=bath)
-
-
-def test_matching_legacy_duplicate_remains_compatible():
-    bath = Bath(J=[_J, _J], coupling=[sigma_z, sigma_x],
-                domain=(0.0, 40.0), n_modes=3, phys_dim=4)
-    with pytest.warns(DeprecationWarning, match="Bath.coupling is deprecated"):
-        model = SystemBath(h=0.5 * sigma_x,
-                           coupling=[sigma_z, sigma_x], bath=bath)
-    assert model.coupled_bath.is_multichannel
 
 
 def test_thermalized_ohmic_density_has_the_correct_zero_frequency_limit():

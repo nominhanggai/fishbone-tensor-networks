@@ -139,7 +139,14 @@ def test_system_bath_rejects_unknown_engine_options():
             initial_bond=4)
 
 
-def test_binary_tree_reports_progress_each_step():
+@pytest.mark.parametrize("method", [
+    "interaction-chain-tree-tebd",
+    "interaction-chain-tebd",
+    "interaction-chain-trotter-mpo",
+    "interaction-chain-tdvp2",
+    "polaron-chain-tebd",
+])
+def test_progress_payload_is_consistent_across_engines(method):
     from fishbonett import Bath, SystemBath
     from fishbonett.operators import sigma_x, sigma_z
 
@@ -148,7 +155,7 @@ def test_binary_tree_reports_progress_each_step():
         bath=Bath.vibronic([1.0, 2.0], [0.1, 0.05], phys_dim=3))
     updates = []
     model.run(
-        dt=0.02, n_steps=2, method="interaction-chain-tree-tebd",
+        dt=0.02, n_steps=2, method=method,
         bond_dim=16, progress=updates.append)
     assert [item["step"] for item in updates] == [0, 1]
     assert [item["t"] for item in updates] == pytest.approx([0.02, 0.04])
@@ -349,7 +356,7 @@ def test_resumed_comb_rejects_a_different_hamiltonian(tmp_path):
     with pytest.raises(ValueError, match="does not match this resolved model"):
         other.run(n_steps=2, resume=first.checkpoint, **kw)
 
-    # ...and a bath resolved for a different horizon is refused too
+    # A different bath horizon changes the resolved model.
     with pytest.raises(ValueError, match="bath_horizon"):
         model.run(n_steps=2, resume=first.checkpoint,
                   **{**kw, "bath_horizon": 0.05})

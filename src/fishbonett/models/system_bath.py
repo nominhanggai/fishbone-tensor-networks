@@ -25,9 +25,8 @@ from fishbonett.targets import BathMode
 
 __all__ = ["SystemBath"]
 
-#: ``run``'s default.  Used to tell "the user asked for a method" apart from
-#: "the user left it alone", which matters for the multichannel model where
-#: ``method`` has nothing to choose.
+#: Default when no method axis is supplied. Multichannel baths select their own
+#: compatible default after the coupling topology is known.
 _DEFAULT_METHOD = "interaction-chain-tree-tebd"
 
 
@@ -117,11 +116,8 @@ class SystemBath:
         # builders take as `h_sys=` / `coupling=`
         self.h = self.system.h
         self.coupling = self.system.coupling
-        # One authoritative binding.  ``Bath.coupling`` is accepted only as a
-        # compatibility duplicate and must agree; every driver below reads this
-        # object for channel topology and combined star couplings.
-        self.coupled_bath = bind_bath(
-            bath, self.coupling, validate_legacy=True)
+        # Every driver reads this binding for channel topology and star couplings.
+        self.coupled_bath = bind_bath(bath, self.coupling)
         self.bath = self.coupled_bath.bath
 
     # -- public API ----------------------------------------------------------
@@ -192,8 +188,7 @@ class SystemBath:
           thermalization.
         * **multichannel** -- one bath through several couplings on shared modes.
           Selected by giving ``SystemBath(coupling=...)`` a *list* of coupling
-          operators. ``Bath.coupling`` is deprecated and emits a warning; a
-          conflicting duplicate is rejected.
+          operators.
 
         For several system sites use :class:`~fishbonett.models.fishbone.Fishbone` (1D
         backbone) or :class:`~fishbonett.models.fishbone.TreeFishbone` (any tree).
@@ -208,8 +203,8 @@ class SystemBath:
         below it are discarded, so it alone decides the bond dimension.
         ``bond_dim`` is an *optional* safety cap; the default ``None`` means
         **unlimited**, i.e. the bond grows to whatever ``trunc_eps`` requires
-        (``result.max_bond`` reports what was actually used).  Fixed-bond methods
-        One-site TDVP methods evolve on a fixed bond manifold and therefore
+        (``result.max_bond`` reports what was actually used). One-site TDVP
+        methods evolve on a fixed bond manifold and therefore
         require ``bond_dim``. Dynamic TDVP can grow its manifold, but also
         requires ``bond_dim`` as a finite memory ceiling.
 
@@ -221,16 +216,6 @@ class SystemBath:
         density matrix. ``observe_every`` controls recording without changing
         integration; ``bath_horizon`` controls automatic bath resolution.
         """
-        if "geometry" in engine_kw:
-            raise TypeError(
-                "'geometry' is no longer a public run axis; use "
-                "state_geometry with 'mps', 'binary-tree', or 'tree'")
-        stale_axes = [name for name in ("frame", "basis") if name in engine_kw]
-        if stale_axes:
-            joined = " and ".join(repr(name) for name in stale_axes)
-            raise TypeError(
-                f"{joined} is not a public run axis; use one exact "
-                "representation= value instead")
         dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
         trunc = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
         observe_every, bath_horizon = _resolve_sampling_options(
@@ -249,8 +234,7 @@ class SystemBath:
         axes = any(v is not None for v in axis_kw.values())
         multichannel = self.coupled_bath.is_multichannel
         if multichannel:
-            # This model is selected by the model coupling's shape, so `method` can only
-            # pick among its propagators -- say so rather than ignoring it.
+            # A coupling list selects the multichannel model.
             mine = {"multichannel"}
             own = methods_of("multichannel")
             if method is not None:

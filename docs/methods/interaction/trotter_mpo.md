@@ -152,7 +152,7 @@ The bond dimension of the *state* is unchanged — this is the same representati
 same physics as `interaction-chain-tebd`, so it carries the same entanglement.
 `interaction-chain-trotter-mpo` changes
 the cost of applying the propagator, not the cost of representing the state.  For a
-method that lowers the state entanglement itself, see {doc}`/methods/schrodinger/polaron_chain`.
+method that lowers the state entanglement itself, see {doc}`/methods/polaron`.
 ```
 
 ### Exactness on a truncated ladder

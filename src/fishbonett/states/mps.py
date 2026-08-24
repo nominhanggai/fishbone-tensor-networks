@@ -53,7 +53,7 @@ try:  # optional GPU backend
         b = min(b, dim)
         # Derive each device sketch from the high-level run-local RNG. This
         # honors ``run(seed=...)`` while advancing between successive bonds.
-        return _curdsvd(a, b, True, n_iter=2, l=2 * b, seed=_next_seed())
+        return _curdsvd(a, b, n_iter=2, l=2 * b, seed=_next_seed())
 except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 

@@ -74,9 +74,11 @@ def test_vibronic_dimer_represents_one_gap_coordinate():
     model = module.make_model(8.0, module.PROFILES["smoke"])
     assert len(model.baths[0]) == 1
     assert model.baths[1] == []
-    assert np.array_equal(model.baths[0][0].operator, module.OCCUPIED)
+    assert np.array_equal(model.baths[0][0].operator, module.GAP_OPERATOR)
+    assert np.array_equal(module.GAP_OPERATOR, np.diag([-0.5, 0.5]))
     assert module.PROFILES["docs"].t_max == 20.0
     assert module.PROFILES["docs"].n_modes is None
+    assert module.PROFILES["docs"].trunc_eps == pytest.approx(1e-4)
     paper = module.load_paper_figure5()
     assert tuple(paper.dtype.names) == (
         "tJ", "omega4_acceptor", "omega8_acceptor",
@@ -92,6 +94,12 @@ def test_nonadiabatic_smoke_population_is_physical():
     population = suite["results"]["interaction"].expect["population_up"]
     assert np.all(np.asarray(population) >= -1e-10)
     assert np.all(np.asarray(population) <= 1.0 + 1e-10)
+
+
+def test_nonadiabatic_reference_uses_the_paper_length_chain():
+    module = _load("nonadiabatic_spin_boson")
+    assert module.PROFILES["docs"].n_modes == 200
+    assert module.PROFILES["reference"].n_modes == 600
 
 
 def test_electron_transfer_units_and_smoke_populations():
@@ -215,6 +223,7 @@ def test_electron_transfer_tomography_spans_liouville_space():
 
 def test_heat_flow_smoke_uses_distinct_baths_and_obeys_continuity():
     module = _load("two_bath_heat_flow")
+    assert module.ALPHA == pytest.approx(0.025)
     suite = module.run_profile("smoke")
     case = suite["results"]["nonequilibrium"]["primary"]
     result = case["result"]

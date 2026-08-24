@@ -110,4 +110,4 @@ r2.max_bond
 - `h` and the coupling `O` are carried as matrices, so a general Hermitian system
   and coupling of any dimension work; see {doc}`/models/spin_boson`.
 - `polaron-star` is a separate static representation implemented through the
-  generic TDVP MPO; see {doc}`polaron_chain`.
+  generic TDVP MPO; see {doc}`/methods/polaron`.

@@ -9,13 +9,7 @@ from fishbonett.states.mps import SystemBathMPS
 
 
 def test_gpu_request_without_cupy_says_so_and_still_works():
-    """``gpu=True`` without CuPy silently ran on the CPU.
-
-    The fallback itself is right -- the results are identical, only slower -- but
-    silence means the only symptom is an unaccountably slow run.  Same class as the
-    VEGAS integrators: an optional extra whose absence changed behaviour without
-    saying anything.  It now warns once and still produces the same state.
-    """
+    """A missing CuPy backend warns before falling back to the CPU."""
     from fishbonett.states import mps as mps_mod
     from fishbonett.states.mps import SystemBathMPS
 

@@ -49,7 +49,8 @@ PROFILES = {
         ("interaction",),
     ),
     "reference": Profile(
-        "reference", 5.0 * np.pi, 0.0125, 10, 200, (-16.0, 80.0), 1e-3,
+        # Figure 9 displays 600 bath-chain bonds for the full Figure 8 run.
+        "reference", 5.0 * np.pi, 0.0125, 10, 600, (-16.0, 80.0), 1e-3,
         ("interaction",),
     ),
 }

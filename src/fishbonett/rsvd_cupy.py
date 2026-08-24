@@ -31,13 +31,12 @@ def _range(matrix, width, n_iter, rng):
     return Q
 
 
-def rsvd(A, k=6, raw=False, n_iter=2, l=None, seed=None):
+def rsvd(A, k=6, *, n_iter=2, l=None, seed=None):
     """Return the leading ``k`` singular triplets of a CuPy matrix.
 
-    ``raw`` is accepted for compatibility with the former CPU/GPU API. ``l`` is
-    the total sketch width, and ``seed`` controls a run-local CuPy generator.
+    ``l`` is the total sketch width, and ``seed`` controls a run-local CuPy
+    generator.
     """
-    del raw
     matrix = cp.asarray(A)
     if matrix.ndim != 2:
         raise ValueError("rsvd expects a two-dimensional matrix")

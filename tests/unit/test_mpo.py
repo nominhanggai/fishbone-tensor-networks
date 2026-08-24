@@ -11,11 +11,7 @@ from fishbonett.representations.schrodinger import SchrodingerRepresentation
 
 DOMAIN = (-25.0, 36.0)
 
-# The seven run_* wrappers these tests used to call are gone: each was one
-# (representation, sweep) pair with its own copy of the loop.  Materializing the
-# MPO is a representation question and running the sweep an evolution question, so a test
-# now names both.  The wrappers took a half-step and advanced 2*dt per step;
-# run_mpo_hamiltonian takes the step itself, hence dt=0.10 where they said dt=0.05.
+# ``run_mpo_hamiltonian`` receives the complete integration step.
 
 
 def _Jb(w):
@@ -149,8 +145,7 @@ def test_the_two_bonddims_are_not_interchangeable():
 def test_one_loop_serves_every_tdvp_mpo_and_sweep():
     """Represented Hamiltonian and TDVP sweep are independent choices.
 
-    Whichever MPO you hand it, and whichever sweep you name, it is the same loop --
-    which is why there is no longer a function per combination.
+    Every represented MPO and sweep is routed through the same driver loop.
     """
     n_chain, d, V = 3, 4, 1.0
     interaction = InteractionRepresentation(

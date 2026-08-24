@@ -52,7 +52,6 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.representations.interaction
    fishbonett.representations.polaron
    fishbonett.representations.multichannel
-   fishbonett.representations.coolingchain
 ```
 
 ## Tensor-network states

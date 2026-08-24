@@ -213,8 +213,7 @@ def test_multichannel_ip_mps_matches_the_static_tree_and_exact():
 
 
 def test_multichannel_ip_rejects_a_zero_lanczos_seed():
-    """A coupling set whose diagonal vanishes in the working basis gives a zero
-    Lanczos seed.  That used to produce a silent NaN chain; it must raise."""
+    """A zero multichannel Lanczos seed is rejected explicitly."""
     sy = np.array([[0, -1j], [1j, 0]], complex)
     sd = lambda w: 0.15 * w * np.exp(-w / 6.0)
     mc = Bath(J=[sd, sd], domain=(0.0, 30.0),
@@ -326,9 +325,8 @@ def test_swap_network_walks_the_system_out_from_site_0_and_back():
     """Pin the swap-network direction to the site-0 convention.
 
     The swap gate exchanges its two sites, so the physical *dimensions* move with
-    the content: with d_sys != d_boson the system's position is observable.  Nothing
-    else pins this, and the direction is exactly what the site-0 port had to change
-    -- the old layout walked the system inward from the last site.
+    the content. With unequal system and boson dimensions, this makes the system's
+    outward path and return to site 0 directly observable.
     """
     from fishbonett import Bath
     from fishbonett.evolve import tebd
@@ -465,10 +463,9 @@ def test_free_chain_gates_put_each_frequency_on_its_own_mode():
     on ``c_m`` -- its **right** leg, because with the system at site 0 the chain
     runs outward.
 
-    The old layout ran the chain inward, where the new mode was the *left* leg;
-    carrying that convention over silently pairs each frequency with the
-    neighbouring mode.  Populations stay normalized and traces stay 1, so only a
-    structural check catches it.
+    Assigning ``w_list[m]`` to the left leg shifts each frequency to a neighbouring
+    mode without violating normalization, so this test checks the gate structure
+    directly.
     """
     import scipy.linalg as sla
     from fishbonett import Bath
@@ -498,23 +495,11 @@ def test_free_chain_gates_put_each_frequency_on_its_own_mode():
 
 
 def test_two_site_tdvp_bond_grows_at_the_default_threshold():
-    """Two-site TDVP must be accurate at the *default* trunc_eps, not only at 1e-12.
+    """Two-site TDVP grows entanglement at the default truncation threshold.
 
-    Regression test.  ``_split2`` used to keep only the Schmidt values above
-    ``eps * s[0]``, with no allowance for growth.  Starting from a product state
-    the entangling component a step creates is O(coupling * dt); when that fell
-    below ``eps`` it was discarded, so the next step regenerated the same O(dt)
-    seed instead of accumulating -- the bond locked at 1 and the run returned a
-    mean-field answer with no warning.
-
-    Measured before the fix, at the default ``trunc_eps=1e-4``: 5.5e-2 error
-    against exact diagonalization with peak bond 1, while one-site TDVP on the
-    identical MPO gave 5.4e-4.  The error was *flat* from eps=1e-2 to 1e-5,
-    which is the signature: tightening the accuracy knob did nothing.
-
-    ``test_method_matches_exact`` covers the same method but at ``trunc_eps=1e-12``,
-    which is deep inside the region where the bug is invisible.  This test pins the
-    default explicitly, and asserts the bond actually grew.
+    A product-state step can create Schmidt values below the threshold. Retaining
+    a small expansion space prevents repeated truncation from locking the bond at
+    one before those components accumulate.
     """
     from fishbonett.linalg import DEFAULT_EPS
 
@@ -558,13 +543,7 @@ def test_bond_expansion_allowance_is_bounded():
 
 
 def test_dynamic_tdvp_honours_the_bond_expansion_allowance():
-    """``dtdvp`` must get the allowance too -- it is a two-site sweep.
-
-    ``tdvp1sweep_dynamic`` is ``tdvp2sweep`` with ``prec`` as its threshold, so it
-    shared the growth bug, and adaptive bond growth is the one thing it exists to
-    do.  When the allowance was first added the driver passed it only on the
-    ``tdvp2`` branch, so ``bond_expand`` was accepted and silently ignored here.
-    """
+    """Dynamic TDVP passes ``bond_expand`` to its two-site sweep."""
     grown = _model().run(dt=0.05, n_steps=8, method="schrodinger-chain-dtdvp",
                          bond_dim=40, trunc_eps=1e-3,
                          observables={"sz": sigma_z})

@@ -305,17 +305,11 @@ def tdvp_branch_step(state, mpo, path, dt, chi_max, eps,
     propagates with the *generator*, projected onto the two-site tangent space.
     Both are second order and both agree with exact diagonalization.
 
-    What this does **not** buy is accuracy at a binding ``chi_max``.  Two-site TDVP
-    evolves a two-site block and then splits it with a truncating SVD
+    Two-site TDVP evolves a two-site block and then splits it with a truncating SVD
     (:func:`~fishbonett.evolve._tdvp_sweeps._split2`), so once the cap binds it
-    discards weight just as a Trotter step can. A binding cap therefore requires
-    its own convergence check; choosing TDVP2 does not remove that error source.
-    Working strictly inside a fixed-bond manifold without ever truncating is a
-    property of *one-site* TDVP, which is a separate integrator and needs the bond
-    padded up front because it cannot grow one.
-
-    Use this when a generator-based integrator is wanted for its own sake; use
-    ``trotter-mpo`` when the bond is capped and speed is what matters.
+    discards weight. A binding cap therefore requires a convergence check.
+    One-site TDVP instead evolves within a fixed-bond manifold and needs the bond
+    padded before propagation because it cannot grow.
 
     ``mpo`` is the branch Hamiltonian along ``path``, sampled at the midpoint of the
     interval by the caller, in the tree's *forward* mode order (see

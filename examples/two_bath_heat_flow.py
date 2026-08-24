@@ -17,7 +17,8 @@ from fishbonett.operators import annihilate, sigma_x, sigma_y, sigma_z
 
 OMEGA_C = 1.0
 OMEGA_0 = 0.2
-ALPHA = 0.1
+# Coupling of each reservoir in the two-bath benchmark.
+ALPHA = 0.025
 
 
 @dataclass(frozen=True)

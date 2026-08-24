@@ -1,4 +1,4 @@
-"""Dependency and compatibility contracts for the split numerical engines."""
+"""Dependency contracts for the numerical-engine layers."""
 import ast
 import inspect
 
@@ -77,22 +77,8 @@ def test_modetree_dependencies_point_from_driver_to_sweep_and_core():
     assert "fishbonett.evolve._modetree_sweeps" in _imports(driver)
 
 
-#: ``representations/coolingchain.py`` is exempt because it is not a
-#: representation builder at all: ``SystemBathCoolingChain`` *subclasses*
-#: ``states.mps.SystemBathMPS``, so it is a state that happens to live in this
-#: package.  It is not one of the six entries in ``registry.REPRESENTATIONS``.
-#: Relocating it to ``states/`` would remove the exemption; until then it is
-#: named here so the exemption is a decision rather than an oversight.
-LAYERING_EXEMPT = {"coolingchain"}
-
-
 def test_transformed_representations_do_not_import_propagation_layers():
-    """Representations materialize operators but never advance tensor states.
-
-    Discovered by globbing the package rather than from a hand-written module
-    list: a list silently stops covering whatever is added next, and the module
-    that actually violates this invariant was missing from the previous one.
-    """
+    """Representations materialize operators but never advance tensor states."""
     import importlib
     import pathlib
 
@@ -100,7 +86,7 @@ def test_transformed_representations_do_not_import_propagation_layers():
     root = pathlib.Path(__file__).resolve().parents[2] / "src" / "fishbonett" / "representations"
     checked = set()
     for path in sorted(root.glob("*.py")):
-        if path.stem.startswith("__") or path.stem in LAYERING_EXEMPT:
+        if path.stem.startswith("__"):
             continue
         module = importlib.import_module(f"fishbonett.representations.{path.stem}")
         checked.add(path.stem)
@@ -109,11 +95,3 @@ def test_transformed_representations_do_not_import_propagation_layers():
 
     # the sweep must actually have covered the six public representations
     assert {"interaction", "multichannel", "polaron", "schrodinger"} <= checked
-
-
-def test_layering_exemptions_are_real_modules():
-    """An exemption for a module that no longer exists silently weakens the sweep."""
-    import pathlib
-    root = pathlib.Path(__file__).resolve().parents[2] / "src" / "fishbonett" / "representations"
-    for stem in LAYERING_EXEMPT:
-        assert (root / f"{stem}.py").exists(), stem

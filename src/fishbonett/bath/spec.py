@@ -97,12 +97,6 @@ class Bath:
         Bath discretization: uniform-measure Gauss-Legendre star, or the
         measure-adapted TEDOPA star (resolves IR-divergent / sharply peaked baths).
     extra_breaks, m_per : TEDOPA quadrature options.
-    coupling : (d, d) array, or list of (d, d) arrays
-        Deprecated compatibility field. Bind operators explicitly with
-        :meth:`Bath.bind`, or pass ``SystemBath(coupling=...)`` for the
-        single-system API. Using this field emits ``DeprecationWarning``; a
-        conflicting duplicate is rejected. A list denotes channels sharing one
-        mode grid and therefore requires ``'legendre'``.
     """
     J: Callable[[float], float] | Sequence[Callable[[float], float]]
     domain: tuple[float, float] | None = None
@@ -114,7 +108,6 @@ class Bath:
     discretization: str = "legendre"
     extra_breaks: tuple = ()
     m_per: int = 60
-    coupling: np.ndarray | Sequence[np.ndarray] | None = None
     discrete_frequencies: tuple[float, ...] = ()
     discrete_couplings: tuple[float, ...] = ()
     # A normally constructed Bath describes a continuum.  Discrete-only
@@ -408,41 +401,14 @@ class Bath:
             raise ValueError("Bath.J must contain at least one spectral density")
         return tuple(self._thermalized(density) for density in densities)
 
-    @property
-    def is_multichannel(self):
-        """Compatibility view of whether ``Bath.coupling`` contains a list.
-
-        Prefer ``bath.bind(operators).is_multichannel``; channel topology belongs
-        to the coupled model, not the environment specification alone.
-        """
-        return isinstance(self.coupling, (list, tuple))
-
-    def channels(self):
-        """``[(thermalized_J_c, operator_c), ...]`` for a multichannel bath.
-
-        The channels share the same mode grid (same ``domain``/``n_modes``/
-        ``discretization``); ``J`` may be one spectral density (shared by all
-        channels) or a list of the same length as ``coupling``."""
-        ops = list(self.coupling)
-        Js = self.J if isinstance(self.J, (list, tuple)) else [self.J] * len(ops)
-        if len(Js) != len(ops):
-            raise ValueError("a multichannel Bath needs `J` and `coupling` of the "
-                             "same length (one spectral density per channel)")
-        return [(self._thermalized(Jc), np.asarray(op, complex))
-                for Jc, op in zip(Js, ops)]
-
-    def bind(self, coupling=None, *, default_operator=None,
-             validate_legacy=False):
+    def bind(self, coupling):
         """Bind this bath to model-owned coupling operator(s).
 
-        New code should keep the operator outside the bath specification and use
-        this explicit binding.  ``Bath.coupling`` remains temporarily accepted for
-        the Fishbone API and emits ``DeprecationWarning``; it is checked when
-        ``validate_legacy`` is requested.
+        Pass one operator, or a sequence of operators for channels that share the
+        same represented modes.
         """
         from fishbonett.bath.coupled import bind_bath
-        return bind_bath(self, coupling, default_operator=default_operator,
-                         validate_legacy=validate_legacy)
+        return bind_bath(self, coupling)
 
     def discretizer(self):
         """The star-discretization callable this bath's ``discretization`` selects

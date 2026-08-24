@@ -41,9 +41,7 @@ coupled = bath.bind(sigma_z)
 Representations receive `bath` directly and discretize it into their own finite
 star or chain coefficients. Those coefficients are private implementation data,
 while `CoupledBath` records the physical association between a bath and one or
-more model operators. `Bath(coupling=...)` is deprecated; use
-`SystemBath(coupling=...)` or `bath.bind(operator)`.
-If it duplicates `SystemBath(coupling=...)`, the values must agree.
+more model operators.
 
 ## Discrete molecular vibrations
 
@@ -253,8 +251,9 @@ $g_k$, and an orthogonal transform. This is a way to generate a finite star
 discretization. The interaction construction then starts from that star:
 
 1. absorb the free-star evolution into $g_ke^{-i\omega_kt}$;
-2. keep those modes for `interaction-star`, or apply the inverse transform
-   star-to-chain for `interaction-chain`.
+2. keep those modes for `interaction-star`, or apply the star-to-chain transform
+   for `interaction-chain`. This transform is the inverse of the preceding
+   finite-chain diagonalization.
 
 Consequently, chain diagonalization is not the definition of
 `interaction-chain`. It is one way to prepare the finite star from which the
@@ -269,9 +268,9 @@ Because quadrature and chain mapping are two numerical views of one finite bath,
 The default `"legendre"` puts them at the Gauss–Legendre nodes of the *uniform*
 measure on the domain (de Vega & Bañuls 2015): frequencies $\omega_k$ are the nodes
 and couplings $g_k=\sqrt{J(\omega_k)\,w_k/\pi}$ come from the quadrature weights.
-The nodes ignore $J$, which makes them robust and — crucially — **shared across
-channels**, which is why a {doc}`multichannel bath <models/composite_multichannel>`
-requires this setting.  This is
+The nodes are independent of $J$ and can therefore be shared across channels. A
+{doc}`multichannel bath <models/composite_multichannel>` requires this setting.
+This is
 {py:func}`fishbonett.bath.legendre.get_vn_squared`.
 
 `"tedopa"` instead uses the measure $d\mu(\omega)=J(\omega)\,d\omega$ — the actual

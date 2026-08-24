@@ -1,5 +1,8 @@
 """Regression tests for scientific contracts required by a public release."""
 
+from pathlib import Path
+
+import fishbonett
 import numpy as np
 import pytest
 
@@ -19,6 +22,12 @@ from fishbonett.representations.multichannel import (
 from fishbonett.spectral_densities import brownian
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.system import System
+
+
+def test_suite_imports_the_current_checkout():
+    expected = Path(__file__).resolve().parents[2] / "src" / "fishbonett"
+    imported = Path(fishbonett.__file__).resolve().parent
+    assert imported == expected
 
 
 def test_complex_multichannel_local_hamiltonian_is_hermitian():

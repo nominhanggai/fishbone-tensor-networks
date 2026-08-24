@@ -11,19 +11,7 @@ from fishbonett.bath.legendre import get_vn_squared
 
 
 def test_vegas_rate_integrators_run_up_to_their_optional_dependency():
-    """The two VEGAS integrators were executed by nothing at all.
-
-    ``vegas`` is an optional extra that no test or CI job installs, so both
-    functions in ``rates/golden_rule_multi`` that use it had never run -- the same
-    situation as ``benchmarks/tree_engine.py``, which turned out to have been broken
-    for a long time precisely because nothing ran it.
-
-    This exercises everything up to the import: the argument unpacking, the
-    displacement algebra, the coth prefactors and the integrand closures all
-    execute, and only the missing package stops them.  That is most of the code and
-    it is checkable without the extra.  It also pins the error message, which now
-    names the extra instead of just saying "No module named 'vegas'".
-    """
+    """VEGAS rate functions explain how to install their optional dependency."""
     import numpy as np
     import pytest
 

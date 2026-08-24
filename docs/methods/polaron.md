@@ -47,8 +47,6 @@ RDM for both star and chain.
 - Both representations supply a static TDVP MPO for one-site, two-site, and
   dynamically adaptive TDVP.
 
-These are numerical products of the same represented Hamiltonian.
-
 ```python
 chain = model.run(
     dt=0.02, t_max=4.0, method="polaron-chain-tdvp2",

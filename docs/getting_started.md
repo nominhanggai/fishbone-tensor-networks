@@ -220,5 +220,6 @@ the initial state, runs this loop, and — in time-dependent representations —
 rebuilds the gates each step.
 
 See the [`examples/`](https://github.com/nominhanggai/fishbone-tensor-networks/tree/main/examples)
-directory for runnable scripts — start with `friendly_interface.py`, which also
-covers the interaction picture, the cooling scheme, and rate theory.
+directory for runnable scripts. Start with `friendly_interface.py` for compact
+single-system and multi-site examples, then use the paper-backed tutorials for
+complete scientific calculations.

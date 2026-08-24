@@ -100,14 +100,7 @@ def _exact(sites, specs, backbone, d, ts):
 
 
 def _check(sites, baths, backbone, specs, d, tol, dt=0.02, ns=12):
-    """Propagate and compare against exact diagonalization.
-
-    The ``tol`` values are ~3x the errors actually measured at ``dt=0.02`` with the
-    second-order step (3e-5 to 1.4e-4).  They used to be 1e-3 to 5e-3, which the
-    old first-order step also satisfied -- keeping them loose is what let the wrong
-    Trotter order go unnoticed, so they are now tight enough that a regression to
-    first order fails here as well as in the convergence test.
-    """
+    """Compare against exact diagonalization with tolerances that reject first order."""
     fb = Fishbone(sites=sites, baths=baths, backbone=backbone)
     res = fb.run(dt=dt, n_steps=ns, bond_dim=40, trunc_eps=1e-12,
                  observables={"sz": sigma_z})
@@ -404,12 +397,7 @@ def test_splitting_a_bath_across_branches_is_exact():
 
 
 def test_a_site_may_carry_baths_with_different_phys_dim():
-    """Each branch keeps its own truncation, so parts can be sized independently.
-
-    This is what makes a split worthwhile beyond the chain-mixing question: modes
-    that are barely populated do not need the ``phys_dim`` the strongly driven ones
-    do, and before this a site had a single bath and therefore a single value.
-    """
+    """Independent bath branches may use different local dimensions."""
     freqs, strengths = np.array([3.0, 11.0]), np.array([0.5, 0.35])
     apart = [_two_line_bath(freqs[:1], strengths[:1], 6, PROJECTOR),
              _two_line_bath(freqs[1:], strengths[1:], 3, PROJECTOR)]
@@ -421,11 +409,11 @@ def test_a_site_may_carry_baths_with_different_phys_dim():
     assert dims == [2, 3, 6], dims
 
 
-def test_an_unbound_list_of_baths_is_rejected():
-    """Several baths require explicit operators; their position has no meaning."""
+@pytest.mark.parametrize("entry", [lambda bath: bath, lambda bath: [bath, bath]])
+def test_unbound_baths_are_rejected(entry):
     raw = Bath(J=_J, domain=DOM, n_modes=2, phys_dim=4)
-    with pytest.raises(ValueError, match="bind every coupling operator explicitly"):
-        Fishbone._site_baths([raw, raw])
+    with pytest.raises(ValueError, match=r"bath\.bind\(operator\)"):
+        Fishbone._site_baths(entry(raw))
 
 
 @pytest.mark.parametrize("method", COMB_METHODS)

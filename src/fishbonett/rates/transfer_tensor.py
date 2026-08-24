@@ -141,9 +141,8 @@ def predict_density_mat(t, T, r_init):
     """Extrapolate the density matrix to time index ``t`` with transfer tensors ``T``.
 
     Each new step is ``rho_n = sum_k T_k rho_{n-k}`` over the retained memory
-    depth ``len(T)``, seeded with the directly-simulated ``r_init``.  Cost per
-    step is a few matrix products regardless of how far out ``t`` is -- that is
-    the whole point of the method.
+    depth ``len(T)``, seeded with the directly simulated ``r_init``. Cost per
+    step is independent of the requested final time index.
 
     Requires ``t >= len(T) == len(r_init) > 0``: you need at least as much
     simulated history as the memory depth you kept.  Returns the full trajectory

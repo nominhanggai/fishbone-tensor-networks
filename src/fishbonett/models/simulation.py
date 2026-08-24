@@ -269,9 +269,7 @@ def _compile_tdvp_representation(model, spec, context, coupled):
         if spec.driver == "dtdvp":
             hooks["prec"] = context.kw.get("prec", context.trunc_eps)
         if spec.driver == "tdvp1":
-            # One-site TDVP evolves on a fixed manifold, so the public bond_dim
-            # is the manifold requested by the user.  A hidden cap here made
-            # polaron TDVP1 silently run at bond dimension six.
+            # One-site TDVP evolves on the requested fixed-bond manifold.
             hooks["initial_bond"] = context.bond_dim
         return transformed, hooks
     raise ValueError(f"engine 'mpo-tdvp' has no compiler for representation {spec.representation!r}")
@@ -625,6 +623,8 @@ def _compile_polaron_plan(model, spec, context):
     bath_observables = _bath_observables(context.obs_ops, _bath)
     state = SystemBathMPS(phys_dims)
     psi0 = model.system.initial_vector(context.initial)
+    # Factorize the analytically prepared pair without applying the propagation
+    # truncation threshold; this cutoff removes only floating-point null values.
     state.split_truncate_theta(
         representation.initial_theta(psi0), 0, context.bond_dim, 1e-14)
     gates = representation.tebd_gates(context.dt / 2.0)

@@ -83,8 +83,8 @@ star-to-chain transformation.
 - `fishbonett.evolve` advances tensors and does not discretize a bath or select a
   representation.
 
-`Bath.coupling` is deprecated. Use `SystemBath(coupling=...)` for single-system
-models and `bath.bind(operator)` for multi-site models.
+`SystemBath(coupling=...)` owns the operator for a single-system model. Multi-site
+models take explicit `bath.bind(operator)` values at the attached sites.
 
 ## Numerical products of a representation
 
