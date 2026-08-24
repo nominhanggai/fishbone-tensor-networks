@@ -145,21 +145,25 @@ def run_junction(beta_hot, beta_cold):
     return result, hot_to_system, cold_to_system
 
 
-# A temperature-biased calculation and a zero-bias control.
-neq, hot_current, cold_current = run_junction(2.0, 100.0)
-eq, eq_hot_current, eq_cold_current = run_junction(100.0, 100.0)
+# A temperature-biased calculation and an equal-temperature control.
+biased, hot_current, cold_current = run_junction(2.0, 100.0)
+equal_temperature, control_hot_current, control_cold_current = (
+    run_junction(100.0, 100.0)
+)
 
 # The molecular energy and its numerical derivative provide an independent
 # continuity check: d<E_S>/dt = I_hot->S + I_cold->S.
-system_energy = 0.5 * OMEGA_0 * np.asarray(neq.expect["sz"], dtype=float)
-energy_derivative = np.gradient(system_energy, neq.t)
+system_energy = (
+    0.5 * OMEGA_0 * np.asarray(biased.expect["sz"], dtype=float)
+)
+energy_derivative = np.gradient(system_energy, biased.t)
 continuity_residual = energy_derivative - hot_current - cold_current
 interior = continuity_residual[1:-1]  # omit one-sided derivative endpoints
 
 # "Steady" below means only the final fifth of this finite simulation.
-tail = slice(int(0.8 * len(neq.t)), None)
-print("observable shape:", neq.expect["sz"].shape)
-print("maximum bond dimension:", int(np.max(neq.max_bond)))
+tail = slice(int(0.8 * len(biased.t)), None)
+print("observable shape:", biased.expect["sz"].shape)
+print("maximum bond dimension:", int(np.max(biased.max_bond)))
 print("mean late hot current:", float(np.mean(hot_current[tail])))
 print("mean late cold current:", float(np.mean(cold_current[tail])))
 print(
@@ -169,24 +173,34 @@ print(
 print("continuity RMS:", float(np.sqrt(np.mean(interior**2))))
 print(
     "equal-temperature late net current:",
-    float(np.mean((eq_hot_current + eq_cold_current)[tail])),
+    float(np.mean((control_hot_current + control_cold_current)[tail])),
 )
 
-fig, axes = plt.subplots(2, 1, figsize=(7, 6), sharex=True)
-axes[0].plot(neq.t, neq.expect["sz"], label="temperature bias")
-axes[0].plot(eq.t, eq.expect["sz"], "--", label="equal temperature")
-axes[0].set_ylabel(r"$\langle\sigma_z\rangle$")
-axes[0].legend()
-
-axes[1].plot(neq.t, hot_current, label=r"$I_{h\to S}$")
-axes[1].plot(neq.t, cold_current, label=r"$I_{c\to S}$")
-axes[1].plot(
-    neq.t, hot_current + cold_current, ":", label="current sum"
+fig, axes = plt.subplots(1, 2, figsize=(11.2, 4.4))
+axes[0].plot(
+    biased.t, biased.expect["sz"], label="temperature-biased run"
 )
-axes[1].axhline(0.0, color="black", linewidth=0.7)
-axes[1].set_xlabel(r"time [$\omega_c^{-1}$]")
-axes[1].set_ylabel(r"energy current [$\omega_c^2$]")
-axes[1].legend()
+axes[0].plot(
+    equal_temperature.t,
+    equal_temperature.expect["sz"],
+    "--",
+    label="equal-temperature control",
+)
+axes[1].plot(biased.t, hot_current, label=r"hot $\to$ system")
+axes[1].plot(biased.t, -cold_current, label=r"system $\to$ cold")
+axes[0].set(
+    xlabel=r"time ($\omega_c^{-1}$)",
+    ylabel=r"$\langle\sigma_z\rangle$",
+    title="junction dynamics",
+)
+axes[1].set(
+    xlabel=r"time ($\omega_c^{-1}$)",
+    ylabel="energy current",
+    title="directional currents",
+)
+for axis in axes:
+    axis.grid(alpha=0.25)
+    axis.legend(frameon=False)
 fig.tight_layout()
 fig.savefig("two_bath_heat_flow.svg")
 ```
@@ -285,7 +299,7 @@ at every early time.
 ```{include} ../_generated/two_bath_heat_flow.md
 ```
 
-The upper panel shows molecular relaxation; the lower panel shows where its
+The left panel shows molecular relaxation; the right panel shows where its
 energy comes from and goes. A credible transport regime requires all of the
 following:
 
