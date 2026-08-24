@@ -54,12 +54,71 @@ def test_tutorial_pages_are_self_contained(name):
     assert "Complete runnable" in page
     assert "Common mistakes" in page
     assert programs
-    program = max(programs, key=len)
-    assert "from fishbonett import" in program
-    assert ".run(" in program
-    assert "observables=" in program
-    assert ".expect[" in program
-    assert "matplotlib" in program
+    assert any("from fishbonett import" in program for program in programs)
+    assert any(".run(" in program for program in programs)
+    assert any("observables=" in program for program in programs)
+    assert any(".expect[" in program for program in programs)
+    assert any("matplotlib" in program for program in programs)
+
+
+@pytest.mark.parametrize(
+    ("name", "label_attributes"),
+    (
+        ("vibronic_dimer", ("SIMULATION_LABEL", "PAPER_LABEL")),
+        ("nonadiabatic_spin_boson", ("SIMULATION_LABEL", "PAPER_LABEL")),
+        ("bridge_electron_transfer", ("SIMULATION_LABEL", "PAPER_LABEL")),
+        ("two_bath_heat_flow", ("CONDITION_LABELS",)),
+    ),
+)
+def test_tutorial_plot_labels_match_the_executable_examples(
+    name, label_attributes,
+):
+    """Reader-visible labels must come from the vocabulary used by the build."""
+    module = _load(name)
+    page = (ROOT / "docs" / "tutorials" / f"{name}.md").read_text(
+        encoding="utf-8",
+    )
+    for attribute in label_attributes:
+        value = getattr(module, attribute)
+        labels = value.values() if isinstance(value, dict) else (value,)
+        for label in labels:
+            assert label in page
+
+
+def test_bath_page_reports_the_current_automatic_discretizations():
+    """Static numerical captions must follow the resolver used by the figures."""
+    from fishbonett import Bath
+
+    page = (ROOT / "docs" / "bath.md").read_text(encoding="utf-8")
+    ohmic = lambda omega: 0.2 * omega * np.exp(-omega / 5.0)
+    zero_temperature = Bath(J=ohmic, phys_dim=10).resolved(4.0)
+    finite_temperature = Bath(
+        J=ohmic, temperature=1.0, phys_dim=10,
+    ).resolved(4.0)
+
+    def structured(omega):
+        omega = np.asarray(omega, float)
+        density = 0.05 * omega * np.exp(-omega / 2.5)
+        for reorganization, damping, centre in (
+            (0.6, 1.2, 6.0),
+            (0.5, 1.0, 13.0),
+        ):
+            density += (
+                2.0 * reorganization * damping * centre**2 * omega
+                / ((centre**2 - omega**2) ** 2 + damping**2 * omega**2)
+            )
+        return density
+
+    structured_bath = Bath(J=structured, phys_dim=10).resolved(4.0)
+    assert f"domain=(0, {zero_temperature.domain[1]:.1f})" in page
+    assert f"asks for {structured_bath.n_modes} modes" in page
+    assert rf"\approx {structured_bath.domain[1]:.1f}" in page
+    finite_domain = (
+        f"({finite_temperature.domain[0]:.2f}, "
+        f"{finite_temperature.domain[1]:.2f})"
+    )
+    assert finite_domain in page
+    assert f"{finite_temperature.n_modes} modes" in page
 
 
 def test_vibronic_dimer_smoke_conserves_the_excitation():
@@ -225,7 +284,11 @@ def test_heat_flow_smoke_uses_distinct_baths_and_obeys_continuity():
     module = _load("two_bath_heat_flow")
     assert module.ALPHA == pytest.approx(0.025)
     suite = module.run_profile("smoke")
-    case = suite["results"]["nonequilibrium"]["primary"]
+    assert module.CONDITION_LABELS == {
+        "temperature_biased": "temperature-biased run",
+        "equal_temperature": "equal-temperature control",
+    }
+    case = suite["results"]["temperature_biased"]["primary"]
     result = case["result"]
     branches = result.meta["bath_branches"]
     assert [(item["system_site"], item["bath"]) for item in branches] == [
@@ -235,4 +298,4 @@ def test_heat_flow_smoke_uses_distinct_baths_and_obeys_continuity():
         result.meta["observable_targets"]["cold_system_mode"]
     )
     summary = module.summarize(suite)
-    assert summary["nonequilibrium"]["continuity_rms"] < 1e-3
+    assert summary["temperature_biased"]["continuity_rms"] < 1e-3

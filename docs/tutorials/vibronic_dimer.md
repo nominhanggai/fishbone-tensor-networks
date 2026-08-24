@@ -137,7 +137,11 @@ paper = np.genfromtxt(
     names=True,
 )
 
-for frequency, result in results.items():
+figure, axes = plt.subplots(
+    1, 2, figsize=(11.2, 4.4), sharex=True, sharey=True
+)
+
+for axis, (frequency, result) in zip(axes, results.items()):
     population = np.asarray(result.expect["population"], float)
 
     # A bare two-level operator is measured on each electronic site, so the
@@ -159,20 +163,40 @@ for frequency, result in results.items():
         f"peak bond={np.max(result.max_bond)}"
     )
     print("resolved bath layout:", result.meta["bath_branches"])
-    color = {4.0: "tab:blue", 8.0: "tab:green"}[frequency]
-    plt.plot(
-        times, acceptor, color=color,
-        label=fr"fishbonett, $\omega_0={frequency:g}J$",
+    axis.plot(
+        times,
+        acceptor,
+        linewidth=2.0,
+        color="#4C6EF5",
+        label="interaction-chain tensor network",
     )
-    plt.plot(
-        paper["tJ"], paper_population, "o", ms=4, mfc="none", color=color,
-        label=fr"Fig. 5, $\omega_0={frequency:g}J$",
+    axis.plot(
+        paper["tJ"],
+        paper_population,
+        "o",
+        markersize=4.2,
+        markerfacecolor="none",
+        color="#E8590C",
+        label="Fig. 5 (vector-path samples)",
     )
+    axis.set(
+        xlabel=r"time ($J^{-1}$)",
+        title=fr"$\omega_0={frequency:g}J$",
+        ylim=(-0.015, 0.74),
+    )
+    axis.grid(alpha=0.25)
 
-plt.xlabel(r"time ($J^{-1}$)")
-plt.ylabel("acceptor population")
-plt.legend(loc="upper left")
-plt.tight_layout()
+axes[0].set_ylabel("acceptor population")
+handles, labels = axes[0].get_legend_handles_labels()
+figure.legend(
+    handles,
+    labels,
+    frameon=False,
+    loc="upper center",
+    ncol=2,
+    bbox_to_anchor=(0.5, 1.01),
+)
+figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.91))
 plt.show()
 ```
 

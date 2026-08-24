@@ -19,6 +19,10 @@ OMEGA_C = 1.0
 OMEGA_0 = 0.2
 # Coupling of each reservoir in the two-bath benchmark.
 ALPHA = 0.025
+CONDITION_LABELS = {
+    "temperature_biased": "temperature-biased run",
+    "equal_temperature": "equal-temperature control",
+}
 
 
 @dataclass(frozen=True)
@@ -111,20 +115,25 @@ def _run_case(config, beta_hot, beta_cold, phys_dim, trunc_eps):
 
 def run_profile(profile="smoke", *, announce=False):
     config = PROFILES[profile] if isinstance(profile, str) else profile
-    results = {"nonequilibrium": {}, "equilibrium": {}}
-    for label, phys_dim, trunc_eps in config.variants:
-        if announce:
-            print(f"[{config.name}] nonequilibrium/{label}: starting")
-        results["nonequilibrium"][label] = _run_case(
-            config, beta_hot=2.0, beta_cold=100.0,
-            phys_dim=phys_dim, trunc_eps=trunc_eps,
-        )
-        if announce:
-            print(f"[{config.name}] equilibrium/{label}: starting")
-        results["equilibrium"][label] = _run_case(
-            config, beta_hot=100.0, beta_cold=100.0,
-            phys_dim=phys_dim, trunc_eps=trunc_eps,
-        )
+    temperatures = {
+        "temperature_biased": (2.0, 100.0),
+        "equal_temperature": (100.0, 100.0),
+    }
+    results = {condition: {} for condition in temperatures}
+    for condition, (beta_hot, beta_cold) in temperatures.items():
+        for label, phys_dim, trunc_eps in config.variants:
+            if announce:
+                print(
+                    f"[{config.name}] {CONDITION_LABELS[condition]}/"
+                    f"{label}: starting"
+                )
+            results[condition][label] = _run_case(
+                config,
+                beta_hot=beta_hot,
+                beta_cold=beta_cold,
+                phys_dim=phys_dim,
+                trunc_eps=trunc_eps,
+            )
     return {"profile": config, "results": results}
 
 

@@ -24,6 +24,8 @@ METHODS = {
 
 REFERENCE_DATA = Path(__file__).resolve().parent / "reference_data"
 PAPER_FIG8_DATA = REFERENCE_DATA / "nuomin_2022_fig8_ic10.csv"
+SIMULATION_LABEL = "fishbonett"
+PAPER_LABEL = "Fig. 8 IC10 (vector-path samples)"
 
 
 @dataclass(frozen=True)

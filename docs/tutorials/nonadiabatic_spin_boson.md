@@ -153,7 +153,7 @@ left.plot(
     paper_population,
     "o",
     markerfacecolor="none",
-    label="Figure 8 IC10",
+    label="Fig. 8 IC10 (vector-path samples)",
 )
 left.set(xlabel=r"$t\Delta/\pi$", ylabel=r"$P_\uparrow(t)$")
 left.legend()
