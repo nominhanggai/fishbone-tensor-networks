@@ -169,7 +169,7 @@ def test_public_api_surface():
     import fishbonett as fb
     for name in ("SystemBathMPS", "TreeTensorNetwork", "SystemBath", "Fishbone",
                  "TreeFishbone", "Bath", "Result", "Truncation",
-                 "get_bath_nn_paras", "get_coupling", "lanczos",
+                 "get_bath_nn_parameters", "get_coupling", "lanczos",
                  "sigma_x", "sigma_z", "drude", "lorentzian"):
         assert hasattr(fb, name), name
     # every advertised name must resolve, or `from fishbonett import *` breaks

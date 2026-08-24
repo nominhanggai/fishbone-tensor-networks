@@ -77,7 +77,7 @@ rep = InteractionRepresentation(
 
 t, rdm, max_bond = run_mpo_hamiltonian(
     rep, initial=initial_state,
-    dt=0.02, nsteps=100, sweep="tdvp2", D=100
+    dt=0.02, nsteps=100, sweep="tdvp2", bond_dim=100
 )
 ```
 

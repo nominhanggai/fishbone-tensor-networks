@@ -3,7 +3,7 @@ of a small spin-boson chain."""
 import numpy as np
 
 from fishbonett import Bath
-from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.bath.chain import get_bath_nn_parameters
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian, SX, SZ
 from fishbonett.operators import annihilate, create, number
 from fishbonett.representations.interaction import InteractionRepresentation
@@ -38,7 +38,7 @@ def _embed(op, site, dims):
 
 def _exact_sz(n_chain, d, V, ts):
     bath = _bath(n_chain, d)
-    eps_c, couplings = get_bath_nn_paras(
+    eps_c, couplings = get_bath_nn_parameters(
         bath.spectral_density(), n_chain, list(bath.domain),
         discretizer=bath.discretizer())
     t_c, c0 = couplings[1:], couplings[0]
@@ -74,7 +74,7 @@ def _bath(n_modes, phys_dim):
 def test_tdvp1_matches_exact_diagonalization():
     n_chain, d, V = 3, 5, 1.0
     t, sz, _ = run_mpo_hamiltonian(_chain(n_chain, d, V), dt=0.10, nsteps=12,
-                             sweep="tdvp1", D=40, krylov=25)
+                             sweep="tdvp1", bond_dim=40, krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.isclose(sz[0], 0.99, atol=0.02)          # starts near |up>
     assert np.max(np.abs(sz - sz_ex)) < 1e-6
@@ -83,7 +83,8 @@ def test_tdvp1_matches_exact_diagonalization():
 def test_tdvp2_matches_exact_and_grows_bonds():
     n_chain, d, V = 3, 5, 1.0
     t, sz, maxd = run_mpo_hamiltonian(_chain(n_chain, d, V), dt=0.10, nsteps=12,
-                                sweep="tdvp2", chi_max=40, eps=1e-12, krylov=25)
+                                sweep="tdvp2", bond_dim=40,
+                                trunc_eps=1e-12, krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert maxd[-1] > 1                                 # bonds grew from product state
     assert np.max(np.abs(sz - sz_ex)) < 1e-6
@@ -98,12 +99,13 @@ def test_ip_mpo_matches_exact():
         h_sys=V * SX, coupling=SZ,
         bath=_bath(n_chain, d)).build()
     assert not representation.static, "the interaction MPO must be rebuilt"
-    t, sz, _ = run_mpo_hamiltonian(representation, dt=0.04, nsteps=15, sweep="tdvp1", D=40,
+    t, sz, _ = run_mpo_hamiltonian(representation, dt=0.04, nsteps=15,
+                             sweep="tdvp1", bond_dim=40,
                              krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert np.max(np.abs(sz - sz_ex)) < 5e-3
     t2, sz2, maxd = run_mpo_hamiltonian(representation, dt=0.04, nsteps=15, sweep="tdvp2",
-                                  chi_max=40, eps=1e-12, krylov=25)
+                                  bond_dim=40, trunc_eps=1e-12, krylov=25)
     assert maxd[-1] > 1                                 # bonds grew
     assert np.max(np.abs(sz2 - sz_ex)) < 5e-3
 
@@ -111,7 +113,7 @@ def test_ip_mpo_matches_exact():
 def test_dtdvp_grows_bonds_and_tracks_dynamics():
     n_chain, d, V = 3, 5, 1.0
     t, sz, maxd = run_mpo_hamiltonian(_chain(n_chain, d, V), dt=0.10, nsteps=12,
-                                sweep="dtdvp", prec=1e-9, D=40,
+                                sweep="dtdvp", prec=1e-9, bond_dim=40,
                                 krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
     assert maxd[-1] >= 1 and np.all(np.isfinite(sz))
@@ -160,7 +162,8 @@ def test_one_loop_serves_every_tdvp_mpo_and_sweep():
     for name, representation in representations.items():
         for sweep in ("tdvp1", "tdvp2", "dtdvp"):
             t, sz, maxd = run_mpo_hamiltonian(representation, dt=0.05, nsteps=2, sweep=sweep,
-                                        D=20, chi_max=20, eps=1e-10, krylov=20)
+                                        bond_dim=20, trunc_eps=1e-10,
+                                        krylov=20)
             assert t.shape == (2,) and sz.shape == (2,), (name, sweep)
             assert np.all(np.isfinite(sz)), (name, sweep)
             # every sweep reports the peak bond, including the fixed-bond one

@@ -56,6 +56,7 @@ class SimulationPlan:
     step: Optional[Callable[[int], None]] = None
     measure_rdm: Optional[Callable[[], np.ndarray]] = None
     peak_bond: Optional[Callable[[], int]] = None
+    measure_expect: Optional[Callable[[], Mapping[str, complex]]] = None
     execute: Optional[Callable[[], Result]] = None
 
     def __post_init__(self):
@@ -68,6 +69,8 @@ class SimulationPlan:
         if has_step_plan == (self.execute is not None):
             raise ValueError(
                 "a simulation plan needs exactly one of step policies or execute")
+        if self.measure_expect is not None and not has_step_plan:
+            raise ValueError("measure_expect is available only on step-based plans")
 
     @property
     def is_step_based(self):
@@ -84,6 +87,7 @@ class SimulationPlan:
                     self.spec, self.context, step=self.step,
                     rdm=self.measure_rdm, peak_bond=self.peak_bond,
                     expect_from_rdm=_expect_from_rdm,
+                    measure_expect=self.measure_expect,
                 )
         metadata = {
             "method": self.spec.name,
@@ -92,6 +96,8 @@ class SimulationPlan:
             "integrator": getattr(self.spec, "integrator", ""),
             "dt": self.context.dt,
             "n_steps": self.context.n_steps,
+            "observe_every": self.context.observe_every,
+            "bath_horizon": self.context.bath_horizon,
             "trunc_eps": self.context.trunc_eps,
             "max_bond_cap": self.context.bond_dim,
             "krylov": self.context.krylov,
@@ -99,6 +105,22 @@ class SimulationPlan:
         }
         metadata.update(result.meta)
         result.meta = metadata
+        if (self.context.observe_every > 1
+                and len(result.t) == self.context.n_steps):
+            indices = np.array([
+                step for step in range(self.context.n_steps)
+                if (step + 1) % self.context.observe_every == 0
+                or step + 1 == self.context.n_steps
+            ], dtype=int)
+            result.t = result.t[indices]
+            result.expect = {
+                name: np.asarray(values)[indices]
+                for name, values in result.expect.items()
+            }
+            if result.max_bond is not None:
+                result.max_bond = np.asarray(result.max_bond)[indices]
+            if result.rdm is not None:
+                result.rdm = np.asarray(result.rdm)[indices]
         return result
 
 
@@ -109,7 +131,69 @@ def _expect_from_rdm(rdms, obs_ops: Mapping[str, np.ndarray]):
             np.einsum("tij,ji->t", rdms, np.asarray(operator))
         )
         for name, operator in obs_ops.items()
+        if not isinstance(operator, tuple)
     }
+
+
+def _bath_observables(obs_ops, bath):
+    """Validate and return ``name -> (operator, represented mode)``."""
+    selected = {}
+    for name, value in obs_ops.items():
+        if not isinstance(value, tuple):
+            continue
+        operator, target = value
+        if not isinstance(target, BathMode):
+            raise TypeError(f"observable {name!r} has an invalid target")
+        if target.mode >= bath.n_modes:
+            raise ValueError(
+                f"observable {name!r} targets bath mode {target.mode}, but the "
+                f"resolved bath has {bath.n_modes} modes"
+            )
+        operator = np.asarray(operator, complex)
+        expected = (bath.phys_dim, bath.phys_dim)
+        if operator.shape != expected:
+            raise ValueError(
+                f"observable {name!r} has shape {operator.shape}, expected "
+                f"{expected} for a bath mode"
+            )
+        selected[name] = (operator, target.mode)
+    return selected
+
+
+def _mps_site_rdm(tensors, site, *, physical_middle=False):
+    """One-site RDM for ``(left, right, physical)`` MPS tensors."""
+    if physical_middle:
+        tensors = [np.moveaxis(tensor, 1, -1) for tensor in tensors]
+    left = np.ones((1, 1), complex)
+    for tensor in tensors[:site]:
+        left = np.einsum(
+            "ab,arp,bsp->rs", left, tensor, tensor.conj(), optimize=True
+        )
+    right = np.ones((1, 1), complex)
+    for tensor in reversed(tensors[site + 1:]):
+        right = np.einsum(
+            "arp,bsp,rs->ab", tensor, tensor.conj(), right, optimize=True
+        )
+    tensor = tensors[site]
+    rho = np.einsum(
+        "ab,arp,bsq,rs->pq", left, tensor, tensor.conj(), right,
+        optimize=True,
+    )
+    return rho / np.trace(rho)
+
+
+def _measure_mps_bath(
+    tensors, observables, *, reverse_modes=False, physical_middle=False,
+):
+    values = {}
+    for name, (operator, mode) in observables.items():
+        site = len(tensors) - mode - 1 if reverse_modes else mode + 1
+        values[name] = np.trace(
+            _mps_site_rdm(
+                tensors, site, physical_middle=physical_middle
+            ) @ operator
+        )
+    return values
 
 
 def _check_single_channel(model):
@@ -121,14 +205,15 @@ def _check_single_channel(model):
             "fishbonett.models.registry.")
 
 
-def _tdvp_hooks(context):
+def _tdvp_hooks(context, driver):
     """Driver options shared by every representation supplying a TDVP MPO."""
     hooks = dict(
         observe=lambda tensors: _mpo.measure_rdm(tensors[0]),
-        prec=context.kw.get("prec", context.trunc_eps),
         tol=context.kw.get("tol", 1e-7),
         eshift=context.kw.get("eshift", False),
     )
+    if driver == "dtdvp":
+        hooks["prec"] = context.kw.get("prec", context.trunc_eps)
     return hooks
 
 
@@ -147,7 +232,9 @@ def _polaron_representation(model, context, name):
     from fishbonett.representations.polaron import PolaronRepresentation
 
     _check_single_channel(model)
-    coupled = model.coupled_bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(
+        context.bath_horizon or context.t_max
+    )
     bath = coupled.bath
     n_modes, d_sys = bath.n_modes, model.h.shape[0]
     phys_dims = [d_sys] + [bath.phys_dim] * n_modes
@@ -162,11 +249,11 @@ def _compile_tdvp_representation(model, spec, context, coupled):
     if spec.representation in {"schrodinger-chain", "schrodinger-star"}:
         representation = _schrodinger_representation(
             model, coupled, spec.representation)
-        return representation, _tdvp_hooks(context)
+        return representation, _tdvp_hooks(context, spec.driver)
     if spec.representation in {"interaction-chain", "interaction-star"}:
         representation, _phys_dims = _interaction_representation(
             model, coupled, spec.representation)
-        return representation, _tdvp_hooks(context)
+        return representation, _tdvp_hooks(context, spec.driver)
     if spec.representation in {"polaron-chain", "polaron-star"}:
         transformed, _bath, _n_modes, _phys_dims = _polaron_representation(
             model, context, spec.representation)
@@ -178,8 +265,9 @@ def _compile_tdvp_representation(model, spec, context, coupled):
         hooks = dict(
             prepare=prepare,
             observe=transformed.recover_rdm,
-            prec=context.kw.get("prec", context.trunc_eps),
         )
+        if spec.driver == "dtdvp":
+            hooks["prec"] = context.kw.get("prec", context.trunc_eps)
         if spec.driver == "tdvp1":
             # One-site TDVP evolves on a fixed manifold, so the public bond_dim
             # is the manifold requested by the user.  A hidden cap here made
@@ -191,22 +279,42 @@ def _compile_tdvp_representation(model, spec, context, coupled):
 
 def _compile_mpo_plan(model, spec, context):
     _check_single_channel(model)
-    coupled = model.coupled_bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(
+        context.bath_horizon or context.t_max
+    )
     representation, hooks = _compile_tdvp_representation(
         model, spec, context, coupled)
     initial = model.system.initial_vector(context.initial)
+    bath_observables = _bath_observables(context.obs_ops, coupled.bath)
+    base_observe = hooks.pop("observe")
 
     def execute():
+        targeted = {name: [] for name in bath_observables}
+
+        def observe(tensors):
+            measured = _measure_mps_bath(
+                tensors, bath_observables,
+                reverse_modes=spec.representation.startswith("interaction-"),
+            )
+            for name, value in measured.items():
+                targeted[name].append(value)
+            return base_observe(tensors)
+
         times, rdms, max_bond = _mpo.run_mpo_hamiltonian(
             representation, initial=initial,
             dt=context.dt, nsteps=context.n_steps, sweep=spec.driver,
-            D=context.bond_dim, chi_max=context.bond_dim,
-            eps=context.trunc_eps, krylov=context.krylov,
+            bond_dim=context.bond_dim, trunc_eps=context.trunc_eps,
+            krylov=context.krylov,
             seed=context.seed, progress=context.progress,
             bond_expand=context.kw.get("bond_expand"),
-            **hooks)
+            observe=observe, **hooks)
+        expectations = _expect_from_rdm(rdms, context.obs_ops)
+        expectations.update({
+            name: np.real_if_close(np.asarray(values))
+            for name, values in targeted.items()
+        })
         return Result(
-            t=times, expect=_expect_from_rdm(rdms, context.obs_ops),
+            t=times, expect=expectations,
             max_bond=max_bond, rdm=np.asarray(rdms), method=spec.name)
 
     return SimulationPlan(spec, context, execute=execute)
@@ -214,29 +322,45 @@ def _compile_mpo_plan(model, spec, context):
 
 def _compile_modetree_plan(model, spec, context):
     _check_single_channel(model)
-    coupled = model.coupled_bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(
+        context.bath_horizon or context.t_max
+    )
     representation, _phys_dims = _interaction_representation(
         model, coupled, spec.representation)
+    bath_observables = _bath_observables(context.obs_ops, coupled.bath)
 
     def execute():
         max_bond = []
+        targeted = {name: [] for name in bath_observables}
 
         def observe(nodes, root):
             max_bond.append(modetree_peak_bond(nodes))
+            mode_nodes = {
+                node.mode: node.id for node in nodes if node.mode is not None
+            }
+            for name, (operator, mode) in bath_observables.items():
+                rho = _tree.measure_node_rdm(nodes, mode_nodes[mode])
+                targeted[name].append(np.trace(rho @ operator))
             return _tree.measure_rdm_oc(nodes, root)
 
         common = dict(
             init=model.system.initial_vector(context.initial),
-            dt=context.dt, nsteps=context.n_steps, D=context.bond_dim,
+            dt=context.dt, nsteps=context.n_steps,
             observe=observe, seed=context.seed, progress=context.progress,
             **context.kw)
         if spec.driver == "run_tree_tebd":
             times, rdms = _tree.run_tree_tebd(
-                representation, trunc_eps=context.trunc_eps, **common)
+                representation, bond_dim=context.bond_dim,
+                trunc_eps=context.trunc_eps, **common)
         else:
             raise ValueError(f"unknown mode-tree driver {spec.driver!r}")
+        expectations = _expect_from_rdm(rdms, context.obs_ops)
+        expectations.update({
+            name: np.real_if_close(np.asarray(values))
+            for name, values in targeted.items()
+        })
         return Result(
-            t=times, expect=_expect_from_rdm(rdms, context.obs_ops),
+            t=times, expect=expectations,
             max_bond=np.array(max_bond), rdm=np.asarray(rdms),
             method=spec.name)
 
@@ -335,7 +459,8 @@ def _compile_static_tree_plan(model, spec, context):
                 context.progress({
                     "step": step, "n_steps": context.n_steps,
                     "t": context.elapsed + (step + 1) * context.dt,
-                    "bond": tree_peak_bond(state), "state": state,
+                    "bond": tree_peak_bond(state), "rdm": None,
+                    "state": state,
                 })
             if step not in record_step_set:
                 continue
@@ -418,7 +543,9 @@ def _multichannel_interaction_representation(model, coupled, name):
 def _compile_swap_plan(model, spec, context):
     from fishbonett.states.mps import SystemBathMPS
 
-    coupled = model.coupled_bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(
+        context.bath_horizon or context.t_max
+    )
     bath = coupled.bath
     if model.coupled_bath.is_multichannel:
         representation, phys_dims = _multichannel_interaction_representation(
@@ -428,6 +555,7 @@ def _compile_swap_plan(model, spec, context):
         representation, phys_dims = _interaction_representation(
             model, coupled, spec.representation)
     state = SystemBathMPS(phys_dims)
+    bath_observables = _bath_observables(context.obs_ops, bath)
     psi0 = model.system.initial_vector(context.initial)
     state.B[0][:] = 0.0
     for index, amplitude in enumerate(psi0):
@@ -440,6 +568,10 @@ def _compile_swap_plan(model, spec, context):
             context.bond_dim, context.trunc_eps),
         measure_rdm=lambda: state.rdm(0),
         peak_bond=lambda: mps_peak_bond(state),
+        measure_expect=lambda: {
+            name: state.expectation(operator, mode + 1)
+            for name, (operator, mode) in bath_observables.items()
+        },
     )
 
 
@@ -449,9 +581,12 @@ def _compile_displacement_plan(model, spec, context):
     )
 
     _check_single_channel(model)
-    coupled = model.coupled_bath.resolved(context.t_max)
+    coupled = model.coupled_bath.resolved(
+        context.bath_horizon or context.t_max
+    )
     representation, phys_dims = _interaction_representation(
         model, coupled, spec.representation)
+    bath_observables = _bath_observables(context.obs_ops, coupled.bath)
     tensors = product_state(
         phys_dims, model.system.initial_vector(context.initial))
     u_half = _la.expm(-0.5j * context.dt * np.asarray(model.h, complex))
@@ -476,7 +611,10 @@ def _compile_displacement_plan(model, spec, context):
 
     return SimulationPlan(
         spec, context, step=step, measure_rdm=measure_rdm,
-        peak_bond=lambda: max(bond_dims(tensors)))
+        peak_bond=lambda: max(bond_dims(tensors)),
+        measure_expect=lambda: _measure_mps_bath(
+            tensors, bath_observables, physical_middle=True
+        ))
 
 
 def _compile_polaron_plan(model, spec, context):
@@ -484,6 +622,7 @@ def _compile_polaron_plan(model, spec, context):
 
     representation, _bath, n_modes, phys_dims = _polaron_representation(
         model, context, spec.representation)
+    bath_observables = _bath_observables(context.obs_ops, _bath)
     state = SystemBathMPS(phys_dims)
     psi0 = model.system.initial_vector(context.initial)
     state.split_truncate_theta(
@@ -496,6 +635,10 @@ def _compile_polaron_plan(model, spec, context):
         measure_rdm=lambda: representation.recover_pair_rdm(
             state.get_theta2(0)),
         peak_bond=lambda: mps_peak_bond(state),
+        measure_expect=lambda: {
+            name: state.expectation(operator, mode + 1)
+            for name, (operator, mode) in bath_observables.items()
+        },
     )
 
 
@@ -720,7 +863,8 @@ def _compile_interaction_fishbone_plan(model, spec, context):
                 context.progress({
                     "step": step, "n_steps": context.n_steps,
                     "t": elapsed + (step + 1) * context.dt,
-                    "bond": tree_peak_bond(state), "state": state,
+                    "bond": tree_peak_bond(state), "rdm": None,
+                    "state": state,
                 })
             if step not in record_set:
                 continue

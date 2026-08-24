@@ -12,7 +12,7 @@ bath itself.
 
 ```bash
 pip install -e .                 # from a checkout
-# GPU: install the CuPy wheel matching your CUDA platform, then fishbonett
+pip install -e ".[gpu-cuda12]"   # or gpu-cuda11, matching your CUDA runtime
 pip install -e ".[rates]"        # optional vegas Monte-Carlo integrator
 pip install -e ".[test,docs]"    # development
 ```

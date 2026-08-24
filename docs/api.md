@@ -111,6 +111,36 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.linalg
    fishbonett.randomized
    fishbonett.spectral_densities
-   fishbonett.rates
+   fishbonett.rates.golden_rule
+   fishbonett.rates.golden_rule_multi
+   fishbonett.rates.mcmc
+   fishbonett.rates.transfer_tensor
    fishbonett.diabatization
+```
+
+## Package tours
+
+These package pages explain how the public layers fit together.
+
+```{eval-rst}
+.. automodule:: fishbonett
+   :no-members:
+
+.. automodule:: fishbonett.models
+   :no-members:
+
+.. automodule:: fishbonett.bath
+   :no-members:
+
+.. automodule:: fishbonett.representations
+   :no-members:
+
+.. automodule:: fishbonett.states
+   :no-members:
+
+.. automodule:: fishbonett.evolve
+   :no-members:
+
+.. automodule:: fishbonett.rates
+   :no-members:
 ```

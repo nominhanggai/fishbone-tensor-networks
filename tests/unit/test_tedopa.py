@@ -6,7 +6,7 @@ from fishbonett.bath.tedopa import (
     rkpw_recurrence, get_vn_squared_tedopa, make_tedopa_discretizer,
 )
 from fishbonett.bath.legendre import get_vn_squared
-from fishbonett.bath.chain import get_bath_nn_paras
+from fishbonett.bath.chain import get_bath_nn_parameters
 
 DOMAIN = (-25.0, 36.0)
 
@@ -64,7 +64,7 @@ def test_tedopa_beats_legendre_on_correlation():
 def test_tedopa_discretizer_is_dropin_for_chain_mapping():
     Jb = _superohmic_Jb()
     disc = make_tedopa_discretizer(m_per=60)
-    w, k = get_bath_nn_paras(Jb, 30, list(DOMAIN), discretizer=disc)
+    w, k = get_bath_nn_parameters(Jb, 30, list(DOMAIN), discretizer=disc)
     assert len(w) == 30 and len(k) == 30
     assert np.all(np.isfinite(w)) and np.all(np.isfinite(k))
     assert k[0] > 0                    # positive system-bath coupling

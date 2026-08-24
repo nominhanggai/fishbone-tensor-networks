@@ -23,7 +23,7 @@ finite star first and only then optionally apply its star-to-chain transform.
 :class:`Bath`                      environment physics + resolution settings
 :class:`CoupledBath`               explicit model binding to system operator(s)
 :func:`thermalize`                 T-TEDOPA thermalized density from a ``T=0`` one
-:func:`get_bath_nn_paras`          spectral density -> chain ``(w_list, k_list)``
+:func:`get_bath_nn_parameters`     spectral density -> chain ``(w_list, k_list)``
 :func:`get_coupling`               the same, via polynomial recurrences
 :func:`get_vn_squared`             Gauss-Legendre (uniform-measure) star
 :func:`make_tedopa_discretizer`    measure-adapted TEDOPA star (peaked/IR baths)
@@ -40,20 +40,22 @@ from fishbonett.bath.coupled import CoupledBath, bind_bath
 from fishbonett.bath.conventions import (
     integrated_free_phase, reorganization_energy, star_coupling_squared,
 )
-from fishbonett.bath.chain import get_bath_nn_paras, get_coupling
+from fishbonett.bath.chain import (
+    get_bath_nn_parameters, get_coupling,
+)
 from fishbonett.bath.legendre import get_vn_squared, get_legendre_recursion
 from fishbonett.bath.tedopa import (
     get_vn_squared_tedopa, make_tedopa_discretizer,
 )
 from fishbonett.bath.lanczos import lanczos
-from fishbonett.bath.recurrence import recurrenceCoefficients
+from fishbonett.bath.recurrence import recurrence_coefficients
 
 __all__ = [
     "Bath", "CoupledBath", "bind_bath", "thermalize",
     "integrated_free_phase", "reorganization_energy",
     "star_coupling_squared",
-    "get_bath_nn_paras", "get_coupling",
+    "get_bath_nn_parameters", "get_coupling",
     "get_vn_squared", "get_legendre_recursion",
     "get_vn_squared_tedopa", "make_tedopa_discretizer",
-    "lanczos", "recurrenceCoefficients",
+    "lanczos", "recurrence_coefficients",
 ]

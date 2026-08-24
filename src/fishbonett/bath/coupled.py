@@ -6,14 +6,24 @@ and associates them with the operators belonging to a physical model.
 """
 from dataclasses import dataclass, replace
 import warnings
+from collections.abc import Sequence
 
 import numpy as np
+from numpy.typing import ArrayLike
+
+from fishbonett.bath.spec import Bath
 
 __all__ = ["CoupledBath", "bind_bath"]
 
 
-def _operators(value):
-    values = value if isinstance(value, (list, tuple)) else [value]
+def _operators(value: ArrayLike | Sequence[ArrayLike]) -> tuple[np.ndarray, ...]:
+    try:
+        is_matrix = np.asarray(value).ndim == 2
+    except ValueError:
+        is_matrix = False
+    values = (
+        [value] if is_matrix or not isinstance(value, (list, tuple)) else value
+    )
     out = []
     for op in values:
         item = np.array(op, dtype=complex, copy=True)
@@ -38,8 +48,9 @@ class CoupledBath:
     sharing one set of modes.
     """
 
-    bath: object
-    operators: tuple
+    bath: Bath
+    operators: tuple[np.ndarray, ...]
+
     def __post_init__(self):
         ops = _operators(self.operators)
         if not ops:
@@ -97,8 +108,13 @@ class CoupledBath:
         return replace(self, bath=bath)
 
 
-def bind_bath(bath, coupling=None, *, default_operator=None,
-              validate_legacy=False):
+def bind_bath(
+    bath: Bath | CoupledBath,
+    coupling: ArrayLike | Sequence[ArrayLike] | None = None,
+    *,
+    default_operator: ArrayLike | None = None,
+    validate_legacy: bool = False,
+) -> CoupledBath:
     """Return a :class:`CoupledBath` from explicit or deprecated input.
 
     ``coupling`` is the model-owned value. If ``validate_legacy`` is true and the

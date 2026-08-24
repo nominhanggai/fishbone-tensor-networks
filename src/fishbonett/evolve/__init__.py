@@ -8,14 +8,24 @@ tensor-network geometry and integrator determine the propagation module.
 Projector-splitting sweeps act on a one-dimensional MPS and MPO. Branching tensor
 networks use one of the tree modules.
 
-=======================  ==================================  =====================
-tensor-network geometry  module                              integrators
-=======================  ==================================  =====================
-1D chain (MPS)        :mod:`~fishbonett.evolve.tebd`      TEBD (Trotter gates)
-1D chain (MPS + MPO)  :mod:`~fishbonett.evolve.tdvp`      TDVP 1/2-site, adaptive
-binary tree of modes  :mod:`~fishbonett.evolve.modetree`  TTNO + Schmidt truncation
-any tree (incl comb)  :mod:`~fishbonett.evolve.sitetree`  TEBD
-=======================  ==================================  =====================
+.. list-table::
+   :header-rows: 1
+
+   * - ``state_geometry``
+     - module
+     - integrators
+   * - ``mps``
+     - :mod:`~fishbonett.evolve.tebd`
+     - TEBD with Trotter gates
+   * - ``mps`` with an MPO
+     - :mod:`~fishbonett.evolve.tdvp`
+     - one-site, two-site, and dynamic TDVP
+   * - ``binary-tree``
+     - :mod:`~fishbonett.evolve.modetree`
+     - TTNO gates with Schmidt truncation
+   * - ``tree``
+     - :mod:`~fishbonett.evolve.sitetree`
+     - TEBD on a general tree
 
 Note the two tree modules serve different geometries, not two integrators for one
 graph: ``modetree`` is a balanced binary tree of *bath modes* around one system
@@ -32,7 +42,8 @@ the level you need:
 
 *primitive*
     one bond or one site: :func:`~fishbonett.evolve.tebd.update_bond`,
-    :func:`~fishbonett.evolve.sitetree.apply_edge`, ``tdvp.applyH1``/``applyH0``.
+    :func:`~fishbonett.evolve.sitetree.apply_edge`,
+    ``tdvp.apply_h1``/``apply_h0``.
 *sweep / graph operation*
     one pass over the state: :func:`~fishbonett.evolve.tebd.sweep`,
     ``tdvp.tdvp1sweep``, or ``modetree.apply_coupling`` followed by

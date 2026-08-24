@@ -57,6 +57,55 @@ def resolve_time_grid(dt, *, t_max=None, n_steps=None):
     return dt, steps
 
 
+def _resolve_sampling_options(observe_every, bath_horizon):
+    """Validate recording cadence and an optional bath-resolution horizon."""
+    if (isinstance(observe_every, (bool, np.bool_))
+            or not isinstance(observe_every, (int, np.integer))
+            or observe_every < 1):
+        raise ValueError("observe_every must be a positive integer")
+    if bath_horizon is not None:
+        if (isinstance(bath_horizon, (bool, np.bool_))
+                or not isinstance(bath_horizon, (int, float, np.number))
+                or not np.isfinite(bath_horizon) or bath_horizon <= 0):
+            raise ValueError("bath_horizon must be finite and positive")
+        bath_horizon = float(bath_horizon)
+    return int(observe_every), bath_horizon
+
+
+def _resolve_continuation(
+    *, resume, initial, method, dt, n_steps, bath_horizon,
+    supports_resume,
+):
+    """Validate checkpoint use and return the resolved bath horizon."""
+    if resume is not None:
+        from fishbonett.models.result import SimulationCheckpoint
+
+        if not supports_resume:
+            raise ValueError(f"method {method!r} does not support resume")
+        if not isinstance(resume, SimulationCheckpoint):
+            raise TypeError("resume must be a SimulationCheckpoint")
+        if initial is not None:
+            raise ValueError("initial and resume cannot be supplied together")
+        if resume.method != method:
+            raise ValueError(
+                f"checkpoint method is {resume.method!r}, requested {method!r}"
+            )
+        if bath_horizon is None:
+            bath_horizon = resume.bath_horizon
+        elif not np.isclose(bath_horizon, resume.bath_horizon):
+            raise ValueError("bath_horizon cannot change when resuming")
+        if resume.elapsed + n_steps * dt > bath_horizon + 1e-12:
+            raise ValueError(
+                "continuation exceeds the checkpoint bath_horizon; rerun the "
+                "initial segment with a horizon covering the complete time"
+            )
+    elif bath_horizon is None:
+        bath_horizon = n_steps * dt
+    elif bath_horizon + 1e-12 < n_steps * dt:
+        raise ValueError("bath_horizon must cover the requested propagation")
+    return bath_horizon
+
+
 @dataclass(frozen=True)
 class RunCtx:
     """Everything a driver needs that does not depend on which method ran.
@@ -85,6 +134,19 @@ class RunCtx:
         to draw from NumPy's global generator instead.
     kw
         Engine-specific extras passed through from ``run(**engine_kw)``.
+    resume
+        Optional continuation checkpoint. Engines without checkpoint support
+        reject it before propagation.
+    bath_horizon
+        Physical horizon used to resolve an automatic bath. It may exceed the
+        duration of the current segment when a continuation is planned.
+    observe_every
+        Record every Nth integration step, always including the final step.
+    progress
+        Optional callback invoked every integration step. Every engine supplies
+        the keys ``step``, ``n_steps``, ``t``, ``bond``, ``rdm`` and ``state``.
+        A value is ``None`` when exposing it would require an extra contraction
+        or the engine does not retain that state representation.
     """
 
     dt: float
@@ -99,8 +161,8 @@ class RunCtx:
     resume: Any = None
     bath_horizon: Optional[float] = None
     observe_every: int = 1
-    #: Optional ``callable(info)`` invoked after **every** step with a dict of
-    #: ``step``, ``n_steps``, ``t``, ``bond`` and ``state``.  Separate from
+    #: Optional ``callable(info)`` invoked after **every** step with the stable
+    #: payload documented above. Separate from
     #: ``observe_every``, which controls what is *recorded* into the Result:
     #: this controls what is *reported* while a long run is still going, so a
     #: multi-hour propagation is not silent between observations.
@@ -184,7 +246,10 @@ def modetree_peak_bond(nodes):
     return best
 
 
-def propagate(spec, ctx, *, step, rdm, peak_bond, expect_from_rdm):
+def propagate(
+    spec, ctx, *, step, rdm, peak_bond, expect_from_rdm,
+    measure_expect=None,
+):
     """Run ``ctx.n_steps`` steps and assemble the :class:`Result`.
 
     Method-specific operations are supplied as callbacks:
@@ -202,16 +267,31 @@ def propagate(spec, ctx, *, step, rdm, peak_bond, expect_from_rdm):
     Every method reports ``max_bond``; it is constant for fixed-bond methods.
     """
     rdms, max_bond = [], []
+    extra = {name: [] for name in ctx.obs_ops
+             if isinstance(ctx.obs_ops[name], tuple)}
     for k in range(ctx.n_steps):
         step(k)
         rdms.append(rdm())
         max_bond.append(peak_bond())
+        if measure_expect is not None:
+            measured = measure_expect()
+            if set(measured) != set(extra):
+                raise ValueError(
+                    "measure_expect must return every targeted observable"
+                )
+            for name, value in measured.items():
+                extra[name].append(value)
         if ctx.progress is not None:
             ctx.progress({"step": k, "n_steps": ctx.n_steps,
                           "t": (k + 1) * ctx.dt, "bond": max_bond[-1],
                           "rdm": rdms[-1], "state": None})
+    expectations = expect_from_rdm(rdms, ctx.obs_ops)
+    expectations.update({
+        name: np.real_if_close(np.asarray(values))
+        for name, values in extra.items()
+    })
     return Result(t=np.arange(1, ctx.n_steps + 1) * ctx.dt,
-                  expect=expect_from_rdm(rdms, ctx.obs_ops),
+                  expect=expectations,
                   max_bond=np.array(max_bond),
                   rdm=np.asarray(rdms),
                   method=spec.name)

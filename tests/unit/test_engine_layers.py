@@ -12,13 +12,24 @@ def _imports(module):
     }
 
 
-def test_tdvp_facade_preserves_established_entry_points():
+def test_tdvp_facade_exports_snake_case_entry_points():
     from fishbonett.evolve import tdvp
     from fishbonett.evolve import _tdvp_driver as driver
     from fishbonett.evolve import _tdvp_kernels as kernels
     from fishbonett.evolve import _tdvp_sweeps as sweeps
 
-    assert tdvp.applyH1 is kernels.applyH1
+    assert tdvp.apply_h1 is kernels.applyH1
+    assert tdvp.apply_h0 is kernels.applyH0
+    assert tdvp.apply_h2 is sweeps.applyH2
+    assert tdvp.evolve_site_tensor is kernels.evolveAC
+    assert tdvp.evolve_bond_tensor is kernels.evolveC
+    assert tdvp.update_left_environment is kernels.updateleftenv
+    assert tdvp.update_right_environment is kernels.updaterightenv
+    for retired in (
+        "applyH0", "applyH1", "applyH2", "evolveAC", "evolveC",
+        "updateleftenv", "updaterightenv",
+    ):
+        assert not hasattr(tdvp, retired)
     assert tdvp.expmv_lanczos is kernels.expmv_lanczos
     assert tdvp.tdvp1sweep is sweeps.tdvp1sweep
     assert tdvp.tdvp2sweep is sweeps.tdvp2sweep
@@ -47,6 +58,8 @@ def test_modetree_facade_preserves_established_entry_points():
     assert modetree.Node is core.Node
     assert modetree.build_tree_mpo is core.build_tree_mpo
     assert modetree.apply_op_node is sweeps.apply_op_node
+    assert modetree.contract_center is sweeps.contractC
+    assert not hasattr(modetree, "contractC")
     assert modetree.truncate_from_root is sweeps.truncate_from_root
     assert modetree.run_tree_tebd is driver.run_tree_tebd
 

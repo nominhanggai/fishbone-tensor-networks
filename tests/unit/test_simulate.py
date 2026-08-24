@@ -475,7 +475,7 @@ def test_free_chain_gates_put_each_frequency_on_its_own_mode():
     from fishbonett.representations.polaron import PolaronRepresentation
     from fishbonett.operators import annihilate
 
-    nb, d, ds = 4, 5, 2
+    nb, d = 4, 5
     bath = Bath(
         J=lambda w: 0.3 * w * np.exp(-w / 2.5), domain=(0.3, 12.0),
         n_modes=nb, phys_dim=d)

@@ -33,7 +33,13 @@ import scipy.linalg
 from fishbonett.contract import contract as einsum
 
 from fishbonett.linalg import svd, cap_rank
+from fishbonett.randomized import _next_seed
 from fishbonett.states.network import TensorNetwork
+
+# LBO is an auxiliary compression before the bond SVD. Retaining a modest floor
+# avoids collapsing a weakly occupied oscillator basis before occupations have
+# had time to develop; slicing naturally caps it at the physical dimension.
+MIN_LBO_DIMENSION = 10
 
 try:  # optional GPU backend
     import cupy as cp
@@ -45,7 +51,9 @@ try:  # optional GPU backend
     def _cusvd(a, b, full_matrices=False):
         dim = min(a.shape[0], a.shape[1])
         b = min(b, dim)
-        return _curdsvd(a, b, True, n_iter=2, l=2 * b)
+        # Derive each device sketch from the high-level run-local RNG. This
+        # honors ``run(seed=...)`` while advancing between successive bonds.
+        return _curdsvd(a, b, True, n_iter=2, l=2 * b, seed=_next_seed())
 except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 
@@ -53,11 +61,10 @@ except ImportError:  # pragma: no cover - exercised only with a GPU present
 class SystemBathMPS(TensorNetwork):
     """Matrix-product state of a system (spin) site followed by a boson chain.
 
-    A chain is a tree, so this is a
-    :class:`~fishbonett.states.network.TensorNetwork` whose graph is a **path**, and
-    it inherits the topology and the observables (``rdm``, ``joint_rdm``,
-    ``expectation``) from there.  Two things make it its own class rather than a
-    bare ``TreeTensorNetwork``:
+    This is the ``mps`` state geometry: a linear
+    :class:`~fishbonett.states.network.TensorNetwork`. It inherits the topology
+    and observables (``rdm``, ``joint_rdm``, ``expectation``) from that base.
+    Two things make it its own class rather than a bare ``TreeTensorNetwork``:
 
     * **leg order.**  Storage is ``(vL, p, vR)`` -- physical in the middle -- which
       the whole 1D TEBD/TDVP stack and every representation's gate layout assume.  The base
@@ -250,10 +257,10 @@ class SystemBathMPS(TensorNetwork):
         if eps_lbo is not None:
             # Local basis optimization: project each site onto its optimal basis.
             w_A, v_A = scipy.linalg.eigh(einsum('aIJb,aKJb->IK', theta, theta.conj()))
-            n_A = max(10, int(np.sum(w_A > eps_lbo)))
+            n_A = max(MIN_LBO_DIMENSION, int(np.sum(w_A > eps_lbo)))
             self.R[i] = v_A[:, np.argsort(w_A)[::-1][:n_A]]
             w_B, v_B = scipy.linalg.eigh(einsum('aIJb, aIKb->JK', theta, theta.conj()))
-            n_B = max(10, int(np.sum(w_B > eps_lbo)))
+            n_B = max(MIN_LBO_DIMENSION, int(np.sum(w_B > eps_lbo)))
             self.R[i + 1] = v_B[:, np.argsort(w_B)[::-1][:n_B]]
             theta = einsum('KI,LJ,aIJb->aKLb', self.R[i].T.conj(),
                            self.R[i + 1].T.conj(), theta)
@@ -293,11 +300,11 @@ class SystemBathMPS(TensorNetwork):
     def _split_gpu(self, theta, i, chi_max, eps, eps_lbo):  # pragma: no cover
         if eps_lbo is not None:
             w_A, v_A = cp.linalg.eigh(einsum('aIJb,aKJb->IK', theta, theta.conj()))
-            n_A = max(10, int(cp.sum(w_A > eps_lbo)))
+            n_A = max(MIN_LBO_DIMENSION, int(cp.sum(w_A > eps_lbo)))
             R1 = v_A[:, cp.argsort(w_A)[::-1][:n_A]]
             self.R[i] = R1.get()
             w_B, v_B = cp.linalg.eigh(einsum('aIJb, aIKb->JK', theta, theta.conj()))
-            n_B = max(10, int(cp.sum(w_B > eps_lbo)))
+            n_B = max(MIN_LBO_DIMENSION, int(cp.sum(w_B > eps_lbo)))
             R2 = v_B[:, cp.argsort(w_B)[::-1][:n_B]]
             self.R[i + 1] = R2.get()
             theta = einsum('KI,LJ,aIJb->aKLb', R1.T.conj(), R2.T.conj(), theta)

@@ -461,11 +461,22 @@ MODELS = {
 def why_not(model_key, representation=None, *, state_geometry=None):
     """Why a combination is unavailable, or ``None`` if it exists.
 
-    Every one of the six representations is a real representation, so nothing here says "impossible".
-    It reports unimplemented model combinations (:attr:`Model.gaps`) plus the
-    structural constraint that a
-    balanced binary tree needs a representation with no mode-mode terms.
+    Reports unimplemented model combinations (:attr:`Model.gaps`) and the
+    structural constraint that a balanced binary tree needs a representation
+    with no mode-mode terms.
     """
+    selected_model = model(model_key)
+    if representation is not None and representation not in REPRESENTATIONS:
+        raise KeyError(
+            f"unknown representation {representation!r}; available: "
+            f"{', '.join(REPRESENTATIONS)}"
+        )
+    known_geometries = {spec.state_geometry for spec in METHODS.values()}
+    if state_geometry is not None and state_geometry not in known_geometries:
+        raise KeyError(
+            f"unknown state_geometry {state_geometry!r}; available: "
+            f"{', '.join(sorted(known_geometries))}"
+        )
     if (state_geometry == "binary-tree" and representation is not None
             and representation in REPRESENTATIONS
             and not REPRESENTATIONS[representation].mode_decoupled):
@@ -475,9 +486,8 @@ def why_not(model_key, representation=None, *, state_geometry=None):
         return (f"{MODELS[model_key].label} puts each site's bath on its own "
                 f"branch, so its state_geometry is always 'tree'.")
     if representation is not None:
-        m = MODELS.get(model_key)
-        if m is not None and representation not in m.representations:
-            return m.gaps.get(representation)
+        if representation not in selected_model.representations:
+            return selected_model.gaps.get(representation)
     return None
 
 
@@ -535,6 +545,19 @@ def resolve(model_keys, *, method=None, **axes):
         raise TypeError(f"unknown axis {sorted(unknown)}; the axes are "
                         f"{', '.join(_AXES)}")
     given = {k: v for k, v in axes.items() if v is not None}
+    representation = given.get("representation")
+    if representation is not None and representation not in REPRESENTATIONS:
+        raise ValueError(
+            f"no method for representation={representation!r}; available "
+            f"representations: {', '.join(REPRESENTATIONS)}"
+        )
+    known_geometries = {spec.state_geometry for spec in METHODS.values()}
+    requested_geometry = given.get("state_geometry")
+    if requested_geometry is not None and requested_geometry not in known_geometries:
+        raise ValueError(
+            f"no method for state_geometry={requested_geometry!r}; available "
+            f"state geometries: {', '.join(sorted(known_geometries))}"
+        )
     avail = combinations(model_keys)
     if method is not None:
         if not given:
