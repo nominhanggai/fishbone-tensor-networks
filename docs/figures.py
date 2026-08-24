@@ -105,7 +105,7 @@ def bath_correlation(path=None):
            f"Ohmic bath, automatic domain and {bath.n_modes} modes")
     _error_inset(axis, _TS, exact, curves)
     figure.tight_layout()
-    output = Path(path or IMG / "bath_correlation.png")
+    output = Path(path or IMG / "bath_correlation.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     return output
@@ -145,7 +145,7 @@ def bath_correlation_finite_t(path=None):
            f"Finite-temperature bath, signed domain, {bath.n_modes} modes")
     _error_inset(axis, _TS, exact, curves)
     figure.tight_layout()
-    output = Path(path or IMG / "bath_correlation_finiteT.png")
+    output = Path(path or IMG / "bath_correlation_finiteT.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     return output
@@ -194,7 +194,7 @@ def bath_structured(path=None):
     _panel(right, _TS, exact, curves, "correlation function")
     _error_inset(right, _TS, exact, curves, (0.46, 0.60, 0.50, 0.34))
     figure.tight_layout()
-    output = Path(path or IMG / "bath_structured.png")
+    output = Path(path or IMG / "bath_structured.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     return output
@@ -221,7 +221,7 @@ def vibronic_dimer(path=None):
     for axis in (left, right):
         axis.grid(alpha=0.25)
     figure.tight_layout()
-    output = Path(path or IMG / "vibronic_dimer.png")
+    output = Path(path or IMG / "vibronic_dimer.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     modes = ", ".join(
@@ -262,7 +262,7 @@ def nonadiabatic_spin_boson(path=None):
     for axis in (left, right):
         axis.grid(alpha=0.25)
     figure.tight_layout()
-    output = Path(path or IMG / "nonadiabatic_spin_boson.png")
+    output = Path(path or IMG / "nonadiabatic_spin_boson.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     difference = summary["max_difference_from_interaction"].get(
@@ -306,14 +306,17 @@ def bridge_electron_transfer(path=None):
         "weak_diagonal": "weak diagonal control",
         "noncondon": "non-Condon",
     }
+    state_handles = []
     for column, case in enumerate(cases):
         result = validation["results"][case]
         top, residual_axis = axes[:, column]
         for state_index, (state, color) in enumerate(colors.items()):
-            top.plot(
+            state_line, = top.plot(
                 result["t"], result["populations"][:, state_index],
                 color=color, lw=1.8, label=state,
             )
+            if column == 0:
+                state_handles.append(state_line)
             top.plot(
                 result["paper_t"][::10],
                 result["paper_populations"][::10, state_index],
@@ -339,17 +342,85 @@ def bridge_electron_transfer(path=None):
         for axis in (top, residual_axis):
             axis.grid(alpha=0.25)
     axes[0, 0].set_ylabel("population")
-    axes[0, 0].legend(frameon=False, ncol=3, loc="upper right")
-    axes[0, 1].plot([], [], "-", color="#495057", label="tensor network + TTM")
-    axes[0, 1].plot(
+    method_handle, = axes[0, 1].plot(
+        [], [], "-", color="#495057", label="tensor network + TTM"
+    )
+    paper_handle, = axes[0, 1].plot(
         [], [], "o", ms=4, mfc="white", mec="#495057",
         label="digitized paper Fig. 2",
     )
-    axes[0, 1].legend(frameon=False, loc="upper right")
-    figure.tight_layout()
-    output = Path(path or IMG / "bridge_electron_transfer.png")
+    figure.legend(
+        [*state_handles, method_handle, paper_handle],
+        ["donor", "bridge", "acceptor", "tensor network + TTM",
+         "digitized paper Fig. 2"],
+        loc="upper center", bbox_to_anchor=(0.5, 0.995), ncol=5,
+        frameon=False,
+    )
+    figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
+    output = Path(path or IMG / "bridge_electron_transfer.svg")
     figure.savefig(output, dpi=160)
     plt.close(figure)
+
+    memory_figure, memory_axes = plt.subplots(1, 3, figsize=(13.2, 4.3))
+    case_colors = {
+        "diagonal_reference": "#4C6EF5",
+        "noncondon": "#E8590C",
+    }
+    case_handles = []
+    dt_ps = validation["metadata"]["dt_ps"]
+    for case in cases:
+        result = validation["results"][case]
+        color = case_colors[case]
+        lag = np.arange(1, len(result["transfer_norm"]) + 1) * dt_ps
+        case_line, = memory_axes[0].semilogy(
+            lag, result["transfer_norm"], color=color, lw=1.8,
+            label=display_names[case],
+        )
+        case_handles.append(case_line)
+        convergence = result["memory_convergence"]
+        nonzero = convergence["max_population_difference"] > 0.0
+        memory_axes[1].semilogy(
+            convergence["cutoff_ps"][nonzero],
+            convergence["max_population_difference"][nonzero],
+            "o-", color=color, ms=4, lw=1.5,
+        )
+        memory_axes[2].plot(
+            convergence["cutoff_ps"],
+            convergence["donor_lifetime_ps"],
+            "o-", color=color, ms=4, lw=1.5,
+        )
+    memory_band = memory_axes[0].axvspan(
+        0.10, 0.12, color="#ADB5BD", alpha=0.28,
+        label="paper's 0.10--0.12 ps memory range",
+    )
+    for axis in memory_axes[1:]:
+        axis.axvspan(0.10, 0.12, color="#ADB5BD", alpha=0.28)
+    memory_axes[0].set(
+        xlabel="kernel lag (ps)", ylabel=r"transfer-tensor norm $\|T_n\|_F$",
+        title="(a) kernel-tail decay",
+    )
+    memory_axes[1].set(
+        xlabel="retained memory (ps)",
+        ylabel="maximum population difference",
+        title="(b) change from the 0.15 ps kernel",
+    )
+    memory_axes[2].set(
+        xlabel="retained memory (ps)", ylabel="fitted donor lifetime (ps)",
+        title="(c) long-time observable convergence",
+    )
+    for axis in memory_axes:
+        axis.grid(alpha=0.25)
+    memory_figure.legend(
+        [*case_handles, memory_band],
+        ["diagonal reference", "non-Condon",
+         "paper's 0.10--0.12 ps memory range"],
+        loc="upper center", bbox_to_anchor=(0.5, 0.995), ncol=3,
+        frameon=False,
+    )
+    memory_figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.90))
+    memory_output = output.with_name("bridge_electron_transfer_memory.svg")
+    memory_figure.savefig(memory_output, dpi=160)
+    plt.close(memory_figure)
 
     validation_rows = "\n".join(
         f"| {display_names[case]} | "
@@ -371,6 +442,16 @@ def bridge_electron_transfer(path=None):
     )
     diagonal_validation = validation["summary"]["diagonal_reference"]
     noncondon_validation = validation["summary"]["noncondon"]
+    convergence_at_012 = {}
+    for case in cases:
+        convergence = validation["results"][case]["memory_convergence"]
+        index = int(np.argmin(np.abs(convergence["cutoff_ps"] - 0.12)))
+        convergence_at_012[case] = {
+            "population_difference": convergence[
+                "max_population_difference"
+            ][index],
+            "lifetime_ps": convergence["donor_lifetime_ps"][index],
+        }
     _write_summary("bridge_electron_transfer", fr"""## Generated result
 
 ### Fifteen-picosecond paper comparison
@@ -394,6 +475,14 @@ with maximum population errors of
 short maps preserve trace to **{max(diagonal_validation['direct_map_trace_error'], noncondon_validation['direct_map_trace_error']):.2e}**;
 their most negative Choi eigenvalue is
 **{min(diagonal_validation['direct_map_minimum_choi_eigenvalue'], noncondon_validation['direct_map_minimum_choi_eigenvalue']):.2e}**, which measures the small non-CP error introduced by independently truncating the tomography runs.
+
+Retaining 0.12 ps rather than the complete 0.15 ps kernel changes the 15 ps
+populations by at most
+**{convergence_at_012['diagonal_reference']['population_difference']:.2e}**
+and **{convergence_at_012['noncondon']['population_difference']:.2e}**. The
+corresponding donor lifetimes are
+**{convergence_at_012['diagonal_reference']['lifetime_ps']:.3f} ps** and
+**{convergence_at_012['noncondon']['lifetime_ps']:.3f} ps**.
 
 ### Direct 0.2 ps documentation run
 
@@ -437,7 +526,7 @@ def two_bath_heat_flow(path=None):
         axis.grid(alpha=0.25)
         axis.legend(frameon=False)
     figure.tight_layout()
-    output = Path(path or IMG / "two_bath_heat_flow.png")
+    output = Path(path or IMG / "two_bath_heat_flow.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     nonequilibrium = summary["nonequilibrium"]
@@ -469,10 +558,13 @@ FIGURES = (
 )
 
 OUTPUTS = {
-    function.__name__: IMG / f"{function.__name__}.png"
+    function.__name__: IMG / f"{function.__name__}.svg"
     for function in FIGURES
 }
-OUTPUTS["bath_correlation_finite_t"] = IMG / "bath_correlation_finiteT.png"
+OUTPUTS["bath_correlation_finite_t"] = IMG / "bath_correlation_finiteT.svg"
+EXTRA_OUTPUTS = {
+    "bridge_electron_transfer": (IMG / "bridge_electron_transfer_memory.svg",),
+}
 
 
 def build_all(force=False):
@@ -481,12 +573,14 @@ def build_all(force=False):
     written = []
     for function in FIGURES:
         target = OUTPUTS[function.__name__]
+        targets = (target, *EXTRA_OUTPUTS.get(function.__name__, ()))
         summary = GENERATED / f"{function.__name__}.md"
         tutorial = function.__name__ in {
             "vibronic_dimer", "nonadiabatic_spin_boson",
             "bridge_electron_transfer", "two_bath_heat_flow",
         }
-        if target.exists() and (not tutorial or summary.exists()) and not force:
+        if (all(item.exists() for item in targets)
+                and (not tutorial or summary.exists()) and not force):
             continue
         written.append(function(target))
     return written

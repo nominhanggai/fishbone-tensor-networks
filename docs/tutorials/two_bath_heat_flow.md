@@ -1,4 +1,4 @@
-# Heat flow through a two-level molecular junction
+# Heat flow through a two-level molecular junction [tree TEBD]
 
 A molecule connected to environments at different temperatures is a minimal
 model of nanoscale heat transport. Unlike a one-bath relaxation calculation,
@@ -187,7 +187,7 @@ axes[1].set_xlabel(r"time [$\omega_c^{-1}$]")
 axes[1].set_ylabel(r"energy current [$\omega_c^2$]")
 axes[1].legend()
 fig.tight_layout()
-fig.savefig("two_bath_heat_flow.png", dpi=180)
+fig.savefig("two_bath_heat_flow.svg")
 ```
 
 The result contains the time grid in `result.t`, one array per named observable
@@ -279,7 +279,7 @@ at every early time.
 
 ## 6. Reading the dynamics
 
-![Junction population and hot/cold currents](../img/two_bath_heat_flow.png)
+![Junction population and hot/cold currents](../img/two_bath_heat_flow.svg)
 
 ```{include} ../_generated/two_bath_heat_flow.md
 ```

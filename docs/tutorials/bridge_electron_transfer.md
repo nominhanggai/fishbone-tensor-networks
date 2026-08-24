@@ -1,4 +1,4 @@
-# Donor--bridge--acceptor electron transfer
+# Donor--bridge--acceptor electron transfer [transfer tensor method]
 
 This tutorial tests how fluctuations of electronic couplings can accelerate
 electron transfer through a molecular bridge. It reproduces the model behind
@@ -319,7 +319,7 @@ the paper. No bath displacement conditioned on the donor is included.
 
 ## 6. Comparing the complete dynamics with Fig. 2
 
-![Tensor-network and transfer-tensor donor, bridge, and acceptor populations overlaid with digitized paper curves, with pointwise residuals below](../img/bridge_electron_transfer.png)
+![Tensor-network and transfer-tensor donor, bridge, and acceptor populations overlaid with digitized paper curves, with pointwise residuals below](../img/bridge_electron_transfer.svg)
 
 ```{include} ../_generated/bridge_electron_transfer.md
 ```
@@ -342,6 +342,16 @@ the acceptor rise over the entire 15 ps window. The weak-diagonal and non-Condon
 calculations still have identical $H_S$ in the paper's convention; their
 different dynamics comes from the off-diagonal entries of $M$. The diagonal
 reference uses larger electronic couplings and is a separate benchmark.
+
+The curves should not be expected to coincide point for point yet. The paper
+used a continuous-bath MACGIC-QUAPI calculation converged by reducing its
+Trotter step while increasing the influence-functional memory. Here, the short
+dynamical maps use a finite 95-mode TEDOPA bath, local Fock dimension 6, a 2 fs
+step, and an SVD threshold of $10^{-4}$. Those settings reproduce the paper to
+within about one percent, but they are documentation-scale rather than the
+common numerical limit of the two methods. The plotted paper curves are also
+vector-path samples rather than the authors' raw data; their population sums
+differ from one by as much as 0.006.
 
 ## 7. From 0.15 ps direct dynamics to 15 ps
 
@@ -430,6 +440,17 @@ are folded into them.
 
 ## 8. Numerical evidence and remaining convergence checks
 
+![Decay of the transfer-tensor kernel and convergence of the propagated populations and donor lifetime with retained memory](../img/bridge_electron_transfer_memory.svg)
+
+The shaded interval is the paper's typical 0.10--0.12 ps memory range for this
+spectral density. Panel (a) plots the Frobenius norm of every transfer tensor,
+not merely its final value. Panel (b) repeats the complete 15 ps propagation
+after truncating the kernel at each indicated memory and compares it with the
+0.15 ps result. The zero-error 0.15 ps point is omitted from the logarithmic
+axis because it is the reference by definition. Panel (c) applies the same
+lifetime fit at every cutoff. Together, the panels distinguish a small-looking
+kernel tail from its accumulated effect on the long-time observable.
+
 The following checks have been performed for this validation:
 
 - At $10^{-4}$ SVD threshold, changing the step from 2 fs to 3.33 fs changes
@@ -445,6 +466,11 @@ The following checks have been performed for this validation:
   map showed that a 0.12 ps kernel predicts the remaining direct trajectory to
   better than $10^{-4}$ in the non-Condon case and about $1.5\times10^{-5}$ in
   the diagonal case.
+- Over the complete 15 ps continuation, retaining 0.12 ps instead of 0.15 ps
+  changes any population by about 0.0011 and 0.0020, and changes the fitted
+  lifetimes by 0.008 ps and 0.016 ps. Kernel truncation therefore contributes
+  to the residual but does not explain the full 0.010--0.011 maximum difference
+  from the digitized paper curves.
 - The reconstructed dynamical maps preserve trace to $3.4\times10^{-16}$. Their
   most negative Choi eigenvalue is $-2.4\times10^{-5}$, a small non-CP error
   from independently truncating the tomography trajectories that should also

@@ -161,7 +161,7 @@ $\max_t |C_{\mathrm{disc}}(t) - C(t)| / |C(0)|$ on $[0, t_{max}]$ is:
 | auto domain, too few modes (20) | 5.5 × 10⁻¹ |
 | too-narrow domain $(0, 10)$, auto modes | 4.1 × 10⁻¹ |
 
-```{figure} img/bath_correlation.png
+```{figure} img/bath_correlation.svg
 :alt: Real and imaginary parts of the bath correlation function C(t); the auto-discretized bath lands exactly on the exact curve, with an inset showing its relative error stays ~1e-2 while too-few-modes and too-narrow-domain discretizations rise toward 1.
 :width: 80%
 :align: center
@@ -187,7 +187,7 @@ the 99.9% reorganization-energy window reaches out to $\omega_{hi} \approx 29.5$
 and the light cone asks for ~80 modes, which sample the peaks finely enough to
 reproduce $C(t)$ to a few $\times 10^{-2}$ over the whole run:
 
-```{figure} img/bath_structured.png
+```{figure} img/bath_structured.svg
 :alt: Left, a structured spectral density with two peaks, the star modes sampling it within the auto domain edge at 32.1; right, the strongly oscillatory correlation function with the auto-discretized bath (markers) on the exact curve and an inset error around 1e-3.
 :width: 100%
 :align: center
@@ -209,7 +209,7 @@ It reproduces the thermal $C(t)$ just as faithfully (peak error
 $7.6 \times 10^{-3}$) at far fewer modes than a symmetric window would need, while
 too few modes or too narrow a domain fail in the same way:
 
-```{figure} img/bath_correlation_finiteT.png
+```{figure} img/bath_correlation_finiteT.svg
 :alt: Finite-temperature bath correlation function; the auto thermofield bath (156 modes on a signed domain) lands on the exact thermal C(t), with an inset showing the relative error stays ~1e-3 while too-few-modes and too-narrow-domain discretizations rise toward 1.
 :width: 80%
 :align: center

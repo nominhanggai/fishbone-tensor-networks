@@ -359,6 +359,55 @@ def dynamical_map_diagnostics(maps):
     }
 
 
+def memory_cutoff_convergence(
+    maps, direct, reference_populations, *, dt_ps, n_steps,
+    first_cutoff_ps=0.04, cutoff_step_ps=0.01,
+):
+    """Converge the long trajectory against retained TTM memory length.
+
+    The longest available map is the reference.  Shorter prefixes are
+    independently deconvolved and propagated to the same final time, so the
+    returned population error measures the consequence of discarding the tail
+    of the transfer-tensor kernel rather than only its instantaneous norm.
+    """
+    maps = np.asarray(maps, complex)
+    direct = np.asarray(direct, complex)
+    reference_populations = np.asarray(reference_populations, float)
+    if len(maps) != len(direct):
+        raise ValueError("maps and direct trajectory must have equal lengths")
+    if n_steps < len(maps):
+        raise ValueError("n_steps must include the complete direct trajectory")
+    if reference_populations.shape != (n_steps, 3):
+        raise ValueError("reference_populations must have shape (n_steps, 3)")
+
+    first_depth = max(1, int(round(first_cutoff_ps / dt_ps)))
+    depth_step = max(1, int(round(cutoff_step_ps / dt_ps)))
+    if first_depth > len(maps):
+        raise ValueError("first memory cutoff exceeds the available maps")
+    depths = np.arange(first_depth, len(maps) + 1, depth_step, dtype=int)
+    if depths[-1] != len(maps):
+        depths = np.append(depths, len(maps))
+
+    population_errors = []
+    lifetimes = []
+    times = np.arange(1, n_steps + 1, dtype=float) * dt_ps
+    for depth in depths:
+        transfer, _transfer_norm = transfer_mat(maps[:depth])
+        predicted = predict_density_mat(n_steps, transfer, direct[:depth])
+        populations = np.diagonal(predicted, axis1=1, axis2=2).real
+        population_errors.append(float(np.max(np.abs(
+            populations - reference_populations
+        ))))
+        lifetimes.append(
+            fit_donor_lifetime(times, populations[:, 0])["lifetime_ps"]
+        )
+    return {
+        "cutoff_ps": depths.astype(float) * dt_ps,
+        "max_population_difference": np.asarray(population_errors),
+        "donor_lifetime_ps": np.asarray(lifetimes),
+    }
+
+
 def long_validation(
     maps_path=REFERENCE_MAPS, paper_path=PAPER_FIG2_DATA, *, t_max_ps=15.0
 ):
@@ -431,6 +480,9 @@ def long_validation(
         paper_fit = fit_donor_lifetime(
             paper_times, paper_populations[:, 0]
         )
+        memory_convergence = memory_cutoff_convergence(
+            maps, direct, populations, dt_ps=dt_ps, n_steps=n_steps
+        )
         results[case] = {
             "t": times,
             "rdm": predicted,
@@ -441,6 +493,7 @@ def long_validation(
             "residual": residual,
             "fit": simulation_fit,
             "paper_fit": paper_fit,
+            "memory_convergence": memory_convergence,
         }
         summary[case] = {
             "population_rmse": float(np.sqrt(np.mean(residual ** 2))),

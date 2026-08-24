@@ -1,4 +1,4 @@
-# Vibrationally assisted transfer in a molecular dimer
+# Vibrationally assisted transfer in a molecular dimer [interaction-chain MPO]
 
 This tutorial calculates excitation transfer between two electronically
 mismatched molecules and asks whether a damped intramolecular vibration can
@@ -177,7 +177,7 @@ modes, and a tighter `trunc_eps`.
 
 ## 5. Dynamics and conclusion
 
-![Acceptor population at two characteristic vibrational frequencies](../img/vibronic_dimer.png)
+![Acceptor population at two characteristic vibrational frequencies](../img/vibronic_dimer.svg)
 
 ```{include} ../_generated/vibronic_dimer.md
 ```
