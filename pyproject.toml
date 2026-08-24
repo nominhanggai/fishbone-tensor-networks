@@ -37,14 +37,14 @@ classifiers = [
 dependencies = [
     "numpy>=1.22",
     "scipy>=1.8",
+    "opt_einsum>=3.3",
 ]
 
 [project.optional-dependencies]
-speed = ["opt_einsum>=3.3"]     # faster contractions (large speedup for the tree/TTN engines)
 rates = ["vegas>=5.0"]
 test = ["pytest>=7"]
 docs = ["sphinx>=6", "furo", "myst-parser", "matplotlib>=3.5"]
-dev = ["pytest>=7", "build", "twine", "ruff", "opt_einsum>=3.3"]
+dev = ["pytest>=7", "build", "twine", "ruff"]
 gpu-cuda11 = ["cupy-cuda11x>=12"]
 gpu-cuda12 = ["cupy-cuda12x>=12"]
 

@@ -16,29 +16,6 @@ def test_polaron_builds_and_gives_normalized_rdm():
     assert np.allclose([np.trace(rho).real for rho in r.rdm], 1.0, atol=1e-6)
 
 
-def test_both_contraction_backends_agree():
-    """The optional and fallback contraction backends agree numerically."""
-    import numpy as np
-
-    opt_einsum = pytest.importorskip("opt_einsum",
-                                     reason="only one backend is installed")
-    from fishbonett.contract import _numpy_contract
-
-    rng = np.random.default_rng(0)
-    # the shape of a real tensor-network kernel: several operands, shared indices
-    a = rng.standard_normal((4, 5, 3)) + 1j * rng.standard_normal((4, 5, 3))
-    b = rng.standard_normal((3, 6)) + 1j * rng.standard_normal((3, 6))
-    c = rng.standard_normal((5, 6, 2)) + 1j * rng.standard_normal((5, 6, 2))
-
-    for subs, ops in [("ijk,kl,jlm->im", (a, b, c)),
-                      ("ijk,ijk->", (a, a.conj())),
-                      ("ijk,kl->ijl", (a, b))]:
-        got = opt_einsum.contract(subs, *ops)
-        ref = _numpy_contract(subs, *ops)
-        assert np.allclose(got, ref, rtol=0, atol=1e-12), subs
-        assert np.abs(np.asarray(got) - np.asarray(ref)).max() < 1e-13, subs
-
-
 def test_every_module_all_is_accurate():
     """``__all__`` entries exist and include module-defined public callables."""
     import importlib

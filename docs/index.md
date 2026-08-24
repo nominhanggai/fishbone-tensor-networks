@@ -78,8 +78,8 @@ api
   spectral density and the propagation time; truncation is driven by an accuracy
   threshold, with the bond dimension left unbounded unless you cap it.
 - **Self-contained.** TEDOPA discretization and chain mapping are implemented in
-  the package — no external Fortran dependencies — with an optional CuPy GPU
-  backend and an optional `opt_einsum` fast path.
+  the package — no external Fortran dependencies — with `opt_einsum`
+  contractions and an optional CuPy GPU backend.
 - Also included: golden-rule and Marcus rate theory, transfer tensors, and
   Boys-localization diabatization.
 

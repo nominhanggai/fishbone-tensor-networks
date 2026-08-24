@@ -1,46 +1,18 @@
-"""Tensor-contraction backend.
+"""Tensor contractions used by the tensor-network engines.
 
-Provides :func:`contract`, a drop-in for ``opt_einsum.contract`` /
-``numpy.einsum``.  ``opt_einsum`` is used when installed (it caches contraction
-paths and is a little faster on the hot tensor-network kernels), otherwise this
-falls back to ``numpy.einsum`` with greedy path optimization -- so ``opt_einsum``
-is an optional dependency, not a hard requirement.
-
-Set the environment variable ``FISHBONETT_EINSUM=numpy`` to force the NumPy
-backend even when ``opt_einsum`` is installed (used for benchmarking).
+The package requires :mod:`opt_einsum` so that its MPS and tree engines use the
+same contraction-path implementation on every supported installation. This
+module keeps that dependency behind one stable package-level function.
 """
-import os
+from opt_einsum import contract as _contract_impl
 
-import numpy as _np
-
-__all__ = ["contract", "BACKEND"]
-
-_force = os.environ.get("FISHBONETT_EINSUM", "").lower()
-
-
-def _numpy_contract(subscripts, *operands, **kwargs):
-    kwargs.setdefault("optimize", "greedy")
-    return _np.einsum(subscripts, *operands, **kwargs)
-
-
-if _force == "numpy":
-    _contract_impl = _numpy_contract
-    BACKEND = "numpy"
-else:
-    try:
-        from opt_einsum import contract as _oe_contract  # noqa: F401
-        _contract_impl = _oe_contract
-        BACKEND = "opt_einsum"
-    except ImportError:
-        _contract_impl = _numpy_contract
-        BACKEND = "numpy"
+__all__ = ["contract"]
 
 
 def contract(subscripts, *operands, **kwargs):
-    """Contract tensors with the selected NumPy or ``opt_einsum`` backend.
+    """Contract tensors with :func:`opt_einsum.contract`.
 
     The accepted arguments are those of :func:`numpy.einsum`, including the
     interleaved integer-label form.
-    :data:`BACKEND` reports which implementation will execute the contraction.
     """
     return _contract_impl(subscripts, *operands, **kwargs)
