@@ -1,0 +1,96 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fishbonett"
+version = "0.1.0"
+description = "Tensor-network (MPS) propagation of vibronic open-quantum-system dynamics: spin-boson models, electron and excitation-energy transfer."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "The fishbonett developers" }]
+maintainers = [{ name = "Hanggai Nuomin", email = "hanggai@caltech.edu" }]
+keywords = [
+    "tensor networks",
+    "matrix product states",
+    "open quantum systems",
+    "spin-boson model",
+    "TEDOPA",
+    "electron transfer",
+    "vibronic dynamics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.8",
+]
+
+[project.optional-dependencies]
+speed = ["opt_einsum>=3.3"]     # faster contractions (large speedup for the tree/TTN engines)
+rates = ["vegas>=5.0"]
+test = ["pytest>=7"]
+# matplotlib is required: docs/conf.py regenerates the figures via docs/figures.py
+docs = ["sphinx>=6", "furo", "myst-parser", "matplotlib>=3.5"]
+dev = ["pytest>=7", "build", "twine", "ruff", "opt_einsum>=3.3"]
+gpu-cuda11 = ["cupy-cuda11x>=12"]
+gpu-cuda12 = ["cupy-cuda12x>=12"]
+
+[project.urls]
+Homepage = "https://github.com/nominhanggai/fishbone-tensor-networks"
+Repository = "https://github.com/nominhanggai/fishbone-tensor-networks"
+Issues = "https://github.com/nominhanggai/fishbone-tensor-networks/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fishbonett"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/.private",
+    "/.tmp-*",
+    "/.venv",
+    "/dist",
+    "/examples/legacy",
+    "/extensions",
+    "/legacy",
+    "/paper",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+# Start with the correctness rules. Formatting the historical research tests is
+# intentionally separate from release hardening.
+select = ["F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    # There is deliberately no blanket "ignore::DeprecationWarning:scipy.*" here.
+    # It used to be needed for the sparse-array `kron` migration, which is now done
+    # (fishbonett.linalg.kron passes a coo_array, so scipy returns a csc_array and
+    # does not warn).  With that gone the suite raises no DeprecationWarning at all
+    # -- verified by running it under `-W error::DeprecationWarning` -- so a blanket
+    # ignore would hide only the *next* one.
+    #
+    # Promoted to an error rather than dropped, so a call site slipping back to the
+    # legacy interface fails instead of quietly restoring several thousand warnings.
+    "error:.*kron is switching to the sparse array interface.*:DeprecationWarning",
+]

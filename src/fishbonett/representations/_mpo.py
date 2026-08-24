@@ -1,0 +1,113 @@
+"""Private algebra for compiling sums of operator products into MPO tensors."""
+
+from typing import Sequence
+
+import numpy as np
+from fishbonett._svd import robust_svd as _robust_svd
+
+
+def identity_product(dimensions):
+    """One identity operator for every physical site."""
+    return [np.eye(dimension, dtype=complex) for dimension in dimensions]
+
+
+def product_sum_mpo(dimensions: Sequence[int], products, coefficients=None):
+    """Compile ``sum_r c_r prod_i O[r, i]`` into a compressed MPO.
+
+    The product index is compressed while sweeping from left to right.  Building
+    all diagonal ``(n_terms, n_terms, d, d)`` tensors first would use cubic total
+    storage for the local Hamiltonians produced by this package, even though
+    their final MPO bond is small.
+    """
+    dimensions = tuple(int(dimension) for dimension in dimensions)
+    rows = [[np.asarray(operator, complex) for operator in row]
+            for row in products]
+    if not rows:
+        raise ValueError("an MPO needs at least one product term")
+    if any(len(row) != len(dimensions) for row in rows):
+        raise ValueError("every product must contain one operator per site")
+    for row in rows:
+        for dimension, operator in zip(dimensions, row):
+            if operator.shape != (dimension, dimension):
+                raise ValueError(
+                    f"local operator shape {operator.shape} does not match "
+                    f"{(dimension, dimension)}")
+
+    values = (np.ones(len(rows), complex) if coefficients is None
+              else np.asarray(coefficients, complex))
+    if values.shape != (len(rows),):
+        raise ValueError("coefficients must have one entry per product")
+
+    rank = len(rows)
+    if len(dimensions) == 1:
+        operator = sum(
+            (values[index] * rows[index][0] for index in range(rank)),
+            np.zeros((dimensions[0], dimensions[0]), complex),
+        )
+        return [operator.reshape(1, 1, dimensions[0], dimensions[0])]
+
+    first = np.stack(
+        [values[index] * rows[index][0] for index in range(rank)], axis=-1
+    )
+    matrix = first.reshape(dimensions[0] ** 2, rank)
+    u, singular, vh = _robust_svd(matrix, full_matrices=False)
+    scale = singular[0] if singular.size else 1.0
+    kept = max(1, int(np.sum(singular > 1e-13 * scale)))
+    u, singular, vh = u[:, :kept], singular[:kept], vh[:kept]
+    mpo = [u.reshape(1, dimensions[0], dimensions[0], kept).transpose(
+        0, 3, 1, 2
+    )]
+    carry = singular[:, None] * vh
+    for site in range(1, len(dimensions) - 1):
+        dimension = dimensions[site]
+        operators = np.stack([row[site] for row in rows], axis=0)
+        tensor = np.einsum("ar,rij->arij", carry, operators, optimize=True)
+        left = tensor.shape[0]
+        matrix = np.transpose(tensor, (0, 2, 3, 1)).reshape(
+            left * dimension * dimension, rank
+        )
+        u, singular, vh = _robust_svd(matrix, full_matrices=False)
+        scale = singular[0] if singular.size else 1.0
+        kept = max(1, int(np.sum(singular > 1e-13 * scale)))
+        u, singular, vh = u[:, :kept], singular[:kept], vh[:kept]
+        mpo.append(np.transpose(
+            u.reshape(left, dimension, dimension, kept), (0, 3, 1, 2)
+        ))
+        carry = singular[:, None] * vh
+    final_operators = np.stack([row[-1] for row in rows], axis=0)
+    final = np.einsum("ar,rij->aij", carry, final_operators, optimize=True)
+    mpo.append(final[:, None, :, :])
+    return compress_mpo(mpo)
+
+
+def compress_mpo(mpo, tolerance=1e-13):
+    """Remove linearly dependent auxiliary directions from an MPO."""
+    out = [np.asarray(tensor, complex).copy() for tensor in mpo]
+    if len(out) < 2:
+        return out
+
+    for site in range(len(out) - 1):
+        left, right, d_out, d_in = out[site].shape
+        matrix = np.transpose(out[site], (0, 2, 3, 1)).reshape(
+            left * d_out * d_in, right)
+        q, residual = np.linalg.qr(matrix, mode="reduced")
+        rank = q.shape[1]
+        out[site] = np.transpose(
+            q.reshape(left, d_out, d_in, rank), (0, 3, 1, 2))
+        out[site + 1] = np.einsum(
+            "xo,orij->xrij", residual, out[site + 1], optimize=True)
+
+    for site in range(len(out) - 1, 0, -1):
+        left, right, d_out, d_in = out[site].shape
+        matrix = np.transpose(out[site], (0, 2, 3, 1)).reshape(
+            left, d_out * d_in * right)
+        u, singular, vh = _robust_svd(matrix, full_matrices=False)
+        scale = singular[0] if singular.size else 1.0
+        rank = max(1, int(np.sum(singular > tolerance * scale)))
+        u, singular, vh = u[:, :rank], singular[:rank], vh[:rank]
+        out[site] = np.transpose(
+            vh.reshape(rank, d_out, d_in, right), (0, 3, 1, 2))
+        transfer = u * singular[None, :]
+        out[site - 1] = np.einsum(
+            "loij,ok->lkij", out[site - 1], transfer, optimize=True)
+    return out

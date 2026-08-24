@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "fishbonett: Tensor-network dynamics of vibronic open quantum systems"
+abstract: >-
+  A self-contained Python package for propagating the dynamics of multi-site
+  vibronic (fishbone-like) open-quantum-system models using matrix-product-state
+  and tree-tensor-network TEBD methods.
+type: software
+authors:
+  - family-names: Nuomin
+    given-names: Hanggai
+    email: hanggai@caltech.edu
+    affiliation: California Institute of Technology
+version: 0.1.0
+date-released: "2026-08-11"
+license: MIT
+repository-code: "https://github.com/nominhanggai/fishbone-tensor-networks"
+keywords:
+  - tensor networks
+  - matrix product states
+  - open quantum systems
+  - spin-boson model
+  - TEDOPA
+  - electron transfer
+  - vibronic dynamics
