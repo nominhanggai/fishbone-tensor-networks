@@ -20,8 +20,10 @@ the two-bath spin--boson junction discussed by
   claim.
 - **You will learn:** how two independent baths attach to one system site, how
   to derive a directional energy-current observable, and how to test continuity.
-- **Cost:** the default smoke profile takes seconds; the two 25-time-unit
-  documentation runs commonly take tens of minutes or longer on a CPU.
+- **Cost:** the four-step `smoke` profile takes seconds. The plotted calculation
+  advances the temperature-biased junction and equal-temperature control for
+  250 steps each, through $t\omega_c=25$, and commonly takes tens of minutes or
+  longer on a CPU.
 - **Output:** molecular relaxation, hot and cold currents, and a zero-bias
   control.
 ```
@@ -124,10 +126,11 @@ the derivative and tensor-network evolution are approximate.
 
 ## 4. Complete runnable calculation
 
-The following program runs the biased junction and its
-equal-temperature control, measures the two currents, checks energy continuity,
-and writes a dynamics figure. The settings are small enough for a
-documentation example; the convergence procedure is given below.
+The following program runs the biased junction and its equal-temperature
+control to $t\omega_c=25$ with timestep $0.1/\omega_c$, local Fock dimension 5,
+SVD threshold $10^{-3}$, and no maximum bond cap. It measures both bath
+currents, checks energy continuity, and writes a dynamics figure. The
+convergence section specifies the longer and more tightly resolved variants.
 
 ```python
 import numpy as np
@@ -157,7 +160,7 @@ def make_bath(beta):
         beta=beta,
         # A finite-temperature TEDOPA bath uses a signed effective domain.
         domain=(-OMEGA_C, OMEGA_C),
-        n_modes=None,                 # ask the bath to resolve the mode count
+        n_modes=None,                 # resolve the mode count automatically
         phys_dim=PHYS_DIM,
         discretization="tedopa",
         extra_breaks=(0.0,),          # preserve the change at omega = 0
@@ -335,13 +338,14 @@ continuity residual are stable together. Extend `t_max` only with enough
 automatically resolved modes to keep the chain recurrence outside the measured
 window.
 
-For production comparisons,
-`python examples/two_bath_heat_flow.py --profile reference` runs Fock-space
-and SVD-threshold variants. Its primary comparison uses `phys_dim=6`,
-`dt=0.025`, and `trunc_eps=1e-3`; the variants raise the Fock dimension to 8
-and tighten the threshold to $5\times10^{-4}$. Agreement of both currents and
-the zero-bias control is more informative than convergence of
-$\langle\sigma_z\rangle$ alone.
+`python examples/two_bath_heat_flow.py --profile reference` advances both
+temperature conditions to $t\omega_c=40$ with timestep $0.025/\omega_c$ and
+automatically resolved bath chains. It performs six simulations: the primary
+pair uses local Fock dimension 6 and SVD threshold $10^{-3}$; a second pair
+raises the Fock dimension to 8; and a third pair returns to dimension 6 while
+tightening the threshold to $5\times10^{-4}$. All six runs leave the maximum
+bond unrestricted. Agreement of both currents and the zero-bias control is more
+informative than convergence of $\langle\sigma_z\rangle$ alone.
 
 ## 8. Physical conclusion
 

@@ -1,9 +1,7 @@
-"""Regenerate documentation figures from the public examples.
+"""Generate tutorial figures and numerical summaries from public examples.
 
-Figures and numerical summaries are build artifacts. ``docs/conf.py`` invokes
-``build_all`` so a documentation build runs the same profiled calculations that
-the tutorial text describes. CI may call ``build_selected`` in parallel before
-Sphinx starts; ``build_all`` then generates missing or stale figures.
+``docs/conf.py`` invokes ``build_all``; ``build_selected`` can generate a named
+subset before Sphinx starts.
 """
 
 from argparse import ArgumentParser
@@ -119,7 +117,7 @@ def _error_inset(axis, times, exact, curves, location=(0.44, 0.44, 0.52, 0.36)):
 
 
 def bath_correlation(path=None):
-    """Zero-temperature Ohmic bath and two deliberately degraded grids."""
+    """Zero-temperature Ohmic bath and two coarser comparison grids."""
     from fishbonett import Bath
     plt = _mpl()
     eta, cutoff = 0.2, 5.0
@@ -281,18 +279,18 @@ def vibronic_dimer(path=None):
         )
         for frequency in summary["paper_curve_rmse"]
     )
-    _write_summary("vibronic_dimer", f"""## Generated result
+    _write_summary("vibronic_dimer", f"""## Numerical result
 
-The documentation profile conserved the one-excitation population to
-**{summary['normalization_error']:.2e}** and retained a peak bond dimension of
-**{summary['max_bond']}**. Comparison with 41 samples derived from each published
-Figure 5 curve gives {comparisons}.
+The two-trajectory calculation uses timestep $0.025/J$, local Fock dimension
+12, SVD threshold $10^{{-4}}$, and no maximum bond cap. It conserved the
+one-excitation population to **{summary['normalization_error']:.2e}** and
+retained a peak bond dimension of **{summary['max_bond']}**. Comparison with 41
+samples derived from each published Figure 5 curve gives {comparisons}.
 
 The comparison uses the centered energy-gap operator and reports the full-curve
-error rather than selecting a visually favorable endpoint. The tensor-network
-and HEOM calculations use different numerical representations, so the remaining
-difference is interpreted only after timestep, local-dimension, and SVD
-convergence checks.
+error, not a selected endpoint. The tensor-network and HEOM calculations use
+different numerical representations, so the remaining difference is
+interpreted only after timestep, local-dimension, and SVD convergence checks.
 
 Both the signed thermal frequency domain and the interaction-chain light cone
 were resolved automatically. The resulting TEDOPA layouts were {modes}. This
@@ -336,9 +334,9 @@ def nonadiabatic_spin_boson(path=None):
     output = Path(path or IMG / "nonadiabatic_spin_boson.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
-    _write_summary("nonadiabatic_spin_boson", rf"""## Generated result
+    _write_summary("nonadiabatic_spin_boson", rf"""## Numerical result
 
-The paper-matched profile gives
+The 200-mode calculation gives
 $P_\uparrow={summary['final_population_up']:.4f}$ at
 $t\Delta/\pi={result.t[-1] / np.pi:.4f}$. Against
 **{summary['paper_points_compared']}** vector-path samples of the published IC10
@@ -347,11 +345,12 @@ curve on this interval, the population RMSE is
 **{summary['paper_curve_max_error']:.4f}**. The peak retained bond dimension is
 **{summary['max_bond']['interaction']}**.
 
-This shortened interval uses 200 bath modes. The full reference profile uses
-the 600-mode chain displayed in the paper's bond-index plot. Both use ten
-oscillator states per mode, time step $0.0125/\Delta$, and SVD threshold
-$10^{{-3}}$. The finite frequency window is stated separately in the tutorial
-because the paper does not report its numerical endpoints.
+This trajectory advances 252 steps to $t\Delta/\pi=1$. The `reference` profile
+uses the 600-mode chain displayed in the paper's bond-index plot and advances
+1,257 steps to $t\Delta/\pi=5$. Both calculations assign ten oscillator states
+to each bath mode, use timestep $0.0125/\Delta$, SVD threshold $10^{{-3}}$, and
+no maximum bond cap. The finite frequency window is stated separately in the
+tutorial because the paper does not report its numerical endpoints.
 """)
     return output
 
@@ -523,7 +522,7 @@ def bridge_electron_transfer(path=None):
             ][index],
             "lifetime_ps": convergence["donor_lifetime_ps"][index],
         }
-    _write_summary("bridge_electron_transfer", fr"""## Generated result
+    _write_summary("bridge_electron_transfer", fr"""## Numerical result
 
 ### Fifteen-picosecond paper comparison
 
@@ -531,8 +530,8 @@ def bridge_electron_transfer(path=None):
 |---|---:|---:|---:|---:|---:|---:|
 {validation_rows}
 
-The solid curves in the generated figure are the 15 ps transfer-tensor
-propagation; open circles are vector-path data extracted from the paper's Fig. 2.
+The solid curves are the 15 ps transfer-tensor propagation; open circles are
+vector-path data extracted from the paper's Fig. 2.
 Residuals compare all three populations at every 0.05 ps digitization point.
 The same $A\exp(-t/\tau)+C$ model was fitted independently to the calculated and
 digitized donor curves. Its fit to the digitized curves recovers the lifetimes
@@ -547,26 +546,25 @@ short maps preserve trace to **{max(diagonal_validation['direct_map_trace_error'
 their most negative Choi eigenvalue is
 **{min(diagonal_validation['direct_map_minimum_choi_eigenvalue'], noncondon_validation['direct_map_minimum_choi_eigenvalue']):.2e}**, which measures the small non-CP error introduced by independently truncating the tomography runs.
 
-Retaining 0.12 ps rather than the complete 0.15 ps kernel changes the 15 ps
-populations by at most
+Retaining 0.12 ps of the complete 0.15 ps kernel changes the 15 ps populations
+by at most
 **{convergence_at_012['diagonal_reference']['population_difference']:.2e}**
 and **{convergence_at_012['noncondon']['population_difference']:.2e}**. The
 corresponding donor lifetimes are
 **{convergence_at_012['diagonal_reference']['lifetime_ps']:.3f} ps** and
 **{convergence_at_012['noncondon']['lifetime_ps']:.3f} ps**.
 
-### Direct 0.2 ps documentation run
+### Direct 0.2 ps tensor-network propagation
 
 | coupling model | donor loss | max bridge | final acceptor | normalization error |
 |---|---:|---:|---:|---:|
 {early_rows}
 
-The docs profile used the paper's $\alpha={suite['bath']['alpha']}$,
+The direct propagation uses the paper's $\alpha={suite['bath']['alpha']}$,
 $\omega_c={suite['bath']['cutoff_cm']:.0f}\ \mathrm{{cm}}^{{-1}}$ bath and
-{suite['bath']['n_modes']} automatically resolved modes. This independently
-regenerated short run checks that the current propagation code retains the
-published model's early population transfer; the checked-in short dynamical
-maps make the longer validation affordable in CI.
+{suite['bath']['n_modes']} automatically resolved modes. This 0.2 ps trajectory
+independently confirms the early population transfer. The separate 0.15 ps
+dynamical maps initialize the 15 ps TTM propagation tabulated above.
 
 Any fitted donor lifetime summarizes the full population trace; it is not an
 isolated elementary $D\to A$ rate because bridge occupation and recrossing
@@ -606,20 +604,22 @@ def two_bath_heat_flow(path=None):
     plt.close(figure)
     temperature_biased = summary["temperature_biased"]
     equal_temperature = summary["equal_temperature"]
-    _write_summary("two_bath_heat_flow", f"""## Generated result
+    _write_summary("two_bath_heat_flow", f"""## Numerical result
 
 The calculation uses the cited Ohmic coupling $\alpha={example.ALPHA:g}$ for
-each reservoir. In the final 20% of the documentation run, the hot- and
-cold-bath currents into the system are
+each reservoir. Over $20 \leq t\omega_c \leq 25$, the hot- and cold-bath
+currents into the system are
 **{temperature_biased['mean_hot_to_system']:.4g}** and
 **{temperature_biased['mean_cold_to_system']:.4g}**. Their residual balance is
 **{temperature_biased['steady_balance_error']:.3g}**, and the RMS continuity-equation
 residual is **{temperature_biased['continuity_rms']:.3g}**.
 
-The equal-temperature control has a final-window hot current of
-**{equal_temperature['mean_hot_to_system']:.3g}**. A nonzero residual means the finite
-run has not established a steady-state transport claim; extend the reference
-profile and converge it before interpreting the plateau.
+The equal-temperature control has a mean hot current of
+**{equal_temperature['mean_hot_to_system']:.3g}** over the same interval. A
+nonzero residual means this trajectory has not established a steady-state
+transport claim. The `reference` profile extends both temperature conditions to
+$t\omega_c=40$ with timestep $0.025/\omega_c$ and independently refines the
+Fock dimension and SVD threshold.
 """)
     return output
 
@@ -675,7 +675,7 @@ def build_selected(names, force=False):
 
 
 def build_all(force=False):
-    """Generate every missing figure, propagating failures to Sphinx and CI."""
+    """Generate every missing or stale figure and propagate failures."""
     return build_selected(_FIGURE_BY_NAME, force=force)
 
 
