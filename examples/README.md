@@ -9,7 +9,7 @@ python examples/interaction_picture_spin_boson.py
 
 | Example | Method |
 |---|---|
-| [`interaction_picture_spin_boson.py`](interaction_picture_spin_boson.py) | Interaction-picture spin-boson dynamics with a discrete multichannel bath (unified TEBD engine + leg swaps). |
+| [`interaction_picture_spin_boson.py`](interaction_picture_spin_boson.py) | Interaction-picture spin-boson dynamics with a discrete multichannel bath (MPS swap-network TEBD). |
 | [`cooling_spin_boson.py`](cooling_spin_boson.py) | Finite-temperature "cooling" scheme with a chain bath and a `get_rdm` readout. |
 | [`golden_rule_rate.py`](golden_rule_rate.py) | Fermi golden-rule vs Marcus electron-transfer rate from a spectral density (`fishbonett.rates`). |
 | [`vibronic_dimer.py`](vibronic_dimer.py) | Vibrationally assisted transfer in a biased molecular dimer, with one Brownian bath coupled to the molecular energy difference. |

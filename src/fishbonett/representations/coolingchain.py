@@ -35,7 +35,7 @@ from fishbonett.states.mps import SystemBathMPS
 class SystemBathCoolingChain(SystemBathMPS):
     """Cooling-chain builder: system + harmonic bath, dissipative cooling ansatz.
 
-    Extends the 1D :class:`~fishbonett.states.mps.SystemBathMPS` engine with a
+    Extends the 1D :class:`~fishbonett.states.mps.SystemBathMPS` state with a
     ``betaOmega`` cooling gauge: each bath mode carries a heating operator so the
     chain is progressively cooled, and :meth:`get_rdm` reads the system reduced
     density matrix through those operators.  Everything the representation needs is given at

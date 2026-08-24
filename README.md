@@ -21,7 +21,7 @@ Lanczos tridiagonalization), so no hard-to-build Fortran packages are required.
   propagate with a single `run(dt=..., t_max=..., method=...)` call — no
   hand-written sweep loop — returning a `Result` with the time grid, observables,
   per-step reduced density matrix and peak bond dimension. The same call
-  dispatches to the TEBD, MPO/TDVP and tree engines below.
+  dispatches to the TEBD, MPO/TDVP and tree evolution paths below.
 - **MPS TEBD engine** (`fishbonett.evolve.tebd`): nearest-neighbour and
   swap-network updates acting on a `fishbonett.states.mps.SystemBathMPS` state,
   with SVD-threshold truncation, an optional maximum bond dimension, adaptive
@@ -32,10 +32,10 @@ Lanczos tridiagonalization), so no hard-to-build Fortran packages are required.
   TDVP that grows the bond by SVD truncation, and adaptive two-site tangent-space
   evolution — one driver (`run_mpo_hamiltonian`) taking a representation and a
   sweep as independent arguments.
-- **Tree tensor-network engine** (`fishbonett.evolve.modetree`): a balanced binary
-  tree with the spin at the root (O(log n) deep vs an O(n) chain). It applies the
-  exact commuting-coupling exponential as a bond-K tree operator and compresses
-  each edge by its Schmidt spectrum.
+- **Tree tensor-network TEBD**: `fishbonett.evolve.modetree` places one system and
+  its bath modes on a balanced binary tree, while `fishbonett.evolve.sitetree`
+  propagates multi-site and fishbone models on arbitrary loop-free trees. Both
+  compress tree edges using their Schmidt spectra.
 - **Self-contained bath discretization / TEDOPA chain mapping** from an arbitrary
   spectral density `J(ω)` — either the default Gauss–Legendre star or a
   **measure-adapted TEDOPA star** (`fishbonett.bath.tedopa`)
@@ -68,7 +68,7 @@ pip install -e ".[test,docs]"    # development
 
 Core dependencies: `numpy` and `scipy` only. `opt_einsum` is an optional
 contraction backend (`[speed]`). It is on par with `numpy.einsum` for the MPS /
-MPO engines but gives a large speedup for the **tree / TTN engines** (whose
+MPO evolution paths but gives a large speedup for the **tree / TTN paths** (whose
 multi-operand kernels numpy evaluates unoptimised), so install `[speed]` if you
 use `tree-*` methods. Set `FISHBONETT_EINSUM=numpy` before importing `fishbonett`
 to force the NumPy backend for benchmarking or backend comparisons. Requires
@@ -106,7 +106,7 @@ same `dt`/`t_max` and returns the same `Result`.
 A **fishbone** is a set of electronic sites, each with one or two baths. The
 electronic sites can form *any* loop-free tree via `TreeFishbone` (an edge list);
 the common 1D chain is a convenience specialization, `Fishbone` (a linear
-backbone), that delegates to the same engine:
+backbone), that uses the same tree-state propagation path:
 
 ```python
 from fishbonett.models import Fishbone
@@ -126,9 +126,11 @@ res.expect["sz"]         # shape (n_steps, n_sites): <sz> on every site (per-sit
 For a non-chain topology, use `fishbonett.models.TreeFishbone` directly and pass
 an edge list instead of a backbone.
 
-The low-level engines (`fishbonett.states.mps`, `fishbonett.states.tree`,
-`fishbonett.evolve.tdvp`, `fishbonett.evolve.sitetree`, `fishbonett.evolve.modetree`)
-remain available directly for finer control. More runnable demonstrations are in
+The low-level state containers (`fishbonett.states.mps`,
+`fishbonett.states.tree`) and evolution modules (`fishbonett.evolve.tebd`,
+`fishbonett.evolve.tdvp`, `fishbonett.evolve.sitetree`,
+`fishbonett.evolve.modetree`) remain available directly for finer control. More
+runnable demonstrations are in
 [`examples/`](examples/) — start with
 [`examples/friendly_interface.py`](examples/friendly_interface.py).
 

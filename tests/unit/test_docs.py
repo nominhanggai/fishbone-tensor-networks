@@ -1,12 +1,4 @@
-"""The docs have to keep up with the code.
-
-Documentation should be checked after every code change; this is the part of
-that which a machine can check.  It exists because it was needed: three modules
-added during the model/representation restructure (``fishbonett.system`` and
-``fishbonett.representations.schrodinger``) were absent from the
-API reference until a scan found them, and ``fishbonett.models.propagate`` went
-missing the same way afterwards.
-"""
+"""Documentation structure, examples, and public-API consistency checks."""
 import ast
 import pathlib
 import re
@@ -186,6 +178,8 @@ def test_docs_do_not_contain_refactor_commentary():
         "near-identical",
         "were unreachable",
         "replaced seven",
+        "unified tebd engine",
+        "high-level high-level",
     )
     sources = [
         (path, 1, path.read_text(encoding="utf-8", errors="ignore"))

@@ -30,9 +30,8 @@ __all__ = ["TreeTensorNetwork"]
 class TreeTensorNetwork(TensorNetwork):
     """Mixed-canonical tree tensor-network state (TTN).
 
-    Named for the ansatz, as :class:`fishbonett.states.mps.SystemBathMPS` is.  It was
-    called ``TreeTEBD``, which named an *algorithm* -- and one that now lives in
-    :mod:`fishbonett.evolve.sitetree` rather than here.
+    This class stores the tensor state; tree gate application and Trotter sweeps
+    are implemented in :mod:`fishbonett.evolve.sitetree`.
 
     The topology, the orthogonality-centre machinery and the observables all live in
     :class:`~fishbonett.states.network.TensorNetwork`; what is left here is the
@@ -117,4 +116,3 @@ class TreeTensorNetwork(TensorNetwork):
         """
         from fishbonett.evolve.sitetree import symmetric_tree_step
         symmetric_tree_step(self, site_gates, edge_gates, chi, eps)
-

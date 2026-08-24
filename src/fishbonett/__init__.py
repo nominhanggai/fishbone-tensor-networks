@@ -131,7 +131,7 @@ except PackageNotFoundError:  # running from a source tree without an install
 
 __all__ = [
     "__version__",
-    # engines
+    # low-level state and evolution entry points
     "SystemBathMPS",
     "run_mpo_hamiltonian",
     "run_tree_tebd",

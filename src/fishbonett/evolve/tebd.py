@@ -1,10 +1,9 @@
 """TEBD on an MPS: bond update, sweeps, and whole symmetric steps.
 
-TEBD is Trotter-split gates plus truncation, which works on any loop-free
-geometry -- so this is one of several TEBD implementations here, not *the* one.
-It is the MPS one: it acts on a :class:`~fishbonett.states.mps.SystemBathMPS`
-and indexes gates by bond number, which is what ties it to a linear chain.  The
-others carry their own bookkeeping for their own geometry:
+This module implements TEBD for a linear
+:class:`~fishbonett.states.mps.SystemBathMPS`: gates are indexed by MPS bond
+number. Other tensor-network geometries use their corresponding evolution
+modules:
 
 - :func:`fishbonett.evolve.modetree.run_tree_tebd` -- a balanced binary tree of
   *modes* (``interaction-chain-tree-tebd``).

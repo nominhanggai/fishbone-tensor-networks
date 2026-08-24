@@ -2,11 +2,11 @@
 
 A **fishbone** is a set of electronic sites, each carrying one or more independent
 baths. The electronic sites need not form a chain: the
-general engine {py:class}`~fishbonett.models.fishbone.TreeFishbone` wires them into
+general model {py:class}`~fishbonett.models.fishbone.TreeFishbone` wires them into
 *any* loop-free tree, and the common 1D chain
 {py:class}`~fishbonett.models.fishbone.Fishbone` is a convenience specialization of it.
 
-## The general engine: `TreeFishbone`
+## The general model: `TreeFishbone`
 
 Give `TreeFishbone` a list of electronic site Hamiltonians, an **edge list**
 describing the (loop-free) couplings between them, and the baths attached to
@@ -46,7 +46,7 @@ sites have no bath. The positional sequence form remains supported.
 ## The 1D specialization: `Fishbone`
 
 The 1D chain is the most common case, so it has a convenience class that takes a
-linear **backbone** instead of an edge list and delegates to the same engine — so
+linear **backbone** instead of an edge list and uses the same propagation path, so
 it has the identical observable interface and {py:class}`~fishbonett.models.result.Result`
 layout:
 
@@ -194,9 +194,9 @@ and back up each branch — so the step applies each half-step gate twice.  See
 {py:func}`fishbonett.evolve.sitetree.symmetric_tree_step`.
 
 ```{note}
-Both classes run on the one general tree-TEBD engine.  On a 1D chain this *is* the
-comb algorithm and costs the same at equal truncation.  The one thing to watch: an
-interior backbone site with two baths is a high-degree (degree-4) tree tensor, so
+Both classes use {py:mod}`fishbonett.evolve.sitetree` with a
+{py:class}`~fishbonett.states.tree.TreeTensorNetwork` state. An interior backbone
+site with two baths is a high-degree (degree-4) tree tensor, so
 its cost scales with the **square** of its bond dimensions.  Retaining singular
 values far below the physical entanglement — an over-tight `trunc_eps` — then
 inflates those bonds for no accuracy gain (e.g. a backbone bond of true rank 3 held
