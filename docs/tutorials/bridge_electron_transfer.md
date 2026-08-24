@@ -380,7 +380,9 @@ from the stored short maps:
 ```python
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import curve_fit
 
 from fishbonett.rates import predict_density_mat, transfer_mat
 
@@ -392,6 +394,8 @@ data = np.load(
 dt = float(data["dt_ps"])
 steps = round(15.0 / dt)
 rho0 = np.diag([1.0, 0.0, 0.0]).astype(complex)
+times = np.arange(1, steps + 1, dtype=float) * dt
+trajectories = {}
 
 for case in ("diagonal_reference", "noncondon"):
     maps = data[f"{case}_maps"]
@@ -403,10 +407,135 @@ for case in ("diagonal_reference", "noncondon"):
     ).reshape(-1, 3, 3)
     rdm = predict_density_mat(steps, transfer_tensors, direct)
     population = np.diagonal(rdm, axis1=1, axis2=2).real
+    trajectories[case] = population
 
     print(case)
     print("  final populations:", population[-1])
     print("  final transfer-tensor norm:", transfer_norm[-1])
+
+# Load the vector-path samples used for the pointwise paper comparison.
+paper = np.genfromtxt(
+    Path("examples/reference_data")
+    / "acharyya_2021_fig2_populations.csv",
+    delimiter=",",
+    names=True,
+    dtype=None,
+    encoding="utf-8",
+)
+
+
+def lifetime(time, donor):
+    """Fit P_D(t) = A exp(-t/tau) + C and return tau."""
+    def model(t, amplitude, tau, offset):
+        return amplitude * np.exp(-t / tau) + offset
+
+    parameters, _ = curve_fit(
+        model,
+        time,
+        donor,
+        p0=(0.95, 2.5, 0.01),
+        bounds=([0.0, 0.01, -0.2], [2.0, 100.0, 0.2]),
+    )
+    return parameters[1]
+
+
+colors = {
+    "donor": "#4C6EF5",
+    "bridge": "#E8590C",
+    "acceptor": "#2B8A3E",
+}
+figure, axes = plt.subplots(
+    2,
+    2,
+    figsize=(11.2, 7.0),
+    sharex="col",
+    gridspec_kw={"height_ratios": (2.4, 1.0)},
+)
+state_handles = []
+
+for column, case in enumerate(trajectories):
+    selected = paper[paper["case"] == case]
+    paper_t = np.asarray(selected["time_ps"], float)
+    paper_population = np.column_stack(
+        [selected[name] for name in colors]
+    ).astype(float)
+    population = trajectories[case]
+    simulation_at_paper_t = np.column_stack([
+        np.interp(
+            paper_t,
+            np.r_[0.0, times],
+            np.r_[rho0[state, state].real, population[:, state]],
+        )
+        for state in range(3)
+    ])
+    residual = simulation_at_paper_t - paper_population
+    top, bottom = axes[:, column]
+
+    for state, (name, color) in enumerate(colors.items()):
+        state_line, = top.plot(
+            times, population[:, state], color=color, label=name
+        )
+        if column == 0:
+            state_handles.append(state_line)
+        top.plot(
+            paper_t[::10],
+            paper_population[::10, state],
+            "o",
+            markersize=3.8,
+            markerfacecolor="white",
+            markeredgecolor=color,
+        )
+        bottom.plot(paper_t, residual[:, state], color=color)
+
+    tau_simulation = lifetime(times, population[:, 0])
+    tau_paper = lifetime(paper_t, paper_population[:, 0])
+    top.text(
+        0.97,
+        0.58,
+        fr"$\tau_{{\rm TN}}={tau_simulation:.2f}$ ps" "\n"
+        fr"$\tau_{{\rm paper}}={tau_paper:.2f}$ ps",
+        transform=top.transAxes,
+        horizontalalignment="right",
+    )
+    top.set_title(
+        "(a) diagonal, $V_{DB}/V_{BA}=22/45$"
+        if case == "diagonal_reference"
+        else "(b) non-Condon, $V_{DB}/V_{BA}=2/2$"
+    )
+    top.set_ylim(-0.025, 1.025)
+    bottom.axhline(0.0, color="#495057", linewidth=0.8)
+    bottom.set(
+        xlabel="time (ps)",
+        ylabel="simulation - paper",
+        ylim=(-0.015, 0.015),
+    )
+    for axis in (top, bottom):
+        axis.grid(alpha=0.25)
+
+axes[0, 0].set_ylabel("population")
+method_handle, = axes[0, 1].plot(
+    [], [], "-", color="#495057", label="tensor network + TTM"
+)
+paper_handle, = axes[0, 1].plot(
+    [], [], "o", markerfacecolor="white", markeredgecolor="#495057",
+    label="digitized paper Fig. 2",
+)
+figure.legend(
+    [*state_handles, method_handle, paper_handle],
+    [
+        "donor",
+        "bridge",
+        "acceptor",
+        "tensor network + TTM",
+        "digitized paper Fig. 2",
+    ],
+    loc="upper center",
+    bbox_to_anchor=(0.5, 0.995),
+    ncol=5,
+    frameon=False,
+)
+figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
+plt.show()
 ```
 
 To regenerate those maps rather than load them, run the expensive tomography

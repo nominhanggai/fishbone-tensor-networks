@@ -245,11 +245,11 @@ def vibronic_dimer(path=None):
         axis.plot(
             np.concatenate(([0.0], result.t)),
             np.concatenate(([0.0], population[:, 1])), lw=2.0,
-            color="#4C6EF5", label="interaction-chain tensor network",
+            color="#4C6EF5", label=example.SIMULATION_LABEL,
         )
         axis.plot(
             paper["tJ"], paper[column], "o", ms=4.2, mfc="none",
-            color="#E8590C", label="Fig. 5 (vector-path samples)",
+            color="#E8590C", label=example.PAPER_LABEL,
         )
         axis.set(
             xlabel=r"time ($J^{-1}$)",
@@ -312,13 +312,13 @@ def nonadiabatic_spin_boson(path=None):
     paper_mask = paper["t_delta_over_pi"] <= result.t[-1] / np.pi + 1e-6
     left.plot(
         result.t / np.pi, result.expect["population_up"],
-        color="#4C6EF5", lw=2.0, label="fishbonett",
+        color="#4C6EF5", lw=2.0, label=example.SIMULATION_LABEL,
     )
     left.plot(
         paper["t_delta_over_pi"][paper_mask],
         paper["population_up"][paper_mask],
         "o", ms=4.5, mfc="none", color="#E8590C",
-        label="Fig. 8 IC10 (vector-path samples)",
+        label=example.PAPER_LABEL,
     )
     right.plot(
         result.t / np.pi, result.max_bond,
@@ -413,16 +413,16 @@ def bridge_electron_transfer(path=None):
             axis.grid(alpha=0.25)
     axes[0, 0].set_ylabel("population")
     method_handle, = axes[0, 1].plot(
-        [], [], "-", color="#495057", label="tensor network + TTM"
+        [], [], "-", color="#495057", label=example.SIMULATION_LABEL,
     )
     paper_handle, = axes[0, 1].plot(
         [], [], "o", ms=4, mfc="white", mec="#495057",
-        label="digitized paper Fig. 2",
+        label=example.PAPER_LABEL,
     )
     figure.legend(
         [*state_handles, method_handle, paper_handle],
-        ["donor", "bridge", "acceptor", "tensor network + TTM",
-         "digitized paper Fig. 2"],
+        ["donor", "bridge", "acceptor", example.SIMULATION_LABEL,
+         example.PAPER_LABEL],
         loc="upper center", bbox_to_anchor=(0.5, 0.995), ncol=5,
         frameon=False,
     )
@@ -580,17 +580,15 @@ def two_bath_heat_flow(path=None):
     summary = example.summarize(suite)
     plt = _mpl()
     figure, axes = plt.subplots(1, 2, figsize=(11.2, 4.4))
-    conditions = (
-        ("nonequilibrium", "temperature-biased run", "-"),
-        ("equilibrium", "equal-temperature control", "--"),
-    )
-    for condition, legend_label, style in conditions:
+    conditions = (("temperature_biased", "-"), ("equal_temperature", "--"))
+    for condition, style in conditions:
         case = suite["results"][condition]["primary"]
         result = case["result"]
         axes[0].plot(
-            result.t, result.expect["sz"], style, label=legend_label,
+            result.t, result.expect["sz"], style,
+            label=example.CONDITION_LABELS[condition],
         )
-    case = suite["results"]["nonequilibrium"]["primary"]
+    case = suite["results"]["temperature_biased"]["primary"]
     result = case["result"]
     axes[1].plot(result.t, case["hot_to_system"], label=r"hot $\to$ system")
     axes[1].plot(result.t, -case["cold_to_system"], label=r"system $\to$ cold")
@@ -605,18 +603,18 @@ def two_bath_heat_flow(path=None):
     output = Path(path or IMG / "two_bath_heat_flow.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
-    nonequilibrium = summary["nonequilibrium"]
-    equilibrium = summary["equilibrium"]
+    temperature_biased = summary["temperature_biased"]
+    equal_temperature = summary["equal_temperature"]
     _write_summary("two_bath_heat_flow", f"""## Generated result
 
 In the final 20% of the documentation run, the hot- and cold-bath currents into
-the system are **{nonequilibrium['mean_hot_to_system']:.4g}** and
-**{nonequilibrium['mean_cold_to_system']:.4g}**. Their residual balance is
-**{nonequilibrium['steady_balance_error']:.3g}**, and the RMS continuity-equation
-residual is **{nonequilibrium['continuity_rms']:.3g}**.
+the system are **{temperature_biased['mean_hot_to_system']:.4g}** and
+**{temperature_biased['mean_cold_to_system']:.4g}**. Their residual balance is
+**{temperature_biased['steady_balance_error']:.3g}**, and the RMS continuity-equation
+residual is **{temperature_biased['continuity_rms']:.3g}**.
 
 The equal-temperature control has a final-window hot current of
-**{equilibrium['mean_hot_to_system']:.3g}**. A nonzero residual means the finite
+**{equal_temperature['mean_hot_to_system']:.3g}**. A nonzero residual means the finite
 run has not established a steady-state transport claim; extend the reference
 profile and converge it before interpreting the plateau.
 """)

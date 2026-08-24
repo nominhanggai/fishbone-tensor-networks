@@ -30,6 +30,8 @@ REFERENCE_DATA = Path(__file__).with_name("reference_data")
 REFERENCE_MAPS = REFERENCE_DATA / "bridge_electron_transfer_ttm_maps.npz"
 PAPER_FIG2_DATA = REFERENCE_DATA / "acharyya_2021_fig2_populations.csv"
 REFERENCE_METHOD = "interaction-chain-trotter-mpo"
+SIMULATION_LABEL = "tensor network + TTM"
+PAPER_LABEL = "digitized paper Fig. 2"
 
 PROJECTORS = {
     "donor": np.diag([1.0, 0.0, 0.0]),

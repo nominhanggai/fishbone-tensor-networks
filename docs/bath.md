@@ -143,7 +143,7 @@ def C_disc(domain, n_modes, ts):
     return (np.asarray(v_sq)[None, :] / np.pi
             * np.exp(-1j * np.outer(ts, freq))).sum(axis=1)
 
-bath = Bath(J=J, phys_dim=10).resolved(t_max)     # -> domain=(0, 34.9), n_modes=91
+bath = Bath(J=J, phys_dim=10).resolved(t_max)     # -> domain=(0, 34.8), n_modes=91
 ts = np.linspace(0, t_max, 400)
 rel = lambda d, n: np.max(np.abs(C_disc(d, n, ts) - C_exact(ts))) / abs(C_exact(0))
 print(rel(bath.domain, bath.n_modes))             # 7.5e-3
@@ -180,13 +180,14 @@ weak Ohmic background plus two underdamped vibrational peaks,
 $J(\omega) = 0.05\,\omega\,e^{-\omega/2.5} + \sum_{k} \frac{2\lambda_k\gamma_k
 \Omega_k^2\,\omega}{(\Omega_k^2-\omega^2)^2 + \gamma_k^2\omega^2}$ with peaks at
 $\Omega = 6, 13$.  Its correlation function is strongly oscillatory (the two peaks
-beat against each other), yet the automatic construction covers **both** peaks —
-the 99.9% reorganization-energy window reaches out to $\omega_{hi} \approx 29.5$ —
-and the light cone asks for ~80 modes, which sample the peaks finely enough to
-reproduce $C(t)$ to a few $\times 10^{-2}$ over the whole run:
+beat against each other), yet the automatic construction covers **both** peaks.
+With the current defaults, the 99.9% reorganization-energy window reaches
+$\omega_{hi} \approx 30.0$ and the light cone asks for 80 modes. They sample the
+peaks finely enough to reproduce $C(t)$ to a few $\times 10^{-2}$ over the whole
+run:
 
 ```{figure} img/bath_structured.svg
-:alt: Left, a structured spectral density with two peaks, the star modes sampling it within the auto domain edge at 32.1; right, the strongly oscillatory correlation function with the auto-discretized bath (markers) on the exact curve and an inset error around 1e-3.
+:alt: Left, a structured spectral density with two peaks sampled by 80 star modes within an automatically resolved domain ending near 30; right, the strongly oscillatory correlation function with the automatic discretization on the exact curve and an inset error around 2e-2.
 :width: 100%
 :align: center
 
@@ -202,18 +203,19 @@ the detailed-balance factor,
 $C(t) = \tfrac{1}{\pi}\int_0^\infty d\omega\, J(\omega)[\coth(\tfrac{\beta\omega}{2})
 \cos\omega t - i\sin\omega t]$, and the automatic bath uses the **asymmetric signed
 domain** above (thermofield / T-TEDOPA), each half sized by its own
-reorganization-energy tail — for $k_B T = 1$ here, $(-4.3, 34.9)$ and 100 modes.
+reorganization-energy tail. With the current defaults, $k_B T = 1$ gives the
+domain $(-4.48, 34.81)$ and 101 modes.
 It reproduces the thermal $C(t)$ just as faithfully (peak error
 $7.6 \times 10^{-3}$) at far fewer modes than a symmetric window would need, while
 too few modes or too narrow a domain fail in the same way:
 
 ```{figure} img/bath_correlation_finiteT.svg
-:alt: Finite-temperature bath correlation function; the auto thermofield bath (156 modes on a signed domain) lands on the exact thermal C(t), with an inset showing the relative error stays ~1e-3 while too-few-modes and too-narrow-domain discretizations rise toward 1.
+:alt: Finite-temperature bath correlation function; the automatic thermofield bath uses 101 modes on an asymmetric signed domain and follows the exact thermal correlation, with an inset showing an error around 1e-2 while degraded discretizations rise toward 1.
 :width: 80%
 :align: center
 
-Finite temperature ($k_B T = 1$).  The automatic thermofield bath (100 modes on
-the asymmetric signed domain $(-4.3, 34.9)$, markers) reproduces the thermal
+Finite temperature ($k_B T = 1$). The automatic thermofield bath (101 modes on
+the asymmetric signed domain $(-4.48, 34.81)$, markers) reproduces the thermal
 correlation function (lines); the inset shows the same separation between the
 faithful automatic choice and the degraded discretizations.
 ```
