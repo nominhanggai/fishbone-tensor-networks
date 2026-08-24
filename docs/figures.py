@@ -608,8 +608,10 @@ def two_bath_heat_flow(path=None):
     equal_temperature = summary["equal_temperature"]
     _write_summary("two_bath_heat_flow", f"""## Generated result
 
-In the final 20% of the documentation run, the hot- and cold-bath currents into
-the system are **{temperature_biased['mean_hot_to_system']:.4g}** and
+The calculation uses the cited Ohmic coupling $\alpha={example.ALPHA:g}$ for
+each reservoir. In the final 20% of the documentation run, the hot- and
+cold-bath currents into the system are
+**{temperature_biased['mean_hot_to_system']:.4g}** and
 **{temperature_biased['mean_cold_to_system']:.4g}**. Their residual balance is
 **{temperature_biased['steady_balance_error']:.3g}**, and the RMS continuity-equation
 residual is **{temperature_biased['continuity_rms']:.3g}**.

@@ -13,6 +13,19 @@ checks needed before interpreting a current as steady state. The model follows
 the two-bath spin--boson junction discussed by
 [Dunnett and Chin](https://doi.org/10.3390/e23010077).
 
+```{admonition} Orientation
+:class: note
+
+- **Level:** advanced; read {doc}`convergence` before making a steady-current
+  claim.
+- **You will learn:** how two independent baths attach to one system site, how
+  to derive a directional energy-current observable, and how to test continuity.
+- **Cost:** the default smoke profile takes seconds; the two 25-time-unit
+  documentation runs commonly take tens of minutes or longer on a CPU.
+- **Output:** molecular relaxation, hot and cold currents, and a zero-bias
+  control.
+```
+
 ## 1. Physical model
 
 The junction is a two-level system,
@@ -37,8 +50,8 @@ J_b(\omega)=2\pi\alpha\omega\,\Theta(\omega_c-\omega).
 $$
 
 We use $\omega_c=1$ as the unit of energy (and therefore $\omega_c^{-1}$
-as the unit of time), $\omega_0=0.2$, and $\alpha=0.025$ for each reservoir.
-The transport run has
+as the unit of time), $\omega_0=0.2$, and $\alpha=0.1$ for each reservoir,
+matching the cited benchmark setting. The transport run has
 $\beta_h=2$ and $\beta_c=100$. A second run with
 $\beta_h=\beta_c=100$ is a zero-temperature-bias control.
 
@@ -52,9 +65,66 @@ The correspondence between the equations and the main code objects is:
 | $\sigma_x$ | the operator passed to each bath's `bind` method |
 | first hot/cold chain coordinate | `BathMode(0, 0, 0)` / `BathMode(0, 1, 0)` |
 
-## 2. Complete runnable calculation
+## 2. Why the model has two baths on one site
 
-The following script is self-contained. It runs the biased junction and its
+The construction
+
+```python
+baths={0: [hot, cold]}
+```
+
+means "attach both entries in this list to system site 0." The list order fixes
+the bath indices used by `BathMode`: hot is bath 0 and cold is bath 1. Each
+`Bath` is discretized and chain-mapped independently. They share the system
+operator $\sigma_x$, but they do not share oscillator modes or noise.
+
+This is distinct from one bath coupled to two system sites, which would describe
+correlated environmental fluctuations. It is also distinct from adding two
+spectral densities and making one bath: doing that would discard the identity
+of the hot and cold reservoirs and prevent the two currents from being measured
+separately.
+
+## 3. Deriving the current observable
+
+After chain mapping, bath $b$ couples to the system through
+
+$$
+H_{Sb}=\kappa_b\sigma_x X_b,
+\qquad X_b=b_{b0}+b_{b0}^{\dagger},
+$$
+
+where $b_{b0}$ is the first mode of that bath's chain. The contribution of this
+coupling to the change in molecular energy is
+
+$$
+I_{b\to S}
+=i\langle[H_{Sb},H_S]\rangle
+=\kappa_b\omega_0\langle\sigma_yX_b\rangle.
+$$
+
+This fixes both the prefactor and sign convention: a positive value means that
+bath $b$ is adding energy to the molecule. The raw
+$\langle\sigma_yX_b\rangle$ correlation is therefore not itself an energy
+current. The script reads $\kappa_b$ from `result.meta["bath_branches"]` because
+it is determined by the numerical chain transformation.
+
+`BathMode(system_site, bath, mode)` names a represented bath coordinate. It is
+preferable to an internal tensor index: the latter depends on the chosen state
+geometry, whereas the physical address remains stable.
+
+Summing the two bath contributions gives a useful identity,
+
+$$
+\frac{d}{dt}\langle H_S\rangle=I_{h\to S}+I_{c\to S}.
+$$
+
+The finite-difference residual printed by the script tests the observable
+definition and time resolution. It is not expected to be exactly zero because
+the derivative and tensor-network evolution are approximate.
+
+## 4. Complete runnable calculation
+
+The following program runs the biased junction and its
 equal-temperature control, measures the two currents, checks energy continuity,
 and writes a dynamics figure. The settings are deliberately small enough for a
 documentation example; the convergence procedure is given below.
@@ -70,7 +140,7 @@ from fishbonett.operators import annihilate, sigma_x, sigma_y, sigma_z
 # omega_c sets the energy unit; times are consequently in omega_c^{-1}.
 OMEGA_C = 1.0
 OMEGA_0 = 0.2
-ALPHA = 0.025
+ALPHA = 0.1
 PHYS_DIM = 5
 
 
@@ -130,7 +200,7 @@ def run_junction(beta_hot, beta_cold):
     )
 
     # Chain mapping changes the system--first-mode coupling. Use the resolved
-    # coefficients recorded by the run, rather than reconstructing them.
+    # coefficients recorded by the run instead of reconstructing them.
     branches = result.meta["bath_branches"]
     kappa_hot = branches[0]["system_coupling"]
     kappa_cold = branches[1]["system_coupling"]
@@ -210,69 +280,12 @@ in `result.expect`, the maximum MPS bond dimension after each step in
 `result.max_bond`, and representation-specific information in `result.meta`.
 Every observable array has the same length as `result.t`.
 
-## 3. Why the model has two baths on one site
-
-The construction
-
-```python
-baths={0: [hot, cold]}
-```
-
-means “attach both entries in this list to system site 0.” The list order fixes
-the bath indices used by `BathMode`: hot is bath 0 and cold is bath 1. Each
-`Bath` is discretized and chain-mapped independently. They share the system
-operator $\sigma_x$, but they do not share oscillator modes or noise.
-
-This is distinct from one bath coupled to two system sites, which would describe
-correlated environmental fluctuations. It is also distinct from adding two
-spectral densities and making one bath: doing that would discard the identity
-of the hot and cold reservoirs and prevent the two currents from being measured
-separately.
-
-## 4. Deriving the current observable
-
-After chain mapping, bath $b$ couples to the system through
-
-$$
-H_{Sb}=\kappa_b\sigma_x X_b,
-\qquad X_b=b_{b0}+b_{b0}^{\dagger},
-$$
-
-where $b_{b0}$ is the first mode of that bath's chain. The contribution of this
-coupling to the change in molecular energy is
-
-$$
-I_{b\to S}
-=i\langle[H_{Sb},H_S]\rangle
-=\kappa_b\omega_0\langle\sigma_yX_b\rangle.
-$$
-
-This fixes both the prefactor and sign convention: a positive value means that
-bath $b$ is adding energy to the molecule. The raw
-$\langle\sigma_yX_b\rangle$ correlation is therefore not itself an energy
-current. The script reads $\kappa_b$ from `result.meta["bath_branches"]` because
-it is determined by the numerical chain transformation.
-
-`BathMode(system_site, bath, mode)` names a represented bath coordinate. It is
-preferable to an internal tensor index: the latter depends on the chosen state
-geometry, whereas the physical address remains stable.
-
-Summing the two bath contributions gives a useful identity,
-
-$$
-\frac{d}{dt}\langle H_S\rangle=I_{h\to S}+I_{c\to S}.
-$$
-
-The finite-difference residual printed by the script tests the observable
-definition and time resolution. It is not expected to be exactly zero because
-the derivative and tensor-network evolution are approximate.
-
 ## 5. Representation and numerical choices
 
 `schrodinger-chain-tree-tebd` has three independent parts:
 
 - `schrodinger-chain` is the Hamiltonian representation. Each star bath is
-  transformed to a nearest-neighbour chain and remains in the Schrödinger
+  transformed to a nearest-neighbour chain and remains in the Schrodinger
   picture.
 - `tree` is the tensor-network state geometry. The two bath chains branch from
   their common system site.
@@ -315,20 +328,19 @@ and the automatically resolved chain length together.
 
 ## 7. Convergence study
 
-Change one numerical control at a time and compare the full current curves, not
-only their final values:
+Use the shared timestep, SVD, Fock-space, and finite-bath workflow in
+{doc}`convergence`. For this transport problem, accept a refinement only when
+the complete hot and cold current curves, their late-time balance, and the
+continuity residual are stable together. Extend `t_max` only with enough
+automatically resolved modes to keep the chain recurrence outside the measured
+window.
 
-1. halve `dt` from 0.1 to 0.05;
-2. increase `PHYS_DIM` from 5 to 6 or 8;
-3. reduce `trunc_eps` from $10^{-3}$ to $5\times10^{-4}$;
-4. keep `bond_dim=None`, or set a deliberately large safety cap, so the SVD
-   threshold remains the primary truncation control; and
-5. extend `t_max` while allowing TEDOPA to resolve enough modes to postpone
-   recurrence beyond the observation window.
-
-For production comparisons, `examples/two_bath_heat_flow.py --profile reference`
-runs Fock-space and SVD-threshold variants. Agreement of the currents, energy
-continuity, and zero-bias control is more informative than convergence of
+For production comparisons,
+`python examples/two_bath_heat_flow.py --profile reference` runs Fock-space
+and SVD-threshold variants. Its primary comparison uses `phys_dim=6`,
+`dt=0.025`, and `trunc_eps=1e-3`; the variants raise the Fock dimension to 8
+and tighten the threshold to $5\times10^{-4}$. Agreement of both currents and
+the zero-bias control is more informative than convergence of
 $\langle\sigma_z\rangle$ alone.
 
 ## 8. Physical conclusion
@@ -351,3 +363,7 @@ it cannot be inferred from a population plateau by itself.
   recurrence into a false steady-state signal.
 - A small current-balance error alone does not establish convergence if both
   currents change when the time step, Fock dimension, or SVD threshold changes.
+
+This is the most advanced tutorial in the sequence. Return to
+{doc}`bridge_electron_transfer` for a single-bath chemical example, or use the
+{doc}`tutorial index <index>` to choose another path.

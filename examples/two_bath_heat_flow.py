@@ -17,8 +17,8 @@ from fishbonett.operators import annihilate, sigma_x, sigma_y, sigma_z
 
 OMEGA_C = 1.0
 OMEGA_0 = 0.2
-# Coupling of each reservoir in the two-bath benchmark.
-ALPHA = 0.025
+# Ohmic coupling of each reservoir in the Dunnett--Chin benchmark.
+ALPHA = 0.1
 CONDITION_LABELS = {
     "temperature_biased": "temperature-biased run",
     "equal_temperature": "equal-temperature control",

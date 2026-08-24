@@ -5,13 +5,23 @@ of [Dijkstra *et al.*](https://arxiv.org/abs/1309.4910). It asks how an
 underdamped molecular vibration changes excitation transfer between two
 molecules whose electronic energies are far from resonance.
 
-The calculation below is self-contained. It constructs the electronic
-Hamiltonian and Brownian-oscillator environment, identifies exactly which
-molecule is coupled to the bath, propagates to the paper's endpoint, and checks
-the full result against samples derived from the published curves. The paper
-uses HEOM; this tutorial uses an interaction-chain tensor network. Agreement is
-therefore a model-level check, not a claim that the two numerical algorithms
-are identical.
+```{admonition} Orientation
+:class: note
+
+- **Level:** first tutorial; assumes a general open-quantum-systems background.
+- **You will learn:** how a structured vibration is attached to one molecular
+  site, propagated, and compared with a published population curve.
+- **Cost:** the default smoke profile takes seconds; the two-trajectory
+  documentation profile commonly takes tens of minutes or longer on a CPU.
+- **Output:** donor and acceptor populations through $tJ=20$.
+```
+
+The program constructs the electronic Hamiltonian and Brownian-oscillator
+environment, identifies exactly which molecule is coupled to the bath,
+propagates to the paper's endpoint, and checks the full result against samples
+derived from the published curves. The paper uses HEOM; this tutorial uses an
+interaction-chain tensor network. Agreement is therefore a model-level check,
+not a claim that the two numerical algorithms are identical.
 
 ## 1. Electronic dimer and environmental coordinate
 
@@ -218,7 +228,7 @@ select the Trotter-MPO integrator.
 At finite temperature, `beta=0.1` produces a signed thermofield spectral
 density. Leaving `domain` unset resolves a frequency window for the requested
 spectral tolerance. Leaving `n_modes` unset then sizes the chain from the
-propagation horizon, rather than from an arbitrary small mode count.
+propagation horizon instead of imposing an arbitrary small mode count.
 
 ## 4. Reading and validating the result
 
@@ -246,11 +256,11 @@ Fock dimensions. The documentation calculation instead uses:
 | chain modes | automatic | automatic |
 | maximum bond | unlimited | unlimited |
 
-When refining the timestep, also tighten the SVD threshold: a smaller step
-performs more truncations over the same physical interval. Judge convergence by
-the population trajectory and endpoint, not by probability conservation alone.
-For this 800-step benchmark, `1e-3` is useful for a quick exploratory run but
-changes the full-curve result visibly; it is not the control used in the figure.
+Follow the coupled timestep/SVD procedure in {doc}`convergence`. For this
+800-step benchmark, `1e-3` is useful for a quick exploratory run but changes the
+full population curve visibly; it is not the control used in the figure. In
+addition, inspect `bath_branches` to confirm that automatic resolution postpones
+the chain boundary beyond $tJ=20$.
 
 ## 5. Dynamics and conclusion
 
@@ -261,7 +271,7 @@ changes the full-curve result visibly; it is not the control used in the figure.
 
 The resonant $8J$ vibration moves population rapidly and approaches a large
 acceptor population, whereas the $4J$ case transfers more slowly. The generated
-summary reports errors over 41 points along each published curve, rather than
+summary reports errors over 41 points along each published curve instead of
 checking only the final value. These pointwise errors, together with the peak
 bond dimension, are the acceptance criteria for the documentation profile.
 
@@ -284,7 +294,7 @@ on this page is deliberately limited to the two trajectories shown above.
   centered gap coordinate `{0: gap_bath.bind(GAP_OPERATOR)}`.
 - Replacing `GAP_OPERATOR` with the donor projector `OCCUPIED` adds an
   identity-coupled bath force. For the factorized thermal initial state, that
-  changes the physical transient rather than merely shifting the energy zero.
+  changes the physical transient; it is not merely an energy-zero shift.
 - Fixing `n_modes` to 24 or 48 is not safe at $t=20/J$. The resulting return from
   the chain boundary can look like physical population recurrence.
 - Starting both local sites in `EXCITED` leaves the one-excitation sector and
@@ -293,3 +303,7 @@ on this page is deliberately limited to the two trajectories shown above.
   cutoff and leave the maximum bond unlimited unless memory protection is needed.
 - Chain-mode and star-mode occupations are observables of different represented
   coordinates and cannot be compared mode by mode.
+
+Next, {doc}`nonadiabatic_spin_boson` applies the same representation to a hot,
+strongly coupled bath where discretization and local Fock convergence are more
+demanding.
