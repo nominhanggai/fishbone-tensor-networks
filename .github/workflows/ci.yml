@@ -40,35 +40,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install package with test extras
-        # Deliberately without `speed`: this matrix covers the NumPy contraction
-        # fallback, which is what a plain `pip install fishbonett` gives you.
-        # The opt_einsum path is covered by the `test-opt-einsum` job below.
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[test]
       - name: Run test suite
         run: pytest -q
-
-  test-opt-einsum:
-    # Exercise the recommended speed backend and the NumPy fallback in the same
-    # environment so backend differences are isolated from dependency changes.
-    name: tests (opt_einsum)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install package with the speed extra
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .[test,speed]
-      - name: Run test suite on the opt_einsum backend
-        run: pytest -q
-      - name: Run test suite on the NumPy backend for comparison
-        run: pytest -q
-        env:
-          FISHBONETT_EINSUM: numpy
 
   minimum-dependencies:
     name: declared minimum dependencies
@@ -80,7 +56,7 @@ jobs:
           python-version: "3.10"
       - name: Install declared dependency floors
         run: |
-          python -m pip install "numpy==1.22.4" "scipy==1.8.1" "pytest>=7"
+          python -m pip install "numpy==1.22.4" "scipy==1.8.1" "opt_einsum==3.3.0" "pytest>=7"
           python -m pip install -e . --no-deps
       - run: pytest -q
 
@@ -118,11 +94,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install package
-        # `speed` (opt_einsum) matters here: the tree engines are markedly slower
-        # on numpy's einsum, and the benchmarks exercise them.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[test,speed]
+          python -m pip install -e .[test]
       - name: Run the curated examples
         run: |
           set -e
@@ -160,7 +134,7 @@ jobs:
       - name: Install package with docs extras
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[docs,speed]
+          python -m pip install -e .[docs]
       - name: Generate tutorial figure
         run: python docs/figures.py --figure "${{ matrix.figure }}"
       - name: Upload generated figure and summary
@@ -185,7 +159,7 @@ jobs:
       - name: Install package with docs extras
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[docs,speed]
+          python -m pip install -e .[docs]
       - name: Download generated tutorial figures
         uses: actions/download-artifact@v6
         with:

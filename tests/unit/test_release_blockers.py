@@ -30,6 +30,15 @@ def test_suite_imports_the_current_checkout():
     assert imported == expected
 
 
+def test_opt_einsum_is_a_core_dependency():
+    metadata = (
+        Path(__file__).resolve().parents[2] / "pyproject.toml"
+    ).read_text(encoding="utf-8")
+    project, optional = metadata.split("[project.optional-dependencies]", 1)
+    assert '"opt_einsum>=3.3"' in project
+    assert "\nspeed =" not in optional
+
+
 def test_complex_multichannel_local_hamiltonian_is_hermitian():
     representation = MultichannelInteractionRepresentation.from_signed_star(
         [2, 3], [sigma_z + sigma_y], [1.0], h_sys=np.zeros((2, 2)),

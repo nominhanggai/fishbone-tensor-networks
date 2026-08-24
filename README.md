@@ -19,20 +19,18 @@ Propagation uses TEBD, Trotter MPOs, or TDVP where supported.
 The package is not yet released on PyPI. From a checkout:
 
 ```bash
-python -m pip install -e ".[speed]"
+python -m pip install -e .
 ```
 
-The core package requires only NumPy and SciPy. The `speed` extra installs
-`opt_einsum`, which is recommended for tree tensor networks. Other extras are:
+The core package requires NumPy, SciPy, and `opt_einsum`. The latter plans and
+reuses the contractions performed by the MPS and tree tensor-network engines.
+Optional extras are:
 
 ```bash
 python -m pip install -e ".[rates]"       # VEGAS rate integrator
 python -m pip install -e ".[gpu-cuda12]"  # or gpu-cuda11
 python -m pip install -e ".[test,docs]"   # tests and documentation
 ```
-
-Set `FISHBONETT_EINSUM=numpy` before importing `fishbonett` to force the NumPy
-contraction backend.
 
 ## First simulation
 

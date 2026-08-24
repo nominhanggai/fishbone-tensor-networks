@@ -17,14 +17,9 @@ pip install -e ".[rates]"        # optional vegas Monte-Carlo integrator
 pip install -e ".[test,docs]"    # development
 ```
 
-Core dependencies are `numpy` and `scipy`; Python ≥ 3.10 is required.
-
-### Optional faster contractions
-
-The tree engines contract many-operand tensor networks in their inner loop.
-Installing `fishbonett[speed]` enables `opt_einsum`, which supplies reusable
-contraction paths and is substantially faster for these operations. A NumPy
-fallback is included in the core installation.
+Core dependencies are `numpy`, `scipy`, and `opt_einsum`; Python ≥ 3.10 is
+required. `opt_einsum` supplies reusable contraction paths for the MPS and tree
+tensor-network engines.
 
 ## A first simulation
 
