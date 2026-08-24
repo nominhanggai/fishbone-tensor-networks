@@ -18,28 +18,10 @@ measure instead and should be preferred in those cases.
 :func:`get_legendre_recursion`  Legendre recurrence coefficients on a window
 :func:`get_vn_squared`          the star: ``(freq, V_squared)`` -- the main entry
 :func:`get_approx_func`         the discretized ``J`` as a smooth function, to plot
-:func:`get_recursion`           numerical recurrence route (deprecated)
 ==============================  =================================================
 """
 
 import numpy as np
-
-
-def get_recursion(n, j, domain, g=1, ncap=20000):  # j=weight function
-    """Return recurrence coefficients numerically.
-
-    Deprecated because :func:`get_legendre_recursion` evaluates the Legendre
-    coefficients analytically at lower cost.
-    """
-    import fishbonett.bath.recurrence as rc
-    alphaL, sqrt_betaL = rc.recurrence_coefficients(
-        n - 1, lb=domain[0], rb=domain[1], j=j, g=g, ncap=ncap
-    )
-    j = lambda x: j(x) * np.pi
-    alphaL = g * np.array(alphaL)
-    sqrt_betaL = g * np.sqrt(np.array(sqrt_betaL))
-    sqrt_betaL[0] = sqrt_betaL[0] / g
-    return alphaL, sqrt_betaL[1:]  # k=sqrt(beta), w=alpha, sqrt_beta[0] is dropped
 
 
 def get_legendre_recursion(n, domain):

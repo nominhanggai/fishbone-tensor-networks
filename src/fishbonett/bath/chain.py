@@ -88,7 +88,7 @@ def star_transform(sd, n, domain, discretizer=None):
     return np.asarray(freq), np.asarray(Vn), np.ascontiguousarray(P.T)
 
 
-def get_coupling(sd, n, domain, g=1, ncap=20000, discretizer=None):
+def get_coupling(sd, n, domain, *, discretizer=None):
     """Chain parameters from orthogonal-polynomial recurrence coefficients.
 
     The classical TEDOPA route: the recurrence coefficients ``(alpha, beta)`` of
@@ -96,16 +96,11 @@ def get_coupling(sd, n, domain, g=1, ncap=20000, discretizer=None):
     energies and hoppings, with no explicit star in between.  Returns
     ``(w_list, k_list)`` in the same layout as :func:`get_bath_nn_parameters`.
 
-    ``g`` rescales the frequency axis and ``discretizer`` selects the quadrature.
-
-    ``ncap`` is accepted for API compatibility and ignored. Discretization
-    accuracy is set by ``n``; changing ``ncap`` has no effect.
+    ``discretizer`` selects the quadrature used to represent the positive
+    measure before tridiagonalization.
     """
-    alphaL, betaL = rc.recurrence_coefficients(
-        n - 1, lb=domain[0], rb=domain[1], j=sd, g=g, ncap=ncap,
-        discretizer=discretizer,
+    w_list, beta = rc.recurrence_coefficients(
+        sd, n, domain, discretizer=discretizer,
     )
-    w_list = g * np.array(alphaL)
-    k_list = g * np.sqrt(np.array(betaL))
-    k_list[0] = k_list[0] / g
+    k_list = np.sqrt(beta)
     return w_list, k_list

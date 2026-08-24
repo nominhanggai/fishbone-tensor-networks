@@ -13,7 +13,7 @@ def test_chain_cooling_gives_normalized_rdm():
     eth = SystemBathCoolingChain(
         pd, betaOmega=0.2, h_sys=10.0 * sigma_x, coupling=sigma_z,
         sd=lambda w: 0.5 * abs(w) * np.exp(-abs(w) / 10.0),
-        domain=[-50.0, 50.0], ncap=200).build()
+        domain=[-50.0, 50.0]).build()
     eth.U = eth.get_u(0.01)
     for j in range(len(pd) - 1):
         eth.update_bond(j, 20, 1e-6, swap=0)
@@ -52,7 +52,7 @@ def test_cooling_gauge_cancels_out_of_the_observable():
     def evolve(beta_omega):
         st = SystemBathCoolingChain(
             pd, betaOmega=beta_omega, h_sys=10.0 * sigma_x, coupling=sigma_z,
-            sd=sd, domain=[-50.0, 50.0], ncap=200).build()
+            sd=sd, domain=[-50.0, 50.0]).build()
         st.U = st.get_u(0.01)
         for _ in range(6):
             for j in range(len(pd) - 1):

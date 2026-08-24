@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from fishbonett.bath.recurrence import recurrence_coefficients
+from fishbonett.bath.chain import get_bath_nn_parameters, get_coupling
 
 
 def test_recurrence_matches_analytic_legendre():
@@ -10,7 +11,7 @@ def test_recurrence_matches_analytic_legendre():
     polynomials are the Legendre polynomials with the exact recurrence
     alpha_k = 0, beta_0 = 2, beta_k = k^2 / (4 k^2 - 1)."""
     alpha, beta = recurrence_coefficients(
-        10, lb=-1.0, rb=1.0, j=lambda w: np.pi, g=1
+        lambda w: np.pi, 11, (-1.0, 1.0)
     )
     alpha = np.asarray(alpha)
     beta = np.asarray(beta)
@@ -25,11 +26,22 @@ def test_recurrence_needs_no_orthpol():
     import importlib.util
     assert importlib.util.find_spec("orthpol") is None
     # The call path must succeed regardless.
-    alpha, beta = recurrence_coefficients(4, lb=0.0, rb=10.0,
-                                         j=lambda w: w * np.exp(-w / 5.0), g=1)
+    alpha, beta = recurrence_coefficients(
+        lambda w: w * np.exp(-w / 5.0), 5, (0.0, 10.0))
     assert len(alpha) == len(beta) == 5
     assert np.all(np.isfinite(alpha)) and np.all(np.isfinite(beta))
     assert beta[0] > 0  # zeroth moment (system-bath coupling squared) is positive
+
+
+def test_native_recurrence_route_matches_star_lanczos_route():
+    density = lambda w: (0.2 + w) * np.exp(-w / 4.0)
+    domain = (0.0, 12.0)
+
+    direct_w, direct_k = get_coupling(density, 8, domain)
+    star_w, star_k = get_bath_nn_parameters(density, 8, domain)
+
+    np.testing.assert_allclose(direct_w, star_w, atol=1e-12)
+    np.testing.assert_allclose(direct_k, star_k, atol=1e-12)
 
 
 def test_interaction_representation_starts_from_a_finite_star():

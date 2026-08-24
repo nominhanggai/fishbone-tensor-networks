@@ -65,7 +65,7 @@ def _build_exact(sites, specs, backbone, d):
     c = annihilate(d)
     for i in range(nc):
         for (nm, op, side) in specs[i]:
-            w, k = get_coupling(_J, nm, list(DOM), 1.0)
+            w, k = get_coupling(_J, nm, list(DOM))
             base, _ = slots[i][side]
             for m in range(nm):
                 H += w[m] * _embed(c.T @ c, base + m, dims)

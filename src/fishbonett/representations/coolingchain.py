@@ -57,12 +57,6 @@ class SystemBathCoolingChain(SystemBathMPS):
         Frequency window to chain-map over.
     betaOmega : float, optional
         The cooling gauge strength.
-    g : float, optional
-        Frequency-axis rescaling passed to the recurrence coefficients.
-    ncap : int, optional
-        Accepted and ignored -- the chain mapping's accuracy is set by the number
-        of modes.  Kept because callers pass it; see
-        :func:`fishbonett.bath.chain.get_coupling`.
     discretizer : callable, optional
         Quadrature for the star discretization; ``None`` is Gauss-Legendre.  This
         representation could not accept one until the chain mapping was shared with
@@ -71,7 +65,7 @@ class SystemBathCoolingChain(SystemBathMPS):
     """
 
     def __init__(self, pd, *, h_sys, coupling, sd, domain, betaOmega=2.,
-                 g=1.0, ncap=20000, discretizer=None):
+                 discretizer=None):
         super().__init__(pd)
         self.len_boson = len(self.pd_boson)
         if self.len_boson == 0:
@@ -82,8 +76,6 @@ class SystemBathCoolingChain(SystemBathMPS):
         self.sd = sd
         self.domain = list(domain)
         self.betaOmega = betaOmega
-        self.g = g
-        self.ncap = ncap
         self.discretizer = discretizer
         self.k_list = []
         self.w_list = []
@@ -117,8 +109,7 @@ class SystemBathCoolingChain(SystemBathMPS):
         """
         n = len(self.pd_boson)
         self.w_list, self.k_list = get_coupling(
-            self.sd, n, self.domain, self.g, self.ncap,
-            discretizer=self.discretizer)
+            self.sd, n, self.domain, discretizer=self.discretizer)
 
     def build(self):
         """Chain-map the bath, assemble the two-site Hamiltonians, and build the
