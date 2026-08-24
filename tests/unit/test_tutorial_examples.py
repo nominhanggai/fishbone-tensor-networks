@@ -123,6 +123,65 @@ def test_electron_transfer_units_and_smoke_populations():
         assert np.isnan(summary[case]["effective_lifetime_ps"])
 
 
+def test_electron_transfer_reference_maps_reproduce_paper_dynamics():
+    module = _load("bridge_electron_transfer")
+    validation = module.long_validation()
+    assert validation["metadata"] == {
+        "memory_ps": pytest.approx(0.15),
+        "trunc_eps": pytest.approx(1e-4),
+        "bath_alpha": pytest.approx(1.67),
+        "bath_cutoff_cm": pytest.approx(600.0),
+        "temperature_k": pytest.approx(300.0),
+        "dt_ps": pytest.approx(0.002),
+        "phys_dim": 6,
+        "bath_n_modes": 95,
+        "bath_domain_cm": pytest.approx(
+            (-870.7656455500296, 4312.930476458639)
+        ),
+        "method": "interaction-chain-trotter-mpo",
+    }
+    expected_lifetimes = {
+        "diagonal_reference": 2.36,
+        "noncondon": 2.50,
+    }
+    for case, expected_lifetime in expected_lifetimes.items():
+        result = validation["results"][case]
+        summary = validation["summary"][case]
+        assert result["populations"].shape == (7500, 3)
+        assert summary["population_rmse"] < 0.006
+        assert summary["max_population_error"] < 0.012
+        assert summary["last_transfer_norm"] < 1.6e-4
+        assert summary["heldout_population_error"] < 1e-4
+        assert summary["direct_map_trace_error"] < 1e-12
+        assert summary["direct_map_minimum_choi_eigenvalue"] > -3e-5
+        assert summary["trace_error"] < 2e-11
+        assert summary["minimum_eigenvalue"] > -1e-10
+        assert summary["lifetime_ps"] == pytest.approx(
+            expected_lifetime, rel=0.03
+        )
+        assert summary["paper_curve_lifetime_ps"] == pytest.approx(
+            expected_lifetime, rel=0.01
+        )
+
+
+def test_electron_transfer_tomography_spans_liouville_space():
+    module = _load("bridge_electron_transfer")
+    states = module.tomography_states(3)
+    assert tuple(states) == (
+        "d0", "d1", "d2", "r01", "i01", "r02", "i02", "r12", "i12"
+    )
+    identity_runs = {
+        label: np.repeat(
+            (state[:, None] @ state.conj()[None, :])[None, :, :], 2, axis=0
+        )
+        for label, state in states.items()
+    }
+    maps = module.assemble_dynamical_maps(identity_runs)
+    np.testing.assert_allclose(
+        maps, np.repeat(np.eye(9)[None, :, :], 2, axis=0), atol=2e-16
+    )
+
+
 def test_heat_flow_smoke_uses_distinct_baths_and_obeys_continuity():
     module = _load("two_bath_heat_flow")
     suite = module.run_profile("smoke")

@@ -6,10 +6,13 @@ Fig. 2 of [Acharyya, Ovcharenko, and
 Fingerhut](https://doi.org/10.1063/5.0027976)
 ([preprint](https://arxiv.org/abs/2108.11175)) with a tensor-network bath.
 
-The complete program below is an automatically resolved-bath *early-time
-tutorial* that runs to 0.2 ps. It shows the onset of population transfer and the
-non-Condon transient. The paper's 2.36 and 2.50 ps donor lifetimes remain
-separate 15 ps validation targets and must not be fitted from this short trace.
+The complete program below first performs an automatically resolved 0.2 ps run,
+which is short enough to execute while learning the API. The page then builds a
+15 ps transfer-tensor trajectory from a numerically checked 0.15 ps dynamical
+map and compares every donor, bridge, and acceptor population with curves
+digitized from the paper's Fig. 2. This separates an approachable calculation
+from the expensive reference-map generation without replacing the numerical
+validation by a quoted lifetime.
 
 ## 1. Physical model
 
@@ -314,105 +317,161 @@ time step must be converged.
 The initial state is $|D\rangle\langle D|$ with a factorized thermal bath, as in
 the paper. No bath displacement conditioned on the donor is included.
 
-## 6. Reading the early dynamics
+## 6. Comparing the complete dynamics with Fig. 2
 
-![Early donor, bridge, and acceptor populations with the weak-coupling control shown dashed](../img/bridge_electron_transfer.png)
+![Tensor-network and transfer-tensor donor, bridge, and acceptor populations overlaid with digitized paper curves, with pointwise residuals below](../img/bridge_electron_transfer.png)
 
 ```{include} ../_generated/bridge_electron_transfer.md
 ```
 
-The weak-diagonal and non-Condon calculations have identical $H_S$ in the
-paper's convention. Their different dynamics comes from the off-diagonal entries
-of $M$, including the terms generated when $\lambda_RD^2$ is rotated from the
-coupling eigenbasis back to the diabatic basis. The diagonal reference uses much
-larger electronic couplings and is a separate benchmark trajectory.
+Solid lines are this package's calculation. Open circles are values extracted
+from the actual vector paths in the paper PDF at 0.05 ps intervals; they are not
+points estimated by clicking a raster image. The lower panels show
 
-The donor loss and compensating bridge/acceptor growth are the population
-transfer. Probability conservation checks that the apparent loss is not tensor
-truncation. At 0.2 ps, however, none of the curves has sampled a 2.4 ps decay;
-the generated table therefore reports the lifetimes as unresolved. Fitting this
-inertial transient would manufacture a rate.
+$$
+\Delta P_i(t)=P_i^{\mathrm{TN+TTM}}(t)-P_i^{\mathrm{paper}}(t)
+$$
 
-## 7. Reproducing the reported lifetimes
+for all three states. The digitized paper curves were not renormalized: their
+population sums deviate from one by as much as about 0.006, which provides a
+practical scale for interpreting sub-percent residuals.
 
-The paper plots approximately 15 ps and reports single-exponential donor
-lifetimes of 2.36 ps for the diagonal reference and 2.50 ps for the non-Condon
-case. The example provides a manual reference profile with that horizon:
+The comparison is more informative than checking two lifetimes. It tests the
+initial donor loss, the height and time of the transient bridge population, and
+the acceptor rise over the entire 15 ps window. The weak-diagonal and non-Condon
+calculations still have identical $H_S$ in the paper's convention; their
+different dynamics comes from the off-diagonal entries of $M$. The diagonal
+reference uses larger electronic couplings and is a separate benchmark.
 
-```bash
-python examples/bridge_electron_transfer.py --profile reference \
-  --output examples/output/bridge_electron_transfer_reference.npz
-```
+## 7. From 0.15 ps direct dynamics to 15 ps
 
-That profile is intentionally unsuitable for a documentation build: the bath
-light cone approaches one thousand modes at 15 ps and it repeats the calculation
-with larger Fock spaces and a tighter SVD threshold.
+A direct 15 ps interaction-chain calculation asks the automatic light-cone
+resolver for nearly one thousand modes and develops large MPS bonds. The bath
+memory reported for Fig. 2 is only about 0.10--0.12 ps, so it is more efficient
+to calculate the complete reduced dynamical map through 0.15 ps and then use
+the transfer-tensor method (TTM).
 
-For a converged long trajectory, a descriptive lifetime can be extracted from
-the approximately exponential portion of $P_D(t)$:
+For a three-state system the map has $3^2=9$ columns. The example propagates the
+three basis states and the real and imaginary superpositions
+
+$$
+|r_{ij}\rangle=\frac{|i\rangle+|j\rangle}{\sqrt 2},\qquad
+|q_{ij}\rangle=\frac{|i\rangle+i|j\rangle}{\sqrt 2},
+$$
+
+for every pair $i<j$. These physical pure states reconstruct
+$\mathcal E_t(|i\rangle\langle j|)$. Propagating only the donor initial state
+would not determine a dynamical map and would not support a valid TTM
+extrapolation.
+
+The inexpensive half of the reference calculation is completely reproducible
+from the stored short maps:
 
 ```python
-def effective_lifetime(result):
-    donor = np.asarray(result.expect["donor"], dtype=float)
-    mask = (donor < 0.9) & (donor > 0.15)
-    if np.count_nonzero(mask) < 3:
-        raise ValueError("the donor decay is not resolved")
-    slope, intercept = np.polyfit(result.t[mask], np.log(donor[mask]), 1)
-    if slope >= 0.0:
-        raise ValueError("the selected donor population is not decaying")
-    return -1.0 / slope
+from pathlib import Path
+
+import numpy as np
+
+from fishbonett.rates import predict_density_mat, transfer_mat
+
+
+data = np.load(
+    Path("examples/reference_data")
+    / "bridge_electron_transfer_ttm_maps.npz"
+)
+dt = float(data["dt_ps"])
+steps = round(15.0 / dt)
+rho0 = np.diag([1.0, 0.0, 0.0]).astype(complex)
+
+for case in ("diagonal_reference", "noncondon"):
+    maps = data[f"{case}_maps"]
+    transfer_tensors, transfer_norm = transfer_mat(maps)
+
+    # The directly simulated donor trajectory seeds one full memory window.
+    direct = np.einsum(
+        "tij,j->ti", maps, rho0.reshape(9)
+    ).reshape(-1, 3, 3)
+    rdm = predict_density_mat(steps, transfer_tensors, direct)
+    population = np.diagonal(rdm, axis1=1, axis2=2).real
+
+    print(case)
+    print("  final populations:", population[-1])
+    print("  final transfer-tensor norm:", transfer_norm[-1])
 ```
 
-This lifetime characterizes the full donor--bridge--acceptor population trace.
-It is not an elementary $k_{D\to A}$: bridge occupation, back transfer, and
-recrossing are all folded into the fit.
+To regenerate those maps rather than load them, run the expensive tomography
+profile explicitly:
 
-A transfer-tensor extrapolation can reduce the long-time cost only after all
-nine electronic dynamical-map columns have been simulated and the transfer
-tensor norm has decayed within the directly simulated memory window. A transfer
-tensor built from the donor trajectory alone is not a valid reduced dynamical
-map.
+```bash
+python examples/bridge_electron_transfer.py \
+  --generate-reference-maps examples/output/dba_ttm_maps.npz
+```
 
-## 8. Required convergence checks
+That command performs 18 tensor-network simulations: nine initial states for
+each of the two coupling models. It uses `dt=0.002 ps`, a 0.15 ps direct window,
+95 automatically resolved TEDOPA modes, local Fock dimension 6, SVD threshold
+$10^{-4}$, and no maximum bond cap. Documentation builds load the resulting
+short maps but redo the TTM propagation, fitting, residual calculation, and
+figure generation.
 
-Before comparing a fitted lifetime with the paper:
+The donor population is fitted to
 
-1. Compare `DT_PS=0.002`, 0.001, and 0.0005 at common physical times.
-2. Increase `PHYS_DIM` from 6 to 10, 20, and, if needed, 40.
-3. Tighten `trunc_eps` from $10^{-4}$ to $5\times10^{-5}$ while leaving
-   `bond_dim=None`, so discarded SVD weight remains the primary bond control.
-4. Compare the automatically resolved mode count with a larger explicit count
-   and verify that the entire population curves are unchanged.
-5. Verify the signed frequency-domain tails by increasing their coverage.
-6. Confirm probability conservation and inspect `result.max_bond` for continuing
-   growth.
-7. Fit only after the 15 ps populations themselves are stable under all of the
-   above changes.
+$$
+P_D(t)=A\exp(-t/\tau)+C.
+$$
 
-The time step and SVD threshold must be refined together. An MPO step creates
-new Schmidt values proportional to the step size; if `trunc_eps` is too loose,
-halving `DT_PS` can discard those values before they accumulate and falsely
-suppress transfer. For the 0.2 ps profile at `trunc_eps=1e-4`, the largest
-population change was $1.63\times10^{-3}$ from 2 fs to 1 fs and
-$8.09\times10^{-4}$ from 1 fs to 0.5 fs. At `trunc_eps=1e-3`, the same step
-refinement did not converge, which is why the plotted profile uses the tighter
-threshold with no bond cap.
+The small $C$ accounts for the nonzero equilibrium donor population. Applying
+this same fit to the digitized paper curves gives 2.362 ps and 2.481 ps, which
+recovers the paper's printed 2.36 ps and 2.50 ps within the precision of the
+plot. The tensor-network trajectories give 2.420 ps and 2.549 ps. These are
+descriptive lifetimes of the complete donor--bridge--acceptor dynamics, not
+elementary $k_{D\to A}$ values: bridge occupation, back transfer, and recrossing
+are folded into them.
 
-Agreement of the two fitted lifetimes alone is insufficient: an erroneous bath
-can preserve a rate accidentally while changing bridge and acceptor dynamics.
+## 8. Numerical evidence and remaining convergence checks
+
+The following checks have been performed for this validation:
+
+- At $10^{-4}$ SVD threshold, changing the step from 2 fs to 3.33 fs changes
+  any population by at most 0.0044 in the diagonal calculation and 0.0051 in
+  the non-Condon calculation over the first 0.2 ps. A 4 fs step increases these
+  changes to 0.0078 and 0.0089 and retains larger bonds, so it is not the
+  preferred reference step.
+- At the looser $10^{-3}$ threshold, increasing the Fock dimension from 6 to 10
+  changed early populations by less than $5.6\times10^{-4}$. This is useful
+  evidence but is not a substitute for repeating the check at $10^{-4}$.
+- The final transfer-tensor norms after 0.15 ps are about
+  $1.4\times10^{-4}$ and $1.5\times10^{-4}$. Holding out the end of the direct
+  map showed that a 0.12 ps kernel predicts the remaining direct trajectory to
+  better than $10^{-4}$ in the non-Condon case and about $1.5\times10^{-5}$ in
+  the diagonal case.
+- The reconstructed dynamical maps preserve trace to $3.4\times10^{-16}$. Their
+  most negative Choi eigenvalue is $-2.4\times10^{-5}$, a small non-CP error
+  from independently truncating the tomography trajectories that should also
+  decrease in the tighter-threshold publication check.
+- The 15 ps propagated density matrices preserve trace to $1.1\times10^{-11}$
+  and remain positive to numerical precision.
+
+For a final publication benchmark, also regenerate the complete nine-column
+maps at Fock dimension 10, tighten the SVD threshold to $5\times10^{-5}$, and
+repeat at a smaller timestep while tightening the threshold with it. Timestep
+and truncation cannot be converged independently: smaller steps create smaller
+Schmidt values, which a fixed loose threshold may discard before they
+accumulate. The full population residuals, not merely the fitted lifetimes,
+should remain stable under each refinement.
 
 ## 9. Physical conclusion
 
-The paper's comparison is striking because adding the off-diagonal bath
-operator restores low-picosecond transfer even when both bare electronic
-couplings are reduced from tens of cm$^{-1}$ to 2 cm$^{-1}$. The weak-diagonal
-control shows that the enhancement is caused by non-Condon fluctuations rather
-than by the weak electronic Hamiltonian itself.
+The calculation reproduces the complete Fig. 2 dynamics to an all-population
+RMSE below 0.006 for both coupling models. It captures the roughly 25% transient
+bridge population, the donor decay, and the acceptor rise, as well as the
+reported low-picosecond lifetimes.
 
-The early-time tutorial demonstrates that mechanism and checks the conversion
-from the paper's QUAPI convention to an explicit tensor-network bath. Recovery
-of the numerical values $2.36$ and $2.50$ ps remains a long-time convergence
-result, not a conclusion encoded into the page.
+The physical result is striking: off-diagonal bath fluctuations restore
+low-picosecond transfer even when both bare electronic couplings are reduced to
+2 cm$^{-1}$. The weak-diagonal fixed-Hamiltonian control remains slow, showing
+that the recovery is caused by non-Condon fluctuations rather than by the weak
+electronic Hamiltonian alone.
 
 ## 10. Common mistakes
 
