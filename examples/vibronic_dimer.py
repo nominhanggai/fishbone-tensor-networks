@@ -2,9 +2,9 @@
 
 The model is the Brownian-oscillator dimer used by Dijkstra et al.
 (arXiv:1309.4910). Run the inexpensive engine check with
-``python examples/vibronic_dimer.py``. The ``docs`` profile reproduces the two
-quantum benchmark trajectories at omega/J = 4 and 8; the manual ``reference``
-profile scans the vibrational frequency more finely.
+``python examples/vibronic_dimer.py``. The ``docs`` profile reconstructs the
+two quantum benchmark trajectories at omega/J = 4 and 8; the manual
+``reference`` profile scans the vibrational frequency more finely.
 """
 
 from argparse import ArgumentParser
@@ -45,9 +45,15 @@ PROFILES = {
     ),
 }
 
-# Approximate values read from the published Figure 5. They are visual
-# cross-checks, not machine-readable data supplied by the authors.
-FIGURE_5_ENDPOINTS = {4.0: 0.27, 8.0: 0.67}
+PAPER_FIGURE_5 = (
+    Path(__file__).with_name("reference_data")
+    / "dijkstra_2015_fig5_quantum_dynamics.csv"
+)
+
+
+def load_paper_figure5(path=PAPER_FIGURE_5):
+    """Load samples derived from the quantum-dynamics curves in Figure 5."""
+    return np.genfromtxt(path, delimiter=",", names=True)
 
 
 def make_bath(vibration, profile):
@@ -65,12 +71,11 @@ def make_bath(vibration, profile):
 
 
 def make_model(vibration, profile):
-    """Biased dimer whose donor energy is coupled to one Brownian bath.
+    """Biased dimer coupled to one Brownian gap-fluctuation coordinate.
 
-    In the one-excitation sector, fluctuating the donor energy relative to the
-    acceptor is precisely a fluctuation of the molecular energy difference used
-    in the paper's quantum model.  A second independent bath at the same
-    reorganization energy would double the gap-fluctuation spectral power.
+    The paper describes coupling the molecular energy difference to a Brownian
+    coordinate but does not print an operator matrix.  Here ``OCCUPIED`` on the
+    donor implements E_D -> E_D + X, and hence (E_D - E_A) -> (E_D - E_A) + X.
     """
     electronic = np.array([[8.0, -1.0], [-1.0, 0.0]])
     baths = {0: make_bath(vibration, profile).bind(OCCUPIED)}
@@ -98,15 +103,24 @@ def run_profile(profile="smoke", *, announce=False):
 
 
 def summarize(suite):
-    """Numerical diagnostics and comparison with published Figure 5 endpoints."""
+    """Numerical diagnostics and comparison with the Figure 5 trajectories."""
     results = suite["results"]
     final_population = {}
+    paper_curve_rmse = {}
+    paper_curve_max_error = {}
+    paper = load_paper_figure5()
     normalization_error = 0.0
     max_bond = 1
     resolved_modes = {}
     for vibration, result in results.items():
         population = np.asarray(result.expect["population"], float)
         final_population[vibration] = float(population[-1, 1])
+        column = f"omega{int(vibration)}_acceptor"
+        if column in (paper.dtype.names or ()):
+            calculated = np.interp(paper["tJ"], result.t, population[:, 1])
+            difference = calculated - paper[column]
+            paper_curve_rmse[vibration] = float(np.sqrt(np.mean(difference**2)))
+            paper_curve_max_error[vibration] = float(np.max(np.abs(difference)))
         normalization_error = max(
             normalization_error,
             float(np.max(np.abs(population.sum(axis=1) - 1.0))),
@@ -117,11 +131,8 @@ def summarize(suite):
         )
     return {
         "final_acceptor_population": final_population,
-        "figure_5_absolute_error": {
-            frequency: abs(final_population[frequency] - target)
-            for frequency, target in FIGURE_5_ENDPOINTS.items()
-            if frequency in final_population
-        },
+        "paper_curve_rmse": paper_curve_rmse,
+        "paper_curve_max_error": paper_curve_max_error,
         "normalization_error": normalization_error,
         "max_bond": max_bond,
         "resolved_modes": resolved_modes,

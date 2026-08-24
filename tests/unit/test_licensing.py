@@ -8,7 +8,11 @@ def test_distribution_declares_mit_license():
     metadata = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'license = "MIT"' in metadata
     assert 'license-files = ["LICENSE"]' in metadata
-    assert '"/paper"' in metadata
+
+
+def test_removed_submission_manuscript_does_not_return():
+    assert not (ROOT / "paper" / "paper.md").exists()
+    assert not (ROOT / "paper" / "paper.bib").exists()
 
 
 # Scientific citations are part of the implementation documentation and must

@@ -1,14 +1,17 @@
 # Vibrationally assisted transfer in a molecular dimer [interaction-chain Trotter MPO]
 
-This tutorial reproduces the quantized-vibration benchmark in Figure 5 of
-[Dijkstra *et al.*](https://arxiv.org/abs/1309.4910). It asks how an underdamped
-molecular vibration changes excitation transfer between two molecules whose
-electronic energies are far from resonance.
+This tutorial reconstructs two quantized-vibration trajectories from Figure 5
+of [Dijkstra *et al.*](https://arxiv.org/abs/1309.4910). It asks how an
+underdamped molecular vibration changes excitation transfer between two
+molecules whose electronic energies are far from resonance.
 
 The calculation below is self-contained. It constructs the electronic
 Hamiltonian and Brownian-oscillator environment, identifies exactly which
 molecule is coupled to the bath, propagates to the paper's endpoint, and checks
-the result against the published population values.
+the full result against samples derived from the published curves. The paper
+uses HEOM; this tutorial uses an interaction-chain tensor network. Agreement is
+therefore a model-level check, not a claim that the two numerical algorithms
+are identical.
 
 ## 1. Electronic dimer and environmental coordinate
 
@@ -20,25 +23,27 @@ H_S/J = \begin{pmatrix}8&-1\\-1&0\end{pmatrix}.
 $$
 
 The donor is $8J$ above the acceptor. Direct coherent transfer is consequently
-off-resonant. The quantum calculation in the paper lets one environmental
-coordinate modulate their energy difference:
+off-resonant. The paper couples their energy difference to a Brownian
+coordinate but does not print a coupling-operator matrix. We implement the
+stated gap fluctuation as
 
 $$
 H_{SB}=|D\rangle\langle D|\otimes X.
 $$
 
-Only the donor needs an explicit bath because changing its energy relative to
-the uncoupled acceptor changes the donor--acceptor gap. In the code this is the
-mapping
+so that $E_D-E_A\mapsto E_D-E_A+X$. In the code this is the mapping
 
 ```python
 baths = {0: gap_bath.bind(OCCUPIED)}
 ```
 
 where key `0` means electronic site 0, the donor. There is no bath entry for
-site 1. Attaching an independent bath with the same strength to both sites would
-double the spectral power of the fluctuating energy difference and would not be
-the quantum model used for Figure 5.
+site 1. The difference between the two diagonal coupling eigenvalues is one, so
+this operator produces the required gap fluctuation. Re-centering it as
+$\sigma_z/2$ also entails a bath displacement and a choice of reorganization
+counterterm; the supplement does not state that convention. Two independent
+local baths would instead define a different gap-correlation function and
+require a corresponding change in spectral-density strength.
 
 The bath has the Brownian-oscillator spectral density
 
@@ -62,6 +67,7 @@ back to the system before $t=20/J$ and gives the wrong long-time population.
 ```python
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 from fishbonett import Bath, Fishbone
 from fishbonett.spectral_densities import brownian
@@ -120,7 +126,11 @@ def run(vibration):
 
 
 results = {frequency: run(frequency) for frequency in (4.0, 8.0)}
-paper_endpoints = {4.0: 0.27, 8.0: 0.67}  # approximate values read from Fig. 5
+paper = np.genfromtxt(
+    Path("examples/reference_data/dijkstra_2015_fig5_quantum_dynamics.csv"),
+    delimiter=",",
+    names=True,
+)
 
 for frequency, result in results.items():
     population = np.asarray(result.expect["population"], float)
@@ -129,18 +139,28 @@ for frequency, result in results.items():
     # two columns are donor and acceptor populations.
     assert population.shape == (len(result.t), 2)
     conservation_error = np.max(np.abs(population.sum(axis=1) - 1.0))
-    endpoint_error = abs(population[-1, 1] - paper_endpoints[frequency])
+    paper_population = paper[f"omega{int(frequency)}_acceptor"]
+    calculated = np.interp(paper["tJ"], result.t, population[:, 1])
+    difference = calculated - paper_population
 
     print(
         f"omega_0={frequency:g}: "
         f"P_A(20/J)={population[-1, 1]:.6f}, "
-        f"paper≈{paper_endpoints[frequency]:.2f}, "
-        f"absolute difference={endpoint_error:.3g}, "
+        f"curve RMSE={np.sqrt(np.mean(difference**2)):.4f}, "
+        f"maximum error={np.max(np.abs(difference)):.4f}, "
         f"probability error={conservation_error:.2e}, "
         f"peak bond={np.max(result.max_bond)}"
     )
     print("resolved bath layout:", result.meta["bath_branches"])
-    plt.plot(result.t, population[:, 1], label=fr"$\omega_0={frequency:g}J$")
+    color = {4.0: "tab:blue", 8.0: "tab:green"}[frequency]
+    plt.plot(
+        result.t, population[:, 1], color=color,
+        label=fr"fishbonett, $\omega_0={frequency:g}J$",
+    )
+    plt.plot(
+        paper["tJ"], paper_population, "o", ms=4, mfc="none", color=color,
+        label=fr"Fig. 5, $\omega_0={frequency:g}J$",
+    )
 
 plt.xlabel(r"time ($J^{-1}$)")
 plt.ylabel("acceptor population")
@@ -164,9 +184,9 @@ used by the tensor network. That representation is independent of the evolution
 algorithm; the final words in the method name select the Trotter-MPO integrator.
 
 At finite temperature, `beta=0.1` produces a signed thermofield spectral
-density. Leaving `domain` unset chooses a frequency window containing 99.9% of
-the physical reorganization energy. Leaving `n_modes` unset then sizes the chain
-from the propagation horizon, rather than from an arbitrary small mode count.
+density. Leaving `domain` unset resolves a frequency window for the requested
+spectral tolerance. Leaving `n_modes` unset then sizes the chain from the
+propagation horizon, rather than from an arbitrary small mode count.
 
 ## 4. Reading and validating the result
 
@@ -182,7 +202,9 @@ bath, Fock-space, timestep, or SVD convergence. The `bath_branches` metadata
 shows that there is exactly one branch, attached to `system_site: 0`, together
 with its automatically selected mode count and local Fock dimension.
 
-The documentation profile uses these practical convergence controls:
+The paper reports one Matsubara frequency, hierarchy depth 6, and HEOM timestep
+$0.001/J$. Those are HEOM controls and do not translate directly into bond or
+Fock dimensions. The documentation calculation instead uses:
 
 | control | documentation run | manual refinement |
 |---|---:|---:|
@@ -198,27 +220,37 @@ the population trajectory and endpoint, not by probability conservation alone.
 
 ## 5. Dynamics and conclusion
 
-![Acceptor dynamics and comparison with the published Figure 5 endpoints](../img/vibronic_dimer.svg)
+![Acceptor dynamics compared point by point with two published Figure 5 curves](../img/vibronic_dimer.svg)
 
 ```{include} ../_generated/vibronic_dimer.md
 ```
 
 The resonant $8J$ vibration moves population rapidly and approaches a large
-acceptor population, whereas the $4J$ case transfers more slowly. Both endpoint
-populations agree closely with the quantum calculation in Figure 5. A
-two-bath model has a different gap-correlation strength, while a short fixed
-chain develops finite-size artifacts before the benchmark endpoint.
+acceptor population, whereas the $4J$ case transfers more slowly. The generated
+summary reports errors over 41 points along each published curve, rather than
+checking only the final value. The comparison is not identical: the $4J$ curve
+is close, but the tensor-network $8J$ trajectory transfers too quickly around
+$tJ=6$--10.
+
+The supplement specifies the Brownian density and HEOM controls but not an
+explicit coupling matrix or reorganization-counterterm convention. Numerical
+checks of the other natural conventions do not improve both curves: a centered
+counterterm improves the $8J$ transient but worsens $4J$, while the coupling
+equivalent to two independent local baths is worse and substantially more
+expensive. The tutorial therefore retains the direct single-gap convention and
+does not tune an unspecified convention to the plotted data. A short fixed
+chain also develops finite-size artifacts before the benchmark endpoint.
 
 The manual `reference` profile in `examples/vibronic_dimer.py` scans integer
-frequencies from $J$ through $10J$ with the refined settings. That scan is needed
-to reproduce the complete two-maximum frequency dependence; the documentation
-build evaluates the two characteristic trajectories so that CI remains bounded.
+frequencies from $J$ through $10J$ with refined settings. It can be used to
+investigate the two maxima in the frequency scan, but the validated comparison
+on this page is deliberately limited to the two trajectories shown above.
 
 ## 6. Common mistakes
 
-- Adding the same Brownian bath to both molecules changes the energy-difference
-  correlation strength. Follow the paper's quantum model with the single mapping
-  `{0: gap_bath.bind(OCCUPIED)}`.
+- Adding the same Brownian bath independently to both molecules changes the
+  energy-difference correlation strength. The mapping used here is the single
+  gap coordinate `{0: gap_bath.bind(OCCUPIED)}`.
 - Fixing `n_modes` to 24 or 48 is not safe at $t=20/J$. The resulting return from
   the chain boundary can look like physical population recurrence.
 - Starting both local sites in `EXCITED` leaves the one-excitation sector and

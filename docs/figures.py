@@ -49,8 +49,11 @@ def _input_mtime(name):
     example = ROOT / "examples" / f"{name}.py"
     if example.exists():
         inputs.append(example)
+    reference_data = ROOT / "examples" / "reference_data"
+    if reference_data.exists():
+        inputs.extend(reference_data.rglob("*"))
     inputs.extend((ROOT / "src" / "fishbonett").rglob("*.py"))
-    return max(path.stat().st_mtime_ns for path in inputs)
+    return max(path.stat().st_mtime_ns for path in inputs if path.is_file())
 
 
 def _outputs_are_current(name, outputs):
@@ -221,46 +224,36 @@ def vibronic_dimer(path=None):
     example = _load_example("vibronic_dimer")
     suite = example.run_profile("docs", announce=True)
     summary = example.summarize(suite)
+    paper = example.load_paper_figure5()
     plt = _mpl()
-    figure, (left, right) = plt.subplots(1, 2, figsize=(11.2, 4.4))
-    colors = {4.0: "#D9480F", 8.0: "#2B8A3E"}
-    for vibration, result in suite["results"].items():
+    figure, axes = plt.subplots(
+        1, 2, figsize=(11.2, 4.4), sharex=True, sharey=True,
+    )
+    for axis, (vibration, result) in zip(axes, suite["results"].items()):
         population = np.asarray(result.expect["population"])
-        left.plot(
-            result.t, population[:, 1], lw=1.8,
-            color=colors.get(vibration),
-            label=rf"$\omega_0={vibration:g}J$",
+        column = f"omega{int(vibration)}_acceptor"
+        axis.plot(
+            result.t, population[:, 1], lw=2.0,
+            color="#4C6EF5", label="fishbonett",
         )
-    scan = summary["final_acceptor_population"]
-    frequencies = list(scan)
-    positions = np.arange(len(frequencies), dtype=float)
-    width = 0.34
-    right.bar(
-        positions - width / 2,
-        [scan[frequency] for frequency in frequencies],
-        width, color="#4C6EF5", label="tensor network",
-    )
-    right.bar(
-        positions + width / 2,
-        [example.FIGURE_5_ENDPOINTS[frequency] for frequency in frequencies],
-        width, color="#ADB5BD", label="paper (read from plot)",
-    )
-    left.set(xlabel=r"time ($J^{-1}$)", ylabel="acceptor population",
-             title="quantized-vibration dynamics")
-    horizon = suite["profile"].t_max
-    right.set(
-        xlabel=r"vibration $\omega_0/J$",
-        ylabel=rf"$P_A({horizon:g}/J)$",
-        title="Figure 5 endpoint check",
-        xticks=positions,
-        xticklabels=[f"{frequency:g}" for frequency in frequencies],
-    )
-    left.legend(frameon=False, loc="upper left")
-    right.legend(frameon=False, loc="upper left", fontsize=8)
-    for axis in (left, right):
-        axis.set_ylim(-0.015, 0.74)
+        axis.plot(
+            paper["tJ"], paper[column], "o", ms=4.2, mfc="none",
+            color="#E8590C", label="Fig. 5 (vector-path samples)",
+        )
+        axis.set(
+            xlabel=r"time ($J^{-1}$)",
+            title=rf"$\omega_0={vibration:g}J$",
+        )
         axis.grid(alpha=0.25)
-    figure.tight_layout()
+    axes[0].set_ylabel("acceptor population")
+    for axis in axes:
+        axis.set_ylim(-0.015, 0.74)
+    handles, labels = axes[0].get_legend_handles_labels()
+    figure.legend(
+        handles, labels, frameon=False, loc="upper center", ncol=2,
+        bbox_to_anchor=(0.5, 1.01),
+    )
+    figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.91))
     output = Path(path or IMG / "vibronic_dimer.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
@@ -268,21 +261,25 @@ def vibronic_dimer(path=None):
         rf"$\omega_0={frequency:g}J$: {values[0]} modes"
         for frequency, values in summary["resolved_modes"].items()
     )
-    values = ", ".join(
-        rf"$P_A={population:.4f}$ at $\omega_0={frequency:g}J$"
-        for frequency, population in scan.items()
-    )
-    errors = ", ".join(
-        f"{frequency:g}J: {error:.3g}"
-        for frequency, error in summary["figure_5_absolute_error"].items()
+    comparisons = ", ".join(
+        (
+            rf"$\omega_0={frequency:g}J$: RMSE "
+            f"{summary['paper_curve_rmse'][frequency]:.4f}, maximum error "
+            f"{summary['paper_curve_max_error'][frequency]:.4f}"
+        )
+        for frequency in summary["paper_curve_rmse"]
     )
     _write_summary("vibronic_dimer", f"""## Generated result
 
 The documentation profile conserved the one-excitation population to
 **{summary['normalization_error']:.2e}** and retained a peak bond dimension of
-**{summary['max_bond']}**. At $t=20/J$ it obtained {values}. The corresponding
-approximate values read from Figure 5 are 0.27 and 0.67; the absolute errors are
-{errors}.
+**{summary['max_bond']}**. Comparison with 41 samples derived from each published
+Figure 5 curve gives {comparisons}.
+
+The agreement is not uniform: the $4J$ trajectory is close, whereas the $8J$
+calculation transfers too quickly in the middle of the interval. The tutorial
+therefore presents this as a documented reconstruction and not as an exact
+reproduction of the HEOM result.
 
 Both the signed thermal frequency domain and the interaction-chain light cone
 were resolved automatically. The resulting TEDOPA layouts were {modes}. This
@@ -298,15 +295,27 @@ def nonadiabatic_spin_boson(path=None):
     summary = example.summarize(suite)
     plt = _mpl()
     figure, (left, right) = plt.subplots(1, 2, figsize=(11.2, 4.4))
-    for label, result in suite["results"].items():
-        left.plot(result.t / np.pi, result.expect["population_up"], label=label)
-    labels = list(summary["max_bond"])
-    right.bar(labels, [summary["max_bond"][label] for label in labels],
-              color=("#4C6EF5", "#E8590C"))
+    result = suite["results"]["interaction"]
+    paper = example.load_paper_figure8()
+    paper_mask = paper["t_delta_over_pi"] <= result.t[-1] / np.pi + 1e-6
+    left.plot(
+        result.t / np.pi, result.expect["population_up"],
+        color="#4C6EF5", lw=2.0, label="fishbonett",
+    )
+    left.plot(
+        paper["t_delta_over_pi"][paper_mask],
+        paper["population_up"][paper_mask],
+        "o", ms=4.5, mfc="none", color="#E8590C",
+        label="Fig. 8 IC10 (vector-path samples)",
+    )
+    right.plot(
+        result.t / np.pi, result.max_bond,
+        color="#2B8A3E", lw=1.8,
+    )
     left.set(xlabel=r"$t\Delta/\pi$", ylabel=r"$P_\uparrow(t)$",
              title="strong-coupling relaxation")
-    right.set(ylabel="peak bond dimension",
-              title="profile peak (different horizons)")
+    right.set(xlabel=r"$t\Delta/\pi$", ylabel="retained bond dimension",
+              title="adaptive bond growth")
     left.legend(frameon=False)
     for axis in (left, right):
         axis.grid(alpha=0.25)
@@ -314,22 +323,21 @@ def nonadiabatic_spin_boson(path=None):
     output = Path(path or IMG / "nonadiabatic_spin_boson.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
-    difference = summary["max_difference_from_interaction"].get(
-        "schrodinger_chain", float("nan"),
-    )
-    _write_summary("nonadiabatic_spin_boson", f"""## Generated result
+    _write_summary("nonadiabatic_spin_boson", rf"""## Generated result
 
-The interaction-chain and short Schrödinger-chain overlap calculation differ by
-at most **{difference:.3g}** in the up-state population on their common interval.
-Their peak retained bond dimensions are
-**{summary['max_bond']['interaction']}** and
-**{summary['max_bond']['schrodinger_chain']}**, respectively. These bond values
-must not be read as an equal-time performance comparison because the TDVP check
-ends earlier.
+The paper-matched profile gives
+$P_\uparrow={summary['final_population_up']:.4f}$ at
+$t\Delta/\pi={result.t[-1] / np.pi:.4f}$. Against
+**{summary['paper_points_compared']}** vector-path samples of the published IC10
+curve on this interval, the population RMSE is
+**{summary['paper_curve_rmse']:.4f}** and the maximum absolute difference is
+**{summary['paper_curve_max_error']:.4f}**. The peak retained bond dimension is
+**{summary['max_bond']['interaction']}**.
 
-Agreement of two representations is a useful cross-check, but publication-scale
-work should also halve the time step and repeat the local-Fock-space and SVD
-threshold checks in the reference profile.
+The calculation uses 200 bath modes, ten oscillator states per mode, time step
+$0.0125/\Delta$, and SVD threshold $10^{{-3}}$, matching the numerical controls
+reported for Fig. 8. The finite frequency window is stated separately in the
+tutorial because the paper does not report its numerical endpoints.
 """)
     return output
 

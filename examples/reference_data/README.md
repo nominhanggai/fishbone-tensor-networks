@@ -1,7 +1,22 @@
-# DBA validation data
+# Tutorial comparison data
 
-These files support the long-time validation in
-`examples/bridge_electron_transfer.py` and its documentation tutorial.
+These files support the paper comparisons in the scientific tutorials. They
+contain data derived from published graphics or calculations performed with
+the public examples; none are raw trajectory data supplied by the authors.
+
+`dijkstra_2015_fig5_quantum_dynamics.csv` contains 41 samples of the
+$\omega_0/J=4$ and 8 quantum population curves in Fig. 5 of Dijkstra *et al.*,
+*J. Phys. Chem. Lett.* **6**, 627--632 (2015),
+<https://doi.org/10.1021/jz502701u>. The values were mapped from the vector paths
+in `fig4.eps` in the authors' arXiv source, at intervals of $0.5/J$. The axes
+give $0\leq tJ\leq20$ and $0\leq P_A\leq0.7$.
+
+`nuomin_2022_fig8_ic10.csv` contains samples of the converged IC10 population
+curve in Fig. 8 of Nuomin, Beratan, and Zhang, *Phys. Rev. A* **105**, 032422
+(2022), <https://doi.org/10.1103/PhysRevA.105.032422>. The values were mapped
+from the vector path in the authors' arXiv source figure. They are comparison
+data derived from the published graphic, not raw trajectory data supplied by
+the authors.
 
 `acharyya_2021_fig2_populations.csv` contains the solid donor, bridge, and
 acceptor curves from panels (a) and (b) of Fig. 2 in Acharyya, Ovcharenko, and
