@@ -23,7 +23,7 @@ def main():
     eth = SystemBathCoolingChain(
         pd, betaOmega=0.2, h_sys=78.5 * sigma_x, coupling=sigma_z,
         sd=lambda w: drude(w, lam=4 * 39.0, gam=78.5) * temp_factor(temp, w),
-        domain=[-g, g], ncap=20000).build()
+        domain=[-g, g]).build()
 
     dt, n_steps, bond_dim, eps = 5e-4, 20, 200, 1e-4
     u_one = eth.get_u(2 * dt)
