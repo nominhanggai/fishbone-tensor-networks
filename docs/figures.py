@@ -206,39 +206,71 @@ def vibronic_dimer(path=None):
     summary = example.summarize(suite)
     plt = _mpl()
     figure, (left, right) = plt.subplots(1, 2, figsize=(11.2, 4.4))
+    colors = {4.0: "#D9480F", 8.0: "#2B8A3E"}
     for vibration, result in suite["results"].items():
         population = np.asarray(result.expect["population"])
-        left.plot(result.t, population[:, 1], label=rf"$\omega_0={vibration:g}$")
+        left.plot(
+            result.t, population[:, 1], lw=1.8,
+            color=colors.get(vibration),
+            label=rf"$\omega_0={vibration:g}J$",
+        )
     scan = summary["final_acceptor_population"]
-    right.plot(list(scan), list(scan.values()), "o-", color="#6F42C1")
+    frequencies = list(scan)
+    positions = np.arange(len(frequencies), dtype=float)
+    width = 0.34
+    right.bar(
+        positions - width / 2,
+        [scan[frequency] for frequency in frequencies],
+        width, color="#4C6EF5", label="tensor network",
+    )
+    right.bar(
+        positions + width / 2,
+        [example.FIGURE_5_ENDPOINTS[frequency] for frequency in frequencies],
+        width, color="#ADB5BD", label="paper (read from plot)",
+    )
     left.set(xlabel=r"time ($J^{-1}$)", ylabel="acceptor population",
-             title="vibronic dimer dynamics")
+             title="quantized-vibration dynamics")
     horizon = suite["profile"].t_max
-    right.set(xlabel=r"vibration $\omega_0/J$",
-              ylabel=rf"$P_A({horizon:g}/J)$",
-              title="frequency dependence")
-    left.legend(frameon=False)
+    right.set(
+        xlabel=r"vibration $\omega_0/J$",
+        ylabel=rf"$P_A({horizon:g}/J)$",
+        title="Figure 5 endpoint check",
+        xticks=positions,
+        xticklabels=[f"{frequency:g}" for frequency in frequencies],
+    )
+    left.legend(frameon=False, loc="upper left")
+    right.legend(frameon=False, loc="upper left", fontsize=8)
     for axis in (left, right):
+        axis.set_ylim(-0.015, 0.74)
         axis.grid(alpha=0.25)
     figure.tight_layout()
     output = Path(path or IMG / "vibronic_dimer.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
     modes = ", ".join(
-        f"{frequency:g}: {values[0]} modes/bath"
+        rf"$\omega_0={frequency:g}J$: {values[0]} modes"
         for frequency, values in summary["resolved_modes"].items()
+    )
+    values = ", ".join(
+        rf"$P_A={population:.4f}$ at $\omega_0={frequency:g}J$"
+        for frequency, population in scan.items()
+    )
+    errors = ", ".join(
+        f"{frequency:g}J: {error:.3g}"
+        for frequency, error in summary["figure_5_absolute_error"].items()
     )
     _write_summary("vibronic_dimer", f"""## Generated result
 
 The documentation profile conserved the one-excitation population to
 **{summary['normalization_error']:.2e}** and retained a peak bond dimension of
-**{summary['max_bond']}**. The TEDOPA layout used {modes}; the frequency domain
-was selected automatically and the documentation profile fixed this mode count
-to keep the build bounded.
+**{summary['max_bond']}**. At $t=20/J$ it obtained {values}. The corresponding
+approximate values read from Figure 5 are 0.27 and 0.67; the absolute errors are
+{errors}.
 
-The calculation resolves how the transfer changes across the damping-scale and
-near-resonant vibrations. The finite scan is evidence for this model and time
-window, not a universal claim that one vibrational frequency is optimal.
+Both the signed thermal frequency domain and the interaction-chain light cone
+were resolved automatically. The resulting TEDOPA layouts were {modes}. This
+prevents the finite-chain reflections that contaminate the endpoint when only a
+few dozen modes are used.
 """)
     return output
 
