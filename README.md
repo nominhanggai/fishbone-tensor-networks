@@ -22,9 +22,11 @@ Lanczos tridiagonalization), so no hard-to-build Fortran packages are required.
   hand-written sweep loop — returning a `Result` with the time grid, observables,
   per-step reduced density matrix and peak bond dimension. The same call
   dispatches to the TEBD, MPO/TDVP and tree engines below.
-- **Unified TEBD engine** (`fishbonett.states.mps.SystemBathMPS`) with leg swaps, a
-  single-SVD or adaptive bond dimension, optional **local basis optimization
-  (LBO)**, and an optional **CuPy GPU** backend.
+- **MPS TEBD engine** (`fishbonett.evolve.tebd`): nearest-neighbour and
+  swap-network updates acting on a `fishbonett.states.mps.SystemBathMPS` state,
+  with SVD-threshold truncation, an optional maximum bond dimension, adaptive
+  rank search, **local basis optimization (LBO)**, and an optional **CuPy GPU**
+  backend.
 - **MPO / TDVP engine** (`fishbonett.evolve.tdvp`): a generic product-sum MPO
   compiler with exact QR/SVD bond minimization, fixed-bond 1-site TDVP, two-site
   TDVP that grows the bond by SVD truncation, and adaptive two-site tangent-space
