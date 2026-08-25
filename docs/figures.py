@@ -79,7 +79,7 @@ def _c_disc(density, domain, n_modes, times):
     ).sum(axis=1)
 
 
-def _panel(axis, times, exact, curves, title):
+def _panel(axis, times, exact, curves, title, *, legend=True):
     axis.plot(times, exact.real, "-", color="#4C6EF5", lw=2.4,
               label=r"exact Re $C(t)$")
     axis.plot(times, exact.imag, "-", color="#E8590C", lw=2.4,
@@ -91,11 +91,11 @@ def _panel(axis, times, exact, curves, title):
               mfc="none", color="#E8590C", label="automatic (Im)")
     axis.set(xlabel="time", ylabel="$C(t)$", title=title)
     axis.grid(alpha=0.25)
-    axis.legend(loc="upper right", frameon=False, fontsize=8, ncol=2)
+    if legend:
+        axis.legend(loc="upper right", frameon=False, fontsize=8, ncol=2)
 
 
-def _error_inset(axis, times, exact, curves, location=(0.44, 0.44, 0.52, 0.36)):
-    inset = axis.inset_axes(location)
+def _error_panel(axis, times, exact, curves):
     scale = abs(exact[0])
     styles = {
         "auto": ("#2B8A3E", "-", "automatic"),
@@ -104,16 +104,32 @@ def _error_inset(axis, times, exact, curves, location=(0.44, 0.44, 0.52, 0.36)):
     }
     for key, (color, style, label) in styles.items():
         if key in curves:
-            inset.semilogy(
+            axis.semilogy(
                 times, np.abs(curves[key] - exact) / scale, style,
                 color=color, lw=1.4, label=label,
             )
-    inset.set_ylim(1e-4, 2.0)
-    inset.set_xlabel("$t$", fontsize=7)
-    inset.set_ylabel("relative error", fontsize=7)
-    inset.tick_params(labelsize=6)
-    inset.grid(alpha=0.25, which="both")
-    inset.legend(fontsize=6, frameon=False, loc="lower right")
+    axis.set(
+        xlabel="time", ylabel="relative correlation error",
+        title="discretization sensitivity", ylim=(1e-4, 2.0),
+    )
+    axis.grid(alpha=0.25, which="both")
+
+
+def _figure_legend(figure, axes, *, columns=4, top=0.84):
+    entries = []
+    labels = set()
+    for axis in axes:
+        for handle, label in zip(*axis.get_legend_handles_labels()):
+            if label not in labels:
+                entries.append((handle, label))
+                labels.add(label)
+    figure.legend(
+        [handle for handle, _label in entries],
+        [label for _handle, label in entries],
+        loc="upper center", bbox_to_anchor=(0.5, 0.99), ncol=columns,
+        frameon=False, fontsize=8,
+    )
+    figure.tight_layout(rect=(0.0, 0.0, 1.0, top))
 
 
 def bath_correlation(path=None):
@@ -129,11 +145,13 @@ def bath_correlation(path=None):
         "few": _c_disc(density, bath.domain, 20, _TS),
         "narrow": _c_disc(density, (0.0, 10.0), bath.n_modes, _TS),
     }
-    figure, axis = plt.subplots(figsize=(7.2, 4.6))
-    _panel(axis, _TS, exact, curves,
-           f"Ohmic bath, automatic domain and {bath.n_modes} modes")
-    _error_inset(axis, _TS, exact, curves)
-    figure.tight_layout()
+    figure, (signal, error) = plt.subplots(1, 2, figsize=(11.2, 4.4))
+    _panel(
+        signal, _TS, exact, curves,
+        f"Ohmic bath: {bath.n_modes} resolved modes", legend=False,
+    )
+    _error_panel(error, _TS, exact, curves)
+    _figure_legend(figure, (signal, error), columns=4)
     output = Path(path or IMG / "bath_correlation.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
@@ -169,11 +187,14 @@ def bath_correlation_finite_t(path=None):
         "few": _c_disc(thermal_density, bath.domain, 20, _TS),
         "narrow": _c_disc(thermal_density, (-1.0, 10.0), bath.n_modes, _TS),
     }
-    figure, axis = plt.subplots(figsize=(7.2, 4.6))
-    _panel(axis, _TS, exact, curves,
-           f"Finite-temperature bath, signed domain, {bath.n_modes} modes")
-    _error_inset(axis, _TS, exact, curves)
-    figure.tight_layout()
+    figure, (signal, error) = plt.subplots(1, 2, figsize=(11.2, 4.4))
+    _panel(
+        signal, _TS, exact, curves,
+        f"Finite-temperature bath: {bath.n_modes} resolved modes",
+        legend=False,
+    )
+    _error_panel(error, _TS, exact, curves)
+    _figure_legend(figure, (signal, error), columns=4)
     output = Path(path or IMG / "bath_correlation_finiteT.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
@@ -207,7 +228,7 @@ def bath_structured(path=None):
     ])
     bath = Bath(J=density, phys_dim=10).resolved(T_MAX)
     curves = {"auto": _c_disc(density, bath.domain, bath.n_modes, _TS)}
-    figure, (left, right) = plt.subplots(1, 2, figsize=(11.4, 4.4))
+    figure, (left, middle, right) = plt.subplots(1, 3, figsize=(14.0, 4.2))
     grid = np.linspace(1e-3, float(bath.domain[1]) * 1.05, 900)
     left.plot(grid, density(grid), color="#4C6EF5", lw=2.0,
               label=r"$J(\omega)$")
@@ -218,11 +239,10 @@ def bath_structured(path=None):
               color="#E8590C", label=f"{bath.n_modes} star modes")
     left.set(xlabel=r"$\omega$", ylabel=r"$J(\omega)$",
              title="structured spectral density")
-    left.legend(frameon=False, fontsize=8)
     left.grid(alpha=0.25)
-    _panel(right, _TS, exact, curves, "correlation function")
-    _error_inset(right, _TS, exact, curves, (0.46, 0.60, 0.50, 0.34))
-    figure.tight_layout()
+    _panel(middle, _TS, exact, curves, "correlation function", legend=False)
+    _error_panel(right, _TS, exact, curves)
+    _figure_legend(figure, (left, middle, right), columns=4)
     output = Path(path or IMG / "bath_structured.svg")
     figure.savefig(output, dpi=140)
     plt.close(figure)
@@ -604,7 +624,7 @@ def two_bath_heat_flow(path=None):
     plt.close(figure)
     temperature_biased = summary["temperature_biased"]
     equal_temperature = summary["equal_temperature"]
-    _write_summary("two_bath_heat_flow", f"""## Numerical result
+    _write_summary("two_bath_heat_flow", fr"""## Numerical result
 
 The calculation uses the cited Ohmic coupling $\alpha={example.ALPHA:g}$ for
 each reservoir. Over $20 \leq t\omega_c \leq 25$, the hot- and cold-bath
