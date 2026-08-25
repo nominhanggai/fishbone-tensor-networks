@@ -38,8 +38,8 @@ $\int J(\omega)/\omega^2\,d\omega$ over the selected domain.
 
 The physical product state becomes a conditional coherent state after the
 transformation. The representation prepares that transformed state explicitly.
-Laboratory coherences also require undoing the displacement during measurement;
-the high-level API performs this automatically and returns a laboratory-system
+Physical coherences also require undoing the displacement during measurement;
+the high-level API performs this automatically and returns the physical system
 RDM for both star and chain.
 
 ## Numerical products

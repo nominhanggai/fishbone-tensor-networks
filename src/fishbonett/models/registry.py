@@ -72,7 +72,7 @@ REPRESENTATIONS = {
         "and the Hamiltonian is static.",
         static=True, mode_decoupled=True),
     "interaction-chain": RepresentationSpec(
-        "interaction-chain", "interaction chain representation",
+        "interaction-chain", "interaction-picture chain representation",
         "The bath is discretized as a finite star and put in the interaction "
         "picture with respect to the free star bath. The resulting time-dependent "
         "star coupling is transformed to chain coordinates. The coefficients "
@@ -83,7 +83,7 @@ REPRESENTATIONS = {
         "polaron-chain", "polaron chain representation",
         "A Lang-Firsov transformation absorbs the diagonal coupling into a chain "
         "displacement and dresses the system tunnelling. The representation is "
-        "static and requires a finite integral of J(w)/w^2. Laboratory "
+        "static and requires a finite integral of J(w)/w^2. Physical "
         "coherences require the inverse observable transformation.",
         static=True, mode_decoupled=False),
     "polaron-star": RepresentationSpec(
