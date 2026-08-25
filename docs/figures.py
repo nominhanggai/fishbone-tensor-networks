@@ -36,6 +36,65 @@ def _mpl():
     return plt
 
 
+def _ignored_tick_labels(figure):
+    """Return tick labels that Matplotlib creates outside an axis limit."""
+    ignored = set()
+    for axis in figure.axes:
+        x_left, x_right = sorted(axis.get_xlim())
+        y_bottom, y_top = sorted(axis.get_ylim())
+        x_scale = max(abs(x_left), abs(x_right), 1.0)
+        y_scale = max(abs(y_bottom), abs(y_top), 1.0)
+        for tick, label in zip(axis.xaxis.get_major_ticks(), axis.get_xticklabels()):
+            if not x_left - 1e-10 * x_scale <= tick.get_loc() <= x_right + 1e-10 * x_scale:
+                ignored.add(label)
+        for tick, label in zip(axis.yaxis.get_major_ticks(), axis.get_yticklabels()):
+            if not y_bottom - 1e-10 * y_scale <= tick.get_loc() <= y_top + 1e-10 * y_scale:
+                ignored.add(label)
+    return ignored
+
+
+def _validate_layout(figure, name):
+    """Reject clipped labels and overlapping visible text before saving."""
+    from matplotlib.text import Text
+
+    figure.canvas.draw()
+    renderer = figure.canvas.get_renderer()
+    ignored = _ignored_tick_labels(figure)
+    canvas = figure.bbox.padded(-1.0)
+    labels = []
+    clipped = []
+    for artist in figure.findobj(match=lambda item: isinstance(item, Text)):
+        value = artist.get_text().strip()
+        if artist in ignored or not artist.get_visible() or not value:
+            continue
+        box = artist.get_window_extent(renderer=renderer)
+        if box.width <= 0.0 or box.height <= 0.0:
+            continue
+        if not canvas.contains(box.x0, box.y0) or not canvas.contains(box.x1, box.y1):
+            clipped.append(value)
+        labels.append((value, box.padded(-0.75)))
+    overlaps = []
+    for index, (left_value, left_box) in enumerate(labels):
+        for right_value, right_box in labels[index + 1:]:
+            if left_box.overlaps(right_box):
+                overlaps.append((left_value, right_value))
+    if clipped or overlaps:
+        details = []
+        if clipped:
+            details.append("clipped: " + ", ".join(repr(value) for value in clipped))
+        if overlaps:
+            details.append(
+                "overlapping: "
+                + ", ".join(f"{left!r} / {right!r}" for left, right in overlaps)
+            )
+        raise RuntimeError(f"{name} layout failed: " + "; ".join(details))
+
+
+def _save_figure(figure, output, *, dpi):
+    _validate_layout(figure, output.name)
+    figure.savefig(output, dpi=dpi)
+
+
 def _load_example(name):
     path = ROOT / "examples" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(f"docs_{name}", path)
@@ -153,7 +212,7 @@ def bath_correlation(path=None):
     _error_panel(error, _TS, exact, curves)
     _figure_legend(figure, (signal, error), columns=4)
     output = Path(path or IMG / "bath_correlation.svg")
-    figure.savefig(output, dpi=140)
+    _save_figure(figure, output, dpi=140)
     plt.close(figure)
     return output
 
@@ -196,7 +255,7 @@ def bath_correlation_finite_t(path=None):
     _error_panel(error, _TS, exact, curves)
     _figure_legend(figure, (signal, error), columns=4)
     output = Path(path or IMG / "bath_correlation_finiteT.svg")
-    figure.savefig(output, dpi=140)
+    _save_figure(figure, output, dpi=140)
     plt.close(figure)
     return output
 
@@ -244,7 +303,7 @@ def bath_structured(path=None):
     _error_panel(right, _TS, exact, curves)
     _figure_legend(figure, (left, middle, right), columns=4)
     output = Path(path or IMG / "bath_structured.svg")
-    figure.savefig(output, dpi=140)
+    _save_figure(figure, output, dpi=140)
     plt.close(figure)
     return output
 
@@ -285,7 +344,7 @@ def vibronic_dimer(path=None):
     )
     figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.91))
     output = Path(path or IMG / "vibronic_dimer_centered_gap.svg")
-    figure.savefig(output, dpi=140)
+    _save_figure(figure, output, dpi=140)
     plt.close(figure)
     modes = ", ".join(
         rf"$\omega_0={frequency:g}J$: {values[0]} modes"
@@ -347,12 +406,11 @@ def nonadiabatic_spin_boson(path=None):
              title="strong-coupling relaxation")
     right.set(xlabel=r"$t\Delta/\pi$", ylabel="retained bond dimension",
               title="adaptive bond growth")
-    left.legend(frameon=False)
+    _figure_legend(figure, (left, right), columns=2, top=0.88)
     for axis in (left, right):
         axis.grid(alpha=0.25)
-    figure.tight_layout()
     output = Path(path or IMG / "nonadiabatic_spin_boson.svg")
-    figure.savefig(output, dpi=140)
+    _save_figure(figure, output, dpi=140)
     plt.close(figure)
     _write_summary("nonadiabatic_spin_boson", rf"""## Numerical result
 
@@ -416,13 +474,14 @@ def bridge_electron_transfer(path=None):
                 result["paper_t"], result["residual"][:, state_index],
                 color=color, lw=1.3,
             )
-        top.set(title=titles[case], ylim=(-0.025, 1.025))
-        top.text(
-            0.97, 0.58,
-            rf"$\tau_{{\rm TN}}={result['fit']['lifetime_ps']:.2f}$ ps"
-            "\n"
-            rf"$\tau_{{\rm paper}}={result['paper_fit']['lifetime_ps']:.2f}$ ps",
-            transform=top.transAxes, ha="right", va="center", fontsize=9,
+        top.set(
+            title=(
+                titles[case]
+                + "\n"
+                + rf"$\tau_{{\rm TN}}={result['fit']['lifetime_ps']:.2f}$ ps, "
+                + rf"$\tau_{{\rm paper}}={result['paper_fit']['lifetime_ps']:.2f}$ ps"
+            ),
+            ylim=(-0.025, 1.025),
         )
         residual_axis.axhline(0.0, color="#495057", lw=0.8)
         residual_axis.set(
@@ -448,7 +507,7 @@ def bridge_electron_transfer(path=None):
     )
     figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
     output = Path(path or IMG / "bridge_electron_transfer.svg")
-    figure.savefig(output, dpi=160)
+    _save_figure(figure, output, dpi=160)
     plt.close(figure)
 
     memory_figure, memory_axes = plt.subplots(1, 3, figsize=(13.2, 4.3))
@@ -509,7 +568,7 @@ def bridge_electron_transfer(path=None):
     )
     memory_figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.90))
     memory_output = output.with_name("bridge_electron_transfer_memory.svg")
-    memory_figure.savefig(memory_output, dpi=160)
+    _save_figure(memory_figure, memory_output, dpi=160)
     plt.close(memory_figure)
 
     validation_rows = "\n".join(
@@ -617,10 +676,9 @@ def two_bath_heat_flow(path=None):
                 title="directional currents")
     for axis in axes:
         axis.grid(alpha=0.25)
-        axis.legend(frameon=False)
-    figure.tight_layout()
+    _figure_legend(figure, axes, columns=4, top=0.88)
     output = Path(path or IMG / "two_bath_heat_flow.svg")
-    figure.savefig(output, dpi=140)
+    _save_figure(figure, output, dpi=140)
     plt.close(figure)
     temperature_biased = summary["temperature_biased"]
     equal_temperature = summary["equal_temperature"]

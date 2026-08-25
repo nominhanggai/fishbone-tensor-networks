@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 import time
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -90,3 +92,26 @@ def test_unrelated_reference_data_do_not_stale_a_figure(tmp_path, monkeypatch):
     monkeypatch.setattr(figures, "ROOT", tmp_path)
 
     assert figures._input_mtime("vibronic_dimer") == target_time
+
+
+def test_layout_validation_rejects_overlapping_text():
+    plt = pytest.importorskip("matplotlib.pyplot")
+    figures = _load_figures()
+    figure = plt.figure(figsize=(3, 2))
+    figure.text(0.5, 0.5, "first label")
+    figure.text(0.5, 0.5, "second label")
+
+    with pytest.raises(RuntimeError, match="overlapping"):
+        figures._validate_layout(figure, "overlap.svg")
+    plt.close(figure)
+
+
+def test_layout_validation_accepts_separated_text():
+    plt = pytest.importorskip("matplotlib.pyplot")
+    figures = _load_figures()
+    figure = plt.figure(figsize=(3, 2))
+    figure.text(0.1, 0.2, "left label")
+    figure.text(0.7, 0.8, "right label")
+
+    figures._validate_layout(figure, "clean.svg")
+    plt.close(figure)
