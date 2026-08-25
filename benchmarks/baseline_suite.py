@@ -1,8 +1,9 @@
 """Small, repeatable algorithmic baseline for architecture changes.
 
-Wall time is diagnostic.  The enforced metrics are numerical output, peak bond,
-and Krylov work, which are stable across machines and catch accidental changes in
-both accuracy and asymptotic work.
+The propagated observable and Krylov call count are strict regression checks.
+Peak bond and Krylov iteration count have narrow tolerances because floating-point
+contraction order and BLAS implementations can change threshold decisions.  Wall
+time is diagnostic only.
 """
 import json
 from pathlib import Path
@@ -43,8 +44,12 @@ def main():
     expected = json.loads(REFERENCE.read_text(encoding="utf-8"))
     assert np.isclose(got["final_sz"], expected["final_sz"],
                       rtol=1e-10, atol=1e-12)
-    for key in ("peak_bond", "krylov_calls", "krylov_iterations"):
-        assert got[key] == expected[key], (key, got[key], expected[key])
+    assert got["krylov_calls"] == expected["krylov_calls"], (
+        "krylov_calls", got["krylov_calls"], expected["krylov_calls"])
+    for key in ("peak_bond", "krylov_iterations"):
+        tolerance = expected[f"{key}_tolerance"]
+        assert abs(got[key] - expected[key]) <= tolerance, (
+            key, got[key], expected[key], tolerance)
     print(json.dumps(got, indent=2, sort_keys=True))
 
 

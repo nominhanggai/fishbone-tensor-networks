@@ -66,6 +66,8 @@ exclude = [
     "/examples/legacy",
     "/extensions",
     "/legacy",
+    "/paper",
+    "/tmp",
 ]
 
 [tool.ruff]

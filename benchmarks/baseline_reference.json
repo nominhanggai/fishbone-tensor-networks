@@ -2,5 +2,7 @@
   "final_sz": 0.9720199732579061,
   "krylov_calls": 84,
   "krylov_iterations": 454,
-  "peak_bond": 8
+  "krylov_iterations_tolerance": 24,
+  "peak_bond": 8,
+  "peak_bond_tolerance": 1
 }

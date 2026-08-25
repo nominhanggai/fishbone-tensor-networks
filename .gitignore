@@ -61,3 +61,10 @@ legacy/
 
 # documentation figures are generated at build time (docs/figures.py)
 docs/img/
+
+# Local software-paper source and generated products
+/paper/
+/output/
+
+# Repository-local scratch output (never package or commit)
+/tmp/
