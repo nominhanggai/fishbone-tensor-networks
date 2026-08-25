@@ -11,6 +11,60 @@ def identity_product(dimensions):
     return [np.eye(dimension, dtype=complex) for dimension in dimensions]
 
 
+def dense_operator_mpo(operator, dimensions, tolerance=1e-13):
+    """Factor a dense many-site operator into an MPO by exact TT-SVD.
+
+    Parameters
+    ----------
+    operator
+        Square matrix in the product basis ordered by ``dimensions``.
+    dimensions
+        Physical dimensions from the left end of the MPO to the right.
+    tolerance
+        Relative cutoff used only to remove floating-point null singular values.
+
+    Notes
+    -----
+    This private compiler is intended for small, nonlocal gates whose dense
+    matrix is already available.  State compression remains controlled by the
+    simulation's separate SVD threshold.
+    """
+    dimensions = tuple(int(dimension) for dimension in dimensions)
+    if not dimensions or any(dimension <= 0 for dimension in dimensions):
+        raise ValueError("dimensions must contain positive integers")
+    total = int(np.prod(dimensions, dtype=int))
+    value = np.asarray(operator, complex)
+    if value.shape != (total, total):
+        raise ValueError(
+            f"operator has shape {value.shape}, expected {(total, total)}"
+        )
+    if not np.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("tolerance must be finite and non-negative")
+
+    # Matrix order is (out_0,...,out_N,in_0,...,in_N).  Interleave the local
+    # output/input axes before the tensor-train factorization.
+    n_sites = len(dimensions)
+    tensor = value.reshape(*dimensions, *dimensions)
+    order = [axis for site in range(n_sites) for axis in (site, site + n_sites)]
+    carry = np.transpose(tensor, order)
+    mpo = []
+    left_rank = 1
+    for dimension in dimensions[:-1]:
+        matrix = carry.reshape(left_rank * dimension * dimension, -1)
+        u, singular, vh = _robust_svd(matrix, full_matrices=False)
+        scale = singular[0] if singular.size else 1.0
+        rank = max(1, int(np.sum(singular > tolerance * scale)))
+        u, singular, vh = u[:, :rank], singular[:rank], vh[:rank]
+        mpo.append(np.transpose(
+            u.reshape(left_rank, dimension, dimension, rank), (0, 3, 1, 2)
+        ))
+        carry = (singular[:, None] * vh)
+        left_rank = rank
+    dimension = dimensions[-1]
+    mpo.append(carry.reshape(left_rank, 1, dimension, dimension))
+    return mpo
+
+
 def product_sum_mpo(dimensions: Sequence[int], products, coefficients=None):
     """Compile ``sum_r c_r prod_i O[r, i]`` into a compressed MPO.
 

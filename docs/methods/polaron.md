@@ -6,6 +6,7 @@ The package implements both static Lang--Firsov representations.
 |---|---|
 | `polaron-chain` | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` |
 | `polaron-star` | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` |
+| independent-bath `Fishbone` | `polaron-chain-tree-tebd` |
 
 ## Theory
 
@@ -46,6 +47,10 @@ RDM for both star and chain.
 - `polaron-chain` supplies local nearest-neighbour gates for TEBD.
 - Both representations supply a static TDVP MPO for one-site, two-site, and
   dynamically adaptive TDVP.
+- On `Fishbone`, `polaron-chain-tree-tebd` applies one independent
+  Lang--Firsov transformation per coupled system site. Local dressed terms stay
+  on the system--first-mode edge. A dressed electronic coupling is applied as a
+  path MPO spanning its two endpoints and their first chain modes.
 
 ```python
 chain = model.run(
@@ -58,6 +63,53 @@ star = model.run(
     bond_dim=80, trunc_eps=1e-5,
 )
 ```
+
+For a multi-site single-excitation model, bind one independent bath to each
+coupled site and select all four axes explicitly:
+
+```python
+import numpy as np
+
+from fishbonett import Bath, Fishbone
+
+exciton_hamiltonian = np.array([[0.3, 0.1], [0.1, 0.0]])
+occupation = np.diag([0.0, 1.0])
+
+def make_bath():
+    return Bath(
+        J=lambda w: 0.03 * w**3 * np.exp(-w / 4),
+        domain=(0.05, 30),
+        n_modes=24,
+        phys_dim=8,
+    )
+
+fishbone = Fishbone.from_single_excitation(
+    exciton_hamiltonian,
+    baths={site: make_bath().bind(occupation)
+           for site in range(len(exciton_hamiltonian))},
+)
+result = fishbone.run(
+    dt=0.01,
+    t_max=2.0,
+    representation="polaron-chain",
+    state_geometry="tree",
+    integrator="tebd",
+    trunc_eps=1e-4,
+    bond_dim=None,
+)
+```
+
+The multi-site path currently accepts at most one independent bath per system
+site. `polaron-star` is not yet available for `Fishbone`. Both restrictions are
+reported by method resolution or plan construction. Gapless Ohmic spectra remain
+invalid for a full Lang--Firsov transform because their displacement norm
+diverges.
+
+Each dressed electronic edge gate is exponentiated on its two system endpoints
+and their first chain modes, then factored into a path MPO. Its dense compilation
+cost therefore grows with the product of those four local dimensions. This is
+usually modest for two-level sites, but it makes Fock-dimension convergence a
+memory consideration as well as an accuracy check.
 
 Converge both the tensor bond and the local Fock dimension. A coherent
 displacement with mean occupation comparable to the Fock cutoff can appear

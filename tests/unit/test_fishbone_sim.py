@@ -139,6 +139,70 @@ def test_two_sites_two_baths_fishbone():
             [(2, sigma_z, "L"), (2, sigma_x, "R")]], d=2, tol=5e-4)
 
 
+def test_independent_polaron_chains_match_schrodinger_graph_dynamics():
+    """Endpoint displacements dress both local and non-neighbour couplings."""
+    occupied = np.diag([0.0, 1.0]).astype(complex)
+    exciton = np.array([
+        [0.20, 0.11, 0.07],
+        [0.11, -0.10, 0.05],
+        [0.07, 0.05, 0.03],
+    ])
+    baths = [
+        Bath.vibronic([1.0], [0.08], phys_dim=4).bind(occupied),
+        None,
+        Bath.vibronic([1.2], [0.08], phys_dim=4).bind(occupied),
+    ]
+    model = Fishbone.from_single_excitation(exciton, baths=baths)
+    initial = [
+        np.array([0.0, 1.0]),
+        np.array([1.0, 0.0]),
+        np.array([1.0, 0.0]),
+    ]
+    settings = dict(
+        dt=0.004, n_steps=10, bond_dim=100, trunc_eps=1e-12,
+        initial=initial, observables={
+            "population": occupied,
+            "end_correlation": (np.kron(occupied, occupied), (0, 2)),
+            "mixed_correlation": (np.kron(occupied, occupied), (0, 1)),
+        },
+    )
+    schrodinger = model.run(
+        method="schrodinger-chain-tree-tebd", **settings
+    )
+    polaron = model.run(method="polaron-chain-tree-tebd", **settings)
+
+    np.testing.assert_allclose(
+        polaron.expect["population"],
+        schrodinger.expect["population"],
+        atol=2e-10,
+    )
+    np.testing.assert_allclose(
+        polaron.expect["end_correlation"],
+        schrodinger.expect["end_correlation"],
+        atol=2e-10,
+    )
+    np.testing.assert_allclose(
+        polaron.expect["mixed_correlation"],
+        schrodinger.expect["mixed_correlation"],
+        atol=2e-10,
+    )
+    assert polaron.meta["representation"] == "polaron-chain"
+    assert polaron.meta["state_geometry"] == "tree"
+    assert polaron.meta["integrator"] == "tebd"
+
+
+def test_fishbone_polaron_rejects_more_than_one_bath_per_site():
+    bath = Bath.vibronic([1.0], [0.05], phys_dim=3)
+    model = Fishbone(
+        sites=[0.2 * sigma_x],
+        baths=[(bath.bind(sigma_z), bath.bind(sigma_x))],
+    )
+    with pytest.raises(ValueError, match="at most one independent bath"):
+        model.run(
+            method="polaron-chain-tree-tebd", dt=0.01, n_steps=1
+        )
+
+
 def test_tree_step_is_second_order_in_dt():
     """``schrodinger-chain-tree-tebd`` must be **second** order, like every other method.
 
