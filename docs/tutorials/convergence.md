@@ -83,7 +83,7 @@ The shared tests above do not replace physics-specific validation:
 - heat current: check both directional currents, energy continuity, a
   zero-temperature-bias control, and absence of finite-chain recurrence, as in
   {doc}`two_bath_heat_flow`;
-- laboratory coherences in transformed representations: transform the
+- physical coherences in transformed representations: transform the
   observable back before comparison, as illustrated by the representation
   comparison in {doc}`nonadiabatic_spin_boson`.
 
