@@ -642,6 +642,451 @@ def _compile_polaron_plan(model, spec, context):
     )
 
 
+def _kron_all(factors):
+    """Kronecker product of a non-empty sequence, in the given site order."""
+    out = np.asarray(factors[0], complex)
+    for factor in factors[1:]:
+        out = np.kron(out, np.asarray(factor, complex))
+    return out
+
+
+def _polaron_dressed_system_operator(
+    operator, sites, representations, all_system_dims,
+):
+    """Dress a multi-site laboratory operator and return ``(matrix, nodes)``.
+
+    The returned node list interleaves every electronic site with the first mode
+    of its independent polaron chain.  Sites without a bath remain bare.
+    """
+    system_dims = [all_system_dims[site] for site in sites]
+    total = int(np.prod(system_dims, dtype=int))
+    operator = np.asarray(operator, complex)
+    if operator.shape != (total, total):
+        raise ValueError(
+            f"system observable has shape {operator.shape}, expected "
+            f"{(total, total)}"
+        )
+    basis = _kron_all([
+        (representations[site][0].eigenvectors
+         if site in representations
+         else np.eye(all_system_dims[site], dtype=complex))
+        for site in sites
+    ])
+    transformed = basis.conj().T @ operator @ basis
+    output_dims = []
+    nodes = []
+    for site in sites:
+        item = representations.get(site)
+        if item is None:
+            output_dims.append(all_system_dims[site])
+            nodes.append(site)
+        else:
+            representation, mode_node = item
+            output_dims.extend((representation.pd_sys,
+                                representation.pd_boson[0]))
+            nodes.extend((site, mode_node))
+    dimension = int(np.prod(output_dims, dtype=int))
+    dressed = np.zeros((dimension, dimension), complex)
+    for row in np.ndindex(*system_dims):
+        row_flat = np.ravel_multi_index(row, system_dims)
+        for column in np.ndindex(*system_dims):
+            column_flat = np.ravel_multi_index(column, system_dims)
+            coefficient = transformed[row_flat, column_flat]
+            if abs(coefficient) < 1e-14:
+                continue
+            factors = []
+            for position, site in enumerate(sites):
+                left, right = row[position], column[position]
+                item = representations.get(site)
+                if item is None:
+                    transition = np.zeros(
+                        (all_system_dims[site],) * 2, complex
+                    )
+                    transition[left, right] = 1.0
+                    factors.append(transition)
+                else:
+                    representation, _mode_node = item
+                    factors.extend((
+                        np.outer(
+                            representation.eigenvectors[:, left],
+                            representation.eigenvectors[:, right].conj(),
+                        ),
+                        representation.displacement_operator(
+                            0,
+                            representation.eigenvalues[left]
+                            - representation.eigenvalues[right],
+                        ),
+                    ))
+            dressed += coefficient * _kron_all(factors)
+    return dressed, nodes
+
+
+def _polaron_graph_gate_mpo(
+    coupling, left, right, representations, system_dims, intermediate_dims,
+    duration,
+):
+    """Compile one independently dressed electronic coupling to a path MPO."""
+    from fishbonett.representations._mpo import dense_operator_mpo
+
+    rep_left = representations.get(left)
+    rep_right = representations.get(right)
+    eig_left = (rep_left[0].eigenvectors if rep_left is not None
+                else np.eye(system_dims[left], dtype=complex))
+    eig_right = (rep_right[0].eigenvectors if rep_right is not None
+                 else np.eye(system_dims[right], dtype=complex))
+    values_left = (rep_left[0].eigenvalues if rep_left is not None
+                   else np.zeros(system_dims[left]))
+    values_right = (rep_right[0].eigenvalues if rep_right is not None
+                    else np.zeros(system_dims[right]))
+    transformed = np.kron(eig_left, eig_right).conj().T
+    transformed = transformed @ np.asarray(coupling, complex)
+    transformed = transformed @ np.kron(eig_left, eig_right)
+
+    endpoint_dims = []
+    if rep_left is not None:
+        endpoint_dims.append(rep_left[0].pd_boson[0])
+    endpoint_dims.append(system_dims[left])
+    left_core_count = len(endpoint_dims)
+    endpoint_dims.append(system_dims[right])
+    if rep_right is not None:
+        endpoint_dims.append(rep_right[0].pd_boson[0])
+    endpoint_hamiltonian = np.zeros(
+        (int(np.prod(endpoint_dims, dtype=int)),) * 2, complex
+    )
+    pair_dims = (system_dims[left], system_dims[right])
+    for left_state in np.ndindex(*pair_dims):
+        left_flat = np.ravel_multi_index(left_state, pair_dims)
+        for right_state in np.ndindex(*pair_dims):
+            right_flat = np.ravel_multi_index(right_state, pair_dims)
+            coefficient = transformed[left_flat, right_flat]
+            if abs(coefficient) < 1e-14:
+                continue
+            factors = []
+            if rep_left is not None:
+                representation = rep_left[0]
+                factors.append(representation.displacement_operator(
+                    0, values_left[left_state[0]] - values_left[right_state[0]]
+                ))
+            factors.append(np.outer(
+                eig_left[:, left_state[0]], eig_left[:, right_state[0]].conj()
+            ))
+            factors.append(np.outer(
+                eig_right[:, left_state[1]], eig_right[:, right_state[1]].conj()
+            ))
+            if rep_right is not None:
+                representation = rep_right[0]
+                factors.append(representation.displacement_operator(
+                    0, values_right[left_state[1]] - values_right[right_state[1]]
+                ))
+            endpoint_hamiltonian += coefficient * _kron_all(factors)
+
+    gate = _la.expm(-1j * duration * endpoint_hamiltonian)
+    endpoint_mpo = dense_operator_mpo(gate, endpoint_dims)
+    if not intermediate_dims:
+        return endpoint_mpo
+    bond = endpoint_mpo[left_core_count - 1].shape[1]
+    identities = []
+    for dimension in intermediate_dims:
+        core = np.zeros((bond, bond, dimension, dimension), complex)
+        identity = np.eye(dimension, dtype=complex)
+        for index in range(bond):
+            core[index, index] = identity
+        identities.append(core)
+    return [
+        *endpoint_mpo[:left_core_count],
+        *identities,
+        *endpoint_mpo[left_core_count:],
+    ]
+
+
+def _compile_polaron_fishbone_plan(model, spec, context):
+    """Independent Lang--Firsov bath transformations on a Fishbone model.
+
+    Each bath is mapped with the displacement-weighted chain transformation.
+    The local displacement then lives on its first chain mode.  Electronic
+    couplings are transformed by both endpoint displacements and applied as
+    exact path MPO gates; the state remains the model's tree tensor network.
+    """
+    from fishbonett.evolve.sitetree import apply_branch_mpo, apply_edge
+    from fishbonett.models.fishbone import _parse_observable
+    from fishbonett.models.result import SimulationCheckpoint, plan_signature
+    from fishbonett.representations.polaron import PolaronRepresentation
+    from fishbonett.states.tree import TreeTensorNetwork
+
+    horizon = context.bath_horizon or context.t_max
+    system_count = model.nc
+    dims = list(model.de)
+    edges = [(site, site + 1) for site in range(system_count - 1)]
+    representations = {}
+    bath_nodes = {}
+    bath_branches = []
+    signature_arrays = [np.asarray(value) for value in model.sites]
+    signature_scalars = [f"horizon={horizon!r}"]
+    next_node = system_count
+    for site, entry in enumerate(model.baths):
+        coupled_baths = model._site_baths(entry)
+        if not coupled_baths:
+            continue
+        if not isinstance(coupled_baths, list):
+            coupled_baths = [coupled_baths]
+        if len(coupled_baths) != 1:
+            raise ValueError(
+                "polaron-chain on a Fishbone currently supports at most one "
+                "independent bath per system site"
+            )
+        coupled = coupled_baths[0]
+        bath = coupled.bath.resolved(horizon)
+        representation = PolaronRepresentation(
+            representation="polaron-chain", h_sys=model.sites[site],
+            coupling=coupled.operator, bath=bath,
+        ).build()
+        nodes = list(range(next_node, next_node + bath.n_modes))
+        path = [site, *nodes]
+        edges.extend(zip(path[:-1], path[1:]))
+        dims.extend([bath.phys_dim] * bath.n_modes)
+        representations[site] = (representation, nodes[0])
+        for mode, node in enumerate(nodes):
+            bath_nodes[BathMode(site, 0, mode)] = node
+        bath_branches.append({
+            "system_site": site,
+            "bath": 0,
+            "representation": "polaron-chain",
+            "first_node": nodes[0],
+            "n_modes": bath.n_modes,
+            "phys_dim": bath.phys_dim,
+            "system_coupling": None,
+        })
+        signature_arrays.extend((
+            np.asarray(coupled.operator),
+            np.asarray(representation.frequencies),
+            np.asarray(representation.hoppings),
+            np.asarray(representation.displacements),
+        ))
+        signature_scalars.append(
+            f"site={site} representation=polaron-chain "
+            f"modes={bath.n_modes} d={bath.phys_dim}"
+        )
+        next_node += bath.n_modes
+
+    site_gates = [None] * len(dims)
+    edge_gates = {
+        (site, site + 1): np.eye(
+            model.de[site] * model.de[site + 1], dtype=complex
+        ).reshape(
+            model.de[site], model.de[site + 1],
+            model.de[site], model.de[site + 1],
+        )
+        for site in range(system_count - 1)
+    }
+    for site, value in enumerate(model.sites):
+        item = representations.get(site)
+        if item is None:
+            site_gates[site] = _la.expm(-0.25j * context.dt * value)
+            continue
+        representation, first_node = item
+        gates = representation.tebd_gates(context.dt / 4.0)
+        edge_gates[(site, first_node)] = gates[0]
+        for offset, gate in enumerate(gates[1:]):
+            edge_gates[(first_node + offset, first_node + offset + 1)] = gate
+
+    graph = model.graph_couplings
+    if graph is None:
+        graph = {
+            (site, site + 1): model.backbone[site]
+            for site in range(system_count - 1)
+            if np.any(model.backbone[site])
+        }
+    graph_mpos = []
+    for (left, right), value in sorted(graph.items()):
+        if left > right:
+            left, right = right, left
+        path = []
+        if left in representations:
+            path.append(representations[left][1])
+        path.extend(range(left, right + 1))
+        if right in representations:
+            path.append(representations[right][1])
+        mpo = _polaron_graph_gate_mpo(
+            value, left, right, representations, model.de,
+            model.de[left + 1:right], context.dt / 2.0,
+        )
+        if len(mpo) != len(path):
+            raise RuntimeError("dressed graph MPO does not match its tree path")
+        graph_mpos.append((path, mpo))
+        signature_scalars.append(f"edge={(left, right)}")
+        signature_arrays.append(np.asarray(value))
+    signature = plan_signature(dims, edges, signature_arrays, signature_scalars)
+
+    if context.resume is not None:
+        if not np.isclose(context.resume.bath_horizon, horizon):
+            raise ValueError(
+                f"checkpoint was produced with bath_horizon="
+                f"{context.resume.bath_horizon!r} but this run resolves "
+                f"{horizon!r}; pass bath_horizon= to keep them equal"
+            )
+        state = context.resume.restore_tree(dims, edges, signature)
+    else:
+        state = TreeTensorNetwork(dims, edges, root=0)
+        helper = model._tree()
+        for site in range(system_count):
+            state.set_physical(site, helper._initial_vec(context.initial, site))
+        # U_P |psi_sys>|0> is a product of commuting conditional displacements,
+        # one on each independent system--bath pair.
+        for site, (representation, first_node) in representations.items():
+            state.move_oc_to(site)
+            apply_edge(
+                state, site, first_node, representation.initial_pair_gate(),
+                context.bond_dim, 1e-14,
+            )
+
+    parsed = []
+    observable_targets = {}
+    for name, value in context.obs_ops.items():
+        kind, operator, targets = _parse_observable(value, model.de, name)
+        if kind == "persite":
+            parsed.append((name, kind, operator, None, None))
+            observable_targets[name] = tuple(
+                site for site in range(system_count)
+                if operator.shape == (model.de[site], model.de[site])
+            )
+            continue
+        if any(isinstance(target, BathMode) for target in targets):
+            if not all(isinstance(target, BathMode) for target in targets):
+                raise ValueError(
+                    "mixed system and represented-bath composite observables "
+                    "are not implemented for polaron-chain"
+                )
+            nodes = []
+            for target in targets:
+                try:
+                    nodes.append(bath_nodes[target])
+                except KeyError as exc:
+                    raise ValueError(
+                        f"{name} targets unavailable bath mode {target}"
+                    ) from exc
+            expected = int(np.prod([dims[node] for node in nodes]))
+            if operator.shape != (expected, expected):
+                raise ValueError(
+                    f"{name} has shape {operator.shape}, expected "
+                    f"{(expected, expected)} for resolved tensor nodes {nodes}"
+                )
+            parsed.append((name, "represented", operator, nodes, None))
+            observable_targets[name] = tuple(nodes)
+            continue
+        if len(targets) == 1:
+            site = targets[0]
+            parsed.append((name, "lab-local", operator, [site], None))
+            observable_targets[name] = (site,)
+            continue
+        dressed, nodes = _polaron_dressed_system_operator(
+            operator, targets, representations, model.de
+        )
+        parsed.append((name, "dressed", dressed, nodes, None))
+        observable_targets[name] = tuple(nodes)
+
+    def laboratory_rdm(site):
+        item = representations.get(site)
+        if item is None:
+            return state.rdm(site)
+        representation, first_node = item
+        return representation.recover_joint_rdm(
+            state.joint_rdm([site, first_node])
+        )
+
+    def execute():
+        elapsed = context.elapsed
+        record_steps = [
+            step for step in range(context.n_steps)
+            if (step + 1) % context.observe_every == 0
+            or step + 1 == context.n_steps
+        ]
+        record_set = set(record_steps)
+        n_records = len(record_steps)
+        expect = {}
+        for name, kind, _operator, _nodes, _unused in parsed:
+            expect[name] = (
+                np.full((n_records, system_count), np.nan, dtype=complex)
+                if kind == "persite" else np.full(n_records, np.nan, dtype=complex)
+            )
+        rdms = np.empty((n_records, system_count), dtype=object)
+        max_bond = np.empty(n_records, dtype=int)
+        record = 0
+        for step in range(context.n_steps):
+            state.step(
+                site_gates, edge_gates,
+                context.bond_dim, context.trunc_eps,
+            )
+            for path, mpo in graph_mpos:
+                apply_branch_mpo(
+                    state, mpo, path,
+                    context.bond_dim, context.trunc_eps,
+                )
+            for path, mpo in reversed(graph_mpos):
+                apply_branch_mpo(
+                    state, mpo, path,
+                    context.bond_dim, context.trunc_eps,
+                )
+            state.step(
+                site_gates, edge_gates,
+                context.bond_dim, context.trunc_eps,
+            )
+            if context.progress is not None:
+                context.progress({
+                    "step": step,
+                    "n_steps": context.n_steps,
+                    "t": elapsed + (step + 1) * context.dt,
+                    "bond": tree_peak_bond(state),
+                    "rdm": None,
+                    "state": state,
+                })
+            if step not in record_set:
+                continue
+            for site in range(system_count):
+                rdms[record, site] = laboratory_rdm(site)
+            for name, kind, operator, nodes, _unused in parsed:
+                if kind == "persite":
+                    for site in range(system_count):
+                        if operator.shape == (model.de[site], model.de[site]):
+                            expect[name][record, site] = np.trace(
+                                rdms[record, site] @ operator
+                            )
+                elif kind == "lab-local":
+                    expect[name][record] = np.trace(
+                        rdms[record, nodes[0]] @ operator
+                    )
+                else:
+                    expect[name][record] = state.expectation(operator, nodes)
+            max_bond[record] = tree_peak_bond(state)
+            record += 1
+        rdm = (
+            np.array([[rdms[t, site] for site in range(system_count)]
+                      for t in range(n_records)])
+            if len(set(model.de)) == 1 else rdms
+        )
+        checkpoint = SimulationCheckpoint.from_tree(
+            state, dims, edges, signature=signature, method=spec.name,
+            elapsed=elapsed + context.n_steps * context.dt,
+            bath_horizon=horizon,
+        )
+        return Result(
+            t=elapsed + (np.asarray(record_steps) + 1) * context.dt,
+            expect={name: np.real_if_close(values)
+                    for name, values in expect.items()},
+            rdm=rdm,
+            max_bond=max_bond,
+            method=spec.name,
+            meta={
+                "n_sites": system_count,
+                "representation": "polaron-chain",
+                "bath_branches": tuple(dict(item) for item in bath_branches),
+                "observable_targets": observable_targets,
+            },
+            checkpoint=checkpoint,
+        )
+
+    return SimulationPlan(spec, context, execute=execute)
+
+
 def _compile_interaction_fishbone_plan(model, spec, context):
     """Independent interaction-chain baths on an electronic comb."""
     from scipy.linalg import expm
@@ -911,6 +1356,7 @@ PLAN_COMPILERS = {
     "swap-tebd": _compile_swap_plan,
     "displacement-mpo": _compile_displacement_plan,
     "polaron-tebd": _compile_polaron_plan,
+    "polaron-fishbone": _compile_polaron_fishbone_plan,
     "static-tree-tebd": _compile_static_tree_plan,
     "interaction-fishbone": _compile_interaction_fishbone_plan,
 }

@@ -124,6 +124,34 @@ Each bath is independently transformed from star modes to the interaction-pictur
 chain. A reversible branch sweep brings the system site next to every represented
 mode without changing which bath belongs to which electronic site.
 
+An infrared-finite bath can instead use an independent polaron transform on
+each coupled site. For example, a super-Ohmic density with a positive infrared
+cutoff has a finite full-polaron displacement norm:
+
+```python
+polaron_bath = Bath(
+    J=lambda w: 0.03 * w**3 * np.exp(-w / 5),
+    domain=(0.05, 40), n_modes=20, phys_dim=10,
+)
+polaron_fb = Fishbone(
+    sites=[0.5 * sigma_z + sigma_x] * 3,
+    baths=[polaron_bath.bind(sigma_z) for _ in range(3)],
+    backbone=[0.4 * np.kron(sigma_z, sigma_z)] * 2,
+)
+result = polaron_fb.run(
+    dt=0.002, t_max=0.1,
+    representation="polaron-chain",
+    state_geometry="tree",
+    integrator="tebd",
+)
+```
+
+This route transforms the initial state and laboratory electronic observables
+automatically. It supports one independent bath per system site; several baths
+on the same site and the multi-site polaron-star representation are not yet
+implemented. The spectral density must have finite
+$\int J(\omega)/\omega^2\,d\omega$.
+
 The interaction-chain comb offers three integrators, which solve the same H(t) and
 differ only in how a branch's terms reach the state:
 
@@ -185,8 +213,9 @@ integration step.
 
 ## Cost and truncation
 
-Both classes propagate with `schrodinger-chain-tree-tebd`, a **second-order** (Strang) Trotter
-step: halving `dt` cuts the error ~4×, as with every other method here
+The default for both classes is `schrodinger-chain-tree-tebd`, a **second-order**
+(Strang) Trotter step: halving `dt` cuts the error by about four, as with every
+other split method here
 ({doc}`/getting_started`).  On a tree that takes more care than on a chain — the
 edge gates must be applied in a palindromic order over the whole tree, not just down
 and back up each branch — so the step applies each half-step gate twice.  See

@@ -213,29 +213,7 @@ class PolaronRepresentation:
             raise ValueError(
                 "polaron-chain gates require a uniform mode dimension")
 
-        destroy = annihilate(dimension)
-        create_op = destroy.conj().T
-        number_op = create_op @ destroy
-        system_mode = np.zeros(
-            (self.pd_sys * dimension,) * 2, complex)
-        for left in range(self.pd_sys):
-            for right in range(self.pd_sys):
-                coefficient = self.system_in_coupling_eigenvectors[left, right]
-                if abs(coefficient) < 1e-14:
-                    continue
-                projector = np.outer(
-                    self.eigenvectors[:, left],
-                    self.eigenvectors[:, right].conj())
-                displacement = self.displacement_operator(
-                    0, self.eigenvalues[left] - self.eigenvalues[right])
-                system_mode += coefficient * np.kron(
-                    projector, displacement)
-        system_mode += self.frequencies[0] * np.kron(
-            np.eye(self.pd_sys), number_op)
-        system_mode -= self.reorganization_energy * np.kron(
-            self.coupling @ self.coupling, np.eye(dimension))
-
-        gates = [expm_gate(system_mode, dt).reshape(
+        gates = [expm_gate(self.system_mode_hamiltonian(), dt).reshape(
             self.pd_sys, dimension, self.pd_sys, dimension)]
         for mode, hopping in enumerate(self.hoppings, start=1):
             left_dimension = self.pd_boson[mode - 1]
@@ -255,6 +233,69 @@ class PolaronRepresentation:
                 left_dimension, right_dimension,
                 left_dimension, right_dimension))
         return gates
+
+    def dressed_system_operator(self, operator, mode=0):
+        """Return a laboratory system operator in polaron coordinates.
+
+        The matrix acts on ``(system, first_chain_mode)`` in that order.  The
+        local form exists because the chain transform puts the full collective
+        displacement on mode zero.  A polaron-star system operator is instead
+        dressed by a product over every star mode and has no two-site form.
+        """
+        if self.name != "polaron-chain" or mode != 0:
+            raise ValueError(
+                "a local dressed system operator requires polaron-chain mode 0"
+            )
+        if self.reorganization_energy is None:
+            raise ValueError("build the polaron representation first")
+        operator = check_operator(operator, "operator", self.pd_sys)
+        transformed = self.eigenvectors.conj().T @ operator @ self.eigenvectors
+        dimension = self.pd_boson[mode]
+        out = np.zeros((self.pd_sys * dimension,) * 2, complex)
+        for left in range(self.pd_sys):
+            for right in range(self.pd_sys):
+                coefficient = transformed[left, right]
+                if abs(coefficient) < 1e-14:
+                    continue
+                transition = np.outer(
+                    self.eigenvectors[:, left],
+                    self.eigenvectors[:, right].conj())
+                displacement = self.displacement_operator(
+                    mode, self.eigenvalues[left] - self.eigenvalues[right])
+                out += coefficient * np.kron(transition, displacement)
+        return out
+
+    def system_mode_hamiltonian(self):
+        """Local transformed Hamiltonian on the system and first chain mode."""
+        if self.name != "polaron-chain":
+            raise ValueError("a local system-mode Hamiltonian requires polaron-chain")
+        dimension = self.pd_boson[0]
+        destroy = annihilate(dimension)
+        number_op = destroy.conj().T @ destroy
+        return (
+            self.dressed_system_operator(self.h_sys)
+            + self.frequencies[0] * np.kron(np.eye(self.pd_sys), number_op)
+            - self.reorganization_energy * np.kron(
+                self.coupling @ self.coupling, np.eye(dimension)
+            )
+        )
+
+    def initial_pair_gate(self):
+        """Conditional displacement preparing the transformed product state."""
+        if self.name != "polaron-chain":
+            raise ValueError("a local initial-state gate requires polaron-chain")
+        dimension = self.pd_boson[0]
+        gate = np.zeros((self.pd_sys * dimension,) * 2, complex)
+        for branch, eigenvalue in enumerate(self.eigenvalues):
+            projector = np.outer(
+                self.eigenvectors[:, branch],
+                self.eigenvectors[:, branch].conj())
+            gate += np.kron(
+                projector, self.displacement_operator(0, eigenvalue)
+            )
+        return gate.reshape(
+            self.pd_sys, dimension, self.pd_sys, dimension
+        )
 
     def displacement_operator(self, mode, scale):
         """Local displacement for one transformed bath mode."""
@@ -339,5 +380,36 @@ class PolaronRepresentation:
                     0, self.eigenvalues[right] - self.eigenvalues[left])
                 out[left, right] = np.einsum(
                     "ab,ba->", transformed[left, :, right, :], displacement)
+        lab = self.eigenvectors @ out @ self.eigenvectors.conj().T
+        return lab / np.trace(lab)
+
+    def recover_joint_rdm(self, rho):
+        """Recover a laboratory RDM from a system--mode-zero joint RDM."""
+        if self.name != "polaron-chain":
+            raise ValueError("local RDM recovery requires polaron-chain")
+        dimension = self.pd_boson[0]
+        rho = np.asarray(rho, complex)
+        expected = self.pd_sys * dimension
+        if rho.shape != (expected, expected):
+            raise ValueError(
+                f"joint RDM has shape {rho.shape}, expected {(expected, expected)}"
+            )
+        rho = rho.reshape(
+            self.pd_sys, dimension, self.pd_sys, dimension
+        )
+        transformed = np.einsum(
+            "Xi,XaYb,Yj->iajb",
+            self.eigenvectors.conj(), rho, self.eigenvectors,
+            optimize=True,
+        )
+        out = np.zeros((self.pd_sys, self.pd_sys), complex)
+        for left in range(self.pd_sys):
+            for right in range(self.pd_sys):
+                displacement = self.displacement_operator(
+                    0, self.eigenvalues[right] - self.eigenvalues[left]
+                )
+                out[left, right] = np.einsum(
+                    "ab,ba->", transformed[left, :, right, :], displacement
+                )
         lab = self.eigenvectors @ out @ self.eigenvectors.conj().T
         return lab / np.trace(lab)

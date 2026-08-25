@@ -32,6 +32,30 @@ def _embed(op, site, dims):
     return out
 
 
+def test_dense_operator_mpo_reconstructs_a_nonlocal_gate():
+    """The private TT-SVD compiler preserves local output/input ordering."""
+    import scipy.linalg as la
+    from fishbonett.representations._mpo import dense_operator_mpo
+
+    dimensions = (2, 3, 2)
+    rng = np.random.default_rng(11)
+    hamiltonian = rng.normal(size=(12, 12)) + 1j * rng.normal(size=(12, 12))
+    hamiltonian = hamiltonian + hamiltonian.conj().T
+    gate = la.expm(-0.07j * hamiltonian)
+    mpo = dense_operator_mpo(gate, dimensions)
+
+    rebuilt = np.zeros_like(gate)
+    for output in np.ndindex(*dimensions):
+        row = np.ravel_multi_index(output, dimensions)
+        for input_ in np.ndindex(*dimensions):
+            column = np.ravel_multi_index(input_, dimensions)
+            transfer = np.array([[1.0 + 0.0j]])
+            for core, out_index, in_index in zip(mpo, output, input_):
+                transfer = transfer @ core[:, :, out_index, in_index]
+            rebuilt[row, column] = transfer.item()
+    np.testing.assert_allclose(rebuilt, gate, atol=2e-13)
+
+
 def _exact_sz(n_chain, d, V, ts):
     bath = _bath(n_chain, d)
     eps_c, couplings = get_bath_nn_parameters(

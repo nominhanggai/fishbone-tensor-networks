@@ -88,13 +88,16 @@ representations and integrators can be compared without changing analysis code.
 For `Fishbone` and `TreeFishbone`, attach each bath explicitly with
 `bath.bind(system_operator)` so the coupled site and operator are unambiguous.
 
-A method name states the Hamiltonian representation and integrator, for example:
+A method name identifies a representation, state geometry, and integrator. MPS
+names omit the implicit `mps`; tree-state names include `tree` when needed to
+distinguish them, for example:
 
 - `schrodinger-chain-tdvp2`
 - `interaction-chain-tebd`
 - `interaction-chain-trotter-mpo`
 - `interaction-chain-tree-tebd`
 - `polaron-chain-tdvp2`
+- `polaron-chain-tree-tebd`
 
 The method registry rejects unsupported combinations and explains why they are
 unavailable. Run the following to inspect the complete table for the installed

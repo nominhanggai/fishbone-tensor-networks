@@ -251,6 +251,8 @@ _METHOD_ROWS = [
     # -- the static tree engine: one engine, two representations, three topologies -----
     _m("schrodinger-chain", ("comb", "site-tree"),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
+    _m("polaron-chain", ("comb",), "polaron-fishbone",
+       integrator="tebd", state_geometry="tree"),
     _m("interaction-chain", ("comb",), "interaction-fishbone",
        integrator="tebd", state_geometry="tree", qualifier="fishbone"),
     # The same per-branch H(t), carried by one conditional-displacement operator
@@ -282,8 +284,7 @@ BOND_CAP_REQUIRED_METHODS = frozenset(
 )
 
 
-#: The multi-site models are wired for one representation only.  Their baths are chain-mapped
-#: per site, and nothing rotates a transformation out per site.
+#: This multi-site representation has no compiler for the selected model.
 _MULTISITE = "not implemented for multi-site models."
 
 #: Static scalar-chain mappings do not directly preserve several cross-correlated
@@ -326,7 +327,6 @@ MODELS = {
         cls="Fishbone",
         gaps={
             "schrodinger-star": _MULTISITE,
-            "polaron-chain": _MULTISITE,
             "polaron-star": _MULTISITE,
         }),
     "site-tree": Model(

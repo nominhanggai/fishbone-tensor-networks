@@ -48,10 +48,8 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
         if name == "interaction-chain-fishbone-tebd":
             assert spec.models == ("comb",)
             assert spec.state_geometry == "tree"
-        # every single-system engine must resolve to one plan compiler
-        if set(spec.models) & {"system-bath", "multichannel"}:
-            assert callable(PLAN_COMPILERS.get(spec.engine)), (
-                f"{name}: engine {spec.engine!r} has no plan compiler")
+        assert callable(PLAN_COMPILERS.get(spec.engine)), (
+            f"{name}: engine {spec.engine!r} has no plan compiler")
 
 def test_state_geometry_vocabulary_is_explicit():
     assert set(R.STATE_GEOMETRIES) == {"mps", "binary-tree", "tree"}
@@ -485,9 +483,18 @@ def test_models_of_reports_every_owner():
 
 def test_methods_of_explains_a_gap_instead_of_a_bare_keyerror():
     """An absent representation reports the registry's reason."""
-    reason = R.MODELS["comb"].gaps["polaron-chain"]
+    reason = R.MODELS["comb"].gaps["polaron-star"]
     with pytest.raises(KeyError, match=re.escape(reason)):
-        R.methods_of("comb", "polaron-chain")
+        R.methods_of("comb", "polaron-star")
+
+
+def test_comb_exposes_independent_polaron_chain_tebd():
+    methods = R.methods_of("comb", "polaron-chain")
+    assert methods == ("polaron-chain-tree-tebd",)
+    spec = R.METHODS[methods[0]]
+    assert (spec.representation, spec.state_geometry, spec.integrator) == (
+        "polaron-chain", "tree", "tebd"
+    )
 
 
 def test_one_engine_can_serve_two_representations():

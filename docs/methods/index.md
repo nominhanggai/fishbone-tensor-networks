@@ -60,7 +60,7 @@ same transformed Hamiltonian and both are implemented.
 
 ## System-bath methods
 
-| representation | tensor-network geometry | methods | details |
+| representation | state geometry | methods | details |
 |---|---|---|---|
 | `schrodinger-chain` | 1D MPS | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-dtdvp` | {doc}`schrodinger/chain` |
 | `schrodinger-star` | 1D MPS | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2` | {doc}`schrodinger/star_mpo` |
@@ -75,12 +75,13 @@ integrator determines how that product advances the tensor state.
 
 ## Other models
 
-| model | representation | tensor-network geometry | method |
+| model | representation | state geometry | method |
 |---|---|---|---|
 | `multichannel` | `schrodinger-star` | star tensor network (`tree`) | `schrodinger-star-tree-tebd` |
 | `multichannel` | `interaction-chain` | 1D MPS (`mps`) | `interaction-chain-tebd` |
 | `comb` | `schrodinger-chain` | comb tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
 | `comb` | `interaction-chain` | comb tensor network (`tree`) | `interaction-chain-fishbone-tebd`, `interaction-chain-fishbone-trotter-mpo`, `interaction-chain-fishbone-tdvp2` |
+| `comb` | `polaron-chain` | comb tensor network (`tree`) | `polaron-chain-tree-tebd` |
 | `site-tree` | `schrodinger-chain` | arbitrary tree tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
 
 For multichannel interaction propagation, `interaction-chain-tebd` applies one
@@ -100,7 +101,8 @@ common orthogonal star-to-chain transform to the matrix-valued mode couplings.
   the free bath has been removed.
 - Polaron methods require finite
   $\int J(\omega)/\omega^2\,d\omega$ and careful convergence in local Fock
-  dimension.
+  dimension. `Fishbone` supports a product of independent polaron
+  transformations when each coupled site carries at most one bath.
 
 ```python
 result = model.run(
