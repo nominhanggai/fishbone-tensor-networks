@@ -117,7 +117,14 @@ def test_every_exciton_layout_matches_the_same_dense_finite_bath(method):
         options["tol"] = 1e-11
     result = model.run(**options)
     exact = _exact_rdm(model, result.t)
-    assert np.max(np.abs(result.rdm - exact)) < 1e-7
+    error = np.max(np.abs(result.rdm - exact))
+    # Report the bond history too: for the adaptive methods a deviation here is
+    # almost always an expansion that did not happen, which the error alone
+    # cannot distinguish from a genuine accuracy problem.
+    assert error < 1e-7, (
+        f"{method} deviates from the dense reference by {error:.6e}; "
+        f"bond history {np.asarray(result.max_bond).tolist()}"
+    )
     assert np.allclose(
         result.expect["population"],
         np.diagonal(exact, axis1=1, axis2=2),

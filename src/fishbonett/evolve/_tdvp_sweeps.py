@@ -267,22 +267,41 @@ def _complete_columns(columns, target, residual=None):
     if residual is not None and residual.size:
         projected = residual - (residual @ columns.conj()) @ columns.T
         want = min(target - current, *projected.shape)
+        # Ask for more directions than can be kept: whether the cut falls
+        # inside a group of equal singular values is only visible from the
+        # values just past it.
+        probe = min(want + 2, *projected.shape)
         try:
             # Only the leading few directions are ever kept, so a full
             # decomposition of a residual this size would dominate the sweep.
             # The sketch is seeded per call rather than from the matrix, so the
             # directions do not inherit last-bit differences between platforms.
             _u, weights, directions = randomized_svd(
-                projected, want, n_iter=2, oversample=8,
+                projected, probe, n_iter=2, oversample=8,
                 rng=np.random.default_rng(0),
             )
         except (np.linalg.LinAlgError, ValueError):
             weights = np.zeros(0)
             directions = np.zeros((0, columns.shape[0]))
         if weights.size:
-            keep = min(
-                want, int(np.count_nonzero(weights > weights[0] * 1e-12))
-            )
+            # Judge a direction against the size of the residual itself, not
+            # against the largest weight.  When the whole projection is
+            # rounding debris the largest weight *is* debris, and scaling by it
+            # promotes noise to signal -- on one platform that debris is an
+            # exact zero and on another it is 1e-17, which is enough to select
+            # different expansion directions.
+            floor = float(np.linalg.norm(residual)) * 1e-12
+            significant = int(np.count_nonzero(weights > floor))
+            keep = min(want, significant)
+            # Never cut inside a group of equal singular values.  Any basis of
+            # such a group is as good as any other, so keeping part of one
+            # selects an arbitrary subspace and hands the result back to
+            # whichever basis the backend happened to return.  Whole groups
+            # only.
+            while 0 < keep < significant and (
+                weights[keep] > weights[keep - 1] * (1.0 - 1e-8)
+            ):
+                keep -= 1
             if keep > 0:
                 basis = np.column_stack((basis, directions[:keep].T))
     if basis.shape[1] < target:
