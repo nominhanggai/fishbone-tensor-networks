@@ -100,8 +100,10 @@ They differ only in how the bond dimension is handled:
   one more direction changes $f$ by at most `trunc_eps`. The subsequent time
   step contains only one-site and zero-site exponential actions; no two-site
   centre is evolved or split. `bond_expand` limits the candidate directions
-  considered in one sweep, and `bond_dim` is the required memory ceiling. This
-  is an independent implementation of the adaptive one-site construction of
+  considered in one sweep, and `bond_dim` is the required memory ceiling. The
+  QR complement uses a deterministic coordinate pivot order, avoiding the
+  non-unique completion returned by different linear-algebra libraries. This is
+  an independent implementation of the adaptive one-site construction of
   [Dunnett and Chin, *Phys. Rev. B* **104**, 214302
   (2021)](https://doi.org/10.1103/PhysRevB.104.214302).
 

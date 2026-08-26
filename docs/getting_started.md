@@ -83,8 +83,10 @@ the left and right canonical bases with full QR factorizations, evaluates the
 three local effective-Hamiltonian norms associated with each bond, and keeps the
 smallest extension whose relative contribution is below `trunc_eps`.
 `bond_expand` limits how many QR-complement directions are tested during one
-sweep. Because this method grows a one-site tangent space rather than splitting
-a two-site centre, `bond_dim` is required as a memory ceiling.
+sweep. The orthogonal complement is generated in a deterministic coordinate
+pivot order because the unused columns of a full QR factorization are otherwise
+non-unique. Because this method grows a one-site tangent space rather than
+splitting a two-site centre, `bond_dim` is required as a memory ceiling.
 
 ### SVD backend and reproducibility
 

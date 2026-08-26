@@ -6,7 +6,6 @@ spaces with the unused columns of full QR factorizations before taking an
 ordinary one-site sweep.  It never exponentiates a two-site centre.
 """
 import numpy as np
-from scipy.linalg.lapack import get_lapack_funcs
 
 from fishbonett.contract import _einsum_cached
 #: Maximum new bond directions considered in one sweep.  For TDVP2 these are
@@ -193,31 +192,55 @@ def _pad_bonds(tensors, D, noise=1e-10, seed=0):
 
 
 def _partial_full_qr(matrix, target):
-    """Return the first ``target`` columns of full Q and the reduced R.
+    """Return a reproducible partial full-QR basis and the reduced R.
 
-    LAPACK stores the Householder reflectors compactly. ``ungqr``/``orgqr``
-    applies them only to the requested columns, avoiding the square full-Q
-    allocation while returning exactly the corresponding full-QR basis.
+    A reduced QR supplies the occupied columns.  The remaining columns are
+    completed from projected coordinate vectors in a deterministic pivot
+    order.  Full-QR complements are mathematically non-unique, and accepting
+    the LAPACK-specific completion made adaptive one-site TDVP choose different
+    tangent directions on otherwise equivalent installations.
     """
     matrix = np.asarray(matrix)
     rows, columns = matrix.shape
     if columns > rows or target < columns or target > rows:
         raise ValueError("requested QR dimensions are incompatible")
-    generator = "ungqr" if np.iscomplexobj(matrix) else "orgqr"
-    geqrf, generate_q = get_lapack_funcs(("geqrf", generator), (matrix,))
-    packed, tau, _work, info = geqrf(
-        np.array(matrix, order="F", copy=True), overwrite_a=True
-    )
-    if info != 0:
-        raise np.linalg.LinAlgError(f"LAPACK geqrf failed with info={info}")
-    reflectors = np.zeros((rows, target), dtype=matrix.dtype, order="F")
-    reflectors[:, :columns] = packed
-    basis, _work, info = generate_q(reflectors, tau, overwrite_a=True)
-    if info != 0:
-        raise np.linalg.LinAlgError(
-            f"LAPACK QR basis generation failed with info={info}"
+    basis, triangular = np.linalg.qr(matrix, mode="reduced")
+
+    # Fix the otherwise arbitrary phase/sign of each occupied QR column while
+    # preserving ``basis @ triangular == matrix``.
+    diagonal = np.diag(triangular)
+    phases = np.ones(columns, dtype=matrix.dtype)
+    nonzero = np.abs(diagonal) > np.finfo(matrix.real.dtype).eps
+    phases[nonzero] = diagonal[nonzero] / np.abs(diagonal[nonzero])
+    basis = basis * phases[None, :]
+    triangular = phases.conj()[:, None] * triangular
+
+    eps = np.finfo(matrix.real.dtype).eps
+    while basis.shape[1] < target:
+        # The squared residual of coordinate vector e_j after projection onto
+        # the current basis is 1 - ||basis[j, :]||^2.  Prefer the earliest
+        # coordinate within roundoff of the largest residual to make ties
+        # reproducible across BLAS/LAPACK implementations.
+        residuals = np.maximum(
+            0.0, 1.0 - np.sum(np.abs(basis) ** 2, axis=1)
         )
-    triangular = np.triu(packed[:columns, :columns])
+        largest = float(np.max(residuals))
+        tie = 256.0 * eps * max(1.0, largest)
+        candidates = np.flatnonzero(residuals >= largest - tie)
+        pivot = int(candidates[0])
+        vector = np.zeros(rows, dtype=matrix.dtype)
+        vector[pivot] = 1.0
+        # Two projections are inexpensive here and suppress loss of
+        # orthogonality when the selected coordinate is almost represented.
+        for _ in range(2):
+            vector -= basis @ (basis.conj().T @ vector)
+        norm = np.linalg.norm(vector)
+        if not np.isfinite(norm) or norm <= 64.0 * eps:
+            raise np.linalg.LinAlgError(
+                "could not construct a stable deterministic QR complement"
+            )
+        vector /= norm
+        basis = np.column_stack((basis, vector))
     return basis, triangular
 
 
@@ -271,7 +294,9 @@ def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
     tensors are formed once in the largest local QR-complement space and
     leading blocks give the values for smaller candidates.  The selected
     dimension is the first one whose relative increment is no larger than
-    ``precision``.
+    ``precision``.  QR-complement columns are constructed deterministically by
+    :func:`_partial_full_qr`, so this test does not inherit a LAPACK-specific
+    direction ordering.
     """
     count = len(tensors)
     right_envs = init_right_envs(tensors, mpo)
