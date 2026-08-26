@@ -271,17 +271,83 @@ def _unpack(vector, shapes, sizes):
     return out
 
 
-def _evolve_components(values, apply_block, tau, **krylov):
-    vector, shapes, sizes = _pack(values)
+def _identity_environments(
+    env, scales, count, left_position, right_position, coefficient,
+    left_dims, right_dims,
+):
+    """Stack the identity-block environments into padded arrays.
 
-    def apply(packed):
-        components = _unpack(packed, shapes, sizes)
-        result = [np.zeros(shape, complex) for shape in shapes]
+    The environments do not change while a Krylov space is built, so folding
+    the block coefficients in once here leaves the inner loop with a pair of
+    contractions over a stacked set index instead of one call per block.
+    Padding to the largest component is safe because the rows a shorter block
+    does not reach stay zero, and are discarded again on the way out.
+    """
+    max_left = max(left_dims)
+    max_right = max(right_dims)
+    left = np.zeros((count, count, max_left, max_left), complex)
+    right = np.zeros((count, count, max_right, max_right), complex)
+    found = False
+    for output in range(count):
+        for input_ in range(count):
+            scale = scales[output][input_]
+            if scale is None:
+                continue
+            found = True
+            block = env[output][input_][left_position][:, 0, :]
+            left[output, input_, :block.shape[0], :block.shape[1]] = (
+                coefficient(scale) * block
+            )
+            block = env[output][input_][right_position][:, 0, :]
+            right[output, input_, :block.shape[0], :block.shape[1]] = block
+    return (left, right) if found else None
+
+
+def _apply_identity_batch(components, left, right, left_dims, right_dims):
+    """Apply every identity block at once over a stacked set index."""
+    count = len(components)
+    trailing = components[0].shape[2:]
+    width = 1
+    for size in trailing:
+        width *= int(size)
+    stacked = np.zeros((count, left.shape[2], right.shape[2], width), complex)
+    for index, value in enumerate(components):
+        stacked[index, :left_dims[index], :right_dims[index]] = value.reshape(
+            left_dims[index], right_dims[index], width
+        )
+    stage = _einsum_cached("abij,bjkm->abikm", left, stacked)
+    out = _einsum_cached("abikm,ablk->ailm", stage, right)
+    return [
+        out[index, :left_dims[index], :right_dims[index]].reshape(
+            (left_dims[index], right_dims[index], *trailing)
+        )
+        for index in range(count)
+    ]
+
+
+def _pairwise_apply(apply_block):
+    """Adapt a per-block action to the stacked interface.
+
+    The tree sweep has no identity blocks to gather, so it keeps the plain
+    loop over pairs.
+    """
+    def apply_all(components):
+        result = [np.zeros_like(value) for value in components]
         for output in range(len(components)):
             for input_ in range(len(components)):
                 value = apply_block(output, input_, components[input_])
                 if value is not None:
                     result[output] += value
+        return result
+
+    return apply_all
+
+
+def _evolve_components(values, apply_all, tau, **krylov):
+    vector, shapes, sizes = _pack(values)
+
+    def apply(packed):
+        result = apply_all(_unpack(packed, shapes, sizes))
         return np.concatenate([value.reshape(-1) for value in result])
 
     evolved = expmv_lanczos(apply, tau, vector, **krylov)
@@ -337,33 +403,60 @@ def multiset_tdvp2_sweep(
     # state space, so no projector splitting is needed.  Evolving the coupled
     # one-site centres also keeps the public TDVP2 method useful for a bath
     # discretization that resolves to a single mode.
-    def block_h2(output, input_, value, position):
-        """Two-site action of one operator block on one component."""
-        block = operators[output][input_]
-        if block is None:
-            return None
-        left = env[output][input_][position]
-        right = env[output][input_][position + 3]
-        scale = scales[output][input_]
-        if scale is not None:
-            return _apply_identity2(
-                value, left, right, scale[position] * scale[position + 1]
-            )
-        return _apply_h2(
-            value, block[position], block[position + 1], left, right
+    operator_blocks = [
+        (output, input_)
+        for output in range(count)
+        for input_ in range(count)
+        if operators[output][input_] is not None
+        and scales[output][input_] is None
+    ]
+
+    def make_apply(centers, left_position, right_position, coefficient, single):
+        """Build the coupled action for one Krylov solve.
+
+        Blocks proportional to the identity are handled together; only the few
+        that carry a real operator stay in a Python loop.
+        """
+        left_dims = [value.shape[0] for value in centers]
+        right_dims = [value.shape[1] for value in centers]
+        batched = _identity_environments(
+            env, scales, count, left_position, right_position,
+            coefficient, left_dims, right_dims,
         )
 
-    def block_h1(output, input_, value, position):
-        """One-site action of one operator block on one component."""
-        block = operators[output][input_]
-        if block is None:
-            return None
-        left = env[output][input_][position]
-        right = env[output][input_][position + 2]
-        scale = scales[output][input_]
-        if scale is not None:
-            return _apply_identity1(value, left, right, scale[position])
-        return _apply_h1(value, block[position], left, right)
+        def apply_all(components):
+            if batched is None:
+                result = [np.zeros_like(value) for value in components]
+            else:
+                result = _apply_identity_batch(
+                    components, batched[0], batched[1], left_dims, right_dims
+                )
+            for output, input_ in operator_blocks:
+                result[output] = result[output] + single(
+                    output, input_, components[input_]
+                )
+            return result
+
+        return apply_all
+
+    def two_site(position):
+        def single(output, input_, value):
+            block = operators[output][input_]
+            return _apply_h2(
+                value, block[position], block[position + 1],
+                env[output][input_][position],
+                env[output][input_][position + 3],
+            )
+        return single
+
+    def one_site(position):
+        def single(output, input_, value):
+            return _apply_h1(
+                value, operators[output][input_][position],
+                env[output][input_][position],
+                env[output][input_][position + 2],
+            )
+        return single
 
     def push_left(site):
         """Carry every block environment one site to the right."""
@@ -414,10 +507,12 @@ def multiset_tdvp2_sweep(
     if sites == 1:
         centers = [values[0] for values in tensors]
 
-        def apply_one_site(output, input_, value):
-            return block_h1(output, input_, value, 0)
-
-        centers = _evolve_components(centers, apply_one_site, -1j * float(dt), **krylov)
+        centers = _evolve_components(
+            centers,
+            make_apply(centers, 0, 2, lambda scale: scale[0], one_site(0)),
+            -1j * float(dt),
+            **krylov,
+        )
         for set_index, center in enumerate(centers):
             tensors[set_index][0] = center
         return state, env
@@ -425,10 +520,16 @@ def multiset_tdvp2_sweep(
     for site in range(sites - 1):
         centers = [_merge2(values[site], values[site + 1]) for values in tensors]
 
-        def apply(output, input_, value, position=site):
-            return block_h2(output, input_, value, position)
-
-        centers = _evolve_components(centers, apply, -1j * half, **krylov)
+        centers = _evolve_components(
+            centers,
+            make_apply(
+                centers, site, site + 3,
+                lambda scale, position=site: scale[position] * scale[position + 1],
+                two_site(site),
+            ),
+            -1j * half,
+            **krylov,
+        )
         for set_index in range(count):
             tensors[set_index][site], tensors[set_index][site + 1] = _split2(
                 centers[set_index], chi_max, eps, "left", expand
@@ -436,21 +537,32 @@ def multiset_tdvp2_sweep(
         push_left(site)
         if site < sites - 2:
             centers = [values[site + 1] for values in tensors]
-
-            def apply_one(output, input_, value, position=site + 1):
-                return block_h1(output, input_, value, position)
-
-            centers = _evolve_components(centers, apply_one, 1j * half, **krylov)
+            centers = _evolve_components(
+                centers,
+                make_apply(
+                    centers, site + 1, site + 3,
+                    lambda scale, position=site + 1: scale[position],
+                    one_site(site + 1),
+                ),
+                1j * half,
+                **krylov,
+            )
             for set_index, center in enumerate(centers):
                 tensors[set_index][site + 1] = center
 
     for site in range(sites - 2, -1, -1):
         centers = [_merge2(values[site], values[site + 1]) for values in tensors]
 
-        def apply(output, input_, value, position=site):
-            return block_h2(output, input_, value, position)
-
-        centers = _evolve_components(centers, apply, -1j * half, **krylov)
+        centers = _evolve_components(
+            centers,
+            make_apply(
+                centers, site, site + 3,
+                lambda scale, position=site: scale[position] * scale[position + 1],
+                two_site(site),
+            ),
+            -1j * half,
+            **krylov,
+        )
         for set_index in range(count):
             tensors[set_index][site], tensors[set_index][site + 1] = _split2(
                 centers[set_index], chi_max, eps, "right", expand
@@ -458,11 +570,16 @@ def multiset_tdvp2_sweep(
         push_right(site)
         if site > 0:
             centers = [values[site] for values in tensors]
-
-            def apply_one(output, input_, value, position=site):
-                return block_h1(output, input_, value, position)
-
-            centers = _evolve_components(centers, apply_one, 1j * half, **krylov)
+            centers = _evolve_components(
+                centers,
+                make_apply(
+                    centers, site, site + 2,
+                    lambda scale, position=site: scale[position],
+                    one_site(site),
+                ),
+                1j * half,
+                **krylov,
+            )
             for set_index, center in enumerate(centers):
                 tensors[set_index][site] = center
     return state, env
