@@ -126,6 +126,27 @@ def test_every_exciton_layout_matches_the_same_dense_finite_bath(method):
     assert np.allclose(np.trace(result.rdm, axis1=1, axis2=2), 1.0)
 
 
+def test_a1tdvp_qr_completion_is_deterministic_under_occupied_gauge():
+    """The adaptive directions must not inherit occupied-column phases."""
+    import fishbonett.evolve._tdvp_sweeps as sweeps
+
+    rng = np.random.default_rng(19)
+    matrix = rng.normal(size=(9, 3)) + 1j * rng.normal(size=(9, 3))
+    phases = np.exp(1j * np.array([0.2, -1.1, 2.4]))
+    first, triangular = sweeps._partial_full_qr(matrix, 7)
+    gauged, gauged_triangular = sweeps._partial_full_qr(
+        matrix * phases[None, :], 7
+    )
+    assert np.allclose(first.conj().T @ first, np.eye(7), atol=1e-13)
+    assert np.allclose(first[:, :3] @ triangular, matrix, atol=1e-13)
+    assert np.allclose(
+        gauged[:, :3] @ gauged_triangular,
+        matrix * phases[None, :],
+        atol=1e-13,
+    )
+    assert np.allclose(first[:, 3:], gauged[:, 3:], atol=1e-13)
+
+
 def test_two_mode_bath_tree_and_flat_mps_agree():
     model = _model(levels=2, modes=2)
     common = dict(

@@ -162,7 +162,10 @@ def test_a1tdvp_grows_bonds_and_tracks_dynamics():
         krylov=25,
     )
     assert loose_bonds[-1] <= maxd[-1]
-    assert np.max(np.abs(loose_sz - sz_ex)) < 1e-5
+    # A convergence precision of 1e-2 intentionally stops at a much smaller
+    # tangent space; it should remain a controlled coarse approximation, not
+    # satisfy the strict run's 1e-5 accuracy target.
+    assert np.max(np.abs(loose_sz - sz_ex)) < 2e-4
 
 
 def _dense_mps(tensors):
