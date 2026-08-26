@@ -11,6 +11,8 @@ observables are lifted as ``O_physical (x) I_ancilla``.
 from __future__ import annotations
 
 import numpy as np
+
+from fishbonett.contract import _contract_cached
 from fishbonett.linalg import full_svd
 
 __all__ = ["GibbsPurification"]
@@ -43,7 +45,7 @@ def _embed(operator, sites, dimensions):
         if site not in sites:
             operands.extend([np.eye(dimension), [site, n + site]])
     operands.append(list(range(2 * n)))
-    return np.einsum(*operands).reshape(
+    return _contract_cached(*operands).reshape(
         int(np.prod(dimensions)), int(np.prod(dimensions)))
 
 
@@ -73,7 +75,7 @@ def _lift(operator, dimensions):
         output.extend([physical_in[i], ancilla_in[i]])
     operands.append(output)
     supersite_dimensions = [d * d for d in dimensions]
-    return np.einsum(*operands).reshape(
+    return _contract_cached(*operands).reshape(
         int(np.prod(supersite_dimensions)),
         int(np.prod(supersite_dimensions)))
 

@@ -6,7 +6,8 @@ from itertools import count
 
 import numpy as np
 
-from fishbonett.contract import contract
+from fishbonett._products import ScaledTreeIdentity
+from fishbonett.contract import _contract_cached
 from fishbonett.evolve._tdvp_sweeps import DEFAULT_BOND_EXPAND
 from fishbonett.evolve._validation import positive_integer, time_steps
 from fishbonett.evolve.multiset import _evolve_components
@@ -14,6 +15,19 @@ from fishbonett.linalg import Truncation, threshold_svd
 from fishbonett.states.multiset_tree import MultiSetTreeTensorNetwork
 
 __all__ = ["multiset_tree_tdvp2_sweep", "run_multiset_tree_hamiltonian"]
+
+
+def _tree_contract(operands):
+    """Contract with a path cached by leg pattern and current bond shapes."""
+    return _contract_cached(*operands)
+
+
+def _is_tree_identity(operator):
+    return isinstance(operator, ScaledTreeIdentity)
+
+
+def _identity_scale(operator):
+    return complex(operator.coefficient)
 
 
 def _validate_operators(state, operators):
@@ -24,6 +38,20 @@ def _validate_operators(state, operators):
     for row in operators:
         for operator in row:
             if operator is None:
+                continue
+            if _is_tree_identity(operator):
+                edges = {
+                    tuple(sorted((int(left), int(right))))
+                    for left, right in operator.edges
+                }
+                if tuple(operator.dimensions) != state.dimensions or edges != set(
+                    state.edges
+                ):
+                    raise ValueError("identity TTNO descriptor does not match the state")
+                if operator.root != state.root:
+                    raise ValueError("identity TTNO descriptor uses a different root")
+                if not np.isfinite(_identity_scale(operator)):
+                    raise ValueError("identity TTNO coefficient must be finite")
                 continue
             if len(operator) != state.n_sites:
                 raise ValueError("every TTNO block must match the component tree")
@@ -73,7 +101,33 @@ def _node_message(bra, ket, operator, node, exclude, messages):
             ]
         )
     operands.append([op_bonds[exclude], ket_bonds[exclude], bra_bonds[exclude]])
-    return contract(*operands)
+    return _tree_contract(operands)
+
+
+def _identity_node_message(bra, ket, node, exclude, messages):
+    """Cross-overlap message for an identity operator subtree."""
+    neighbors = ket.order[node]
+    counter = count(1)
+    ket_bonds = {neighbor: next(counter) for neighbor in neighbors}
+    bra_bonds = {neighbor: next(counter) for neighbor in neighbors}
+    physical = next(counter)
+    operands = [
+        ket.T[node],
+        [ket_bonds[n] for n in neighbors] + [physical],
+        bra.T[node].conj(),
+        [bra_bonds[n] for n in neighbors] + [physical],
+    ]
+    for neighbor in neighbors:
+        if neighbor == exclude:
+            continue
+        operands.extend(
+            [
+                messages[(neighbor, node)],
+                [ket_bonds[neighbor], bra_bonds[neighbor]],
+            ]
+        )
+    operands.append([ket_bonds[exclude], bra_bonds[exclude]])
+    return _tree_contract(operands)
 
 
 def _initialize_messages(state, operators):
@@ -84,30 +138,41 @@ def _initialize_messages(state, operators):
             if operator is None:
                 continue
             messages = {}
+            identity = _is_tree_identity(operator)
 
             tree = state.sets[input_]
             for node in reversed(tree._visit):
                 parent = tree.parent[node]
                 if parent is None:
                     continue
-                messages[(node, parent)] = _node_message(
-                    state.sets[output],
-                    tree,
-                    operator,
-                    node,
-                    parent,
-                    messages,
-                )
-            for node in tree._visit:
-                for child in tree.children[node]:
-                    messages[(node, child)] = _node_message(
+                if identity:
+                    messages[(node, parent)] = _identity_node_message(
+                        state.sets[output], tree, node, parent, messages
+                    )
+                else:
+                    messages[(node, parent)] = _node_message(
                         state.sets[output],
                         tree,
                         operator,
                         node,
-                        child,
+                        parent,
                         messages,
                     )
+            for node in tree._visit:
+                for child in tree.children[node]:
+                    if identity:
+                        messages[(node, child)] = _identity_node_message(
+                            state.sets[output], tree, node, child, messages
+                        )
+                    else:
+                        messages[(node, child)] = _node_message(
+                            state.sets[output],
+                            tree,
+                            operator,
+                            node,
+                            child,
+                            messages,
+                        )
             all_messages[output][input_] = messages
     return all_messages
 
@@ -133,7 +198,29 @@ def _apply_one(value, operator, messages, tree, node):
             ]
         )
     operands.append([bra_bonds[n] for n in neighbors] + [physical_out])
-    return contract(*operands)
+    return _tree_contract(operands)
+
+
+def _apply_identity_one(value, messages, tree, node, coefficient):
+    """Apply a scaled identity through cross-set one-site environments."""
+    neighbors = tree.order[node]
+    counter = count(1)
+    ket_bonds = {neighbor: next(counter) for neighbor in neighbors}
+    bra_bonds = {neighbor: next(counter) for neighbor in neighbors}
+    physical = next(counter)
+    operands = [
+        value,
+        [ket_bonds[n] for n in neighbors] + [physical],
+    ]
+    for neighbor in neighbors:
+        operands.extend(
+            [
+                messages[(neighbor, node)],
+                [ket_bonds[neighbor], bra_bonds[neighbor]],
+            ]
+        )
+    operands.append([bra_bonds[n] for n in neighbors] + [physical])
+    return coefficient * _tree_contract(operands)
 
 
 def _merge_edge(tree, source, destination):
@@ -211,7 +298,52 @@ def _apply_two(value, operator, messages, tree, source, destination):
         + [destination_bra[n] for n in destination_neighbors]
         + [source_out, destination_out]
     )
-    return contract(*operands)
+    return _tree_contract(operands)
+
+
+def _apply_identity_two(
+    value,
+    messages,
+    tree,
+    source,
+    destination,
+    coefficient,
+):
+    """Apply a scaled identity through cross-set two-site environments."""
+    source_neighbors = [n for n in tree.order[source] if n != destination]
+    destination_neighbors = [n for n in tree.order[destination] if n != source]
+    counter = count(1)
+    source_ket = {n: next(counter) for n in source_neighbors}
+    destination_ket = {n: next(counter) for n in destination_neighbors}
+    source_bra = {n: next(counter) for n in source_neighbors}
+    destination_bra = {n: next(counter) for n in destination_neighbors}
+    source_physical, destination_physical = next(counter), next(counter)
+    operands = [
+        value,
+        [source_ket[n] for n in source_neighbors]
+        + [destination_ket[n] for n in destination_neighbors]
+        + [source_physical, destination_physical],
+    ]
+    for neighbor in source_neighbors:
+        operands.extend(
+            [
+                messages[(neighbor, source)],
+                [source_ket[neighbor], source_bra[neighbor]],
+            ]
+        )
+    for neighbor in destination_neighbors:
+        operands.extend(
+            [
+                messages[(neighbor, destination)],
+                [destination_ket[neighbor], destination_bra[neighbor]],
+            ]
+        )
+    operands.append(
+        [source_bra[n] for n in source_neighbors]
+        + [destination_bra[n] for n in destination_neighbors]
+        + [source_physical, destination_physical]
+    )
+    return coefficient * _tree_contract(operands)
 
 
 def _split_edge(tree, source, destination, center, max_bond, eps, expand):
@@ -296,6 +428,15 @@ def multiset_tree_tdvp2_sweep(
             operator = operators[output][input_]
             if operator is None:
                 return None
+            if _is_tree_identity(operator):
+                return _apply_identity_two(
+                    value,
+                    messages[output][input_],
+                    state.sets[input_],
+                    source,
+                    destination,
+                    _identity_scale(operator),
+                )
             return _apply_two(
                 value,
                 operator,
@@ -321,14 +462,25 @@ def multiset_tree_tdvp2_sweep(
                 operator = operators[output][input_]
                 if operator is None:
                     continue
-                messages[output][input_][(source, destination)] = _node_message(
-                    state.sets[output],
-                    state.sets[input_],
-                    operator,
-                    source,
-                    destination,
-                    messages[output][input_],
-                )
+                if _is_tree_identity(operator):
+                    messages[output][input_][(source, destination)] = (
+                        _identity_node_message(
+                            state.sets[output],
+                            state.sets[input_],
+                            source,
+                            destination,
+                            messages[output][input_],
+                        )
+                    )
+                else:
+                    messages[output][input_][(source, destination)] = _node_message(
+                        state.sets[output],
+                        state.sets[input_],
+                        operator,
+                        source,
+                        destination,
+                        messages[output][input_],
+                    )
         next_crossing = (
             crossings[crossing_index + 1] if crossing_index + 1 < len(crossings) else None
         )
@@ -348,6 +500,14 @@ def multiset_tree_tdvp2_sweep(
             operator = operators[output][input_]
             if operator is None:
                 return None
+            if _is_tree_identity(operator):
+                return _apply_identity_one(
+                    value,
+                    messages[output][input_],
+                    state.sets[input_],
+                    destination,
+                    _identity_scale(operator),
+                )
             return _apply_one(
                 value,
                 operator,

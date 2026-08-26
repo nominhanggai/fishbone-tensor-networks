@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import pytest
 
+from fishbonett._products import ScaledTreeIdentity
 from fishbonett import Bath, ExcitonBath, MultiSetTreeTensorNetwork
 from fishbonett.operators import annihilate
 from fishbonett.representations.exciton import ExcitonInteractionRepresentation
@@ -119,6 +120,20 @@ def test_two_mode_bath_tree_and_flat_mps_agree():
     assert np.max(np.abs(tree.rdm - flat.rdm)) < 1e-9
     assert tree.meta["tree_dimensions"] == (1, 1, 3, 3, 3, 3)
     assert len(tree.meta["tree_edges"]) == 5
+
+
+def test_tree_hopping_blocks_use_compact_identity_descriptors():
+    model = _model(levels=3, modes=1)
+    representation = ExcitonInteractionRepresentation(
+        model.h, model.baths, 0.1, layout="system-first"
+    )
+    operators = representation.multiset_tree_operators(0.05)
+    hopping = operators[0][1]
+    assert isinstance(hopping, ScaledTreeIdentity)
+    assert hopping.coefficient == model.h[0, 1]
+    assert hopping.dimensions == representation.tree_dimensions
+    assert hopping.edges == representation.tree_edges
+    assert isinstance(operators[0][0], list)
 
 
 def test_interleaved_layout_preserves_a_general_one_excitation_initial_state():

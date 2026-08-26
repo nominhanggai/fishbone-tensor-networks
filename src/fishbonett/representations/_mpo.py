@@ -3,6 +3,8 @@
 from typing import Sequence
 
 import numpy as np
+
+from fishbonett.contract import _einsum_cached
 from fishbonett.linalg import threshold_svd
 
 
@@ -111,7 +113,7 @@ def product_sum_mpo(dimensions: Sequence[int], products, coefficients=None):
     for site in range(1, len(dimensions) - 1):
         dimension = dimensions[site]
         operators = np.stack([row[site] for row in rows], axis=0)
-        tensor = np.einsum("ar,rij->arij", carry, operators, optimize=True)
+        tensor = _einsum_cached("ar,rij->arij", carry, operators)
         left = tensor.shape[0]
         matrix = np.transpose(tensor, (0, 2, 3, 1)).reshape(
             left * dimension * dimension, rank
@@ -123,7 +125,7 @@ def product_sum_mpo(dimensions: Sequence[int], products, coefficients=None):
         ))
         carry = singular[:, None] * vh
     final_operators = np.stack([row[-1] for row in rows], axis=0)
-    final = np.einsum("ar,rij->aij", carry, final_operators, optimize=True)
+    final = _einsum_cached("ar,rij->aij", carry, final_operators)
     mpo.append(final[:, None, :, :])
     return compress_mpo(mpo)
 
@@ -142,8 +144,8 @@ def compress_mpo(mpo, tolerance=1e-13):
         rank = q.shape[1]
         out[site] = np.transpose(
             q.reshape(left, d_out, d_in, rank), (0, 3, 1, 2))
-        out[site + 1] = np.einsum(
-            "xo,orij->xrij", residual, out[site + 1], optimize=True)
+        out[site + 1] = _einsum_cached(
+            "xo,orij->xrij", residual, out[site + 1])
 
     for site in range(len(out) - 1, 0, -1):
         left, right, d_out, d_in = out[site].shape
@@ -154,6 +156,6 @@ def compress_mpo(mpo, tolerance=1e-13):
         out[site] = np.transpose(
             vh.reshape(rank, d_out, d_in, right), (0, 3, 1, 2))
         transfer = u * singular[None, :]
-        out[site - 1] = np.einsum(
-            "loij,ok->lkij", out[site - 1], transfer, optimize=True)
+        out[site - 1] = _einsum_cached(
+            "loij,ok->lkij", out[site - 1], transfer)
     return out

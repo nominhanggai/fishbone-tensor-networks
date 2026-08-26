@@ -8,6 +8,7 @@ propagation uses a symmetric second-order split with the system Hamiltonian.
 """
 import numpy as np
 
+from fishbonett.contract import _contract_cached
 from fishbonett.operators import annihilate, create, sigma_x, sigma_z
 
 SZ = sigma_z.astype(complex)
@@ -191,8 +192,9 @@ def _contract_mpo(nodes, nid):
     parent_label = []
     if nodes[nid].parent is not None:
         parent_label = [label_for(nid, nodes[nid].parent)]
-    result = np.einsum(*operands, parent_label + out_labels + in_labels,
-                       optimize=True)
+    result = _contract_cached(
+        *operands, parent_label + out_labels + in_labels
+    )
     leaf_count = sum(nodes[node_id].kind == "leaf" for node_id in subtree)
     return result, leaf_count
 

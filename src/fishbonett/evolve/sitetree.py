@@ -31,6 +31,7 @@ module only applies gates through it.
 """
 import numpy as np
 
+from fishbonett.contract import _einsum_cached
 from fishbonett.evolve._tdvp_kernels import init_right_envs
 from fishbonett.evolve._tdvp_sweeps import DEFAULT_BOND_EXPAND, tdvp2sweep
 from fishbonett.linalg import threshold_svd
@@ -92,7 +93,7 @@ def apply_edge(state, i, j, U, chi, eps):
                  + [b for k, b in enumerate(jb) if k != lj] + [so_j])
     sub = (f"{''.join(ib)}{si},{''.join(jb)}{sj},{so_i}{so_j}{si}{sj}"
            f"->{''.join(theta_out)}")
-    theta = np.einsum(sub, Ti, Tj, U, optimize=True)
+    theta = _einsum_cached(sub, Ti, Tj, U)
     nleft = (ki - 1) + 1                       # i's other bonds + phys_out
     lsh, rsh = theta.shape[:nleft], theta.shape[nleft:]
     Um, S, Vh = _svd_trunc(theta.reshape(int(np.prod(lsh)), int(np.prod(rsh))),

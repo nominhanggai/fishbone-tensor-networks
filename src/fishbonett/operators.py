@@ -6,6 +6,8 @@ Check convergence by raising ``phys_dim``, not by testing commutator identities.
 """
 import numpy as np
 
+from fishbonett.contract import _einsum_cached
+
 __all__ = ["sigma_p", "sigma_m", "sigma_x", "sigma_y", "sigma_z", "sigma_0",
            "sigma_1", "annihilate", "create", "number", "temp_factor",
            "rlogr", "entang", "energy_current_operator", "displacement"]
@@ -117,7 +119,7 @@ def displacement(alpha, dim: int):
     vectors, eigenvalues = _displacement_basis(dim)
     radius, phi = np.abs(alpha), np.angle(alpha)
     # V exp(-i r mu) V^dagger, batched over alpha
-    inner = np.einsum(
+    inner = _einsum_cached(
         "am,...m,bm->...ab", vectors,
         np.exp(-1j * radius[..., None] * eigenvalues), vectors.conj())
     ladder = np.arange(dim)

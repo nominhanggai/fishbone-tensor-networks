@@ -16,6 +16,7 @@ methods, not a translation of any particular codebase):
 import numpy as np
 import scipy.linalg
 
+from fishbonett.contract import _einsum_cached
 from fishbonett.operators import sigma_x, sigma_z
 
 SX = sigma_x.astype(complex)
@@ -81,22 +82,20 @@ def applyH1(center, mpo, left, right):
 
 def applyH0(center, left, right):
     """Apply the zero-site (bond) effective Hamiltonian."""
-    return np.einsum("amc,cr,bmr->ab", left, center, right, optimize=True)
+    return _einsum_cached("amc,cr,bmr->ab", left, center, right)
 
 
 def updateleftenv(tensor, mpo, left):
     """Contract one site into a left environment."""
-    return np.einsum(
-        "amc,crp,mnqp,abq->bnr", left, tensor, mpo, tensor.conj(),
-        optimize=True,
+    return _einsum_cached(
+        "amc,crp,mnqp,abq->bnr", left, tensor, mpo, tensor.conj()
     )
 
 
 def updaterightenv(tensor, mpo, right):
     """Contract one site into a right environment."""
-    return np.einsum(
-        "abq,mnqp,crp,bnr->amc", tensor.conj(), mpo, tensor, right,
-        optimize=True,
+    return _einsum_cached(
+        "abq,mnqp,crp,bnr->amc", tensor.conj(), mpo, tensor, right
     )
 
 
@@ -124,8 +123,9 @@ def right_canonicalize(tensors):
     state = [np.asarray(tensor, complex).copy() for tensor in tensors]
     for site in range(len(state) - 1, 0, -1):
         center, state[site] = right_lq(state[site])
-        state[site - 1] = np.einsum(
-            "axp,xr->arp", state[site - 1], center, optimize=True)
+        state[site - 1] = _einsum_cached(
+            "axp,xr->arp", state[site - 1], center
+        )
     norm = np.linalg.norm(state[0])
     if norm == 0 or not np.isfinite(norm):
         raise ValueError("cannot canonicalize a zero or non-finite state")

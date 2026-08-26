@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from fishbonett._products import ScaledTreeIdentity
 from fishbonett.operators import annihilate
 from fishbonett.representations.interaction import InteractionRepresentation
 from fishbonett.system import check_operator
@@ -111,16 +112,12 @@ def _tree_adjacency(count, edges):
 
 
 def _identity_ttno(dimensions, edges, coefficient=1.0, root=0):
-    adjacency = _tree_adjacency(len(dimensions), edges)
-    tensors = []
-    for node, dimension in enumerate(dimensions):
-        tensor = np.eye(dimension, dtype=complex).reshape(
-            *((1,) * len(adjacency[node])), dimension, dimension
-        )
-        if node == root:
-            tensor = coefficient * tensor
-        tensors.append(tensor)
-    return tensors
+    return ScaledTreeIdentity(
+        complex(coefficient),
+        tuple(dimensions),
+        tuple(tuple(edge) for edge in edges),
+        int(root),
+    )
 
 
 def _local_sum_ttno(dimensions, edges, local_operators, constant=0.0, root=0):
@@ -218,7 +215,12 @@ class ExcitonInteractionRepresentation:
         return _interleaved_mpo(self.hamiltonian, self.branches, time)
 
     def multiset_tree_operators(self, time=None):
-        """Bath-only TTNO block matrix for coupled multi-set tree TDVP."""
+        """Bath-only TTNO block matrix for coupled multi-set tree TDVP.
+
+        Scalar identity blocks are returned as compact descriptors so the
+        propagator can use cross-overlap environments without materializing a
+        general TTNO at every electronic hopping matrix element.
+        """
         time = 0.0 if time is None else float(time)
         levels = self.hamiltonian.shape[0]
         blocks = []

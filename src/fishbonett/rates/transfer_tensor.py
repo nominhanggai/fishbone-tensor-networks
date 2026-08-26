@@ -42,6 +42,8 @@ import copy
 import itertools as it
 from pathlib import Path
 
+from fishbonett.contract import _einsum_cached
+
 
 def read_rho(label, t, *, directory="output"):
     """Load one density matrix from ``directory/density_mat_<label>.npy``."""
@@ -112,7 +114,9 @@ def transfer_mat(lt_map):
     T = [T1]
     T_norm = [np.linalg.norm(T1)]
     for N in range(1, len(maps)):
-        TN = maps[N] - np.einsum('Nij,Njk->ik', T, maps[0:N][::-1])
+        TN = maps[N] - _einsum_cached(
+            'Nij,Njk->ik', np.asarray(T), maps[0:N][::-1]
+        )
         T.append(TN)
         T_norm.append(np.linalg.norm(TN))
     return T, T_norm
@@ -170,7 +174,7 @@ def predict_density_mat(t, T, r_init):
     for i in range(diff):
         r_relevant = r[:-len(transfer) - 1:-1]
         vectors = r_relevant.reshape(len(transfer), -1, 1)
-        rho = np.einsum('Nij,Njk->ik', transfer, vectors).reshape(
+        rho = _einsum_cached('Nij,Njk->ik', transfer, vectors).reshape(
             initial.shape[1:]
         )
         r = np.append(r, [rho], axis=0)

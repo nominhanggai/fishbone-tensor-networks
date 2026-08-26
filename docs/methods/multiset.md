@@ -41,8 +41,10 @@ Hamiltonian. Each component is then split and truncated independently.
 The tree implementation uses the same block equation with a TTNO for every
 $H_{ab}^{B}$. A depth-first projector-splitting walk crosses every tree edge in
 both directions. At a branching node, the backward one-site evolution carries
-the node-projector multiplicity required by its degree. Tests compare path and
-branched trees with direct finite-Hamiltonian evolution.
+the node-projector multiplicity required by its degree. Scalar identity blocks,
+such as electronic hopping between conditional bath states, use cross-overlap
+messages without materializing an identity TTNO. Tests compare path and branched
+trees with direct finite-Hamiltonian evolution.
 
 Consequently:
 
