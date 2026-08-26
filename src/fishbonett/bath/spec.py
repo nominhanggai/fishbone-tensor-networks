@@ -24,17 +24,26 @@ window covering 99.9% of the reorganization energy, and leaving ``n_modes`` unse
 picks the mode count from the light cone of the propagation time.  Both are
 resolved by :meth:`Bath.resolved`, which ``run()`` calls for you.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass, replace
 from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from fishbonett.bath.tedopa import make_tedopa_discretizer
+
+if TYPE_CHECKING:
+    from fishbonett.bath.coupled import CoupledBath
 
 __all__ = ["Bath", "thermalize"]
 
 
-def thermalize(J, beta):
+def thermalize(
+    J: Callable[[float], float], beta: float
+) -> Callable[[float], float]:
     """T-TEDOPA thermalized spectral density ``J_beta`` (positive on both halves)
     from a zero-temperature ``J(w>0)``.
 
@@ -49,7 +58,7 @@ def thermalize(J, beta):
     if not np.isfinite(beta) or beta <= 0:
         raise ValueError("beta must be finite and positive")
 
-    def Jb(w):
+    def Jb(w: float) -> float:
         aw = abs(w)
         if aw == 0:
             # The Bose factor diverges at the origin while an Ohmic density
@@ -106,7 +115,7 @@ class Bath:
     beta: float | None = None
     thermalized: bool = False
     discretization: str = "legendre"
-    extra_breaks: tuple = ()
+    extra_breaks: tuple[float, ...] = ()
     m_per: int = 60
     discrete_frequencies: tuple[float, ...] = ()
     discrete_couplings: tuple[float, ...] = ()
@@ -117,7 +126,7 @@ class Bath:
     compression_error: float | None = None
     uncompressed_modes: int | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate the bath specification without discretizing it."""
         densities = self.J if isinstance(self.J, (list, tuple)) else (self.J,)
         if not densities or not all(callable(density) for density in densities):
@@ -201,9 +210,20 @@ class Bath:
             self.uncompressed_modes = int(self.uncompressed_modes)
 
     @classmethod
-    def vibronic(cls, frequencies, huang_rhys, *, continuum=None,
-                 temperature=None, beta=None, phys_dim=20, domain=None,
-                 n_modes=None, discretization="tedopa", **kwargs):
+    def vibronic(
+        cls,
+        frequencies: ArrayLike,
+        huang_rhys: ArrayLike,
+        *,
+        continuum: Callable[[float], float] | None = None,
+        temperature: float | None = None,
+        beta: float | None = None,
+        phys_dim: int = 20,
+        domain: tuple[float, float] | None = None,
+        n_modes: int | None = None,
+        discretization: str = "tedopa",
+        **kwargs: object,
+    ) -> Bath:
         """A bath of resolved molecular vibrations and an optional continuum.
 
         Frequencies are positive angular frequencies in the package's working
@@ -276,7 +296,7 @@ class Bath:
             **kwargs,
         )
 
-    def _discrete_star_data(self):
+    def _discrete_star_data(self) -> tuple[np.ndarray, np.ndarray]:
         """Effective zero-temperature star modes for the discrete component."""
         frequency = np.asarray(self.discrete_frequencies, float)
         coupling = np.asarray(self.discrete_couplings, float)
@@ -292,7 +312,7 @@ class Bath:
                             coupling * np.sqrt(occupation))),
         )
 
-    def reorganization_energy(self):
+    def reorganization_energy(self) -> float:
         """Physical reorganization energy, using positive frequencies only."""
         if self.physical_reorganization is not None:
             return float(self.physical_reorganization)
@@ -310,7 +330,7 @@ class Bath:
                      if self.continuum_present and hi > 0 else 0.0)
         return discrete + continuum
 
-    def correlation(self, times):
+    def correlation(self, times: ArrayLike) -> np.ndarray:
         """Correlation function of the resolved finite star representation."""
         if self.domain is None or self.n_modes is None:
             raise ValueError(
@@ -324,8 +344,14 @@ class Bath:
             star.couplings[0][None, :] ** 2
             * np.exp(-1j * np.outer(times, star.frequencies)), axis=1)
 
-    def compressed(self, t_max, correlation_tol=1e-3, *, samples=401,
-                   max_modes=None):
+    def compressed(
+        self,
+        t_max: float,
+        correlation_tol: float = 1e-3,
+        *,
+        samples: int = 401,
+        max_modes: int | None = None,
+    ) -> Bath:
         """Compress a resolved vibronic measure by correlation-controlled quadrature.
 
         The first ``m`` Lanczos coefficients define the ``m``-node Gaussian
@@ -379,18 +405,20 @@ class Bath:
             compression_error=error, uncompressed_modes=len(frequency))
         return compressed
 
-    def _thermalized(self, Jfunc):
+    def _thermalized(
+        self, Jfunc: Callable[[float], float]
+    ) -> Callable[[float], float]:
         if self.thermalized or (self.temperature is None and self.beta is None):
             return Jfunc
         b = self.beta if self.beta is not None else 1.0 / self.temperature
         return thermalize(Jfunc, b)
 
-    def spectral_density(self):
+    def spectral_density(self) -> Callable[[float], float]:
         """The (thermalized, if applicable) spectral density this bath propagates
         with.  For a multichannel bath this is the *first* channel's density."""
         return self.spectral_densities()[0]
 
-    def spectral_densities(self):
+    def spectral_densities(self) -> tuple[Callable[[float], float], ...]:
         """All thermalized channel densities, independent of system operators.
 
         A scalar ``J`` is one density and a sequence is one density per channel.
@@ -402,7 +430,7 @@ class Bath:
             raise ValueError("Bath.J must contain at least one spectral density")
         return tuple(self._thermalized(density) for density in densities)
 
-    def bind(self, coupling):
+    def bind(self, coupling: ArrayLike | Sequence[ArrayLike]) -> CoupledBath:
         """Bind this bath to model-owned coupling operator(s).
 
         Pass one operator, or a sequence of operators for channels that share the
@@ -411,7 +439,7 @@ class Bath:
         from fishbonett.bath.coupled import bind_bath
         return bind_bath(self, coupling)
 
-    def discretizer(self):
+    def discretizer(self) -> Callable | None:
         """The star-discretization callable this bath's ``discretization`` selects
         (``None`` means the default Gauss-Legendre star)."""
         if self.discretization == "tedopa":
@@ -421,7 +449,7 @@ class Bath:
             return None
         raise ValueError(f"unknown discretization {self.discretization!r}")
 
-    def _auto_domain(self):
+    def _auto_domain(self) -> tuple[float, float]:
         from fishbonett.bath.auto import auto_domain
         beta = self.beta if self.beta is not None else (
             1.0 / self.temperature if self.temperature is not None else None)
@@ -429,7 +457,7 @@ class Bath:
         doms = [auto_domain(Jc, beta=beta) for Jc in Js]          # cover every channel
         return (min(d[0] for d in doms), max(d[1] for d in doms))
 
-    def resolved(self, t_max=None):
+    def resolved(self, t_max: float | None = None) -> Bath:
         """A copy with automatic ``domain`` / ``n_modes`` filled in.
 
         ``domain`` (if unset) becomes the window covering 99.9% of the

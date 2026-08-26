@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from fishbonett.bath.spec import Bath
 from fishbonett.linalg import Truncation
@@ -15,6 +16,7 @@ from fishbonett.models.propagate import (
     _resolve_sampling_options,
     resolve_time_grid,
 )
+from fishbonett.models.result import Result, SimulationCheckpoint
 from fishbonett.system import check_operator
 
 __all__ = ["ExcitonBath"]
@@ -56,7 +58,11 @@ class ExcitonBath:
 
     _MODEL = "exciton-bath"
 
-    def __init__(self, h, baths):
+    def __init__(
+        self,
+        h: ArrayLike,
+        baths: Sequence[Bath | None] | Mapping[int, Bath],
+    ) -> None:
         """Validate the site Hamiltonian and align one bath entry per level."""
         self.h = check_operator(h, "h")
         self.n_levels = self.h.shape[0]
@@ -67,7 +73,7 @@ class ExcitonBath:
         if not any(bath is not None for bath in self.baths):
             raise ValueError("at least one electronic level must have a bath")
 
-    def initial_vector(self, initial=None):
+    def initial_vector(self, initial: int | ArrayLike | None = None) -> np.ndarray:
         """Normalize an initial site-basis vector or basis-state index."""
         if initial is None:
             initial = 0
@@ -89,28 +95,28 @@ class ExcitonBath:
     def run(
         self,
         *,
-        dt,
-        t_max=None,
-        n_steps=None,
-        method=None,
-        model=None,
-        representation=None,
-        state_geometry=None,
-        integrator=None,
-        trunc=None,
-        bond_dim=None,
-        trunc_eps=None,
-        observables=None,
-        initial=None,
-        krylov=25,
-        seed=0,
-        resume=None,
-        bath_horizon=None,
-        progress=None,
-        observe_every=1,
-        svd_backend="auto",
-        **engine_kw,
-    ):
+        dt: float,
+        t_max: float | None = None,
+        n_steps: int | None = None,
+        method: str | None = None,
+        model: str | None = None,
+        representation: str | None = None,
+        state_geometry: str | None = None,
+        integrator: str | None = None,
+        trunc: Truncation | float | None = None,
+        bond_dim: int | None = None,
+        trunc_eps: float | None = None,
+        observables: Mapping[str, ArrayLike] | None = None,
+        initial: int | ArrayLike | None = None,
+        krylov: int = 25,
+        seed: int | None = 0,
+        resume: SimulationCheckpoint | None = None,
+        bath_horizon: float | None = None,
+        progress: Callable[[dict[str, object]], None] | None = None,
+        observe_every: int = 1,
+        svd_backend: str = "auto",
+        **engine_kw: object,
+    ) -> Result:
         """Propagate an excitonic model with an explicitly selected layout.
 
         The conventional ``system-first-mps`` and ``interleaved-mps`` layouts

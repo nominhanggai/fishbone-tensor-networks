@@ -16,6 +16,8 @@ so the representations and models do not each re-derive it.
                         loose arrays rather than a :class:`System`
 ======================  ========================================================
 """
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from collections.abc import Sequence
 
@@ -76,7 +78,7 @@ class System:
     #: Filled in by ``__post_init__``; the system's Hilbert-space dimension.
     dim: int = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate the Hamiltonian, coupling channels, and initial-state input."""
         self.h = check_operator(self.h, "h")
         self.dim = self.h.shape[0]
@@ -91,7 +93,7 @@ class System:
             self.coupling = check_operator(self.coupling, "coupling", self.dim)
 
     @property
-    def is_multichannel(self):
+    def is_multichannel(self) -> bool:
         """True when the bath couples through several operators at once."""
         if not isinstance(self.coupling, (list, tuple)):
             return False
@@ -102,7 +104,7 @@ class System:
         except ValueError:
             return True
 
-    def initial_vector(self, initial=None):
+    def initial_vector(self, initial: str | ArrayLike | None = None) -> np.ndarray:
         """The initial state as a normalized ``(dim,)`` complex vector.
 
         ``initial`` overrides the one given at construction, which is what ``run``
@@ -133,7 +135,7 @@ class System:
             raise ValueError("initial state must have a finite non-zero norm")
         return v / norm
 
-    def observables(self):
+    def observables(self) -> dict[str, np.ndarray]:
         """The default observables: Pauli z/x for a two-level system, else none.
 
         A general system has no canonical set, so ``run`` returns only the reduced
