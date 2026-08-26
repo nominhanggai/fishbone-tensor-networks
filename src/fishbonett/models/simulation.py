@@ -16,6 +16,7 @@ from typing import Callable, Mapping, Optional
 import numpy as np
 import scipy.linalg as _la
 
+from fishbonett.contract import _einsum_cached
 from fishbonett.evolve import modetree as _tree
 from fishbonett.evolve import multiset as _multiset
 from fishbonett.evolve import tdvp as _mpo
@@ -133,7 +134,7 @@ def _expect_from_rdm(rdms, obs_ops: Mapping[str, np.ndarray]):
     rdms = np.asarray(rdms)
     return {
         name: np.real_if_close(
-            np.einsum("tij,ji->t", rdms, np.asarray(operator))
+            _einsum_cached("tij,ji->t", rdms, np.asarray(operator))
         )
         for name, operator in obs_ops.items()
         if not isinstance(operator, tuple)
@@ -171,18 +172,17 @@ def _mps_site_rdm(tensors, site, *, physical_middle=False):
         tensors = [np.moveaxis(tensor, 1, -1) for tensor in tensors]
     left = np.ones((1, 1), complex)
     for tensor in tensors[:site]:
-        left = np.einsum(
-            "ab,arp,bsp->rs", left, tensor, tensor.conj(), optimize=True
+        left = _einsum_cached(
+            "ab,arp,bsp->rs", left, tensor, tensor.conj()
         )
     right = np.ones((1, 1), complex)
     for tensor in reversed(tensors[site + 1:]):
-        right = np.einsum(
-            "arp,bsp,rs->ab", tensor, tensor.conj(), right, optimize=True
+        right = _einsum_cached(
+            "arp,bsp,rs->ab", tensor, tensor.conj(), right
         )
     tensor = tensors[site]
-    rho = np.einsum(
-        "ab,arp,bsq,rs->pq", left, tensor, tensor.conj(), right,
-        optimize=True,
+    rho = _einsum_cached(
+        "ab,arp,bsq,rs->pq", left, tensor, tensor.conj(), right
     )
     return rho / np.trace(rho)
 
@@ -208,13 +208,12 @@ def _mps_product_matrix_element(tensors, operators):
         operator = operators.get(site)
         if operator is None:
             operator = np.eye(tensor.shape[2], dtype=complex)
-        environment = np.einsum(
+        environment = _einsum_cached(
             "ab,arp,bsq,qp->rs",
             environment,
             tensor,
             tensor.conj(),
             operator,
-            optimize=True,
         )
     return environment.reshape(-1)[0]
 
@@ -934,7 +933,7 @@ def _compile_displacement_plan(model, spec, context):
 
     def step(index):
         nonlocal tensors
-        tensors[0] = np.einsum(
+        tensors[0] = _einsum_cached(
             "ij,ajb->aib", u_half, tensors[0])
         tensors = compress(
             apply_mpo(
@@ -942,11 +941,11 @@ def _compile_displacement_plan(model, spec, context):
                 representation.trotter_mpo(
                     index * context.dt, context.dt)),
             context.bond_dim, context.trunc_eps)
-        tensors[0] = np.einsum(
+        tensors[0] = _einsum_cached(
             "ij,ajb->aib", u_half, tensors[0])
 
     def measure_rdm():
-        rho = np.einsum(
+        rho = _einsum_cached(
             "lsr,ltr->st", tensors[0], tensors[0].conj())
         return rho / np.trace(rho)
 

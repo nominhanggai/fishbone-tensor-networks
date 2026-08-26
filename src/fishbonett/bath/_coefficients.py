@@ -11,6 +11,7 @@ import numpy as np
 from fishbonett.bath.chain import get_bath_nn_parameters, star_transform
 from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.lanczos import lanczos
+from fishbonett.contract import _einsum_cached
 
 
 def require_resolved(bath):
@@ -144,8 +145,7 @@ def combined_star_operators(bath, operators):
     if len(strengths) != len(ops):
         raise ValueError(
             "the number of spectral densities must match the coupling operators")
-    combined = np.einsum(
-        "ck,cij->kij", strengths, np.asarray(ops), optimize=True)
+    combined = _einsum_cached("ck,cij->kij", strengths, np.asarray(ops))
     return star.frequencies, combined
 
 

@@ -10,7 +10,7 @@ from copy import deepcopy
 
 import numpy as np
 
-from fishbonett.contract import contract
+from fishbonett.contract import _contract_cached
 from fishbonett.states.tree import TreeTensorNetwork
 
 __all__ = ["MultiSetTreeTensorNetwork"]
@@ -56,7 +56,7 @@ def _matrix_element(bra, ket, *, operator=None, site=None):
             operands.append([])
         else:
             operands.append([ket_bonds[parent], bra_bonds[parent]])
-        messages[(node, parent)] = contract(*operands)
+        messages[(node, parent)] = _contract_cached(*operands)
 
     return np.asarray(messages[(ket.root, None)]).reshape(-1)[0]
 

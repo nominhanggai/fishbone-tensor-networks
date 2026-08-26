@@ -2,6 +2,8 @@
 import ast
 import inspect
 
+import numpy as np
+
 
 def _imports(module):
     tree = ast.parse(inspect.getsource(module))
@@ -95,3 +97,57 @@ def test_transformed_representations_do_not_import_propagation_layers():
 
     # the sweep must actually have covered every public representation module
     assert {"interaction", "multichannel", "polaron", "schrodinger"} <= checked
+
+
+def test_tree_contractions_reuse_shape_compiled_expressions():
+    from fishbonett.contract import _cached_expression, _contract_cached
+
+    left = np.arange(6.0).reshape(2, 3)
+    right = np.arange(12.0).reshape(3, 4)
+    _cached_expression.cache_clear()
+    first = _contract_cached(left, [0, 1], right, [1, 2], [0, 2])
+    after_first = _cached_expression.cache_info()
+    second = _contract_cached(left + 1, [0, 1], right, [1, 2], [0, 2])
+    after_second = _cached_expression.cache_info()
+
+    assert np.allclose(first, left @ right)
+    assert np.allclose(second, (left + 1) @ right)
+    assert after_first.misses == 1
+    assert after_second.hits == 1
+
+
+def test_package_contractions_do_not_bypass_opt_einsum():
+    """Numerical package code must use the shared contraction backend."""
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "src" / "fishbonett"
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        numpy_aliases = {
+            alias.asname or alias.name
+            for node in tree.body
+            if isinstance(node, ast.Import)
+            for alias in node.names
+            if alias.name == "numpy"
+        }
+        direct_aliases = {
+            alias.asname or alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == "numpy"
+            for alias in node.names
+            if alias.name == "einsum"
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            direct = isinstance(node.func, ast.Name) and node.func.id in direct_aliases
+            qualified = (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "einsum"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id in numpy_aliases
+            )
+            if direct or qualified:
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert not offenders, "direct numpy.einsum calls: " + ", ".join(offenders)

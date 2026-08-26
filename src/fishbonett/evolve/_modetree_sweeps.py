@@ -7,13 +7,14 @@ truncates every edge by its Schmidt spectrum.
 import numpy as np
 import scipy.linalg
 
+from fishbonett.contract import _contract_cached, _einsum_cached
 from fishbonett.operators import annihilate
 from fishbonett.evolve._modetree_core import SZ
 from fishbonett.linalg import threshold_svd
 
 
 def _einsum(subscripts, *operands):
-    return np.einsum(subscripts, *operands, optimize=True)
+    return _einsum_cached(subscripts, *operands)
 
 
 def applyH1(tensor, operator, envs):
@@ -30,13 +31,12 @@ def applyH1(tensor, operator, envs):
     operands = [tensor, ket + [pin], operator, op_bond + [pout, pin]]
     for leg in range(degree):
         operands.extend((envs[leg], [bra[leg], op_bond[leg], ket[leg]]))
-    return np.einsum(*operands, bra + [pout], optimize=True)
+    return _contract_cached(*operands, bra + [pout])
 
 
 def applyH0(center, first_env, second_env):
     """Apply the effective operator on one tree edge."""
-    return np.einsum(
-        "amc,cr,bmr->ab", first_env, center, second_env, optimize=True)
+    return _einsum_cached("amc,cr,bmr->ab", first_env, center, second_env)
 
 
 def update_env(tensor, operator, free_leg, envs):
@@ -54,7 +54,7 @@ def update_env(tensor, operator, free_leg, envs):
         if leg != free_leg:
             operands.extend((envs[leg], [bra[leg], op_bond[leg], ket[leg]]))
     output = [bra[free_leg], op_bond[free_leg], ket[free_leg]]
-    return np.einsum(*operands, output, optimize=True)
+    return _contract_cached(*operands, output)
 
 
 def qr_leg(tensor, leg):
@@ -135,7 +135,7 @@ def measure_node_rdm(nodes, target):
             operands.extend((message(neighbour, node_id), [ket[leg], bra[leg]]))
         recipient_leg = neighbours.index(recipient)
         operands.append([ket[recipient_leg], bra[recipient_leg]])
-        return np.einsum(*operands, optimize=True)
+        return _contract_cached(*operands)
 
     node = nodes[target]
     degree = len(node.neighbours)
@@ -147,7 +147,7 @@ def measure_node_rdm(nodes, target):
     for leg, neighbour in enumerate(node.neighbours):
         operands.extend((message(neighbour, target), [ket[leg], bra[leg]]))
     operands.append([physical_ket, physical_bra])
-    rho = np.einsum(*operands, optimize=True)
+    rho = _contract_cached(*operands)
     trace = np.trace(rho)
     if abs(trace) == 0:
         raise ValueError("cannot measure a zero mode-tree state")
@@ -193,7 +193,7 @@ def _contract_subtree(nodes, nid):
     if nodes[nid].parent is not None:
         output.append(edge_label(nid, nodes[nid].parent))
     output.extend(phys_labels[node_id] for node_id in physical_nodes)
-    return np.einsum(*operands, output, optimize=True)
+    return _contract_cached(*operands, output)
 
 
 def measure_sz_tree(nodes, root):

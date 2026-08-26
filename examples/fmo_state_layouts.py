@@ -20,6 +20,7 @@ from fishbonett import Bath, ExcitonBath
 
 
 CM_SCALE = 100.0
+TIME_UNIT_FS = 53.088
 REORGANIZATION = 35.0 / CM_SCALE
 CUTOFF = 106.0 / CM_SCALE
 BETA = CM_SCALE / 208.509
@@ -95,7 +96,18 @@ def run(profile, layouts):
     model = make_model(profile)
     steps = int(round(profile.t_max / profile.dt))
     results = {}
-    summary = {}
+    summary = {
+        "configuration": {
+            "n_steps": steps,
+            "t_max": profile.t_max,
+            "t_max_fs": profile.t_max * TIME_UNIT_FS,
+            "dt": profile.dt,
+            "dt_fs": profile.dt * TIME_UNIT_FS,
+            "n_modes_per_bath": profile.n_modes,
+            "physical_dimension": profile.phys_dim,
+            "svd_threshold": profile.trunc_eps,
+        }
+    }
     for layout in layouts:
         started = perf_counter()
         result = model.run(

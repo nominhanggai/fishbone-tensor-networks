@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from fishbonett.contract import _einsum_cached
 __all__ = ["MultiSetMPS"]
 
 
@@ -34,21 +35,19 @@ def _overlap(bra, ket, *, operator=None, site=None):
     environment = np.ones((1, 1), complex)
     for index, (bra_tensor, ket_tensor) in enumerate(zip(bra, ket)):
         if index == site:
-            environment = np.einsum(
+            environment = _einsum_cached(
                 "ab,arq,bsp,qp->rs",
                 environment,
                 bra_tensor.conj(),
                 ket_tensor,
                 operator,
-                optimize=True,
             )
         else:
-            environment = np.einsum(
+            environment = _einsum_cached(
                 "ab,arp,bsp->rs",
                 environment,
                 bra_tensor.conj(),
                 ket_tensor,
-                optimize=True,
             )
     return environment.reshape(-1)[0]
 
@@ -132,7 +131,7 @@ class MultiSetMPS:
             raise ValueError("the system tensor must be a three-axis left boundary")
         sets = []
         for state in range(system.shape[2]):
-            first = np.einsum("r,rsp->sp", system[0, :, state], tensors[1], optimize=True)[
+            first = _einsum_cached("r,rsp->sp", system[0, :, state], tensors[1])[
                 None, :, :
             ]
             sets.append([first] + _copy_mps(tensors[2:]))

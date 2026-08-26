@@ -14,6 +14,7 @@ import scipy.linalg as la
 
 from fishbonett.bath._coefficients import require_resolved, star_coefficients
 from fishbonett.bath.lanczos import lanczos
+from fishbonett.contract import _einsum_cached
 from fishbonett.linalg import expm_gate
 from fishbonett.operators import annihilate
 from fishbonett.representations._mpo import identity_product, product_sum_mpo
@@ -343,7 +344,7 @@ class PolaronRepresentation:
         if system_tensor.shape[0] != 1:
             raise ValueError("the system tensor must be the left boundary")
         projected = [
-            np.einsum(
+            _einsum_cached(
                 "rs,s->r", system_tensor[0],
                 self.eigenvectors[:, branch].conj())
             for branch in range(self.pd_sys)
@@ -356,10 +357,9 @@ class PolaronRepresentation:
                 scale = self.eigenvalues[right] - self.eigenvalues[left]
                 for mode, tensor in enumerate(tensors[1:]):
                     displacement = self.displacement_operator(mode, scale)
-                    environment = np.einsum(
+                    environment = _einsum_cached(
                         "ac,abp,cdq,qp->bd",
-                        environment, tensor, tensor.conj(), displacement,
-                        optimize=True)
+                        environment, tensor, tensor.conj(), displacement)
                 transformed[left, right] = environment.reshape(-1)[0]
         lab = self.eigenvectors @ transformed @ self.eigenvectors.conj().T
         return lab / np.trace(lab)
@@ -368,9 +368,9 @@ class PolaronRepresentation:
         """Fast laboratory RDM recovery for the local chain representation."""
         if self.name != "polaron-chain":
             raise ValueError("pair recovery is local only for polaron-chain")
-        rho = np.einsum(
+        rho = _einsum_cached(
             "LXaR,LYbR->XaYb", theta, np.asarray(theta).conj())
-        transformed = np.einsum(
+        transformed = _einsum_cached(
             "Xi,XaYb,Yj->iajb",
             self.eigenvectors.conj(), rho, self.eigenvectors)
         out = np.zeros((self.pd_sys, self.pd_sys), complex)
@@ -378,7 +378,7 @@ class PolaronRepresentation:
             for right in range(self.pd_sys):
                 displacement = self.displacement_operator(
                     0, self.eigenvalues[right] - self.eigenvalues[left])
-                out[left, right] = np.einsum(
+                out[left, right] = _einsum_cached(
                     "ab,ba->", transformed[left, :, right, :], displacement)
         lab = self.eigenvectors @ out @ self.eigenvectors.conj().T
         return lab / np.trace(lab)
@@ -397,10 +397,9 @@ class PolaronRepresentation:
         rho = rho.reshape(
             self.pd_sys, dimension, self.pd_sys, dimension
         )
-        transformed = np.einsum(
+        transformed = _einsum_cached(
             "Xi,XaYb,Yj->iajb",
             self.eigenvectors.conj(), rho, self.eigenvectors,
-            optimize=True,
         )
         out = np.zeros((self.pd_sys, self.pd_sys), complex)
         for left in range(self.pd_sys):
@@ -408,7 +407,7 @@ class PolaronRepresentation:
                 displacement = self.displacement_operator(
                     0, self.eigenvalues[right] - self.eigenvalues[left]
                 )
-                out[left, right] = np.einsum(
+                out[left, right] = _einsum_cached(
                     "ab,ba->", transformed[left, :, right, :], displacement
                 )
         lab = self.eigenvectors @ out @ self.eigenvectors.conj().T

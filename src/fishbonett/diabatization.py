@@ -10,6 +10,8 @@ import itertools as it
 import numpy as np
 from numpy.linalg import norm
 
+from fishbonett.contract import _einsum_cached
+
 
 def boys_func(mat_mu):
     """Boys localization functional of a stack of dipole matrices.
@@ -58,7 +60,7 @@ def boys_loc(mat_mu, u_final):
         u[i, j] = np.sin(theta)
         u[j, i] = -np.sin(theta)
         u[i, i] = u[j, j] = np.cos(theta)
-        mat_mu_after = np.einsum('ij,jkX,kl->ilX', u, mat_mu_after, u.T)
+        mat_mu_after = _einsum_cached('ij,jkX,kl->ilX', u, mat_mu_after, u.T)
         u_final = u @ u_final
     return u_final, mat_mu_after, boys_func(mat_mu_after), boys_value_0
 

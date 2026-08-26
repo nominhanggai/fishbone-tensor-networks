@@ -6,6 +6,7 @@ growth mechanism, then applies the requested adaptive truncation threshold.
 """
 import numpy as np
 
+from fishbonett.contract import _einsum_cached
 #: Schmidt directions kept beyond what ``trunc_eps`` admits, so a two-site
 #: bond can grow.  Two is enough to bootstrap a product state and costs a bond
 #: of ``rank + 2``; raise it if a run appears stuck at a small bond.
@@ -19,7 +20,7 @@ from fishbonett.linalg import threshold_svd
 
 def measure_rdm(center):
     """Reduced density matrix at an MPS orthogonality centre."""
-    rho = np.einsum("abp,abq->pq", center, center.conj(), optimize=True)
+    rho = _einsum_cached("abp,abq->pq", center, center.conj())
     trace = np.trace(rho)
     if abs(trace) == 0:
         raise ValueError("cannot measure a zero state")
@@ -53,8 +54,7 @@ def tdvp1sweep(dt2, tensors, mpo, environments=None, **krylov):
         tensors[site], bond = left_qr(center)
         env[site + 1] = updateleftenv(tensors[site], mpo[site], env[site])
         bond = evolveC(half, bond, env[site + 1], env[site + 2], **krylov)
-        center = np.einsum(
-            "ax,xbs->abs", bond, tensors[site + 1], optimize=True)
+        center = _einsum_cached("ax,xbs->abs", bond, tensors[site + 1])
 
     center = evolveAC(
         dt2, center, mpo[-1], env[count - 1], env[count + 1], **krylov)
@@ -64,8 +64,7 @@ def tdvp1sweep(dt2, tensors, mpo, environments=None, **krylov):
         env[site + 2] = updaterightenv(
             tensors[site + 1], mpo[site + 1], env[site + 3])
         bond = evolveC(half, bond, env[site + 1], env[site + 2], **krylov)
-        center = np.einsum(
-            "axp,xb->abp", tensors[site], bond, optimize=True)
+        center = _einsum_cached("axp,xb->abp", tensors[site], bond)
         center = evolveAC(
             half, center, mpo[site], env[site], env[site + 2], **krylov)
     tensors[0] = center
@@ -74,7 +73,7 @@ def tdvp1sweep(dt2, tensors, mpo, environments=None, **krylov):
 
 def _merge2(left, right):
     """Join adjacent MPS tensors into ``(outer-left, outer-right, p, q)``."""
-    return np.einsum("amp,mbq->abpq", left, right, optimize=True)
+    return _einsum_cached("amp,mbq->abpq", left, right)
 
 
 def applyH2(theta, mpo_left, mpo_right, left_env, right_env):

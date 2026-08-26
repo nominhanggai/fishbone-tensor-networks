@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from fishbonett.contract import _einsum_cached
 from fishbonett.evolve._tdvp_kernels import expmv_lanczos
 from fishbonett.evolve._tdvp_sweeps import (
     DEFAULT_BOND_EXPAND,
@@ -70,11 +71,10 @@ def split_system_mpo(mpo, system_dimension=None):
     for output in range(dimension):
         row = []
         for input_ in range(dimension):
-            boundary = np.einsum(
+            boundary = _einsum_cached(
                 "r,rsij->sij",
                 first[0, :, output, input_],
                 second,
-                optimize=True,
             )[None, :, :, :]
             if not np.any(boundary):
                 row.append(None)
@@ -88,24 +88,22 @@ def split_system_mpo(mpo, system_dimension=None):
 
 
 def _update_left(ket, operator, left, bra):
-    return np.einsum(
+    return _einsum_cached(
         "amc,crp,mnqp,abq->bnr",
         left,
         ket,
         operator,
         bra.conj(),
-        optimize=True,
     )
 
 
 def _update_right(ket, operator, right, bra):
-    return np.einsum(
+    return _einsum_cached(
         "abq,mnqp,crp,bnr->amc",
         bra.conj(),
         operator,
         ket,
         right,
-        optimize=True,
     )
 
 
