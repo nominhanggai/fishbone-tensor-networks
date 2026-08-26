@@ -206,11 +206,12 @@ class SystemBath:
           representations.  *schrodinger-chain*
           (``schrodinger-chain-tdvp1 | schrodinger-chain-tdvp2 |
           schrodinger-chain-a1tdvp``) and *schrodinger-star*
-          (``schrodinger-star-tdvp1 | schrodinger-star-tdvp2``) -- static, so the
+          (``schrodinger-star-tdvp1 | schrodinger-star-tdvp2 |
+          schrodinger-star-a1tdvp``) -- static, so the
           MPO is built once and TDVP conserves energy, at the cost of the largest
           bond dimensions.  *interaction-chain*
           (``interaction-chain-tebd``, ``interaction-chain-trotter-mpo``,
-          ``interaction-chain-tdvp1/2`` on a 1D MPS;
+          ``interaction-chain-tdvp1/tdvp2/a1tdvp`` on a 1D MPS;
           ``interaction-chain-tree-tebd`` on a
           balanced binary tree, which keeps the high-bond region ``O(log N)`` edges
           deep instead of ``O(N)``) -- low entanglement, gates rebuilt each step;

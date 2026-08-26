@@ -64,8 +64,8 @@ same transformed Hamiltonian and both are implemented.
 | representation | state geometry | methods | details |
 |---|---|---|---|
 | `schrodinger-chain` | 1D MPS | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-a1tdvp` | {doc}`schrodinger/chain` |
-| `schrodinger-star` | 1D MPS | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2` | {doc}`schrodinger/star_mpo` |
-| `interaction-chain` | 1D MPS | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/tdvp` |
+| `schrodinger-star` | 1D MPS | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2`, `schrodinger-star-a1tdvp` | {doc}`schrodinger/star_mpo` |
+| `interaction-chain` | 1D MPS | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2`, `interaction-chain-a1tdvp` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/tdvp` |
 | `interaction-chain` | binary tree tensor network | `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
 | `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-a1tdvp` | {doc}`polaron` |
 | `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-a1tdvp` | {doc}`polaron` |

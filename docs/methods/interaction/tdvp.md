@@ -1,7 +1,7 @@
 # Interaction-chain [TDVP]
 
-The 1D MPS supports `interaction-chain-tdvp1` and
-`interaction-chain-tdvp2`. Both rebuild a time-dependent Hamiltonian MPO at
+The 1D MPS supports `interaction-chain-tdvp1`, `interaction-chain-tdvp2`, and
+`interaction-chain-a1tdvp`. All three rebuild a time-dependent Hamiltonian MPO at
 the step midpoint. The representation supplies that MPO; TDVP is an independent
 choice of integrator.
 
@@ -31,6 +31,9 @@ star-to-chain transformation.
 - `tdvp1` uses one-site TDVP and requires an explicit `bond_dim`.
 - `tdvp2` uses two-site TDVP and grows bonds according to `trunc_eps`, optionally
   capped by `bond_dim`.
+- `a1tdvp` uses adaptive one-site TDVP and expands the tangent manifold until
+  its relative convergence measure reaches `trunc_eps`; `bond_dim` is its
+  finite memory ceiling.
 - Because the represented Hamiltonian is time dependent, its MPO and
   environments are refreshed every step.
 
