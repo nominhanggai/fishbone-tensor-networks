@@ -50,7 +50,7 @@ def init_mps(n_sites, d, sys_state=None):
     system = (np.array([1.0, 0.0], complex) if sys_state is None
               else np.asarray(sys_state, complex).reshape(-1))
     norm = np.linalg.norm(system)
-    # Some dressed representations deliberately provide a zero placeholder and replace
+    # Some dressed representations provide a zero placeholder and replace
     # the product state through ``prepare`` before canonicalization.
     if norm > 0:
         system = system / norm
