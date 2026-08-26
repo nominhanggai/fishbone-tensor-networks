@@ -147,6 +147,44 @@ def test_a1tdvp_qr_completion_is_deterministic_under_occupied_gauge():
     assert np.allclose(first[:, 3:], gauged[:, 3:], atol=1e-13)
 
 
+def test_a1tdvp_resolves_convergence_increments_below_one_ulp(monkeypatch):
+    """Adaptive bond selection must not quantize its convergence increments.
+
+    Reading the relative increment off ``following / value - 1`` confines it to
+    multiples of the spacing of doubles near one, so a small increment collapses
+    onto ``0`` or one ulp and a comparison against a tight precision stops being
+    reproducible across BLAS implementations.  Accumulating the slices each
+    candidate admits keeps the increment a sum of squares instead.
+    """
+    import fishbonett.evolve._tdvp_sweeps as sweeps
+
+    original = sweeps._adaptive_bond_targets
+    increments = []
+
+    def capture(*args, **kwargs):
+        targets, details = original(*args, **kwargs)
+        increments.extend(item["relative_increment"] for item in details)
+        return targets, details
+
+    monkeypatch.setattr(sweeps, "_adaptive_bond_targets", capture)
+    _model(levels=3, modes=1).run(
+        dt=0.01,
+        n_steps=4,
+        method="interaction-chain-interleaved-a1tdvp",
+        trunc_eps=1e-12,
+        bond_dim=100,
+        krylov=30,
+        tol=1e-11,
+    )
+
+    assert increments
+    ulp = np.finfo(float).eps
+    assert [value for value in increments if 0.0 < value < ulp], (
+        "every reported increment landed on 0 or a whole ulp, so the selection "
+        "is quantized and cannot resolve a precision near machine epsilon"
+    )
+
+
 def test_two_mode_bath_tree_and_flat_mps_agree():
     model = _model(levels=2, modes=2)
     common = dict(
