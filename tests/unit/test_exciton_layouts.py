@@ -147,27 +147,8 @@ def test_a1tdvp_qr_completion_is_deterministic_under_occupied_gauge():
     assert np.allclose(first[:, 3:], gauged[:, 3:], atol=1e-13)
 
 
-def test_a1tdvp_resolves_convergence_increments_below_one_ulp(monkeypatch):
-    """Adaptive bond selection must not quantize its convergence increments.
-
-    Reading the relative increment off ``following / value - 1`` confines it to
-    multiples of the spacing of doubles near one, so a small increment collapses
-    onto ``0`` or one ulp and a comparison against a tight precision stops being
-    reproducible across BLAS implementations.  Accumulating the slices each
-    candidate admits keeps the increment a sum of squares instead.
-    """
-    import fishbonett.evolve._tdvp_sweeps as sweeps
-
-    original = sweeps._adaptive_bond_targets
-    increments = []
-
-    def capture(*args, **kwargs):
-        targets, details = original(*args, **kwargs)
-        increments.extend(item["relative_increment"] for item in details)
-        return targets, details
-
-    monkeypatch.setattr(sweeps, "_adaptive_bond_targets", capture)
-    _model(levels=3, modes=1).run(
+def _a1tdvp_reference_run():
+    return _model(levels=3, modes=1).run(
         dt=0.01,
         n_steps=4,
         method="interaction-chain-interleaved-a1tdvp",
@@ -177,12 +158,53 @@ def test_a1tdvp_resolves_convergence_increments_below_one_ulp(monkeypatch):
         tol=1e-11,
     )
 
-    assert increments
-    ulp = np.finfo(float).eps
-    assert [value for value in increments if 0.0 < value < ulp], (
-        "every reported increment landed on 0 or a whole ulp, so the selection "
-        "is quantized and cannot resolve a precision near machine epsilon"
-    )
+
+def test_a1tdvp_ignores_the_arbitrary_part_of_the_qr_complement(monkeypatch):
+    """Bond growth must not depend on which complement basis LAPACK returns.
+
+    A full-QR complement is only *some* orthonormal basis of the unused space.
+    When the adaptive sweep took its new directions from that basis in order, a
+    direction the Hamiltonian never reaches scored zero, the search read that as
+    convergence, and the bond stopped growing -- so the same commit expanded on
+    one BLAS and not on another.  Choosing the tie-break differently below is
+    exactly the perturbation that used to flip the interleaved cross-validation
+    between agreeing with the dense reference and missing a 1e-3 coherence.
+    """
+    import fishbonett.evolve._tdvp_sweeps as sweeps
+
+    expected = _a1tdvp_reference_run()
+
+    def last_tied_coordinate(matrix, target):
+        matrix = np.asarray(matrix)
+        rows, columns = matrix.shape
+        basis, triangular = np.linalg.qr(matrix, mode="reduced")
+        diagonal = np.diag(triangular)
+        phases = np.ones(columns, dtype=matrix.dtype)
+        nonzero = np.abs(diagonal) > np.finfo(matrix.real.dtype).eps
+        phases[nonzero] = diagonal[nonzero] / np.abs(diagonal[nonzero])
+        basis = basis * phases[None, :]
+        triangular = phases.conj()[:, None] * triangular
+        eps = np.finfo(matrix.real.dtype).eps
+        while basis.shape[1] < target:
+            residuals = np.maximum(
+                0.0, 1.0 - np.sum(np.abs(basis) ** 2, axis=1)
+            )
+            largest = float(np.max(residuals))
+            tie = 256.0 * eps * max(1.0, largest)
+            pivot = int(np.flatnonzero(residuals >= largest - tie)[-1])
+            vector = np.zeros(rows, dtype=matrix.dtype)
+            vector[pivot] = 1.0
+            for _ in range(2):
+                vector -= basis @ (basis.conj().T @ vector)
+            vector /= np.linalg.norm(vector)
+            basis = np.column_stack((basis, vector))
+        return basis, triangular
+
+    monkeypatch.setattr(sweeps, "_partial_full_qr", last_tied_coordinate)
+    perturbed = _a1tdvp_reference_run()
+
+    assert perturbed.max_bond.tolist() == expected.max_bond.tolist()
+    np.testing.assert_allclose(perturbed.rdm, expected.rdm, atol=1e-12)
 
 
 def test_two_mode_bath_tree_and_flat_mps_agree():

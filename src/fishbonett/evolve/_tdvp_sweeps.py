@@ -17,6 +17,7 @@ from fishbonett.evolve._tdvp_kernels import (
     init_right_envs, left_qr, right_lq, updateleftenv, updaterightenv,
 )
 from fishbonett.linalg import threshold_svd
+from fishbonett.randomized import randomized_svd
 
 
 def measure_rdm(center):
@@ -244,36 +245,97 @@ def _partial_full_qr(matrix, target):
     return basis, triangular
 
 
-def _complete_columns(columns, target):
-    """Append requested full-QR complement columns without rotating a basis."""
+def _complete_columns(columns, target, residual=None):
+    """Append complement columns, preferring the ones the Hamiltonian reaches.
+
+    ``residual`` holds, one per row, the components the effective Hamiltonian
+    produces in the same space as ``columns``.  Its leading right singular
+    directions, taken orthogonal to ``columns``, are the directions the state
+    is about to need, and they come out ordered by weight.  A full-QR
+    complement is only *some* orthonormal basis of the unused space; whichever
+    member LAPACK happens to return first decides whether an adaptive sweep
+    grows the bond at all, which is not a property of the physics.  Directions
+    the residual does not reach fall back to the deterministic coordinate
+    completion so the basis is always filled.
+    """
     current = columns.shape[1]
     if target < current or target > columns.shape[0]:
         raise ValueError("completion dimension is outside the available space")
     if target == current:
         return columns.copy()
-    complete, _triangular = _partial_full_qr(columns, target)
-    return np.column_stack((columns, complete[:, current:target]))
+    basis = columns
+    if residual is not None and residual.size:
+        projected = residual - (residual @ columns.conj()) @ columns.T
+        want = min(target - current, *projected.shape)
+        try:
+            # Only the leading few directions are ever kept, so a full
+            # decomposition of a residual this size would dominate the sweep.
+            # The sketch is seeded per call rather than from the matrix, so the
+            # directions do not inherit last-bit differences between platforms.
+            _u, weights, directions = randomized_svd(
+                projected, want, n_iter=2, oversample=8,
+                rng=np.random.default_rng(0),
+            )
+        except (np.linalg.LinAlgError, ValueError):
+            weights = np.zeros(0)
+            directions = np.zeros((0, columns.shape[0]))
+        if weights.size:
+            keep = min(
+                want, int(np.count_nonzero(weights > weights[0] * 1e-12))
+            )
+            if keep > 0:
+                basis = np.column_stack((basis, directions[:keep].T))
+    if basis.shape[1] < target:
+        complete, _triangular = _partial_full_qr(basis, target)
+        basis = np.column_stack(
+            (basis, complete[:, basis.shape[1]:target])
+        )
+    return basis
 
 
-def _left_completion(isometry, target):
-    """Extend a left-isometric tensor with full-QR complement columns."""
+def _right_residual(tensor, mpo, right_env):
+    """Components ``H`` produces in the right-canonical space of ``tensor``.
+
+    This is :func:`applyH1` with the left environment left uncontracted, so the
+    open MPO bond keeps every channel the Hamiltonian can still route through.
+    """
+    stage = np.tensordot(tensor, right_env, axes=([1], [2]))
+    stage = np.tensordot(mpo, stage, axes=([1, 3], [3, 1]))
+    # (mpo_left, physical, ket_left, bond) -> (ket_left, mpo_left, bond, physical)
+    stage = np.transpose(stage, (2, 0, 3, 1))
+    return stage.reshape(-1, tensor.shape[1] * tensor.shape[2])
+
+
+def _left_residual(isometry, mpo, left_env):
+    """Components ``H`` produces in the left-canonical space of ``isometry``."""
+    stage = np.tensordot(left_env, isometry, axes=([2], [0]))
+    # (bra_left, mpo_left, bond, physical_in)
+    stage = np.tensordot(mpo, stage, axes=([0, 3], [1, 3]))
+    # (mpo_right, physical_out, bra_left, bond) -> (bra_left, physical, ...)
+    stage = np.transpose(stage, (0, 3, 2, 1))
+    dl, physical = left_env.shape[0], mpo.shape[2]
+    return stage.reshape(-1, dl * physical)
+
+
+def _left_completion(isometry, target, residual=None):
+    """Extend a left-isometric tensor with complement columns."""
     dl, current, physical = isometry.shape
     matrix = np.transpose(isometry, (0, 2, 1)).reshape(
         dl * physical, current
     )
     if target > matrix.shape[0]:
         raise ValueError("left completion exceeds the local Hilbert space")
-    basis = _complete_columns(matrix, target)
+    basis = _complete_columns(matrix, target, residual)
     return np.transpose(basis.reshape(dl, physical, target), (0, 2, 1))
 
 
-def _right_completion(tensor, target):
-    """Extend a right-isometric tensor with full-QR complement rows."""
+def _right_completion(tensor, target, residual=None):
+    """Extend a right-isometric tensor with complement rows."""
     current, dr, physical = tensor.shape
     matrix_t = tensor.reshape(current, dr * physical).T
     if target > matrix_t.shape[0]:
         raise ValueError("right completion exceeds the local Hilbert space")
-    basis = _complete_columns(matrix_t, target)
+    basis = _complete_columns(matrix_t, target, residual)
     return basis.T.reshape(target, dr, physical)
 
 
@@ -349,8 +411,16 @@ def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
             })
             continue
 
-        left = _left_completion(left_isometries[site], local_limit)
-        right = _right_completion(tensors[site + 1], local_limit)
+        left = _left_completion(
+            left_isometries[site], local_limit,
+            _left_residual(left_isometries[site], mpo[site], left_envs[site]),
+        )
+        right = _right_completion(
+            tensors[site + 1], local_limit,
+            _right_residual(
+                tensors[site + 1], mpo[site + 1], right_envs[site + 3]
+            ),
+        )
         left_expanded = updateleftenv(
             left, mpo[site], left_envs[site]
         )
@@ -433,11 +503,18 @@ def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
     return targets, details
 
 
-def _expand_right_canonical(tensors, targets):
-    """Embed an MPS exactly in the selected right-canonical bond spaces."""
+def _expand_right_canonical(tensors, targets, mpo):
+    """Embed an MPS exactly in the selected right-canonical bond spaces.
+
+    The new directions are the ones the effective Hamiltonian reaches, matching
+    the basis the bond targets were measured in.  Right environments are
+    rebuilt as the sweep descends, because each site is enlarged before the
+    site to its left is considered.
+    """
     state = [np.asarray(tensor, complex).copy() for tensor in tensors]
     if len(targets) != len(state) - 1:
         raise ValueError("one target dimension is required per MPS bond")
+    right_env = np.ones((1, 1, 1), complex)
     for site in range(len(state) - 1, 0, -1):
         tensor = state[site]
         old_left, right, physical = tensor.shape
@@ -445,8 +522,15 @@ def _expand_right_canonical(tensors, targets):
         if target < old_left or target > right * physical:
             raise ValueError("requested bond expansion is locally impossible")
         matrix_t = tensor.reshape(old_left, right * physical).T
-        basis, triangular = _partial_full_qr(matrix_t, target)
+        # Pushing a centre leftwards costs the site to the left its
+        # right-canonical form, so the occupied columns are orthonormalized
+        # here rather than assumed.
+        occupied, triangular = _partial_full_qr(matrix_t, old_left)
+        basis = _complete_columns(
+            occupied, target, _right_residual(tensor, mpo[site], right_env)
+        )
         state[site] = basis.T.reshape(target, right, physical)
+        right_env = updaterightenv(state[site], mpo[site], right_env)
         centre = np.zeros((old_left, target), complex)
         centre[:, :old_left] = triangular.T
         state[site - 1] = _einsum_cached(
@@ -479,7 +563,7 @@ def a1tdvp_sweep(
     targets, bonds = _adaptive_bond_targets(
         tensors, mpo, float(trunc_eps), int(bond_dim), int(expand)
     )
-    state = _expand_right_canonical(tensors, targets)
+    state = _expand_right_canonical(tensors, targets, mpo)
     state, env = tdvp1sweep(dt2, state, mpo, None, **krylov)
     diagnostic = {
         "bond_dimensions": bonddims(state),
