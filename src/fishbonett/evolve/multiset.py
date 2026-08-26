@@ -167,7 +167,63 @@ def _apply_h2(ket, left_operator, right_operator, left, right):
     return np.ascontiguousarray(np.transpose(stage, (0, 3, 1, 2)))
 
 
-def _init_environments(sets, operators):
+def _identity_scale(block):
+    """Per-site scalars when ``block`` is a multiple of the identity everywhere.
+
+    Splitting an exciton Hamiltonian leaves most blocks proportional to the
+    identity, because the bath couples diagonally in the electronic basis.
+    Recognising them lets the sweep contract an overlap instead of an operator.
+    Returns ``None`` as soon as any site carries a real operator.
+    """
+    scales = []
+    for tensor in block:
+        if tensor.shape[0] != 1 or tensor.shape[1] != 1:
+            return None
+        matrix = tensor[0, 0]
+        value = matrix[0, 0]
+        if not np.array_equal(matrix, value * np.eye(matrix.shape[0])):
+            return None
+        scales.append(complex(value))
+    return scales
+
+
+def _identity_scales(operators):
+    """Per-block identity scalars, or ``None`` where the block is an operator."""
+    return [
+        [None if block is None else _identity_scale(block) for block in row]
+        for row in operators
+    ]
+
+
+def _apply_identity2(ket, left, right, scale):
+    """Two-site action of a block proportional to the identity."""
+    stage = np.tensordot(left[:, 0, :], ket, axes=([1], [0]))
+    stage = np.tensordot(stage, right[:, 0, :], axes=([1], [1]))
+    return scale * np.ascontiguousarray(np.transpose(stage, (0, 3, 1, 2)))
+
+
+def _apply_identity1(ket, left, right, scale):
+    """One-site action of a block proportional to the identity."""
+    stage = np.tensordot(left[:, 0, :], ket, axes=([1], [0]))
+    stage = np.tensordot(stage, right[:, 0, :], axes=([1], [1]))
+    return scale * np.ascontiguousarray(np.transpose(stage, (0, 2, 1)))
+
+
+def _update_left_identity(ket, left, bra, scale):
+    """Left environment step for a block proportional to the identity."""
+    stage = np.tensordot(left[:, 0, :], ket, axes=([1], [0]))
+    out = np.tensordot(bra.conj(), stage, axes=([0, 2], [0, 2]))
+    return scale * out[:, None, :]
+
+
+def _update_right_identity(ket, right, bra, scale):
+    """Right environment step for a block proportional to the identity."""
+    stage = np.tensordot(bra.conj(), right[:, 0, :], axes=([1], [0]))
+    out = np.tensordot(stage, ket, axes=([1, 2], [2, 1]))
+    return scale * out[:, None, :]
+
+
+def _init_environments(sets, operators, scales=None):
     count = len(sets)
     sites = len(sets[0])
     environments = [[None for _ in range(count)] for _ in range(count)]
@@ -175,17 +231,26 @@ def _init_environments(sets, operators):
         for input_ in range(count):
             if operators[output][input_] is None:
                 continue
+            scale = None if scales is None else scales[output][input_]
             values = [None] * (sites + 2)
             boundary = np.ones((1, 1, 1), complex)
             values[0] = boundary
             values[sites + 1] = boundary
             for site in range(sites - 1, -1, -1):
-                values[site + 1] = _update_right(
-                    sets[input_][site],
-                    operators[output][input_][site],
-                    values[site + 2],
-                    sets[output][site],
-                )
+                if scale is None:
+                    values[site + 1] = _update_right(
+                        sets[input_][site],
+                        operators[output][input_][site],
+                        values[site + 2],
+                        sets[output][site],
+                    )
+                else:
+                    values[site + 1] = _update_right_identity(
+                        sets[input_][site],
+                        values[site + 2],
+                        sets[output][site],
+                        scale[site],
+                    )
             environments[output][input_] = values
     return environments
 
@@ -261,24 +326,96 @@ def multiset_tdvp2_sweep(
                 raise ValueError("every operator block must have unit boundary bonds")
     half = 0.5 * float(dt)
     tensors = state.sets
-    env = _init_environments(tensors, operators) if environments is None else environments
+    scales = _identity_scales(operators)
+    env = (
+        _init_environments(tensors, operators, scales)
+        if environments is None
+        else environments
+    )
 
     # With one bath site the multi-set manifold spans the complete finite
     # state space, so no projector splitting is needed.  Evolving the coupled
     # one-site centres also keeps the public TDVP2 method useful for a bath
     # discretization that resolves to a single mode.
+    def block_h2(output, input_, value, position):
+        """Two-site action of one operator block on one component."""
+        block = operators[output][input_]
+        if block is None:
+            return None
+        left = env[output][input_][position]
+        right = env[output][input_][position + 3]
+        scale = scales[output][input_]
+        if scale is not None:
+            return _apply_identity2(
+                value, left, right, scale[position] * scale[position + 1]
+            )
+        return _apply_h2(
+            value, block[position], block[position + 1], left, right
+        )
+
+    def block_h1(output, input_, value, position):
+        """One-site action of one operator block on one component."""
+        block = operators[output][input_]
+        if block is None:
+            return None
+        left = env[output][input_][position]
+        right = env[output][input_][position + 2]
+        scale = scales[output][input_]
+        if scale is not None:
+            return _apply_identity1(value, left, right, scale[position])
+        return _apply_h1(value, block[position], left, right)
+
+    def push_left(site):
+        """Carry every block environment one site to the right."""
+        for output in range(count):
+            for input_ in range(count):
+                block = operators[output][input_]
+                if block is None:
+                    continue
+                scale = scales[output][input_]
+                if scale is None:
+                    env[output][input_][site + 1] = _update_left(
+                        tensors[input_][site],
+                        block[site],
+                        env[output][input_][site],
+                        tensors[output][site],
+                    )
+                else:
+                    env[output][input_][site + 1] = _update_left_identity(
+                        tensors[input_][site],
+                        env[output][input_][site],
+                        tensors[output][site],
+                        scale[site],
+                    )
+
+    def push_right(site):
+        """Carry every block environment one site to the left."""
+        for output in range(count):
+            for input_ in range(count):
+                block = operators[output][input_]
+                if block is None:
+                    continue
+                scale = scales[output][input_]
+                if scale is None:
+                    env[output][input_][site + 2] = _update_right(
+                        tensors[input_][site + 1],
+                        block[site + 1],
+                        env[output][input_][site + 3],
+                        tensors[output][site + 1],
+                    )
+                else:
+                    env[output][input_][site + 2] = _update_right_identity(
+                        tensors[input_][site + 1],
+                        env[output][input_][site + 3],
+                        tensors[output][site + 1],
+                        scale[site + 1],
+                    )
+
     if sites == 1:
         centers = [values[0] for values in tensors]
 
         def apply_one_site(output, input_, value):
-            if operators[output][input_] is None:
-                return None
-            return _apply_h1(
-                value,
-                operators[output][input_][0],
-                env[output][input_][0],
-                env[output][input_][2],
-            )
+            return block_h1(output, input_, value, 0)
 
         centers = _evolve_components(centers, apply_one_site, -1j * float(dt), **krylov)
         for set_index, center in enumerate(centers):
@@ -289,43 +426,19 @@ def multiset_tdvp2_sweep(
         centers = [_merge2(values[site], values[site + 1]) for values in tensors]
 
         def apply(output, input_, value, position=site):
-            if operators[output][input_] is None:
-                return None
-            return _apply_h2(
-                value,
-                operators[output][input_][position],
-                operators[output][input_][position + 1],
-                env[output][input_][position],
-                env[output][input_][position + 3],
-            )
+            return block_h2(output, input_, value, position)
 
         centers = _evolve_components(centers, apply, -1j * half, **krylov)
         for set_index in range(count):
             tensors[set_index][site], tensors[set_index][site + 1] = _split2(
                 centers[set_index], chi_max, eps, "left", expand
             )
-        for output in range(count):
-            for input_ in range(count):
-                if operators[output][input_] is None:
-                    continue
-                env[output][input_][site + 1] = _update_left(
-                    tensors[input_][site],
-                    operators[output][input_][site],
-                    env[output][input_][site],
-                    tensors[output][site],
-                )
+        push_left(site)
         if site < sites - 2:
             centers = [values[site + 1] for values in tensors]
 
             def apply_one(output, input_, value, position=site + 1):
-                if operators[output][input_] is None:
-                    return None
-                return _apply_h1(
-                    value,
-                    operators[output][input_][position],
-                    env[output][input_][position],
-                    env[output][input_][position + 2],
-                )
+                return block_h1(output, input_, value, position)
 
             centers = _evolve_components(centers, apply_one, 1j * half, **krylov)
             for set_index, center in enumerate(centers):
@@ -335,43 +448,19 @@ def multiset_tdvp2_sweep(
         centers = [_merge2(values[site], values[site + 1]) for values in tensors]
 
         def apply(output, input_, value, position=site):
-            if operators[output][input_] is None:
-                return None
-            return _apply_h2(
-                value,
-                operators[output][input_][position],
-                operators[output][input_][position + 1],
-                env[output][input_][position],
-                env[output][input_][position + 3],
-            )
+            return block_h2(output, input_, value, position)
 
         centers = _evolve_components(centers, apply, -1j * half, **krylov)
         for set_index in range(count):
             tensors[set_index][site], tensors[set_index][site + 1] = _split2(
                 centers[set_index], chi_max, eps, "right", expand
             )
-        for output in range(count):
-            for input_ in range(count):
-                if operators[output][input_] is None:
-                    continue
-                env[output][input_][site + 2] = _update_right(
-                    tensors[input_][site + 1],
-                    operators[output][input_][site + 1],
-                    env[output][input_][site + 3],
-                    tensors[output][site + 1],
-                )
+        push_right(site)
         if site > 0:
             centers = [values[site] for values in tensors]
 
             def apply_one(output, input_, value, position=site):
-                if operators[output][input_] is None:
-                    return None
-                return _apply_h1(
-                    value,
-                    operators[output][input_][position],
-                    env[output][input_][position],
-                    env[output][input_][position + 2],
-                )
+                return block_h1(output, input_, value, position)
 
             centers = _evolve_components(centers, apply_one, 1j * half, **krylov)
             for set_index, center in enumerate(centers):
