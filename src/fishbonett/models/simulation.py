@@ -17,6 +17,7 @@ import numpy as np
 import scipy.linalg as _la
 
 from fishbonett.evolve import modetree as _tree
+from fishbonett.evolve import multiset as _multiset
 from fishbonett.evolve import tdvp as _mpo
 from fishbonett.evolve import tebd as _tebd
 from fishbonett.models.propagate import (
@@ -318,6 +319,95 @@ def _compile_mpo_plan(model, spec, context):
         return Result(
             t=times, expect=expectations,
             max_bond=max_bond, rdm=np.asarray(rdms), method=spec.name)
+
+    return SimulationPlan(spec, context, execute=execute)
+
+
+def _compile_multiset_plan(model, spec, context):
+    """Compile coupled two-site TDVP on independent bath MPS components."""
+    from fishbonett.states.multiset import MultiSetMPS
+
+    _check_single_channel(model)
+    coupled = model.coupled_bath.resolved(
+        context.bath_horizon or context.t_max
+    )
+    initial = model.system.initial_vector(context.initial)
+    if spec.representation in {"schrodinger-chain", "schrodinger-star"}:
+        representation = _schrodinger_representation(
+            model, coupled, spec.representation
+        )
+        state = MultiSetMPS.product(initial, representation.dimensions[1:])
+        recover = lambda current: current.system_rdm()
+    elif spec.representation == "interaction-chain":
+        representation, dimensions = _interaction_representation(
+            model, coupled, spec.representation
+        )
+        state = MultiSetMPS.product(initial, dimensions[1:])
+        recover = lambda current: current.system_rdm()
+    elif spec.representation in {"polaron-chain", "polaron-star"}:
+        representation, _bath, _n_modes, _dimensions = _polaron_representation(
+            model, context, spec.representation
+        )
+        state = MultiSetMPS.from_full_mps(
+            representation.initial_mps(initial)
+        )
+        recover = lambda current: representation.recover_rdm(
+            current.combined_mps()
+        )
+    else:
+        raise ValueError(
+            "engine 'multiset-tdvp' has no compiler for representation "
+            f"{spec.representation!r}"
+        )
+
+    bath_observables = _bath_observables(context.obs_ops, coupled.bath)
+
+    def execute():
+        targeted = {name: [] for name in bath_observables}
+
+        def observe(current):
+            for name, (operator, mode) in bath_observables.items():
+                site = (
+                    current.n_sites - mode - 1
+                    if spec.representation == "interaction-chain" else mode
+                )
+                targeted[name].append(
+                    current.site_expectation(operator, site)
+                )
+            return recover(current)
+
+        times, rdms, max_bond, set_bonds, final_state = (
+            _multiset.run_multiset_mpo_hamiltonian(
+                representation,
+                state=state,
+                dt=context.dt,
+                nsteps=context.n_steps,
+                bond_dim=context.bond_dim,
+                trunc_eps=context.trunc_eps,
+                krylov=context.krylov,
+                tol=context.kw.get("tol", 1e-7),
+                eshift=context.kw.get("eshift", False),
+                bond_expand=context.kw.get("bond_expand"),
+                observe=observe,
+                progress=context.progress,
+            )
+        )
+        expectations = _expect_from_rdm(rdms, context.obs_ops)
+        expectations.update({
+            name: np.real_if_close(np.asarray(values))
+            for name, values in targeted.items()
+        })
+        return Result(
+            t=times,
+            expect=expectations,
+            max_bond=max_bond,
+            rdm=rdms,
+            method=spec.name,
+            meta={
+                "n_sets": final_state.n_sets,
+                "final_set_bonds": set_bonds[-1].tolist(),
+            },
+        )
 
     return SimulationPlan(spec, context, execute=execute)
 
@@ -1356,6 +1446,7 @@ def _compile_interaction_fishbone_plan(model, spec, context):
 #: table is the implementation boundary for its coarser engine categories.
 PLAN_COMPILERS = {
     "mpo-tdvp": _compile_mpo_plan,
+    "multiset-tdvp": _compile_multiset_plan,
     "modetree": _compile_modetree_plan,
     "swap-tebd": _compile_swap_plan,
     "displacement-mpo": _compile_displacement_plan,

@@ -113,6 +113,7 @@ fixed by the tensor-network geometry:
 | `state_geometry` | infix | example |
 |---|---|---|
 | `mps` | *(none)* | `polaron-chain-tdvp2` |
+| `multi-set-mps` | `multi-set` | `polaron-chain-multi-set-tdvp2` |
 | `binary-tree` | `tree` | `interaction-chain-tree-tebd` |
 | `tree` | `tree` | `schrodinger-chain-tree-tebd` |
 

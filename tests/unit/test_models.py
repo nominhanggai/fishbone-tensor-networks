@@ -52,7 +52,9 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
             f"{name}: engine {spec.engine!r} has no plan compiler")
 
 def test_state_geometry_vocabulary_is_explicit():
-    assert set(R.STATE_GEOMETRIES) == {"mps", "binary-tree", "tree"}
+    assert set(R.STATE_GEOMETRIES) == {
+        "mps", "multi-set-mps", "binary-tree", "tree",
+    }
     assert "path" not in R.STATE_GEOMETRIES
     assert "comb-tree" not in R.STATE_GEOMETRIES
     assert all(not hasattr(spec, "geometry") for spec in R.METHODS.values())
@@ -517,7 +519,10 @@ def test_describe_taxonomy_mentions_every_model_and_method():
 
 #: ``state_geometry`` -> the infix a method name carries.  Two geometries are
 #: trees, so "insert tree" is not a rule that can name both.
-GEOMETRY_INFIX = {"mps": "", "binary-tree": "tree", "tree": "tree"}
+GEOMETRY_INFIX = {
+    "mps": "", "multi-set-mps": "multi-set",
+    "binary-tree": "tree", "tree": "tree",
+}
 
 #: Methods whose names need a qualifier to avoid a collision.
 #:

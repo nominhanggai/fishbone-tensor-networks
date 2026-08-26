@@ -62,6 +62,7 @@ Hamiltonian. They do not advance tensor-network states.
 
    fishbonett.states.network
    fishbonett.states.mps
+   fishbonett.states.multiset
    fishbonett.states.tree
    fishbonett.states.thermal
 ```
@@ -77,6 +78,7 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.evolve.sitetree
    fishbonett.evolve.mpo_apply
    fishbonett.evolve.tdvp
+   fishbonett.evolve.multiset
    fishbonett.evolve.modetree
 ```
 

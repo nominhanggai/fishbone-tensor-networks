@@ -6,7 +6,7 @@ A run is specified by four axes::
     representation  how H is written         schrodinger-chain | schrodinger-star
                                              | interaction-chain
                                              | polaron-chain | polaron-star
-    state_geometry  tensor-network state        mps | binary-tree | tree
+    state_geometry  tensor-network state        mps | multi-set-mps | binary-tree | tree
     integrator  how a step is taken        tebd | tdvp1 | tdvp2 | dtdvp | trotter-mpo
 
 Availability of each Hamiltonian representation for a model is recorded by
@@ -100,6 +100,9 @@ REPRESENTATIONS = {
 #: (``interaction-chain-tree-tebd``).
 STATE_GEOMETRIES = {
     "mps": "a one-dimensional matrix product state, with the system at site 0",
+    "multi-set-mps": (
+        "one independent environment MPS per exact system-basis state"
+    ),
     "binary-tree": "a balanced binary tree tensor network with the system at the root",
     "tree": "a general tree tensor network determined by the multi-site model",
 }
@@ -178,12 +181,23 @@ class MethodSpec:
 def _canonical_method_name(representation, integrator, state_geometry="mps"):
     """Derive a method name from its representation and algorithm.
 
-    MPS methods use ``<representation>-<integrator>``. A tree tensor network
-    inserts ``tree`` so methods that share a representation and integrator remain
-    unambiguous.  Keeping this rule here prevents a registry label from drifting
-    away from the tuple it denotes.
+    Conventional MPS methods use ``<representation>-<integrator>``. A tree
+    tensor network inserts ``tree`` and a multi-set MPS inserts ``multi-set`` so
+    methods that share a representation and integrator remain unambiguous.
+    Keeping this rule here prevents a registry label from drifting away from the
+    tuple it denotes.
     """
-    state_geometry_tag = "" if state_geometry == "mps" else "tree-"
+    tags = {
+        "mps": "",
+        "multi-set-mps": "multi-set-",
+        "binary-tree": "tree-",
+        "tree": "tree-",
+    }
+    try:
+        state_geometry_tag = tags[state_geometry]
+    except KeyError:
+        raise ValueError(
+            f"unknown state geometry {state_geometry!r}") from None
     return f"{representation}-{state_geometry_tag}{integrator}"
 
 
@@ -222,6 +236,10 @@ _METHOD_ROWS = [
     _m("schrodinger-star", _SB, "mpo-tdvp",
        "tdvp1", requires_bond_cap=True),
     _m("schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
+    _m("schrodinger-chain", _SB, "multiset-tdvp", "tdvp2",
+       state_geometry="multi-set-mps"),
+    _m("schrodinger-star", _SB, "multiset-tdvp", "tdvp2",
+       state_geometry="multi-set-mps"),
     # -- system-bath, interaction transformation, on a 1D MPS -------------------------
     # `interaction-chain`, not `-star`: the star-to-chain transform rotates the phases
     # back into the chain modes, so d_n(0) = (|V|, 0, ..., 0) -- the system on c0
@@ -233,6 +251,8 @@ _METHOD_ROWS = [
     _m("interaction-chain", _SB, "mpo-tdvp",
        "tdvp1", requires_bond_cap=True),
     _m("interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
+    _m("interaction-chain", _SB, "multiset-tdvp", "tdvp2",
+       state_geometry="multi-set-mps"),
     # -- ...and the chain representation on a balanced binary tree ---------------------
     _m("interaction-chain", _SB, "modetree",
        "run_tree_tebd", integrator="tebd", state_geometry="binary-tree"),
@@ -248,6 +268,10 @@ _METHOD_ROWS = [
     _m("polaron-star", _SB, "mpo-tdvp", "tdvp2"),
     _m("polaron-star", _SB, "mpo-tdvp",
        "dtdvp", requires_bond_cap=True),
+    _m("polaron-chain", _SB, "multiset-tdvp", "tdvp2",
+       state_geometry="multi-set-mps"),
+    _m("polaron-star", _SB, "multiset-tdvp", "tdvp2",
+       state_geometry="multi-set-mps"),
     # -- the static tree engine: one engine, two representations, three topologies -----
     _m("schrodinger-chain", ("comb", "site-tree"),
        "static-tree-tebd", integrator="tebd", state_geometry="tree"),
@@ -303,10 +327,9 @@ MODELS = {
     "system-bath": Model(
         key="system-bath", label="system-bath",
         blurb="One system site coupled to one bath through one coupling operator. "
-              "It supports all public representations, both single-system tensor-network "
-              "geometries and the full integrator family. The schrodinger-chain, "
-              "schrodinger-star and interaction-chain representations describe the "
-              "Hamiltonian, while interaction-chain supports two state geometries.",
+              "All five representations support conventional and multi-set MPSs; "
+              "interaction-chain also supports a binary-tree tensor network. "
+              "Available integrators depend on the representation and state geometry.",
         cls="SystemBath"),
     "multichannel": Model(
         key="multichannel", label="multichannel system-bath",
