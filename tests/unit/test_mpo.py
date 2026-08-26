@@ -1,9 +1,11 @@
 """Unit tests for the MPO / TDVP engine, validated against exact diagonalization
 of a small spin-boson chain."""
 import numpy as np
+import pytest
 
 from fishbonett import Bath
 from fishbonett.bath.chain import get_bath_nn_parameters
+from fishbonett.evolve.mpo_apply import apply_mpo, product_state
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian, SX, SZ
 from fishbonett.operators import annihilate, create, number
 from fishbonett.representations.interaction import InteractionRepresentation
@@ -32,6 +34,14 @@ def _embed(op, site, dims):
     return out
 
 
+def test_apply_mpo_rejects_a_mismatched_site_count():
+    """An incomplete MPO must not silently drop the final MPS sites."""
+    state = product_state((2, 2))
+    identity = np.eye(2, dtype=complex).reshape(1, 1, 2, 2)
+    with pytest.raises(ValueError):
+        apply_mpo(state, [identity])
+
+
 def test_dense_operator_mpo_reconstructs_a_nonlocal_gate():
     """The private TT-SVD compiler preserves local output/input ordering."""
     import scipy.linalg as la
@@ -50,7 +60,9 @@ def test_dense_operator_mpo_reconstructs_a_nonlocal_gate():
         for input_ in np.ndindex(*dimensions):
             column = np.ravel_multi_index(input_, dimensions)
             transfer = np.array([[1.0 + 0.0j]])
-            for core, out_index, in_index in zip(mpo, output, input_):
+            for core, out_index, in_index in zip(
+                mpo, output, input_, strict=True
+            ):
                 transfer = transfer @ core[:, :, out_index, in_index]
             rebuilt[row, column] = transfer.item()
     np.testing.assert_allclose(rebuilt, gate, atol=2e-13)

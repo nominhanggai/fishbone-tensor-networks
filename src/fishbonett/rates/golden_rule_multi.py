@@ -313,7 +313,9 @@ def fgr_rate3_correction_order_quad(c_list, e_list, kbT, _w, s_list, t1, order):
 
     def integrand(*reverse_times):
         times = {1: t1}
-        for index, value in zip(range(order + 2, 1, -1), reverse_times):
+        for index, value in zip(
+            range(order + 2, 1, -1), reverse_times, strict=True
+        ):
             times[index] = value
         exponent = np.array(const_exponent, complex)
         for (m, n), factor in pre.items():
@@ -413,7 +415,7 @@ def fgr_rate3_correction_order_vegas(c_list, e_list, kbT, w, s_list, t_max, orde
 
     def y2t(y, beta):
         t = []
-        for i, yi in enumerate(y):
+        for i in range(len(y)):
             t.append(np.prod(y[:i + 1]) / beta ** i)
         return t
 

@@ -424,7 +424,9 @@ def multiset_tree_tdvp2_sweep(
     for crossing_index, (source, destination) in enumerate(crossings):
         centers = [_merge_edge(tree, source, destination) for tree in state.sets]
 
-        def apply_two(output, input_, value):
+        def apply_two(
+            output, input_, value, *, source=source, destination=destination
+        ):
             operator = operators[output][input_]
             if operator is None:
                 return None
@@ -496,7 +498,7 @@ def multiset_tree_tdvp2_sweep(
         correction = float(dt) if source != parent and next_node != parent else half
         centers = [tree.T[destination] for tree in state.sets]
 
-        def apply_one(output, input_, value):
+        def apply_one(output, input_, value, *, destination=destination):
             operator = operators[output][input_]
             if operator is None:
                 return None

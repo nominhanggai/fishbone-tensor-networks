@@ -1515,7 +1515,7 @@ def _compile_polaron_fishbone_plan(model, spec, context):
         ).build()
         nodes = list(range(next_node, next_node + bath.n_modes))
         path = [site, *nodes]
-        edges.extend(zip(path[:-1], path[1:]))
+        edges.extend(zip(path[:-1], path[1:], strict=True))
         dims.extend([bath.phys_dim] * bath.n_modes)
         representations[site] = (representation, nodes[0])
         for mode, node in enumerate(nodes):
@@ -1810,7 +1810,7 @@ def _compile_interaction_fishbone_plan(model, spec, context):
                 representation_cache[cache_key] = representation
             nodes = list(range(next_node, next_node + bath.n_modes))
             path = [site, *nodes]
-            edges.extend(zip(path[:-1], path[1:]))
+            edges.extend(zip(path[:-1], path[1:], strict=True))
             dims.extend([bath.phys_dim] * bath.n_modes)
             branches.append((path, representation))
             for mode, node in enumerate(nodes):

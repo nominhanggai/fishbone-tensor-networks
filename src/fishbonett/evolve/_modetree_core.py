@@ -132,7 +132,7 @@ def _local_products(nodes, root, dcoup, hsys, cop):
     system_term = identities.copy()
     system_term[root] = np.asarray(hsys, complex)
     products.append(system_term)
-    for leaf, amplitude in zip(leaves, dcoup):
+    for leaf, amplitude in zip(leaves, dcoup, strict=True):
         a = annihilate(leaf.d)
         term = identities.copy()
         term[root] = np.asarray(cop, complex)

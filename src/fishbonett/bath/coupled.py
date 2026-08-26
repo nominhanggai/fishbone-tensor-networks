@@ -30,7 +30,7 @@ def _same_operators(left, right):
     if len(left) != len(right):
         return False
     return all(a.shape == b.shape and np.array_equal(a, b)
-               for a, b in zip(left, right))
+               for a, b in zip(left, right, strict=True))
 
 
 @dataclass(frozen=True)

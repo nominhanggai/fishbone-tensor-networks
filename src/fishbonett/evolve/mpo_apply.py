@@ -39,7 +39,7 @@ def apply_mpo(A, W):
     into the MPS bond.  The bond dimension is multiplied by the MPO bond, so this
     is normally followed by :func:`compress`."""
     out = []
-    for a, w in zip(A, W):
+    for a, w in zip(A, W, strict=True):
         dl, _, dr = a.shape
         wl, wr, phys_out, _ = w.shape
         out.append(einsum('xyij,ajb->xaiyb', w, a).reshape(wl * dl, phys_out, wr * dr))

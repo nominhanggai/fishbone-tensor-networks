@@ -263,7 +263,7 @@ def _star_mpo(h_sys, coupling, frequencies, couplings, dimension):
     products.append(row)
     coefficients.append(1.0)
     for mode, (frequency, strength) in enumerate(
-            zip(frequencies, couplings)):
+            zip(frequencies, couplings, strict=True)):
         row = identity_product(dimensions)
         row[mode + 1] = number_op
         products.append(row)

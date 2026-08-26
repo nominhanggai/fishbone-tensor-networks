@@ -115,7 +115,7 @@ class TensorNetwork:
         while self.parent[y] is not None:
             y = self.parent[y]; up_b.append(y)
         set_b = {node: k for k, node in enumerate(up_b)}
-        for ka, node in enumerate(up_a):
+        for ka, node in enumerate(up_a):  # noqa: B007 - ka is used after the loop
             if node in set_b:
                 kb = set_b[node]; break
         return up_a[:ka] + up_b[:kb + 1][::-1]
