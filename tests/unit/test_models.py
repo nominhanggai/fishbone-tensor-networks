@@ -71,6 +71,17 @@ def test_high_level_run_signatures_are_uniform():
     assert len(set(signatures.values())) == 1, signatures
 
 
+def test_multi_site_run_docs_distinguish_tree_and_linear_method_sets():
+    """The shared run signature must not imply one shared method set."""
+    tree_docs = TreeFishbone.run.__doc__
+    fishbone_docs = Fishbone.run.__doc__
+    assert "currently supports" in tree_docs
+    assert "linear" in tree_docs and "additionally supports" in tree_docs
+    for method in R.MODELS["comb"].methods():
+        assert method in fishbone_docs
+    assert "multi-site models have a single propagator" not in tree_docs
+
+
 def test_bond_cap_requirements_are_registry_data():
     """Bond-cap requirements are part of each method specification."""
     assert R.BOND_CAP_REQUIRED_METHODS == frozenset(
