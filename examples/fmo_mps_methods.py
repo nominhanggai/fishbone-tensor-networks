@@ -5,7 +5,9 @@ conditional-displacement Trotter-MPO, TDVP1, TDVP2, or dTDVP.  The ``smoke``
 profile checks the complete workflow.  The ``200fs`` profile uses automatic
 TEDOPA bath resolution, a six-level oscillator basis, and an SVD threshold of
 ``1e-4``; it is a production calculation and writes a checkpoint after every
-segment.
+segment. TEBD, Trotter-MPO, TDVP2, and dTDVP use a maximum bond of 512 only as
+a safety ceiling. TDVP1 cannot grow by an SVD threshold, so that comparison
+uses a fixed bond dimension of 64.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ class Profile:
     domain: tuple[float, float]
     segment_steps: int
     bond_dim: int
+    tdvp1_bond_dim: int
 
     @property
     def horizon(self):
@@ -46,8 +49,10 @@ class Profile:
 
 
 PROFILES = {
-    "smoke": Profile(0.01, 2, 1, 3, 1e-8, (-8.0, 8.0), 2, 64),
-    "200fs": Profile(0.025, 151, None, 6, 1e-4, (-10.0, 10.0), 5, 512),
+    "smoke": Profile(0.01, 2, 1, 3, 1e-8, (-8.0, 8.0), 2, 64, 16),
+    "200fs": Profile(
+        0.025, 151, None, 6, 1e-4, (-10.0, 10.0), 5, 512, 64
+    ),
 }
 
 METHODS = {
@@ -97,17 +102,28 @@ def _paths(output, label):
 
 def _load_progress(checkpoint_path, partial_path):
     if not checkpoint_path.exists() or not partial_path.exists():
-        return None, [], [], []
+        return None, [], [], [], 0.0
     checkpoint = SimulationCheckpoint.load(checkpoint_path)
     with np.load(partial_path) as archive:
         times = list(np.asarray(archive["t"], float))
         populations = list(np.asarray(archive["population"], float))
         bonds = list(np.asarray(archive["max_bond"], int))
-    return checkpoint, times, populations, bonds
+        elapsed = (
+            float(archive["elapsed_seconds"])
+            if "elapsed_seconds" in archive
+            else 0.0
+        )
+    return checkpoint, times, populations, bonds, elapsed
 
 
 def _save_progress(
-    checkpoint_path, partial_path, checkpoint, times, populations, bonds,
+    checkpoint_path,
+    partial_path,
+    checkpoint,
+    times,
+    populations,
+    bonds,
+    elapsed_seconds,
 ):
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint.save(checkpoint_path)
@@ -117,18 +133,26 @@ def _save_progress(
         t_fs=np.asarray(times) * TIME_UNIT_FS,
         population=np.asarray(populations),
         max_bond=np.asarray(bonds, dtype=int),
+        elapsed_seconds=np.asarray(elapsed_seconds),
     )
 
 
 def run_method(profile, label, output):
     method = METHODS[label]
     checkpoint_path, partial_path, summary_path = _paths(output, label)
-    checkpoint, times, populations, bonds = _load_progress(
+    checkpoint, times, populations, bonds, previous_elapsed = _load_progress(
         checkpoint_path, partial_path
     )
     completed = 0 if checkpoint is None else int(round(checkpoint.elapsed / profile.dt))
+    if completed >= profile.n_steps and summary_path.exists():
+        print(f"[{label}] complete; using the saved result", flush=True)
+        return json.loads(summary_path.read_text(encoding="utf-8"))
+
     started = perf_counter()
     model = make_model(profile)
+    max_bond_cap = (
+        profile.tdvp1_bond_dim if label.endswith("-tdvp1") else profile.bond_dim
+    )
     print(
         f"[{label}] {completed}/{profile.n_steps} steps already checkpointed",
         flush=True,
@@ -141,7 +165,7 @@ def run_method(profile, label, output):
             bath_horizon=profile.horizon,
             method=method,
             trunc_eps=profile.trunc_eps,
-            bond_dim=profile.bond_dim,
+            bond_dim=max_bond_cap,
             svd_backend="auto",
         )
         if checkpoint is None:
@@ -161,6 +185,7 @@ def run_method(profile, label, output):
             times,
             populations,
             bonds,
+            previous_elapsed + perf_counter() - started,
         )
         print(
             f"[{label}] {completed:3d}/{profile.n_steps}: "
@@ -169,6 +194,8 @@ def run_method(profile, label, output):
         )
 
     population = np.asarray(populations)
+    invocation_seconds = perf_counter() - started
+    total_seconds = previous_elapsed + invocation_seconds
     summary = {
         "method": method,
         "state_family": "conventional-mps",
@@ -180,12 +207,18 @@ def run_method(profile, label, output):
         "layout": (
             "system-first" if label.startswith("system-first-") else "interleaved"
         ),
-        "elapsed_seconds_this_invocation": perf_counter() - started,
+        "elapsed_seconds_this_invocation": invocation_seconds,
+        "elapsed_seconds_total": total_seconds,
         "final_time_fs": times[-1] * TIME_UNIT_FS,
         "dt_fs": profile.dt * TIME_UNIT_FS,
         "n_steps": profile.n_steps,
         "svd_threshold": profile.trunc_eps,
-        "max_bond_cap": profile.bond_dim,
+        "max_bond_cap": max_bond_cap,
+        "truncation_control": (
+            "fixed TDVP1 bond dimension"
+            if label.endswith("-tdvp1")
+            else "relative SVD threshold with a maximum-bond safety ceiling"
+        ),
         "physical_dimension": profile.phys_dim,
         "peak_bond": int(max(bonds)),
         "normalization_error": float(
@@ -209,10 +242,18 @@ def main():
         "--output", type=Path, default=Path("examples/output/fmo_mps_methods")
     )
     args = parser.parse_args()
-    summaries = {
-        label: run_method(PROFILES[args.profile], label, args.output)
-        for label in args.methods
-    }
+    args.output.mkdir(parents=True, exist_ok=True)
+    aggregate_path = args.output / "summary.json"
+    summaries = (
+        json.loads(aggregate_path.read_text(encoding="utf-8"))
+        if aggregate_path.exists()
+        else {}
+    )
+    for label in args.methods:
+        summaries[label] = run_method(PROFILES[args.profile], label, args.output)
+        aggregate_path.write_text(
+            json.dumps(summaries, indent=2) + "\n", encoding="utf-8"
+        )
     print(json.dumps(summaries, indent=2))
 
 
