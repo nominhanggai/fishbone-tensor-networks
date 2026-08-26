@@ -202,7 +202,9 @@ def run_method(profile, label, output):
     population = np.asarray(populations)
     invocation_seconds = perf_counter() - started
     total_seconds = previous_elapsed + invocation_seconds
-    qr_only = label.endswith(("-tdvp1", "-a1tdvp"))
+    tdvp1 = label.endswith("-tdvp1")
+    a1tdvp = label.endswith("-a1tdvp")
+    qr_only = tdvp1 or a1tdvp
     summary = {
         "method": method,
         "state_family": "conventional-mps",
@@ -221,7 +223,15 @@ def run_method(profile, label, output):
         "n_steps": profile.n_steps,
         "trunc_eps": profile.trunc_eps,
         "svd_backend": None if qr_only else "auto",
-        "factorization_backend": "full-qr" if qr_only else "adaptive-svd:auto",
+        "factorization_backend": (
+            "reduced-qr"
+            if tdvp1
+            else (
+                "deterministic-qr-completion"
+                if a1tdvp
+                else "adaptive-svd:auto"
+            )
+        ),
         "max_bond_cap": max_bond_cap,
         "truncation_control": (
             "fixed TDVP1 bond dimension"
