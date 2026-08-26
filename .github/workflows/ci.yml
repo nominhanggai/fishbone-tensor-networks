@@ -42,7 +42,7 @@ jobs:
       - name: Install package with test extras
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[test]
+          python -m pip install -e .[test] pytest-github-actions-annotate-failures
       - name: Run test suite
         run: pytest -q
 
@@ -56,7 +56,7 @@ jobs:
           python-version: "3.10"
       - name: Install declared dependency floors
         run: |
-          python -m pip install "numpy==1.22.4" "scipy==1.8.1" "opt_einsum==3.3.0" "pytest>=7"
+          python -m pip install "numpy==1.22.4" "scipy==1.8.1" "opt_einsum==3.3.0" "pytest>=7" pytest-github-actions-annotate-failures
           python -m pip install -e . --no-deps
       - run: pytest -q
 
@@ -136,7 +136,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[docs]
       - name: Generate tutorial figure
-        run: python docs/figures.py --figure "${{ matrix.figure }}"
+        run: |
+          set +e
+          python docs/figures.py --figure "${{ matrix.figure }}" > figure.log 2>&1
+          status=$?
+          cat figure.log
+          if [ "$status" -ne 0 ]; then
+            message=$(tail -n 30 figure.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+            echo "::error title=Tutorial figure ${{ matrix.figure }} failed::$message"
+          fi
+          exit "$status"
       - name: Upload generated figure and summary
         uses: actions/upload-artifact@v6
         with:
