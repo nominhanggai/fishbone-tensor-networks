@@ -10,7 +10,6 @@ DOCS = pathlib.Path(__file__).resolve().parents[2] / "docs"
 
 #: Modules the reference deliberately omits, and why.
 NOT_IN_REFERENCE = {
-    "fishbonett.rsvd_cupy": "optional GPU kernel behind the CuPy import guard",
 }
 
 
