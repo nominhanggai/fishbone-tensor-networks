@@ -16,6 +16,7 @@ from fishbonett.evolve._tdvp_kernels import (
     SZ, _setbond, applyH0, applyH1, evolveAC, evolveC, expmv_lanczos,
     init_right_envs, left_qr, right_lq, updateleftenv, updaterightenv,
 )
+from fishbonett.evolve.mpo_apply import apply_mpo as _apply_mpo, compress as _compress
 from fishbonett.linalg import threshold_svd
 from fishbonett.randomized import randomized_svd
 
@@ -498,20 +499,27 @@ def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
             )
             return float(sum(np.vdot(value, value).real for value in values))
 
-        selected = local_limit
-        selected_increment = 0.0
-        value = convergence(current)
+        # Every candidate is weighed.  Stopping at the first small increment
+        # assumes the increments fall monotonically, which Dunnett and Chin
+        # note they do not: the gradient of the convergence function is
+        # non-monotonic in the order of the complement, so a direction the
+        # Hamiltonian happens not to reach would otherwise hide the ones
+        # behind it.
+        increments = []
+        running = convergence(current)
         for candidate in range(current, local_limit):
             gain = added(candidate)
-            if value == 0.0:
-                increment = 0.0 if gain == 0.0 else np.inf
+            if running == 0.0:
+                increments.append(0.0 if gain == 0.0 else np.inf)
             else:
-                increment = gain / value
-            selected_increment = increment
-            if increment <= precision:
-                selected = candidate
-                break
-            value += gain
+                increments.append(gain / running)
+            running += gain
+        selected = current
+        for offset, increment in enumerate(increments):
+            if increment > precision:
+                selected = current + offset + 1
+        ignored = increments[selected - current:]
+        selected_increment = float(max(ignored)) if ignored else 0.0
         targets.append(selected)
         details.append({
             "bond": site,
@@ -520,6 +528,79 @@ def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
             "relative_increment": float(selected_increment),
         })
     return targets, details
+
+
+#: Weight of the globally enriched state relative to the propagated one.  The
+#: enrichment only has to *open* a direction; the sweep then fills it.  Keeping
+#: the weight this far down leaves the norm and the energy untouched at the
+#: precision the adaptive tests ask for, which is why the combination below
+#: never truncates on the enrichment's own weight.
+GLOBAL_ENRICHMENT = 1.0e-12
+
+
+def _mps_add(left, right):
+    """Block-diagonal sum of two MPSs stored as ``(bond_l, phys, bond_r)``."""
+    count = len(left)
+    out = []
+    for site, (first, second) in enumerate(zip(left, right, strict=True)):
+        rows = 1 if site == 0 else first.shape[0] + second.shape[0]
+        columns = 1 if site == count - 1 else first.shape[2] + second.shape[2]
+        tensor = np.zeros((rows, first.shape[1], columns), complex)
+        row = slice(None) if site == 0 else slice(0, first.shape[0])
+        column = slice(None) if site == count - 1 else slice(0, first.shape[2])
+        if site == 0:
+            tensor[0, :, :first.shape[2]] += first[0]
+            tensor[0, :, first.shape[2]:] += second[0]
+        elif site == count - 1:
+            tensor[:first.shape[0], :, 0] += first[:, :, 0]
+            tensor[first.shape[0]:, :, 0] += second[:, :, 0]
+        else:
+            tensor[row, :, column] += first
+            tensor[first.shape[0]:, :, first.shape[2]:] += second
+        out.append(tensor)
+    return out
+
+
+def _global_enrichment(tensors, mpo, chi_max, eps, expand):
+    """Open every bond towards ``H`` at once, then trim.
+
+    The adaptive measure is evaluated one bond at a time with the others left
+    alone, which cannot see a coupling that reaches across several of them.
+    For a system spread over separate chain sites — the interleaved exciton
+    layout — the electronic couplings are exactly that, and the environment of
+    the long-range channel is ``<psi|S-|psi>`` over the untouched block, which
+    is zero while every bond is still one.  Each bond then looks converged on
+    its own and the state can only correlate one bond further per sweep, so a
+    coupling that acts at first order in ``dt`` is missed entirely.
+
+    Mixing in a little of ``H|psi>`` opens all the bonds together, which is the
+    global subspace expansion of Yang and White, arXiv:2005.06104.  The
+    adaptive measure then trims what it does not need.
+    """
+    # Only ever open bonds here.  Shrinking would quietly discard a resumed
+    # state that is already wider than the requested ceiling, where the caller
+    # is owed an error instead.
+    current = max(bonddims(tensors))
+    chi_max = max(int(chi_max), current)
+    order = [np.ascontiguousarray(np.transpose(t, (0, 2, 1))) for t in tensors]
+    try:
+        krylov = _apply_mpo(order, mpo)
+    except ValueError:
+        return tensors
+    if not np.isfinite(np.linalg.norm(krylov[0])):
+        return tensors
+    # Trim H|psi> to the few directions worth opening, so a sweep adds at most
+    # ``expand`` per bond rather than the operator's whole bond dimension.
+    krylov = _compress(krylov, chi_max=max(1, int(expand)), eps=max(eps, 1e-14))
+    krylov[0] = krylov[0] * GLOBAL_ENRICHMENT
+    # Truncate on rank alone.  Truncating on weight would discard the
+    # enrichment itself, which is exactly what its smallness is for.
+    combined = _compress(
+        _mps_add(order, krylov),
+        chi_max=min(chi_max, current + max(1, int(expand))),
+        eps=0.0,
+    )
+    return [np.ascontiguousarray(np.transpose(t, (0, 2, 1))) for t in combined]
 
 
 def _expand_right_canonical(tensors, targets, mpo):
@@ -579,6 +660,9 @@ def a1tdvp_sweep(
     ``expand`` limits the number of QR-complement directions tested per sweep.
     The time step itself is an ordinary one-site projector-splitting sweep.
     """
+    tensors = _global_enrichment(
+        tensors, mpo, int(bond_dim), float(trunc_eps), int(expand)
+    )
     targets, bonds = _adaptive_bond_targets(
         tensors, mpo, float(trunc_eps), int(bond_dim), int(expand)
     )
