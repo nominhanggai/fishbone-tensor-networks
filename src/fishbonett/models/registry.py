@@ -266,10 +266,26 @@ _METHOD_ROWS = [
     _m("interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
     _m("interaction-chain", (*_SB, "exciton-bath"), "multiset-tdvp", "tdvp2",
        state_geometry="multi-set-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mps-tebd",
+       integrator="tebd", state_geometry="system-first-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mps-trotter",
+       integrator="trotter-mpo", state_geometry="system-first-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp1",
+       requires_bond_cap=True, state_geometry="system-first-mps"),
     _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp2",
        state_geometry="system-first-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "dtdvp",
+       requires_bond_cap=True, state_geometry="system-first-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mps-tebd",
+       integrator="tebd", state_geometry="interleaved-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mps-trotter",
+       integrator="trotter-mpo", state_geometry="interleaved-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp1",
+       requires_bond_cap=True, state_geometry="interleaved-mps"),
     _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp2",
        state_geometry="interleaved-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "dtdvp",
+       requires_bond_cap=True, state_geometry="interleaved-mps"),
     _m("interaction-chain", ("exciton-bath",), "multiset-tree-tdvp", "tdvp2",
        state_geometry="multi-set-tree"),
     # -- ...and the chain representation on a balanced binary tree ---------------------
@@ -371,7 +387,7 @@ MODELS = {
         blurb="One N-level electronic Hamiltonian with an independent bath on "
               "each site population. It supports a multilevel system-first MPS, "
               "local electronic sites interleaved with their baths, and a "
-              "multi-set MPS, and multi-set bath tree.",
+              "multi-set MPS or bath tree.",
         cls="ExcitonBath",
         gaps={
             "schrodinger-chain": _EXCITON_INTERACTION_ONLY,

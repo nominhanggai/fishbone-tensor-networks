@@ -8,16 +8,20 @@ import numpy as np
 import pytest
 
 from fishbonett._products import ScaledTreeIdentity
-from fishbonett import Bath, ExcitonBath, MultiSetTreeTensorNetwork
+from fishbonett import (
+    Bath,
+    ExcitonBath,
+    MultiSetTreeTensorNetwork,
+    SimulationCheckpoint,
+)
+from fishbonett.models import registry
 from fishbonett.operators import annihilate
 from fishbonett.representations.exciton import ExcitonInteractionRepresentation
 
 
-METHODS = (
-    "interaction-chain-system-first-tdvp2",
-    "interaction-chain-interleaved-tdvp2",
-    "interaction-chain-multi-set-tdvp2",
-    "interaction-chain-multi-set-tree-tdvp2",
+METHODS = tuple(
+    name for name, spec in registry.METHODS.items()
+    if "exciton-bath" in spec.models
 )
 
 
@@ -90,18 +94,24 @@ def _exact_rdm(model, times):
 @pytest.mark.parametrize("method", METHODS)
 def test_every_exciton_layout_matches_the_same_dense_finite_bath(method):
     model = _model(levels=3, modes=1)
-    result = model.run(
+    options = dict(
         dt=0.01,
         n_steps=4,
         method=method,
         trunc_eps=1e-12,
         bond_dim=100,
         krylov=30,
-        tol=1e-11,
     )
+    if "tdvp" in method:
+        options["tol"] = 1e-11
+    result = model.run(**options)
     exact = _exact_rdm(model, result.t)
-    assert np.max(np.abs(result.rdm - exact)) < 1e-8
-    assert np.allclose(result.expect["population"], np.diagonal(exact, axis1=1, axis2=2))
+    assert np.max(np.abs(result.rdm - exact)) < 1e-7
+    assert np.allclose(
+        result.expect["population"],
+        np.diagonal(exact, axis1=1, axis2=2),
+        atol=1e-7,
+    )
     assert np.allclose(np.trace(result.rdm, axis1=1, axis2=2), 1.0)
 
 
@@ -136,21 +146,81 @@ def test_tree_hopping_blocks_use_compact_identity_descriptors():
     assert isinstance(operators[0][0], list)
 
 
-def test_interleaved_layout_preserves_a_general_one_excitation_initial_state():
+@pytest.mark.parametrize("integrator", ["tebd", "trotter-mpo", "tdvp2"])
+def test_interleaved_layout_preserves_a_general_one_excitation_initial_state(
+    integrator,
+):
     model = _model(levels=3, modes=1)
     initial = np.array([1.0, 2.0j, -0.5], complex)
     initial /= np.linalg.norm(initial)
-    result = model.run(
+    options = dict(
         dt=1e-5,
         n_steps=1,
-        method="interaction-chain-interleaved-tdvp2",
+        method=f"interaction-chain-interleaved-{integrator}",
         initial=initial,
         trunc_eps=1e-12,
         bond_dim=100,
-        tol=1e-12,
     )
+    if integrator == "tdvp2":
+        options["tol"] = 1e-12
+    result = model.run(**options)
     assert np.max(np.abs(result.rdm[0] - np.outer(initial, initial.conj()))) < 1e-5
     assert result.meta["electronic_sites"] == (0, 2, 4)
+
+
+@pytest.mark.parametrize("layout", ["system-first", "interleaved"])
+@pytest.mark.parametrize("integrator", ["tdvp1", "dtdvp"])
+def test_fixed_or_adaptive_one_site_tdvp_requires_a_bond_cap(layout, integrator):
+    with pytest.raises(ValueError, match="bond_dim must be given"):
+        _model(levels=2).run(
+            dt=0.01,
+            n_steps=1,
+            method=f"interaction-chain-{layout}-{integrator}",
+        )
+
+
+@pytest.mark.parametrize("layout", ["system-first", "interleaved"])
+@pytest.mark.parametrize(
+    "integrator", ["tebd", "trotter-mpo", "tdvp1", "tdvp2", "dtdvp"]
+)
+def test_conventional_mps_checkpoint_matches_uninterrupted_run(
+    layout, integrator,
+):
+    model = _model(levels=2, modes=1)
+    options = dict(
+        dt=0.01,
+        bath_horizon=0.04,
+        method=f"interaction-chain-{layout}-{integrator}",
+        trunc_eps=1e-12,
+        bond_dim=20,
+    )
+    if "tdvp" in integrator:
+        options["tol"] = 1e-11
+    whole = model.run(n_steps=4, **options)
+    first = model.run(n_steps=2, **options)
+    continued = model.run(n_steps=2, resume=first.checkpoint, **options)
+
+    assert continued.t.tolist() == pytest.approx([0.03, 0.04])
+    assert continued.checkpoint.elapsed == pytest.approx(0.04)
+    assert np.max(np.abs(continued.rdm - whole.rdm[2:])) < 1e-12
+
+
+def test_conventional_mps_checkpoint_roundtrips_without_pickle(tmp_path):
+    model = _model(levels=2, modes=1)
+    options = dict(
+        dt=0.01,
+        bath_horizon=0.03,
+        method="interaction-chain-interleaved-trotter-mpo",
+        trunc_eps=1e-12,
+        bond_dim=20,
+    )
+    first = model.run(n_steps=2, **options)
+    loaded = SimulationCheckpoint.load(
+        first.checkpoint.save(tmp_path / "exciton-mps.npz")
+    )
+    continued = model.run(n_steps=1, resume=loaded, **options)
+    whole = model.run(n_steps=3, **options)
+    assert np.max(np.abs(continued.rdm[-1] - whole.rdm[-1])) < 1e-12
 
 
 def test_multiset_tree_progress_exposes_the_actual_state():

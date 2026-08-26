@@ -81,14 +81,17 @@ integrator determines how that product advances the tensor state.
 |---|---|---|---|
 | `multichannel` | `schrodinger-star` | star tensor network (`tree`) | `schrodinger-star-tree-tebd` |
 | `multichannel` | `interaction-chain` | 1D MPS (`mps`) | `interaction-chain-tebd` |
-| `exciton-bath` | `interaction-chain` | grouped system-first MPS | `interaction-chain-system-first-tdvp2` |
-| `exciton-bath` | `interaction-chain` | interleaved electronic/bath MPS | `interaction-chain-interleaved-tdvp2` |
+| `exciton-bath` | `interaction-chain` | grouped system-first MPS | `interaction-chain-system-first-<integrator>` |
+| `exciton-bath` | `interaction-chain` | interleaved electronic/bath MPS | `interaction-chain-interleaved-<integrator>` |
 | `exciton-bath` | `interaction-chain` | multi-set MPS | `interaction-chain-multi-set-tdvp2` |
 | `exciton-bath` | `interaction-chain` | multi-set bath tree | `interaction-chain-multi-set-tree-tdvp2` |
 | `comb` | `schrodinger-chain` | comb tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
 | `comb` | `interaction-chain` | comb tensor network (`tree`) | `interaction-chain-fishbone-tebd`, `interaction-chain-fishbone-trotter-mpo`, `interaction-chain-fishbone-tdvp2` |
 | `comb` | `polaron-chain` | comb tensor network (`tree`) | `polaron-chain-tree-tebd` |
 | `site-tree` | `schrodinger-chain` | arbitrary tree tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
+
+For the two conventional exciton MPS rows, `<integrator>` is one of `tebd`,
+`trotter-mpo`, `tdvp1`, `tdvp2`, or `dtdvp`.
 
 For multichannel interaction propagation, `interaction-chain-tebd` applies one
 common orthogonal star-to-chain transform to the matrix-valued mode couplings.

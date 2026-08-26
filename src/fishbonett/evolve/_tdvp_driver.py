@@ -18,12 +18,19 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
                         canonicalize=True, prec=None, tol=1e-7,
                         eshift=False, verbose=False, seed=0,
                         initial_bond=None, progress=None,
-                        bond_expand=None):
+                        bond_expand=None, state=None, time_offset=0.0,
+                        return_state=False):
     """Propagate an MPS using a representation's ``tdvp_mpo`` Hamiltonian.
 
     Time-dependent Hamiltonians are sampled at each step midpoint.  Static ones keep
     their environments between steps; changing an MPO invalidates those cached
     contractions automatically.
+
+    ``state`` accepts TDVP-order tensors from a preceding segment and is mutually
+    exclusive with ``initial`` and ``prepare``. ``time_offset`` keeps a
+    time-dependent representation on its absolute clock. Set ``return_state`` to
+    return those final tensors as a fourth result; the default three-result tuple
+    remains ``(times, observations, peak_bonds)``.
     """
     dt, nsteps = time_steps(dt, nsteps)
     if sweep not in {"tdvp1", "tdvp2", "dtdvp"}:
@@ -48,16 +55,28 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
                 or not isinstance(bond_expand, (int, np.integer))
                 or bond_expand < 0):
             raise ValueError("bond_expand must be a non-negative integer or None")
+    if not np.isfinite(time_offset) or time_offset < 0:
+        raise ValueError("time_offset must be finite and non-negative")
+    time_offset = float(time_offset)
     dimensions = tuple(representation.dimensions)
     if len(dimensions) < 2:
         raise ValueError("TDVP system-bath propagation needs at least two sites")
-    if initial is None:
-        initial = np.zeros(dimensions[0], complex)
-        initial[0] = 1.0
     measure = observe if observe is not None else lambda state: measure_sz(state[0])
-    state = init_mps(len(dimensions), dimensions[1:], initial)
-    if prepare is not None:
-        state = prepare(state)
+    if state is None:
+        if initial is None:
+            initial = np.zeros(dimensions[0], complex)
+            initial[0] = 1.0
+        state = init_mps(len(dimensions), dimensions[1:], initial)
+        if prepare is not None:
+            state = prepare(state)
+    else:
+        if initial is not None or prepare is not None:
+            raise ValueError("state cannot be combined with initial or prepare")
+        state = [np.asarray(tensor, complex).copy() for tensor in state]
+        if len(state) != len(dimensions) or tuple(
+            tensor.shape[2] for tensor in state
+        ) != dimensions:
+            raise ValueError("state physical dimensions do not match representation")
 
     adaptive_cap = bond_dim
     if sweep == "dtdvp" and adaptive_cap is None:
@@ -78,7 +97,9 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
     expand = DEFAULT_BOND_EXPAND if bond_expand is None else int(bond_expand)
     for step in range(nsteps):
         if not representation.static:
-            operator = representation.tdvp_mpo((step + 0.5) * dt)
+            operator = representation.tdvp_mpo(
+                time_offset + (step + 0.5) * dt
+            )
             environments = None
         if sweep == "tdvp1":
             state, environments = tdvp1sweep(
@@ -96,13 +117,17 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
         peak_bonds.append(max(bonddims(state)))
         if progress is not None:
             progress({"step": step, "n_steps": nsteps,
-                      "t": dt * (step + 1), "bond": peak_bonds[-1],
+                      "t": time_offset + dt * (step + 1), "bond": peak_bonds[-1],
                       "rdm": observations[-1], "state": state})
         if verbose:
             print(
                 f"  {sweep} {step + 1}/{nsteps} "
-                f"t={dt * (step + 1):.6g} maxD={peak_bonds[-1]}",
+                f"t={time_offset + dt * (step + 1):.6g} "
+                f"maxD={peak_bonds[-1]}",
                 flush=True,
             )
-    times = np.arange(1, nsteps + 1, dtype=float) * dt
-    return times, np.asarray(observations), np.asarray(peak_bonds, dtype=int)
+    times = time_offset + np.arange(1, nsteps + 1, dtype=float) * dt
+    result = times, np.asarray(observations), np.asarray(peak_bonds, dtype=int)
+    if return_state:
+        return (*result, state)
+    return result

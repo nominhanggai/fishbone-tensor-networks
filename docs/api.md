@@ -78,6 +78,7 @@ Hamiltonian. They do not advance tensor-network states.
    :recursive:
 
    fishbonett.evolve.tebd
+   fishbonett.evolve.exciton_tebd
    fishbonett.evolve.sitetree
    fishbonett.evolve.mpo_apply
    fishbonett.evolve.tdvp
