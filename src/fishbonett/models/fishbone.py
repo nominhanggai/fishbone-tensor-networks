@@ -75,12 +75,16 @@ def _parse_observable(spec, dimensions=None, name="observable"):
     specific site or a composite of sites (``kind "sites"``)."""
     if isinstance(spec, tuple):
         # A tuple-of-tuples is a perfectly ordinary matrix.  Only interpret a
-        # two-tuple as a targeted observable when the whole object is not a
-        # square numerical array.
-        try:
-            whole = np.asarray(spec)
-        except (TypeError, ValueError):
-            whole = None
+        # two-tuple as a targeted observable when its entries are not scalar
+        # matrix rows. Checking the row structure first avoids asking NumPy to
+        # coerce ``(operator, target)`` as a ragged array.
+        square_rows = bool(spec) and all(
+            isinstance(row, (tuple, list, np.ndarray))
+            and np.ndim(row) == 1
+            and len(row) == len(spec)
+            for row in spec
+        )
+        whole = np.asarray(spec) if square_rows else None
         if whole is not None and whole.ndim == 2 and whole.shape[0] == whole.shape[1]:
             kind, operator, sites = "persite", whole, None
             return _validate_observable_target(
