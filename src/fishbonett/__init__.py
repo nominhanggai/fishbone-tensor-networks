@@ -91,7 +91,7 @@ Public API
   :class:`~fishbonett.states.multiset.MultiSetMPS` for a multi-set MPS,
   :class:`~fishbonett.states.multiset_tree.MultiSetTreeTensorNetwork` for
   multi-set bath trees, and
-  :class:`~fishbonett.states.tree.TreeTensorNetwork` for a general tree.
+  :class:`~fishbonett.states.tree.TreeTensorNetwork` for a tree.
 * **Representations and numerical products:** the Schrödinger, interaction,
   polaron, and multichannel builders in :mod:`fishbonett.representations`.
   See :doc:`the methods guide </methods/index>` for compatible propagators.

@@ -1,4 +1,4 @@
-"""Tests for the general tree-topology engine (TreeTensorNetwork) and TreeFishbone."""
+"""Tests for the tree-topology engine (TreeTensorNetwork) and TreeFishbone."""
 import numpy as np
 import pytest
 from scipy.linalg import expm

@@ -114,7 +114,7 @@ ratio encountered during propagation.
 A fishbone is a set of electronic sites, each coupled to one bath (a comb) or two
 baths — one on each side of the site (the fishbone).
 {py:class}`~fishbonett.models.fishbone.Fishbone` is the 1D-chain specialization (a linear
-backbone) of the general tree engine
+backbone) of the tree engine
 {py:class}`~fishbonett.models.fishbone.TreeFishbone`, to which it delegates; both return
 per-site data. For a non-chain topology, use ``TreeFishbone`` with an edge list.
 The 1D chain is declared the same way as the single-site system:

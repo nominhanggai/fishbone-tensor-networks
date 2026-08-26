@@ -252,7 +252,7 @@ def test_result_shapes_and_normalization():
 
 
 def test_multi_site_observable_vs_exact():
-    # As a specialization of the general tree engine, the 1D Fishbone now
+    # As a specialization of the tree engine, the 1D Fishbone now
     # supports the full observable interface -- including a composite operator
     # across two sites, which the old comb engine could not measure.
     sites = [0.3 * sigma_z + 0.7 * sigma_x, -0.2 * sigma_z + 0.5 * sigma_x]
@@ -275,7 +275,7 @@ def test_multi_site_observable_vs_exact():
 
 
 def test_per_bath_domains_allowed():
-    # As a specialization of the general tree engine, each bath discretizes
+    # As a specialization of the tree engine, each bath discretizes
     # independently, so baths on different frequency domains are allowed.
     b1 = Bath(
         J=_J, domain=(0.0, 40.0), n_modes=2, phys_dim=4).bind(sigma_z)
