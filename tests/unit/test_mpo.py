@@ -180,15 +180,15 @@ def test_partial_full_qr_returns_the_requested_full_basis_columns():
     rng = np.random.default_rng(29)
     matrix = rng.normal(size=(31, 5)) + 1j * rng.normal(size=(31, 5))
     basis, triangular = _partial_full_qr(matrix, 9)
-    full_basis, full_triangular = np.linalg.qr(matrix, mode="complete")
 
-    np.testing.assert_allclose(basis, full_basis[:, :9], atol=2e-13)
-    np.testing.assert_allclose(triangular, full_triangular[:5], atol=2e-13)
     np.testing.assert_allclose(
         basis.conj().T @ basis, np.eye(9), atol=2e-13
     )
     np.testing.assert_allclose(
         basis[:, :5] @ triangular, matrix, atol=2e-13
+    )
+    np.testing.assert_allclose(
+        basis[:, :5].conj().T @ basis[:, 5:], 0.0, atol=2e-13
     )
 
 

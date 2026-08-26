@@ -73,8 +73,9 @@ print(result.max_bond)
 
 `trunc_eps` is the main tensor-network accuracy control. `bond_dim=None` leaves
 the maximum bond dimension unrestricted; set a finite value only when a hard
-memory limit is needed. Fixed-bond and dynamically expanding TDVP methods require
-a finite cap. `Result` uses the same layout for every high-level method, so
+memory limit is needed. Fixed-bond 1TDVP and adaptive one-site TDVP (A1TDVP)
+require a finite cap; two-site TDVP can remain uncapped. `Result` uses the same
+layout for every high-level method, so
 representations and integrators can be compared without changing analysis code.
 `svd_backend="auto"` uses exact SVD on small blocks and certified adaptive
 randomized truncation on large low-rank blocks; `"exact"` is available for
@@ -101,6 +102,7 @@ Conventional-MPS names omit the implicit `mps`; multi-set and tree-state names
 include their geometry when needed to distinguish them, for example:
 
 - `schrodinger-chain-tdvp2`
+- `schrodinger-chain-a1tdvp`
 - `interaction-chain-tebd`
 - `interaction-chain-trotter-mpo`
 - `interaction-chain-tree-tebd`
