@@ -15,6 +15,7 @@ Run with:  python examples/interaction_picture_spin_boson.py
 """
 import numpy as np
 
+from fishbonett.contract import contract
 from fishbonett.representations.multichannel import MultichannelInteractionRepresentation
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.evolve import tebd
@@ -46,8 +47,8 @@ def main():
         tebd.symmetric_swap_step(
             etn, eth, tn * dt, dt, n_boson, chi, eps)
         theta = etn.get_theta1(0)
-        rho = np.einsum('LiR,LjR->ij', theta, theta.conj())
-        pops.append(np.einsum('ij,ji', rho, sigma_z).real / np.trace(rho).real)
+        rho = contract('LiR,LjR->ij', theta, theta.conj())
+        pops.append(contract('ij,ji', rho, sigma_z).real / np.trace(rho).real)
 
     pops = np.array(pops)
     print("<sigma_z>(t):", np.round(pops, 4))

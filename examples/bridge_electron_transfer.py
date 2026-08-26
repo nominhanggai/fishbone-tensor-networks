@@ -13,6 +13,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 from fishbonett import Bath, SystemBath
+from fishbonett.contract import contract
 from fishbonett.rates import predict_density_mat, transfer_mat
 
 
@@ -445,7 +446,7 @@ def long_validation(
     summary = {}
     for case, maps in stored_maps.items():
         transfer, transfer_norm = transfer_mat(maps)
-        direct = np.einsum("tij,j->ti", maps, initial_vector).reshape(-1, 3, 3)
+        direct = contract("tij,j->ti", maps, initial_vector).reshape(-1, 3, 3)
         holdout_depth = int(round(0.12 / dt_ps))
         if not 0 < holdout_depth < len(maps):
             raise ValueError("stored maps do not extend beyond the holdout depth")

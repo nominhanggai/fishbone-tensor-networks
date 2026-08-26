@@ -48,6 +48,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
+from fishbonett.contract import contract
 from fishbonett.rates import predict_density_mat, transfer_mat
 
 
@@ -66,7 +67,7 @@ for case in ("diagonal_reference", "noncondon"):
     transfer_tensors, transfer_norm = transfer_mat(maps)
 
     # The directly simulated donor trajectory seeds one full memory window.
-    direct = np.einsum(
+    direct = contract(
         "tij,j->ti", maps, rho0.reshape(9)
     ).reshape(-1, 3, 3)
     rdm = predict_density_mat(steps, transfer_tensors, direct)
