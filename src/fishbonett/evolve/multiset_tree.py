@@ -10,7 +10,7 @@ from fishbonett._products import ScaledTreeIdentity
 from fishbonett.contract import _contract_cached
 from fishbonett.evolve._tdvp_sweeps import DEFAULT_BOND_EXPAND
 from fishbonett.evolve._validation import positive_integer, time_steps
-from fishbonett.evolve.multiset import _evolve_components
+from fishbonett.evolve.multiset import _evolve_components, _pairwise_apply
 from fishbonett.linalg import Truncation, threshold_svd
 from fishbonett.states.multiset_tree import MultiSetTreeTensorNetwork
 
@@ -448,7 +448,7 @@ def multiset_tree_tdvp2_sweep(
                 destination,
             )
 
-        centers = _evolve_components(centers, apply_two, -1j * half, **krylov)
+        centers = _evolve_components(centers, _pairwise_apply(apply_two), -1j * half, **krylov)
         for set_index, center in enumerate(centers):
             _split_edge(
                 state.sets[set_index],
@@ -518,7 +518,7 @@ def multiset_tree_tdvp2_sweep(
                 destination,
             )
 
-        centers = _evolve_components(centers, apply_one, 1j * correction, **krylov)
+        centers = _evolve_components(centers, _pairwise_apply(apply_one), 1j * correction, **krylov)
         for set_index, center in enumerate(centers):
             state.sets[set_index].T[destination] = center
     return state
