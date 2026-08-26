@@ -120,12 +120,14 @@ class ExcitonBath:
         """Propagate an excitonic model with an explicitly selected layout.
 
         The conventional ``system-first-mps`` and ``interleaved-mps`` layouts
-        support TEBD, Trotter-MPO, TDVP1, TDVP2, and dTDVP. The
+        support TEBD, Trotter-MPO, TDVP1, TDVP2, and A1TDVP. The
         ``multi-set-mps`` and ``multi-set-tree`` layouts support TDVP2. Every
         result includes ``expect["population"]`` with shape
         ``(recorded_times, n_levels)`` in addition to requested system
         observables. Conventional-MPS results include a checkpoint that can be
-        resumed within the original ``bath_horizon``.
+        resumed within the original ``bath_horizon``. For A1TDVP,
+        ``trunc_eps`` is the relative full-QR tangent-space convergence
+        precision and ``bond_dim`` is a required memory ceiling.
         """
         axes = {
             "model": model,
@@ -148,8 +150,8 @@ class ExcitonBath:
             allowed.update({"tol", "eshift"})
             if spec.integrator == "tdvp2":
                 allowed.add("bond_expand")
-            elif spec.integrator == "dtdvp":
-                allowed.update({"prec", "bond_expand"})
+            elif spec.integrator == "a1tdvp":
+                allowed.add("bond_expand")
         unknown = set(engine_kw) - allowed
         if unknown:
             names = ", ".join(sorted(unknown))

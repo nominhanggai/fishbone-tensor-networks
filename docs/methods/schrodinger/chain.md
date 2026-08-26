@@ -1,6 +1,6 @@
 # Schrödinger-chain representation — MPO + TDVP
 
-`schrodinger-chain-tdvp1` (fixed bond), `schrodinger-chain-tdvp2` (grows by SVD), `schrodinger-chain-dtdvp`
+`schrodinger-chain-tdvp1` (fixed bond), `schrodinger-chain-tdvp2` (grows by SVD), `schrodinger-chain-a1tdvp`
 (bond-adaptive).  Nothing is rotated out, so $H$ is static and the MPO is built
 once — TDVP conserves energy.  The cost: the state carries the full system–bath
 correlation, so bond dimensions are larger than in the other representations.  For lower
@@ -86,12 +86,24 @@ They differ only in how the bond dimension is handled:
   method to use when you do not know the required bond dimension in advance; the
   price is an $O(d^2)$ larger local problem and a truncation error that 1-site
   TDVP does not have.  `result.max_bond` reports the peak bond per step.
-- **`schrodinger-chain-dtdvp`** — adaptive tangent-space evolution. It uses the two-site local
-  tangent space to discover new bond directions, then keeps singular values above
-  `prec`, up to `bond_dim`. It avoids maintaining a separate enlarged-environment
-  algorithm while retaining automatic bond growth.  It is the same two-site sweep
-  as `tdvp2` with `prec` in place of `trunc_eps`, so `bond_expand` applies here
-  too and is essential because this integrator grows the bond adaptively.
+- **`schrodinger-chain-a1tdvp`** — adaptive one-site TDVP. Before each time
+  step, full QR factorizations add candidate basis vectors orthogonal to the
+  current left- and right-canonical spaces. For bond $i$, the method evaluates
+
+  $$
+  f(D_i)=\lVert H(i)A_C(i)\rVert^2
+       +\lVert K(i)C(i)\rVert^2
+       +\lVert H(i+1)A_C(i+1)\rVert^2
+  $$
+
+  in the enlarged spaces and selects the smallest dimension for which adding
+  one more direction changes $f$ by at most `trunc_eps`. The subsequent time
+  step contains only one-site and zero-site exponential actions; no two-site
+  centre is evolved or split. `bond_expand` limits the candidate directions
+  considered in one sweep, and `bond_dim` is the required memory ceiling. This
+  is an independent implementation of the adaptive one-site construction of
+  [Dunnett and Chin, *Phys. Rev. B* **104**, 214302
+  (2021)](https://doi.org/10.1103/PhysRevB.104.214302).
 
 The implementation follows the tangent-space projector splitting described by
 Haegeman *et al.*, *Phys. Rev. B* **94**, 165116 (2016). Local exponential
@@ -122,13 +134,16 @@ r2 = model.run(dt=0.02, t_max=2.0, method="schrodinger-chain-tdvp2", trunc_eps=1
                observables={"sz": sigma_z})
 r2.max_bond            # peak bond dimension reached at each step
 
-r3 = model.run(dt=0.02, t_max=2.0, method="schrodinger-chain-dtdvp", bond_dim=200,
+r3 = model.run(dt=0.02, t_max=2.0, method="schrodinger-chain-a1tdvp", bond_dim=200,
+               trunc_eps=1e-5,
                observables={"sz": sigma_z})
 r3.max_bond
 ```
 
 `schrodinger-chain-tdvp2` needs no `bond_dim` — `trunc_eps` decides how far the bond grows.
-`schrodinger-chain-dtdvp` is bond-adaptive but still needs a ceiling, so `bond_dim` is required.
+`schrodinger-chain-a1tdvp` is bond-adaptive but still needs a ceiling, so
+`bond_dim` is required. Here `trunc_eps` controls the relative tangent-space
+convergence test, not an SVD truncation.
 
 ## Low-level driver
 
@@ -151,7 +166,7 @@ t, sz, maxd = run_mpo_hamiltonian(
     rep, dt=0.05, nsteps=80, sweep="tdvp1", bond_dim=100)
 ```
 
-`sweep` is `"tdvp1"`, `"tdvp2"` or `"dtdvp"`; `dt` is the time advanced per step.
+`sweep` is `"tdvp1"`, `"tdvp2"` or `"a1tdvp"`; `dt` is the time advanced per step.
 
 ## Notes
 

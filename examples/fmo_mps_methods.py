@@ -1,13 +1,14 @@
 """Compare propagators on conventional MPSs for seven-site FMO dynamics.
 
 The system-first and interleaved layouts each run with swap-network TEBD,
-conditional-displacement Trotter-MPO, TDVP1, TDVP2, or dTDVP.  The ``smoke``
+conditional-displacement Trotter-MPO, TDVP1, TDVP2, or A1TDVP.  The ``smoke``
 profile checks the complete workflow.  The ``200fs`` profile uses automatic
 TEDOPA bath resolution, a six-level oscillator basis, and an SVD threshold of
-``1e-4``; it is a production calculation and writes a checkpoint after every
-segment. TEBD, Trotter-MPO, TDVP2, and dTDVP use a maximum bond of 512 only as
-a safety ceiling. TDVP1 cannot grow by an SVD threshold, so that comparison
-uses a fixed bond dimension of 64.
+``1e-4`` for truncating methods; A1TDVP uses the same numerical value for its
+tangent-space convergence precision. It is a production calculation and
+writes a checkpoint after every segment. TEBD, Trotter-MPO, TDVP2, and A1TDVP
+use a maximum bond of 512 only as a safety ceiling. TDVP1 cannot grow from a
+threshold, so that comparison uses a fixed bond dimension of 64.
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ PROFILES = {
 METHODS = {
     f"{layout}-{integrator}": f"interaction-chain-{layout}-{integrator}"
     for layout in ("system-first", "interleaved")
-    for integrator in ("tebd", "trotter-mpo", "tdvp1", "tdvp2", "dtdvp")
+    for integrator in ("tebd", "trotter-mpo", "tdvp1", "tdvp2", "a1tdvp")
 }
 
 
@@ -201,6 +202,7 @@ def run_method(profile, label, output):
     population = np.asarray(populations)
     invocation_seconds = perf_counter() - started
     total_seconds = previous_elapsed + invocation_seconds
+    qr_only = label.endswith(("-tdvp1", "-a1tdvp"))
     summary = {
         "method": method,
         "state_family": "conventional-mps",
@@ -217,13 +219,19 @@ def run_method(profile, label, output):
         "final_time_fs": times[-1] * TIME_UNIT_FS,
         "dt_fs": profile.dt * TIME_UNIT_FS,
         "n_steps": profile.n_steps,
-        "svd_threshold": profile.trunc_eps,
-        "svd_backend": "auto",
+        "trunc_eps": profile.trunc_eps,
+        "svd_backend": None if qr_only else "auto",
+        "factorization_backend": "full-qr" if qr_only else "adaptive-svd:auto",
         "max_bond_cap": max_bond_cap,
         "truncation_control": (
             "fixed TDVP1 bond dimension"
             if label.endswith("-tdvp1")
-            else "relative SVD threshold with a maximum-bond safety ceiling"
+            else (
+                "relative tangent-space convergence precision with a "
+                "maximum-bond safety ceiling"
+                if label.endswith("-a1tdvp")
+                else "relative SVD threshold with a maximum-bond safety ceiling"
+            )
         ),
         "physical_dimension": profile.phys_dim,
         "bath_modes_per_level": [

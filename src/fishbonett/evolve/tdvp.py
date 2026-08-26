@@ -22,7 +22,7 @@ from fishbonett.evolve._tdvp_kernels import (
 )
 from fishbonett.evolve._tdvp_sweeps import (
     applyH2 as _apply_h2, bonddims, measure_rdm, measure_sz, tdvp1sweep,
-    tdvp1sweep_dynamic, tdvp2sweep,
+    a1tdvp_sweep, tdvp2sweep,
 )
 from fishbonett.evolve._tdvp_driver import run_mpo_hamiltonian
 
@@ -42,5 +42,5 @@ __all__ = [
     "right_lq", "expmv_lanczos", "evolve_site_tensor",
     "evolve_bond_tensor", "tdvp1sweep", "measure_sz", "measure_rdm",
     "apply_h2", "tdvp2sweep", "bonddims",
-    "tdvp1sweep_dynamic", "run_mpo_hamiltonian", "krylov_statistics",
+    "a1tdvp_sweep", "run_mpo_hamiltonian", "krylov_statistics",
 ]

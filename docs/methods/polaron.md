@@ -4,8 +4,8 @@ The package implements both static Lang--Firsov representations.
 
 | representation | methods |
 |---|---|
-| `polaron-chain` | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` |
-| `polaron-star` | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` |
+| `polaron-chain` | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-a1tdvp` |
+| `polaron-star` | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-a1tdvp` |
 | independent-bath `Fishbone` | `polaron-chain-tree-tebd` |
 
 ## Theory
@@ -46,7 +46,9 @@ RDM for both star and chain.
 
 - `polaron-chain` supplies local nearest-neighbour gates for TEBD.
 - Both representations supply a static TDVP MPO for one-site, two-site, and
-  dynamically adaptive TDVP.
+  dynamically adaptive TDVP. The adaptive method uses the full-QR one-site
+  expansion and convergence test described in {doc}`schrodinger/chain`; it is
+  not a two-site SVD under a different representation name.
 - On `Fishbone`, `polaron-chain-tree-tebd` applies one independent
   Lang--Firsov transformation per coupled system site. Local dressed terms stay
   on the system--first-mode edge. A dressed electronic coupling is applied as a

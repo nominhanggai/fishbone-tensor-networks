@@ -5,17 +5,17 @@ from fishbonett.linalg import Truncation
 from fishbonett.evolve._tdvp_kernels import init_mps, right_canonicalize
 from fishbonett.evolve._tdvp_sweeps import (
     DEFAULT_BOND_EXPAND, _pad_bonds, bonddims, measure_sz, tdvp1sweep,
-    tdvp1sweep_dynamic, tdvp2sweep,
+    a1tdvp_sweep, tdvp2sweep,
 )
 from fishbonett.evolve._validation import (
-    nonnegative_finite, positive_integer, time_steps,
+    positive_integer, time_steps,
 )
 
 
 def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
                         trunc=None, bond_dim=None, trunc_eps=None,
                         krylov=30, observe=None, prepare=None,
-                        canonicalize=True, prec=None, tol=1e-7,
+                        canonicalize=True, tol=1e-7,
                         eshift=False, verbose=False, seed=0,
                         initial_bond=None, progress=None,
                         bond_expand=None, state=None, time_offset=0.0,
@@ -31,11 +31,17 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
     time-dependent representation on its absolute clock. Set ``return_state`` to
     return those final tensors as a fourth result; the default three-result tuple
     remains ``(times, observations, peak_bonds)``.
+
+    For ``tdvp2``, ``trunc_eps`` is the relative SVD threshold. For ``a1tdvp`` it
+    is the relative convergence precision used to select full-QR tangent-space
+    extensions before each one-site sweep. ``bond_expand`` limits the extra
+    Schmidt directions retained by ``tdvp2`` or the QR-complement directions
+    tested per bond by ``a1tdvp``.
     """
     dt, nsteps = time_steps(dt, nsteps)
-    if sweep not in {"tdvp1", "tdvp2", "dtdvp"}:
+    if sweep not in {"tdvp1", "tdvp2", "a1tdvp"}:
         raise ValueError(
-            f"unknown sweep {sweep!r}; expected 'tdvp1', 'tdvp2' or 'dtdvp'")
+            f"unknown sweep {sweep!r}; expected 'tdvp1', 'tdvp2' or 'a1tdvp'")
     truncation = Truncation.resolve(
         trunc, eps=trunc_eps, max_bond=bond_dim
     )
@@ -44,10 +50,6 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
         initial_bond, "initial_bond", allow_none=True
     )
     krylov = positive_integer(krylov, "krylov")
-    if sweep == "dtdvp":
-        prec = trunc_eps if prec is None else nonnegative_finite(prec, "prec")
-    elif prec is not None:
-        raise TypeError("prec is only used by the dtdvp sweep; use eps otherwise")
     if not np.isfinite(tol) or tol <= 0:
         raise ValueError("tol must be finite and positive")
     if bond_expand is not None:
@@ -79,8 +81,8 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
             raise ValueError("state physical dimensions do not match representation")
 
     adaptive_cap = bond_dim
-    if sweep == "dtdvp" and adaptive_cap is None:
-        raise ValueError("dtdvp requires a finite bond-dimension ceiling")
+    if sweep == "a1tdvp" and adaptive_cap is None:
+        raise ValueError("a1tdvp requires a finite bond-dimension ceiling")
     if sweep == "tdvp1":
         fixed_cap = bond_dim if initial_bond is None else initial_bond
         if bond_dim is not None:
@@ -93,7 +95,8 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
     environments = None
     observations, peak_bonds = [], []
     krylov_options = {"m": krylov, "tol": tol, "eshift": eshift}
-    # Both two-site sweeps use the same rank-expansion allowance.
+    # The allowance controls distinct bond-growth mechanisms: extra Schmidt
+    # directions for TDVP2 and full-QR complement directions for A1TDVP.
     expand = DEFAULT_BOND_EXPAND if bond_expand is None else int(bond_expand)
     for step in range(nsteps):
         if not representation.static:
@@ -109,9 +112,13 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
                 dt, state, operator, adaptive_cap, trunc_eps, environments,
                 expand=expand, **krylov_options)
         else:
-            state, _full, environments, _diagnostic = tdvp1sweep_dynamic(
-                dt, state, operator, None, environments, prec=prec,
-                Dlim=adaptive_cap, expand=expand,
+            state, _full, environments, _diagnostic = a1tdvp_sweep(
+                dt,
+                state,
+                operator,
+                trunc_eps=trunc_eps,
+                bond_dim=adaptive_cap,
+                expand=expand,
                 **krylov_options)
         observations.append(measure(state))
         peak_bonds.append(max(bonddims(state)))

@@ -18,7 +18,7 @@ python examples/interaction_picture_spin_boson.py
 | [`two_bath_heat_flow.py`](two_bath_heat_flow.py) | Heat flow through a two-level junction, measured from explicit system--bath correlations. |
 | [`multiset_holstein.py`](multiset_holstein.py) | Franck--Condon Holstein dynamics compared between multi-set and conventional MPS TDVP. |
 | [`fmo_state_layouts.py`](fmo_state_layouts.py) | Seven-site FMO dynamics with system-first, interleaved, multi-set MPS, and multi-set tree layouts. |
-| [`fmo_mps_methods.py`](fmo_mps_methods.py) | Checkpointed TEBD, Trotter-MPO, TDVP1, TDVP2, and dTDVP comparisons for the system-first and interleaved FMO MPS layouts. |
+| [`fmo_mps_methods.py`](fmo_mps_methods.py) | Checkpointed TEBD, Trotter-MPO, TDVP1, TDVP2, and A1TDVP comparisons for the system-first and interleaved FMO MPS layouts. |
 
 The vibronic-dimer, nonadiabatic-spin-boson, electron-transfer, and heat-flow
 tutorials accept `--profile smoke|docs|reference`. Their default `smoke`

@@ -87,7 +87,7 @@ def test_bond_cap_requirements_are_registry_data():
     assert R.BOND_CAP_REQUIRED_METHODS == frozenset(
         n for n, s in R.METHODS.items() if s.requires_bond_cap)
     assert "schrodinger-chain-tdvp1" in R.BOND_CAP_REQUIRED_METHODS
-    assert "schrodinger-chain-dtdvp" in R.BOND_CAP_REQUIRED_METHODS
+    assert "schrodinger-chain-a1tdvp" in R.BOND_CAP_REQUIRED_METHODS
     assert "interaction-chain-tebd" not in R.BOND_CAP_REQUIRED_METHODS
 
 
@@ -289,9 +289,9 @@ def test_every_method_agrees_on_the_same_physics():
 
     ref = results[("system-bath", "interaction-chain-tebd")]
     for (key, m), sz in results.items():
-        # schrodinger-chain-dtdvp is bond-adaptive: its accuracy is set by `prec`, not by dt, so
-        # it sits a decade or so off the rest.  Still far from a wrong answer.
-        tol = 5e-3 if m == "schrodinger-chain-dtdvp" else 1e-3
+        # schrodinger-chain-a1tdvp is bond-adaptive: its accuracy is set by
+        # `trunc_eps`, not by dt, so it sits a decade or so off the rest.
+        tol = 5e-3 if m == "schrodinger-chain-a1tdvp" else 1e-3
         assert np.abs(sz - ref).max() < tol, (
             f"{key}/{m} disagrees with system-bath/interaction-chain-tebd by "
             f"{np.abs(sz - ref).max():.2e} on identical physics")

@@ -42,8 +42,8 @@ use two-site TDVP.
 
 | `state_geometry` | site layout | available integrators |
 |---|---|---|
-| `system-first-mps` | one $N$-level site, then the modes of bath 1, bath 2, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `dtdvp` |
-| `interleaved-mps` | electronic site 1, its modes, electronic site 2, its modes, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `dtdvp` |
+| `system-first-mps` | one $N$-level site, then the modes of bath 1, bath 2, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `a1tdvp` |
+| `interleaved-mps` | electronic site 1, its modes, electronic site 2, its modes, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `a1tdvp` |
 | `multi-set-mps` | one bath MPS for every electronic basis state | `tdvp2` |
 | `multi-set-tree` | one branched bath TTN for every electronic basis state | `tdvp2` |
 
@@ -53,7 +53,7 @@ For example, the system-first family is
 `interaction-chain-system-first-trotter-mpo`,
 `interaction-chain-system-first-tdvp1`,
 `interaction-chain-system-first-tdvp2`, and
-`interaction-chain-system-first-dtdvp`. The interleaved family follows the same
+`interaction-chain-system-first-a1tdvp`. The interleaved family follows the same
 pattern.
 
 Here `tebd` and `trotter-mpo` both propagate a conventional MPS. They do not
@@ -99,8 +99,8 @@ The propagators realize the interaction Hamiltonian differently:
 - Trotter-MPO applies an electronic half-step, the interval-integrated
   conditional-displacement MPO, and a second electronic half-step.
 - TDVP1 evolves on a fixed-bond manifold, TDVP2 grows bonds through two-site
-  sweeps, and dTDVP expands the one-site tangent space adaptively. TDVP1 and
-  dTDVP therefore require an explicit `bond_dim` ceiling.
+  sweeps, and A1TDVP expands the one-site tangent space adaptively. TDVP1 and
+  A1TDVP therefore require an explicit `bond_dim` ceiling.
 
 All ten conventional-MPS methods return a checkpoint. Resolve the bath for the
 complete intended horizon, then continue a shorter segment without restarting

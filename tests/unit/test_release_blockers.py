@@ -1,5 +1,6 @@
 """Regression tests for scientific contracts required by a public release."""
 
+import inspect
 from pathlib import Path
 
 import fishbonett
@@ -10,7 +11,7 @@ from fishbonett import Bath
 from fishbonett.bath.legendre import get_vn_squared
 from fishbonett.bath.lanczos import block_lanczos
 from fishbonett.diabatization import diabatize
-from fishbonett.evolve import _tdvp_driver
+from fishbonett.evolve import _tdvp_driver, _tdvp_sweeps
 from fishbonett.models.propagate import resolve_time_grid
 from fishbonett.models.result import SimulationCheckpoint
 from fishbonett.models.simulation import _expect_from_rdm
@@ -126,19 +127,20 @@ def test_tdvp2_does_not_invent_an_unrequested_bond_cap(monkeypatch):
     assert received == [None]
 
 
-def test_tdvp_rejects_inert_dynamic_threshold():
-    class Representation:
-        static = True
-        dimensions = (2, 2)
-
-        @staticmethod
-        def tdvp_mpo(_time):
-            return None
-
-    with pytest.raises(TypeError, match="only used by the dtdvp"):
-        _tdvp_driver.run_mpo_hamiltonian(
-            Representation(), dt=0.1, nsteps=1, sweep="tdvp2", prec=1e-6,
-        )
+def test_dynamic_tdvp_exposes_only_the_common_truncation_controls():
+    driver_parameters = inspect.signature(
+        _tdvp_driver.run_mpo_hamiltonian
+    ).parameters
+    sweep_parameters = inspect.signature(
+        _tdvp_sweeps.a1tdvp_sweep
+    ).parameters
+    assert "trunc_eps" in driver_parameters
+    assert "bond_dim" in driver_parameters
+    assert "trunc_eps" in sweep_parameters
+    assert "bond_dim" in sweep_parameters
+    assert {"prec", "Afull", "FRs", "Dlim", "Dplusmax"}.isdisjoint(
+        driver_parameters | sweep_parameters
+    )
 
 
 @pytest.mark.parametrize("kwargs", [

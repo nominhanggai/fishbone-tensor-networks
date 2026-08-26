@@ -178,7 +178,7 @@ class SystemBath:
         tensor-network geometry (``"mps"``, ``"multi-set-mps"``,
         ``"binary-tree"``, or ``"tree"``), and
         ``integrator`` how a step is taken (``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
-        ``"dtdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
+        ``"a1tdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
         one combination fits; if several do, the error lists them.
 
         Representation values use the full names above; partial values such as
@@ -205,7 +205,7 @@ class SystemBath:
         * **system-bath** -- 1 system + 1 bath + 1 coupling operator, in all five
           representations.  *schrodinger-chain*
           (``schrodinger-chain-tdvp1 | schrodinger-chain-tdvp2 |
-          schrodinger-chain-dtdvp``) and *schrodinger-star*
+          schrodinger-chain-a1tdvp``) and *schrodinger-star*
           (``schrodinger-star-tdvp1 | schrodinger-star-tdvp2``) -- static, so the
           MPO is built once and TDVP conserves energy, at the cost of the largest
           bond dimensions.  *interaction-chain*
@@ -217,9 +217,9 @@ class SystemBath:
           for the single-channel model the mode terms commute, which makes
           ``interaction-chain-trotter-mpo``'s exact factorization possible.
           *polaron-chain* (``polaron-chain-tebd``,
-          ``polaron-chain-tdvp1/tdvp2/dtdvp``) -- static *and* low-entanglement; needs
+          ``polaron-chain-tdvp1/tdvp2/a1tdvp``) -- static *and* low-entanglement; needs
           ``int J/w^2`` finite (gapped or super-ohmic).  The corresponding star
-          polaron representation uses ``polaron-star-tdvp1/2/dtdvp``.  Finite
+          polaron representation uses ``polaron-star-tdvp1/2/a1tdvp``.  Finite
           temperature works via T-TEDOPA thermalization.
           Every one of these five representations also supports coupled
           two-site TDVP on ``state_geometry="multi-set-mps"``.  That ansatz
@@ -237,13 +237,15 @@ class SystemBath:
             model.run(..., trunc=Truncation(eps=1e-5, max_bond=200))
             model.run(..., trunc_eps=1e-5, bond_dim=200)     # equivalent
 
-        ``trunc_eps`` (default ``1e-4``) is the accuracy knob: singular values
-        below it are discarded, so it alone decides the bond dimension.
+        ``trunc_eps`` (default ``1e-4``) is the accuracy knob. SVD-based methods
+        discard singular values below that relative threshold. For ``a1tdvp``
+        it is the relative convergence precision for the full-QR
+        tangent-space expansion.
         ``bond_dim`` is an *optional* safety cap; the default ``None`` means
-        **unlimited**, i.e. the bond grows to whatever ``trunc_eps`` requires
-        (``result.max_bond`` reports what was actually used). One-site TDVP
+        **unlimited**, i.e. an SVD-based bond grows to whatever ``trunc_eps``
+        requires (``result.max_bond`` reports what was actually used). One-site TDVP
         methods evolve on a fixed bond manifold and therefore
-        require ``bond_dim``. Dynamic TDVP can grow its manifold, but also
+        require ``bond_dim``. A1TDVP can grow its manifold, but also
         requires ``bond_dim`` as a finite memory ceiling.
 
         ``svd_backend="auto"`` uses certified adaptive randomized truncation on
@@ -302,8 +304,8 @@ class SystemBath:
             allowed_engine_options.update({"tol", "eshift"})
             if spec.integrator == "tdvp2":
                 allowed_engine_options.add("bond_expand")
-            elif spec.integrator == "dtdvp":
-                allowed_engine_options.update({"prec", "bond_expand"})
+            elif spec.integrator == "a1tdvp":
+                allowed_engine_options.add("bond_expand")
         unknown_options = set(engine_kw) - allowed_engine_options
         if unknown_options:
             names = ", ".join(sorted(unknown_options))

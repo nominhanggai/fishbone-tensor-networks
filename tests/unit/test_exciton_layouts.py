@@ -180,7 +180,7 @@ def test_interleaved_layout_preserves_a_general_one_excitation_initial_state(
 
 
 @pytest.mark.parametrize("layout", ["system-first", "interleaved"])
-@pytest.mark.parametrize("integrator", ["tdvp1", "dtdvp"])
+@pytest.mark.parametrize("integrator", ["tdvp1", "a1tdvp"])
 def test_fixed_or_adaptive_one_site_tdvp_requires_a_bond_cap(layout, integrator):
     with pytest.raises(ValueError, match="bond_dim must be given"):
         _model(levels=2).run(
@@ -192,7 +192,7 @@ def test_fixed_or_adaptive_one_site_tdvp_requires_a_bond_cap(layout, integrator)
 
 @pytest.mark.parametrize("layout", ["system-first", "interleaved"])
 @pytest.mark.parametrize(
-    "integrator", ["tebd", "trotter-mpo", "tdvp1", "tdvp2", "dtdvp"]
+    "integrator", ["tebd", "trotter-mpo", "tdvp1", "tdvp2", "a1tdvp"]
 )
 def test_conventional_mps_checkpoint_matches_uninterrupted_run(
     layout, integrator,
@@ -232,6 +232,30 @@ def test_conventional_mps_checkpoint_roundtrips_without_pickle(tmp_path):
     continued = model.run(n_steps=1, resume=loaded, **options)
     whole = model.run(n_steps=3, **options)
     assert np.max(np.abs(continued.rdm[-1] - whole.rdm[-1])) < 1e-12
+
+
+def test_a1tdvp_resume_rejects_a_ceiling_below_the_saved_bond():
+    model = _model(levels=2, modes=1)
+    options = dict(
+        dt=0.01,
+        n_steps=2,
+        bath_horizon=0.04,
+        method="interaction-chain-system-first-a1tdvp",
+        trunc_eps=1e-12,
+        bond_dim=20,
+    )
+    first = model.run(initial=0, **options)
+    assert first.max_bond[-1] > 1
+    with pytest.raises(ValueError, match="exceeds the A1TDVP ceiling"):
+        model.run(
+            dt=0.01,
+            n_steps=1,
+            bath_horizon=0.04,
+            method=first.method,
+            trunc_eps=1e-12,
+            bond_dim=1,
+            resume=first.checkpoint,
+        )
 
 
 def test_multiset_tree_progress_exposes_the_actual_state():
@@ -275,4 +299,11 @@ def test_fmo_propagator_summary_records_the_resolved_baths(tmp_path):
     assert summary["state_family"] == "conventional-mps"
     assert summary["state_geometry"] == "system-first-mps"
     assert summary["svd_backend"] == "auto"
+    assert summary["factorization_backend"] == "adaptive-svd:auto"
     assert summary["bath_modes_per_level"] == [1] * 7
+
+    adaptive = example.run_method(
+        example.PROFILES["smoke"], "system-first-a1tdvp", tmp_path
+    )
+    assert adaptive["svd_backend"] is None
+    assert adaptive["factorization_backend"] == "full-qr"

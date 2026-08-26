@@ -142,14 +142,137 @@ def test_ip_mpo_matches_exact():
     assert np.max(np.abs(sz2 - sz_ex)) < 5e-3
 
 
-def test_dtdvp_grows_bonds_and_tracks_dynamics():
+def test_a1tdvp_grows_bonds_and_tracks_dynamics():
     n_chain, d, V = 3, 5, 1.0
     t, sz, maxd = run_mpo_hamiltonian(_chain(n_chain, d, V), dt=0.10, nsteps=12,
-                                sweep="dtdvp", prec=1e-9, bond_dim=40,
+                                sweep="a1tdvp", trunc_eps=1e-9, bond_dim=40,
                                 krylov=25)
     sz_ex = _exact_sz(n_chain, d, V, t)
-    assert maxd[-1] >= 1 and np.all(np.isfinite(sz))
-    assert np.max(np.abs(sz - sz_ex)) < 1e-2           # adaptive, looser
+    assert maxd[-1] > 1 and np.all(np.diff(maxd) >= 0)
+    assert np.all(np.isfinite(sz))
+    assert np.max(np.abs(sz - sz_ex)) < 1e-5
+
+    _t, loose_sz, loose_bonds = run_mpo_hamiltonian(
+        _chain(n_chain, d, V),
+        dt=0.10,
+        nsteps=12,
+        sweep="a1tdvp",
+        trunc_eps=1e-2,
+        bond_dim=40,
+        krylov=25,
+    )
+    assert loose_bonds[-1] <= maxd[-1]
+    assert np.max(np.abs(loose_sz - sz_ex)) < 1e-5
+
+
+def _dense_mps(tensors):
+    """Contract TDVP-order tensors into one physical state vector."""
+    dense = np.transpose(tensors[0][0], (1, 0))
+    for tensor in tensors[1:]:
+        dense = np.tensordot(dense, tensor, axes=([-1], [0]))
+        dense = np.moveaxis(dense, -2, -1)
+    return np.squeeze(dense, axis=-1).reshape(-1)
+
+
+def test_partial_full_qr_returns_the_requested_full_basis_columns():
+    from fishbonett.evolve._tdvp_sweeps import _partial_full_qr
+
+    rng = np.random.default_rng(29)
+    matrix = rng.normal(size=(31, 5)) + 1j * rng.normal(size=(31, 5))
+    basis, triangular = _partial_full_qr(matrix, 9)
+    full_basis, full_triangular = np.linalg.qr(matrix, mode="complete")
+
+    np.testing.assert_allclose(basis, full_basis[:, :9], atol=2e-13)
+    np.testing.assert_allclose(triangular, full_triangular[:5], atol=2e-13)
+    np.testing.assert_allclose(
+        basis.conj().T @ basis, np.eye(9), atol=2e-13
+    )
+    np.testing.assert_allclose(
+        basis[:, :5] @ triangular, matrix, atol=2e-13
+    )
+
+
+def test_adaptive_qr_expansion_preserves_the_state_and_right_gauge():
+    from fishbonett.evolve._tdvp_kernels import right_canonicalize
+    from fishbonett.evolve._tdvp_sweeps import _expand_right_canonical
+
+    rng = np.random.default_rng(83)
+    dimensions = (2, 3, 3, 2)
+    bonds = (1, 2, 2, 2, 1)
+    state = [
+        rng.normal(size=(bonds[i], bonds[i + 1], dimensions[i]))
+        + 1j * rng.normal(size=(bonds[i], bonds[i + 1], dimensions[i]))
+        for i in range(len(dimensions))
+    ]
+    state = right_canonicalize(state)
+    before = _dense_mps(state)
+    expanded = _expand_right_canonical(state, [2, 3, 2])
+
+    np.testing.assert_allclose(_dense_mps(expanded), before, atol=2e-13)
+    assert [tensor.shape[1] for tensor in expanded[:-1]] == [2, 3, 2]
+    for tensor in expanded[1:]:
+        matrix = tensor.reshape(tensor.shape[0], -1)
+        np.testing.assert_allclose(
+            matrix @ matrix.conj().T,
+            np.eye(tensor.shape[0]),
+            atol=2e-13,
+        )
+
+
+def test_a1tdvp_time_step_never_uses_a_two_site_exponential(monkeypatch):
+    import fishbonett.evolve._tdvp_sweeps as sweeps
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("adaptive one-site TDVP called applyH2")
+
+    monkeypatch.setattr(sweeps, "applyH2", forbidden)
+    _t, _sz, maxd = run_mpo_hamiltonian(
+        _chain(2, 3, 1.0),
+        dt=0.05,
+        nsteps=3,
+        sweep="a1tdvp",
+        trunc_eps=1e-8,
+        bond_dim=20,
+        krylov=20,
+    )
+    assert maxd[-1] > 1
+
+
+def test_a1tdvp_preserves_norm_and_energy_after_each_qr_expansion():
+    from fishbonett.evolve._tdvp_kernels import updateleftenv
+
+    representation = _chain(3, 4, 1.0)
+    mpo = representation.tdvp_mpo(None)
+    energies = []
+    norms = []
+
+    def record(info):
+        state = info["state"]
+        environment = np.ones((1, 1, 1), complex)
+        for tensor, operator in zip(state, mpo, strict=True):
+            environment = updateleftenv(tensor, operator, environment)
+        energies.append(environment.item().real)
+
+        environment = np.ones((1, 1, 1), complex)
+        for tensor in state:
+            physical = tensor.shape[2]
+            identity = np.eye(physical).reshape(1, 1, physical, physical)
+            environment = updateleftenv(tensor, identity, environment)
+        norms.append(environment.item().real)
+
+    run_mpo_hamiltonian(
+        representation,
+        dt=0.05,
+        nsteps=12,
+        sweep="a1tdvp",
+        trunc_eps=1e-6,
+        bond_dim=40,
+        krylov=30,
+        tol=1e-11,
+        progress=record,
+    )
+    assert np.ptp(energies) < 1e-10
+    assert np.max(np.abs(np.asarray(norms) - 1.0)) < 1e-11
 
 
 def test_the_two_bonddims_are_not_interchangeable():
@@ -191,7 +314,7 @@ def test_one_loop_serves_every_tdvp_mpo_and_sweep():
     representations = {"chain": _chain(n_chain, d, V),
                        "interaction-chain": interaction}
     for name, representation in representations.items():
-        for sweep in ("tdvp1", "tdvp2", "dtdvp"):
+        for sweep in ("tdvp1", "tdvp2", "a1tdvp"):
             t, sz, maxd = run_mpo_hamiltonian(representation, dt=0.05, nsteps=2, sweep=sweep,
                                         bond_dim=20, trunc_eps=1e-10,
                                         krylov=20)
