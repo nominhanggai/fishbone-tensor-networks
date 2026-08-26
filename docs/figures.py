@@ -44,16 +44,12 @@ def _ignored_tick_labels(figure):
         y_bottom, y_top = sorted(axis.get_ylim())
         x_scale = max(abs(x_left), abs(x_right), 1.0)
         y_scale = max(abs(y_bottom), abs(y_top), 1.0)
-        for tick, label in zip(
-            axis.xaxis.get_major_ticks(), axis.get_xticklabels(), strict=True
-        ):
+        for tick in axis.xaxis.get_major_ticks():
             if not x_left - 1e-10 * x_scale <= tick.get_loc() <= x_right + 1e-10 * x_scale:
-                ignored.add(label)
-        for tick, label in zip(
-            axis.yaxis.get_major_ticks(), axis.get_yticklabels(), strict=True
-        ):
+                ignored.update((tick.label1, tick.label2))
+        for tick in axis.yaxis.get_major_ticks():
             if not y_bottom - 1e-10 * y_scale <= tick.get_loc() <= y_top + 1e-10 * y_scale:
-                ignored.add(label)
+                ignored.update((tick.label1, tick.label2))
     return ignored
 
 
