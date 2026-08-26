@@ -296,9 +296,18 @@ for axis, case, title in zip(axes, plot_cases, titles):
     axis.set_xlabel("time (ps)")
 
 axes[0].set_ylabel("population")
-axes[0].legend()
-axes[1].legend()
-figure.tight_layout()
+handles, labels = [], []
+for axis in axes:
+    panel_handles, panel_labels = axis.get_legend_handles_labels()
+    for handle, label in zip(panel_handles, panel_labels):
+        if label not in labels:
+            handles.append(handle)
+            labels.append(label)
+figure.legend(
+    handles, labels, frameon=False, loc="upper center", ncol=4,
+    bbox_to_anchor=(0.5, 1.0),
+)
+figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.89))
 plt.show()
 ```
 

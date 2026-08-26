@@ -1,6 +1,6 @@
 # Examples
 
-Small, self-contained examples that use the installed `fishbonett` package.
+These examples use the installed `fishbonett` package.
 The default or smoke calculation runs quickly unless a script says otherwise;
 for example:
 

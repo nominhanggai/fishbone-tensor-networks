@@ -23,9 +23,9 @@ once and reused for every step.
 ### The MPO needs a third channel
 
 Written as a compressed product-sum MPO over sites $[\,\text{system}, a_0, \dots,
-a_{N-1}]$, the interaction-picture star MPO needs bond 2: one channel carrying $O$
-rightward to meet each mode's $(a_k+a_k^\dagger)$, and one carrying the finished
-terms.  Keeping the free bath adds terms that touch **no** system operator —
+a_{N-1}]$, the system--mode terms need two channels: one carries $O$ rightward
+to meet each mode's $(a_k+a_k^\dagger)$, and one carries completed terms.
+Keeping the free bath adds terms that touch **no** system operator —
 $\omega_k a_k^\dagger a_k$ standing alone — and those cannot ride either existing
 channel.  They need a third, `START`, which passes the identity rightward until it
 emits an on-site $\omega_k n_k$ and closes:
@@ -41,16 +41,15 @@ mode k  ->  CARRY->CARRY: 1     CARRY->DONE: (a+a^dag)
             DONE ->DONE : 1
 ```
 
-so the bond profile is $[1, 3, 3, \dots, 3, 1]$ — one larger than the
-interaction-picture star, and still independent of $N$.  The last mode closes to
+so the bond profile is $[1, 3, 3, \dots, 3, 1]$, still independent of $N$.  The last mode closes to
 bond 1 and must emit **no** identity from `START` or `CARRY`, or the operator would
 contain a term with the coupling left dangling. This construction is the
 Hermitian MPO returned by `SchrodingerRepresentation.tdvp_mpo`.
 
 ### Star or chain?
 
-Same trade-off as in the interaction picture, and worth restating because in this
-representation it cuts the other way.
+The star and chain coordinates expose different tensor-network locality for the
+same finite bath.
 
 - The **chain** gives the MPS locality to exploit: the system touches only $b_0$ and
   correlations spread outward at a finite speed.  The price is $N$ mode–mode
@@ -59,10 +58,9 @@ representation it cuts the other way.
   no locality: a single cut must carry the correlation between the system and *every*
   mode on the far side.  The saving is that there are no mode–mode terms at all.
 
-In the interaction picture the residual entanglement is small enough that the star
-often wins.  Here it is not: nothing has been rotated out, so the state carries the
-full system–bath correlation *and* the star interaction graph gives no locality to help
-represent it.  Expect the bond dimension to grow faster than for
+In the Schrödinger representation, the state carries the full system--bath
+correlation and the star interaction graph gives no locality to help represent
+it. Expect the bond dimension to grow faster than for
 {doc}`/methods/schrodinger/chain` on the same problem.
 
 The static star is also useful as an independent numerical check: it shares no
@@ -105,8 +103,8 @@ r2.max_bond
   chain's locality usually beats the star's lack of mode–mode terms once nothing has
   been rotated out.  Reach for the static star when you want a reference answer or
   an independent check.
-- Because the MPO is static, TDVP conserves energy here (up to truncation), which
-  the interaction-picture star cannot offer.
+- Because the MPO is static, TDVP conserves its represented energy up to
+  integration and truncation error.
 - `h` and the coupling `O` are carried as matrices, so a general Hermitian system
   and coupling of any dimension work; see {doc}`/models/spin_boson`.
 - `polaron-star` is a separate static representation implemented through the
