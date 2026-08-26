@@ -8,7 +8,7 @@ tensor-network geometry is selected by `state_geometry`.
 |---|---|---|
 | `system-bath` | {py:class}`~fishbonett.models.system_bath.SystemBath` | one system, one bath, one coupling operator |
 | `multichannel` | {py:class}`~fishbonett.models.system_bath.SystemBath` | one system, shared bath modes, several coupling operators |
-| `exciton-bath` | {py:class}`~fishbonett.models.exciton.ExcitonBath` | one excitation on (N) levels, independent population baths |
+| `exciton-bath` | {py:class}`~fishbonett.models.exciton.ExcitonBath` | one excitation on $N$ levels, independent population baths |
 | `comb` | {py:class}`~fishbonett.models.fishbone.Fishbone` | several system sites on a line, baths per site |
 | `site-tree` | {py:class}`~fishbonett.models.fishbone.TreeFishbone` | several system sites on any loop-free graph, baths per site |
 

@@ -97,7 +97,7 @@ same resolved finite bath.
 ## Excitons with independent baths
 
 {py:class}`~fishbonett.models.exciton.ExcitonBath` applies the multi-set ansatz
-to a single excitation on (N) electronic levels. Every level has an independent
+to a single excitation on $N$ electronic levels. Every level has an independent
 bath coupled to its population. For an instance named `exciton_model`, the two
 multi-set state geometries are selected as follows:
 
@@ -121,7 +121,7 @@ tree_result = exciton_model.run(
 
 The MPS groups all bath modes in electronic-level order. The tree retains one
 bath branch per level inside every set. Both use the same interaction-chain
-coefficients and return the full (N\times N) electronic RDM. See
+coefficients and return the full $N\times N$ electronic RDM. See
 {doc}`/models/exciton_bath` for the conventional system-first and interleaved
 MPS layouts on the same physical model.
 

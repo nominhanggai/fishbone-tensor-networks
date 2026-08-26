@@ -1,6 +1,6 @@
 # Exciton with independent local baths
 
-`ExcitonBath` represents a single excitation shared by (N) electronic levels,
+`ExcitonBath` represents a single excitation shared by $N$ electronic levels,
 with one independent harmonic bath coupled to each site population:
 
 $$
@@ -9,8 +9,8 @@ H_S=\sum_{ij}h_{ij}|i\rangle\langle j|,
 H_{SB}=\sum_i |i\rangle\langle i|\otimes B_i.
 $$
 
-The (N\times N) matrix `h` contains site energies and electronic couplings.
-`baths[i]` defines (B_i); different entries may use different spectral
+The $N\times N$ matrix `h` contains site energies and electronic couplings.
+`baths[i]` defines $B_i$; different entries may use different spectral
 densities, temperatures, Fock dimensions, and mode counts.
 
 ```python
@@ -42,7 +42,7 @@ use two-site TDVP.
 
 | `state_geometry` | site layout | available integrators |
 |---|---|---|
-| `system-first-mps` | one (N)-level site, then the modes of bath 1, bath 2, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `dtdvp` |
+| `system-first-mps` | one $N$-level site, then the modes of bath 1, bath 2, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `dtdvp` |
 | `interleaved-mps` | electronic site 1, its modes, electronic site 2, its modes, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `dtdvp` |
 | `multi-set-mps` | one bath MPS for every electronic basis state | `tdvp2` |
 | `multi-set-tree` | one branched bath TTN for every electronic basis state | `tdvp2` |
@@ -77,7 +77,7 @@ electronic_rdm = result.rdm                 # shape (n_records, 3, 3)
 ```
 
 The system-first layout keeps the single-excitation restriction directly: its
-first physical leg has dimension (N). The interleaved layout uses a local
+first physical leg has dimension $N$. The interleaved layout uses a local
 two-level occupation site for each electronic level. Its MPO conserves total
 excitation number, and the initial-state builder places the MPS in the
 one-excitation sector. `result.rdm[i,j]` is reconstructed from
@@ -129,7 +129,7 @@ second = model.run(
 the number of independent baths. `interleaved-mps` places each coupling beside
 its bath, but electronic hopping crosses the intervening mode blocks. The two
 multi-set layouts truncate each conditional bath wavepacket separately; their
-Hamiltonian action contains up to (N^2) electronic blocks, so a smaller
+Hamiltonian action contains up to $N^2$ electronic blocks, so a smaller
 reported tensor bond does not guarantee a shorter run.
 
 Compare layouts on the same finite bath before increasing the time horizon. A
