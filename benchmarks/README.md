@@ -1,6 +1,6 @@
 # Benchmarks and regression baselines
 
-The benchmark scripts are deliberately outside the unit suite. Run them from the
+The benchmark scripts run separately from the unit suite. Run them from the
 repository root after installing the development dependencies:
 
 ```console
