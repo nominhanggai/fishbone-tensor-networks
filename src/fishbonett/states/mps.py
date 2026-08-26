@@ -82,6 +82,7 @@ class SystemBathMPS(TensorNetwork):
     """
 
     def __init__(self, pd, svd_expansion_factor=1.5):
+        """Create a ground-product Vidal MPS with the requested dimensions."""
         self.pd_sys = pd[0]
         self.pd_boson = pd[1:]
         self.pre_factor = svd_expansion_factor
@@ -129,6 +130,7 @@ class SystemBathMPS(TensorNetwork):
         return t
 
     def set_tensor(self, i, value):
+        """Reject single-tensor writes that would invalidate the Vidal gauge."""
         raise NotImplementedError(
             "SystemBathMPS is in Vidal form: writing a single tensor back would "
             "leave S inconsistent.  Use update_bond / split_truncate_theta, which "

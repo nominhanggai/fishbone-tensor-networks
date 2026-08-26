@@ -109,6 +109,7 @@ class SystemBath:
     """
 
     def __init__(self, h, coupling, bath):
+        """Validate the system and bind its operator or channels to one bath."""
         # `System` validates h and the coupling(s) once -- square, matching
         # dimension, Hermitian -- and keeps a multichannel coupling as a *list*
         # rather than collapsing it into a 3-D array.

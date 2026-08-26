@@ -66,6 +66,7 @@ class MultiSetMPS:
     """
 
     def __init__(self, sets):
+        """Store and validate one bath MPS per exact system-basis component."""
         self.sets = [_copy_mps(tensors) for tensors in sets]
         self._validate()
 

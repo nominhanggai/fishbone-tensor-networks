@@ -46,6 +46,7 @@ class CoupledBath:
     operators: tuple[np.ndarray, ...]
 
     def __post_init__(self):
+        """Validate and freeze the coupling operators in normalized tuple form."""
         ops = _operators(self.operators)
         if not ops:
             raise ValueError("a coupled bath needs at least one operator")
@@ -72,27 +73,33 @@ class CoupledBath:
 
     @property
     def is_multichannel(self):
+        """Whether several system operators share this bath's modes."""
         return len(self.operators) > 1
 
     @property
     def operator(self):
+        """Return the sole coupling operator, rejecting multichannel bindings."""
         if self.is_multichannel:
             raise ValueError("this bath has several coupling operators")
         return self.operators[0]
 
     @property
     def n_modes(self):
+        """Configured or resolved number of represented bath modes."""
         return self.bath.n_modes
 
     @property
     def phys_dim(self):
+        """Local Fock-space dimension of every represented bath mode."""
         return self.bath.phys_dim
 
     @property
     def domain(self):
+        """Configured or resolved bath-frequency interval."""
         return self.bath.domain
 
     def resolved(self, t_max=None):
+        """Return a binding whose automatic bath settings cover ``t_max``."""
         bath = self.bath.resolved(t_max)
         if bath is self.bath:
             return self

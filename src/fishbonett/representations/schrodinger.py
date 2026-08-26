@@ -56,6 +56,7 @@ class LocalTerms:
     bath_branches: List[dict] = field(default_factory=list)
 
     def __post_init__(self):
+        """Validate dimensions, tree topology, and every local Hamiltonian."""
         n_nodes = len(self.dims)
         if n_nodes == 0:
             raise ValueError("dims must contain at least one node")
@@ -143,6 +144,7 @@ class LocalTerms:
 
     @property
     def n_nodes(self):
+        """Number of nodes in the represented Hamiltonian tree."""
         return len(self.dims)
 
     def tebd_gates(self, dt):
@@ -176,6 +178,7 @@ class SchrodingerRepresentation:
     static = True
 
     def __init__(self, *, representation, h_sys, coupling, bath):
+        """Validate a single-system static star or chain representation."""
         if representation not in self.names:
             raise ValueError(
                 "representation must be 'schrodinger-chain' or "
@@ -194,6 +197,7 @@ class SchrodingerRepresentation:
 
     @property
     def n_sites(self):
+        """Number of physical sites in the represented MPS."""
         return len(self.dimensions)
 
     def tdvp_mpo(self, _time=None):

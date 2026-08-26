@@ -120,6 +120,7 @@ class GibbsPurification:
     """
 
     def __init__(self, sites, backbone, *, temperature=None, beta=None):
+        """Build and factor the purified Gibbs state of a finite system chain."""
         if (temperature is None) == (beta is None):
             raise ValueError("provide exactly one of temperature or beta")
         if temperature is not None:

@@ -49,6 +49,7 @@ class TreeTensorNetwork(TensorNetwork):
     """
 
     def __init__(self, dims, edges, root=0):
+        """Create a ground-product TTN on a validated loop-free graph."""
         self.n = len(dims)
         self.dims = list(dims)
         self.root = root
@@ -65,12 +66,15 @@ class TreeTensorNetwork(TensorNetwork):
 
     # -- storage: legs are already (bonds..., phys), so these are the identity --
     def tensor(self, i):
+        """Return node ``i`` with bond legs followed by its physical leg."""
         return self.T[i]
 
     def set_tensor(self, i, value):
+        """Replace node ``i`` using the canonical ``(bonds..., physical)`` order."""
         self.T[i] = value
 
     def neighbours(self, i):
+        """Return node ``i``'s neighbours in tensor-leg order."""
         return self.order[i]
 
     # -- initial state -------------------------------------------------------

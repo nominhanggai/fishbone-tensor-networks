@@ -62,6 +62,7 @@ class SimulationPlan:
     execute: Optional[Callable[[], Result]] = None
 
     def __post_init__(self):
+        """Require exactly one complete step-based or whole-run execution plan."""
         policies = (self.step, self.measure_rdm, self.peak_bond)
         has_step_plan = all(policy is not None for policy in policies)
         if any(policy is not None for policy in policies) and not has_step_plan:

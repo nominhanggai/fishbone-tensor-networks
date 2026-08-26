@@ -146,6 +146,7 @@ class Truncation:
     max_bond: Optional[int] = None
 
     def __post_init__(self):
+        """Validate and normalize the threshold and optional rank cap."""
         if (isinstance(self.eps, (bool, np.bool_))
                 or not isinstance(self.eps, (int, float, np.number))
                 or not np.isfinite(self.eps) or self.eps < 0):

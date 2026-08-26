@@ -67,6 +67,7 @@ class PolaronRepresentation:
     names = frozenset({"polaron-star", "polaron-chain"})
 
     def __init__(self, *, representation, h_sys, coupling, bath):
+        """Validate the system and retain a resolved bath for construction."""
         if representation not in self.names:
             raise ValueError(
                 "representation must be 'polaron-star' or 'polaron-chain'")
@@ -86,14 +87,17 @@ class PolaronRepresentation:
 
     @property
     def static(self):
+        """Whether the represented Hamiltonian is time independent."""
         return True
 
     @property
     def dimensions(self):
+        """Physical dimensions in system-first MPS order."""
         return (self.pd_sys, *self.pd_boson)
 
     @property
     def n_sites(self):
+        """Number of physical sites in the represented MPS."""
         return len(self.dimensions)
 
     def build(self):

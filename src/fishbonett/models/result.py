@@ -104,6 +104,7 @@ class SimulationCheckpoint:
 
     @classmethod
     def from_state(cls, state, terms, *, method, elapsed, bath_horizon):
+        """Capture a tree state using a represented ``LocalTerms`` signature."""
         return cls(
             tensors=tuple(np.array(value, complex, copy=True) for value in state.T),
             dims=tuple(map(int, terms.dims)),

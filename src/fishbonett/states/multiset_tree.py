@@ -65,6 +65,7 @@ class MultiSetTreeTensorNetwork:
     """One bath :class:`TreeTensorNetwork` per exact system-basis state."""
 
     def __init__(self, sets):
+        """Store and validate one bath TTN per exact system-basis component."""
         sets = list(sets)
         if not all(isinstance(tree, TreeTensorNetwork) for tree in sets):
             raise TypeError("sets must contain TreeTensorNetwork objects")
