@@ -23,8 +23,8 @@ _generated.mkdir(exist_ok=True)
                                          encoding="utf-8")
 
 project = "fishbonett"
-copyright = "2020-2026, The fishbonett developers"
-author = "The fishbonett developers"
+copyright = "2020-2026, Hanggai Nuomin and fishbonett contributors"
+author = "Hanggai Nuomin"
 try:
     release = _version("fishbonett")
 except Exception:
