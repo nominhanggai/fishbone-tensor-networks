@@ -44,8 +44,14 @@ def main():
     def Cexact(Jb, pts):
         out = []
         for t in ts:
-            re, _ = quad(lambda w: Jb(w) * np.cos(w * t), *DOMAIN, limit=200, points=pts)
-            im, _ = quad(lambda w: -Jb(w) * np.sin(w * t), *DOMAIN, limit=200, points=pts)
+            re, _ = quad(
+                lambda w, t=t: Jb(w) * np.cos(w * t),
+                *DOMAIN, limit=200, points=pts,
+            )
+            im, _ = quad(
+                lambda w, t=t: -Jb(w) * np.sin(w * t),
+                *DOMAIN, limit=200, points=pts,
+            )
             out.append(re + 1j * im)
         return np.array(out)
 

@@ -81,7 +81,9 @@ def _exact_rdm(model, times):
     for level, branch in representation.branches:
         projector = np.zeros((model.n_levels, model.n_levels), complex)
         projector[level, level] = 1.0
-        for frequency, coupling in zip(branch.frequencies, branch.star_couplings):
+        for frequency, coupling in zip(
+            branch.frequencies, branch.star_couplings, strict=True
+        ):
             hamiltonian += frequency * embed(destroy.conj().T @ destroy, mode_site)
             hamiltonian += coupling * (
                 embed(projector, 0) @ embed(destroy + destroy.conj().T, mode_site)

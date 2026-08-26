@@ -28,9 +28,9 @@ def test_gpu_request_without_cupy_says_so_and_still_works():
         asked.split_truncate_theta(theta.copy(), 0, 8, 1e-10, gpu=True)
 
     # the warning is the only difference: the state is the same
-    for a, b in zip(cpu.B, asked.B):
+    for a, b in zip(cpu.B, asked.B, strict=True):
         assert np.array_equal(a, b)
-    for a, b in zip(cpu.S, asked.S):
+    for a, b in zip(cpu.S, asked.S, strict=True):
         assert np.array_equal(a, b)
 def _random_gate(d1, d2, rng, dt=0.05):
     h = rng.rand(d1 * d2, d1 * d2)

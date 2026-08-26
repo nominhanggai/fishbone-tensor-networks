@@ -514,7 +514,7 @@ def test_one_engine_can_serve_two_representations():
 
 def test_describe_taxonomy_mentions_every_model_and_method():
     text = R.describe_taxonomy()
-    for key, m in R.MODELS.items():
+    for _key, m in R.MODELS.items():
         assert m.label in text
         for method in m.methods():
             assert method in text

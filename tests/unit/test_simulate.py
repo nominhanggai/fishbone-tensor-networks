@@ -113,7 +113,7 @@ def test_methods_share_time_grid_and_agree():
                for m in methods}
     ref = results["interaction-chain-tebd"]
     assert len(ref.t) == 10 and abs(ref.t[-1] - 0.5) < 1e-12
-    for m, r in results.items():
+    for _method, r in results.items():
         assert np.allclose(r.t, ref.t)                       # same time grid
         assert abs(r.expect["sz"][-1] - ref.expect["sz"][-1]) < 5e-2  # agree
 

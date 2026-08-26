@@ -62,7 +62,12 @@ def _exact_dynamics(times, n_modes=2):
     destroy = annihilate(dimension)
     hamiltonian = embed(h_system, 0)
     for mode, (frequency, strength) in enumerate(
-        zip(representation.frequencies, representation.star_couplings), start=1
+        zip(
+            representation.frequencies,
+            representation.star_couplings,
+            strict=True,
+        ),
+        start=1,
     ):
         hamiltonian += frequency * embed(destroy.conj().T @ destroy, mode)
         hamiltonian += strength * (embed(coupling, 0) @ embed(destroy + destroy.conj().T, mode))
