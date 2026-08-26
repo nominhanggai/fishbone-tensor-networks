@@ -23,7 +23,7 @@ GAP_OPERATOR = OCCUPIED - 0.5 * np.eye(2)
 UNOCCUPIED = np.array([1.0, 0.0])
 EXCITED = np.array([0.0, 1.0])
 SIMULATION_LABEL = "interaction-chain tensor network"
-PAPER_LABEL = "Fig. 5 (vector-path samples)"
+PAPER_LABEL = "digitized paper Fig. 5"
 
 
 @dataclass(frozen=True)

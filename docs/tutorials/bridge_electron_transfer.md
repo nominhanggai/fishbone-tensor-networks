@@ -347,8 +347,8 @@ the paper. No bath displacement conditioned on the donor is included.
 ```
 
 The legend identifies the solid curves as `tensor network + TTM` and the open
-circles as `digitized paper Fig. 2`. The circles were extracted from the actual
-vector paths in the paper PDF at 0.05 ps intervals; they are not points
+circles as `digitized paper Fig. 2`. The circles were extracted from the vector
+graphics in the paper PDF at 0.05 ps intervals; they are not points
 estimated by clicking a raster image. The lower panels show
 
 $$
@@ -373,7 +373,7 @@ instead starts from a finite 95-mode TEDOPA bath with local Fock dimension 6, a
 2 fs step, and SVD threshold $10^{-4}$. The residual can therefore contain
 finite-bath, Fock-space, timestep, SVD-truncation, and map-digitization errors;
 the checks in the validation appendix do not yet isolate a common converged
-limit of the two algorithms. The plotted paper curves are vector-path samples,
+limit of the two algorithms. The plotted paper curves were digitized from the figure,
 not the authors' raw data, and their population sums differ from one by as much
 as 0.006.
 

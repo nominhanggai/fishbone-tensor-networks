@@ -188,7 +188,7 @@ for axis, (frequency, result) in zip(axes, results.items()):
         markersize=4.2,
         markerfacecolor="none",
         color="#E8590C",
-        label="Fig. 5 (vector-path samples)",
+        label="digitized paper Fig. 5",
     )
     axis.set(
         xlabel=r"time ($J^{-1}$)",

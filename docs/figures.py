@@ -426,7 +426,7 @@ def nonadiabatic_spin_boson(path=None):
 The 200-mode calculation gives
 $P_\uparrow={summary['final_population_up']:.4f}$ at
 $t\Delta/\pi={result.t[-1] / np.pi:.4f}$. Against
-**{summary['paper_points_compared']}** vector-path samples of the published IC10
+**{summary['paper_points_compared']}** samples digitized from the published IC10
 curve on this interval, the population RMSE is
 **{summary['paper_curve_rmse']:.4f}** and the maximum absolute difference is
 **{summary['paper_curve_max_error']:.4f}**. The peak retained bond dimension is
@@ -619,7 +619,7 @@ def bridge_electron_transfer(path=None):
 {validation_rows}
 
 The solid curves are the 15 ps transfer-tensor propagation; open circles are
-vector-path data extracted from the paper's Fig. 2.
+samples digitized from the vector graphics in the paper's Fig. 2.
 Residuals compare all three populations at every 0.05 ps digitization point.
 The same $A\exp(-t/\tau)+C$ model was fitted independently to the calculated and
 digitized donor curves. Its fit to the digitized curves recovers the lifetimes

@@ -296,7 +296,7 @@ def save_reference_maps(reference, path):
 
 
 def load_paper_fig2(path=PAPER_FIG2_DATA):
-    """Load populations digitized from the vector paths in paper Fig. 2."""
+    """Load populations digitized from the vector graphics in paper Fig. 2."""
     table = np.genfromtxt(
         path, delimiter=",", names=True, dtype=None, encoding="ascii"
     )
