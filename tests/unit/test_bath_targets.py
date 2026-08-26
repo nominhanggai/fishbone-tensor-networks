@@ -1,11 +1,34 @@
 """Observable targets for represented bath modes."""
 
+import warnings
+
 import numpy as np
 import pytest
 from scipy.linalg import expm
 
 from fishbonett import Bath, BathMode, Fishbone
+from fishbonett.models.fishbone import _parse_observable
 from fishbonett.operators import annihilate, sigma_x, sigma_y, sigma_z
+
+
+def test_targeted_observable_is_not_probed_as_a_ragged_array():
+    """An ``(operator, target)`` pair is recognized before NumPy conversion."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        kind, operator, sites = _parse_observable(
+            (sigma_z, 0), dimensions=(2,), name="z0"
+        )
+    assert not caught
+    assert kind == "sites"
+    assert np.array_equal(operator, sigma_z)
+    assert sites == [0]
+
+    kind, operator, sites = _parse_observable(
+        ((1.0, 0.0), (0.0, -1.0)), dimensions=(2,), name="z"
+    )
+    assert kind == "persite"
+    assert np.array_equal(operator, sigma_z)
+    assert sites is None
 
 
 def _density(scale):
