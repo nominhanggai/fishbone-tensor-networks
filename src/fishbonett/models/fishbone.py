@@ -286,6 +286,7 @@ class TreeFishbone:
     """
 
     def __init__(self, sites, edges, baths):
+        """Validate the electronic tree and bind its per-site bath entries."""
         self.sites = [check_operator(h, f"sites[{i}]")
                       for i, h in enumerate(sites)]
         self.ns = len(self.sites)
@@ -483,6 +484,7 @@ class Fishbone:
     _MODEL = "comb"
 
     def __init__(self, sites, baths, backbone=None, *, couplings=None):
+        """Validate a linear electronic backbone and bind its bath entries."""
         self.sites = [check_operator(h, f"sites[{i}]")
                       for i, h in enumerate(sites)]
         self.nc = len(self.sites)

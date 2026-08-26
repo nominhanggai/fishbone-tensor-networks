@@ -98,6 +98,7 @@ class InterleavedExcitonTEBD:
     def __init__(
         self, representation, state, dt, bond_dim, trunc_eps, *, time_offset=0.0
     ):
+        """Prepare the fixed electronic gates and retain the MPS update policy."""
         if representation.layout != "interleaved":
             raise ValueError("InterleavedExcitonTEBD needs the interleaved layout")
         self.representation = representation

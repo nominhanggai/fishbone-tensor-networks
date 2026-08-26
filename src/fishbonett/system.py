@@ -77,6 +77,7 @@ class System:
     dim: int = field(init=False)
 
     def __post_init__(self):
+        """Validate the Hamiltonian, coupling channels, and initial-state input."""
         self.h = check_operator(self.h, "h")
         self.dim = self.h.shape[0]
         if self.is_multichannel:

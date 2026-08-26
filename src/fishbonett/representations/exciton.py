@@ -205,6 +205,7 @@ class ExcitonInteractionRepresentation:
     static = False
 
     def __init__(self, hamiltonian, baths, horizon, *, layout="system-first"):
+        """Resolve every local bath and assemble the requested conventional layout."""
         if layout not in {"system-first", "interleaved"}:
             raise ValueError("layout must be 'system-first' or 'interleaved'")
         self.hamiltonian = check_operator(hamiltonian, "hamiltonian")

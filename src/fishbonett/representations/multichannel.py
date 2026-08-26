@@ -165,10 +165,12 @@ class MultichannelInteractionRepresentation:
 
     @property
     def dimensions(self):
+        """Physical dimensions in system-first MPS order."""
         return (self.pd_sys, *self.pd_boson)
 
     @property
     def n_sites(self):
+        """Number of physical sites in the represented MPS."""
         return len(self.dimensions)
 
     def two_site_hamiltonians(self, t, delta, include_system=True):

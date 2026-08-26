@@ -172,6 +172,7 @@ class RunCtx:
     progress: Any = None
 
     def __post_init__(self):
+        """Validate run controls and freeze mapping-valued inputs."""
         dt, n_steps = resolve_time_grid(self.dt, n_steps=self.n_steps)
         object.__setattr__(self, "dt", dt)
         object.__setattr__(self, "n_steps", n_steps)

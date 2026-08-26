@@ -18,6 +18,7 @@ class BathMode:
     mode: int = 0
 
     def __post_init__(self):
+        """Require non-negative integer indices for every target coordinate."""
         for name in ("system_site", "bath", "mode"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, Integral):

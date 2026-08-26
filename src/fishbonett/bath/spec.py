@@ -118,6 +118,7 @@ class Bath:
     uncompressed_modes: int | None = None
 
     def __post_init__(self):
+        """Validate the bath specification without discretizing it."""
         densities = self.J if isinstance(self.J, (list, tuple)) else (self.J,)
         if not densities or not all(callable(density) for density in densities):
             raise TypeError("J must be a callable or a non-empty sequence of callables")

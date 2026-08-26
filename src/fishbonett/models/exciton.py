@@ -57,6 +57,7 @@ class ExcitonBath:
     _MODEL = "exciton-bath"
 
     def __init__(self, h, baths):
+        """Validate the site Hamiltonian and align one bath entry per level."""
         self.h = check_operator(h, "h")
         self.n_levels = self.h.shape[0]
         self.baths = _bath_entries(baths, self.n_levels)
