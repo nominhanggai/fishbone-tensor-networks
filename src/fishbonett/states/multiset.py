@@ -14,7 +14,7 @@ dynamics by Kloss, Reichman, and Tempelaar, Phys. Rev. Lett. 123, 126601
 (2019).
 
 Tensors use the TDVP convention ``(left bond, right bond, physical)``.  This
-container deliberately owns no Hamiltonian or propagation logic; coupled
+container owns no Hamiltonian or propagation logic; coupled
 projector-splitting sweeps live in :mod:`fishbonett.evolve.multiset`.
 """
 
