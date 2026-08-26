@@ -67,7 +67,9 @@ def split_system_mpo(mpo, system_dimension=None):
     if system_dimension is not None and int(system_dimension) != dimension:
         raise ValueError(f"system MPO dimension is {dimension}, expected {system_dimension}")
     second = mpo[1]
+    tail = mpo[2:]
     blocks = []
+    cache = {}
     for output in range(dimension):
         row = []
         for input_ in range(dimension):
@@ -79,12 +81,55 @@ def split_system_mpo(mpo, system_dimension=None):
             if not np.any(boundary):
                 row.append(None)
             else:
-                # Every block has its own contracted left boundary, while the
-                # remaining MPO tensors are immutable during a sweep. Sharing
-                # that tail avoids N**2 copies for an N-level multi-set model.
-                row.append([boundary, *mpo[2:]])
+                row.append(_trim_block(boundary, tail, cache))
         blocks.append(row)
     return blocks
+
+
+def _reachable(tensor, columns):
+    """Right MPO bond components reachable from ``columns`` through ``tensor``."""
+    weight = np.abs(tensor[sorted(columns)]).sum(axis=(0, 2, 3))
+    return frozenset(np.flatnonzero(weight > 0.0).tolist())
+
+
+def _trim_block(boundary, tail, cache):
+    """Drop the MPO bond components a split block can never reach.
+
+    Splitting the system leg fixes which operator channel each block rides.
+    For an exciton chain the seven bath-projector channels and the identity
+    channel all remain in the shared tail, so an untrimmed block contracts a
+    bond-eight MPO over every site even though an off-diagonal block is only
+    ``J[a, b]`` times the identity and a diagonal block needs its own bath
+    channel plus the identity.  The discarded components multiply zero, so this
+    removes work without changing the result.  Tails are cached by the reachable
+    component set, which is shared across the blocks of a symmetric model.
+    """
+    live = _reachable(boundary, (0,))
+    if not live:
+        return [boundary, *tail]
+    if live not in cache:
+        trimmed = []
+        columns = live
+        for tensor in tail:
+            following = _reachable(tensor, columns)
+            if not following:
+                # The block vanishes downstream; keep the tail exact instead.
+                trimmed = None
+                break
+            trimmed.append(
+                np.ascontiguousarray(
+                    tensor[np.ix_(sorted(columns), sorted(following))]
+                )
+            )
+            columns = following
+        cache[live] = trimmed
+    trimmed = cache[live]
+    if trimmed is None:
+        return [boundary, *tail]
+    return [
+        np.ascontiguousarray(boundary[:, sorted(live)]),
+        *trimmed,
+    ]
 
 
 def _update_left(ket, operator, left, bra):

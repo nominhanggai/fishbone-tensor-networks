@@ -98,6 +98,7 @@ def test_multiset_product_rdm_and_conventional_embedding_agree():
 
 
 def test_split_system_mpo_shares_the_immutable_operator_tail():
+    """Blocks reaching the same operator channels share one trimmed tail."""
     mpo = [
         np.ones((1, 2, 2, 2), complex),
         np.ones((2, 2, 3, 3), complex),
@@ -105,8 +106,53 @@ def test_split_system_mpo_shares_the_immutable_operator_tail():
     ]
     blocks = split_system_mpo(mpo)
     assert blocks[0][0][0] is not mpo[1]
-    assert blocks[0][0][1] is mpo[2]
-    assert blocks[1][1][1] is mpo[2]
+    # Every block of a dense MPO reaches every channel, so one tail serves all
+    # of them and an N-level model still makes no N**2 copies.
+    assert blocks[0][0][1] is blocks[1][1][1]
+    assert np.allclose(blocks[0][0][1], mpo[2])
+
+
+def test_split_system_mpo_drops_channels_a_block_cannot_reach():
+    """An off-diagonal block riding only the identity channel loses the rest.
+
+    Splitting the system leg fixes which operator channel a block rides.  The
+    exciton chain keeps one projector channel per bath plus an identity
+    channel, so carrying the full operator bond through every block makes each
+    of the N**2 blocks as expensive as the undivided Hamiltonian.
+    """
+    # Channel 0 carries a projector; channel 1 carries the identity.
+    middle = np.zeros((2, 2, 2, 2), complex)
+    middle[0, 0] = np.diag((1.0, -1.0))
+    middle[1, 1] = np.eye(2)
+    last = np.zeros((2, 1, 2, 2), complex)
+    last[0, 0] = np.diag((1.0, -1.0))
+    last[1, 0] = np.eye(2)
+    system = np.zeros((1, 2, 2, 2), complex)
+    system[0, 0, 0, 0] = 1.0                            # only block (0, 0)
+    system[0, 1] = np.array([[0.5, 0.7], [0.7, 0.5]])   # every block
+    mpo = [system, middle, middle, last]
+
+    blocks = split_system_mpo(mpo, 2)
+    # The off-diagonal blocks are a coupling times the identity, so they keep a
+    # single channel; the diagonal block still needs its projector as well.
+    assert max(tensor.shape[0] for tensor in blocks[0][1]) == 1
+    assert max(tensor.shape[0] for tensor in blocks[1][0]) == 1
+    assert max(tensor.shape[0] for tensor in blocks[0][0]) == 2
+    assert blocks[0][1][1] is blocks[1][0][1]
+
+    # Trimming only removes components that contract to zero, so a block still
+    # represents exactly the same operator.
+    def dense(block):
+        value = block[0]
+        for tensor in block[1:]:
+            value = np.einsum("lrij,rskm->lsikjm", value, tensor)
+            left, right, out_a, out_b, in_a, in_b = value.shape
+            value = value.reshape(left, right, out_a * out_b, in_a * in_b)
+        return value[0, 0]
+
+    untrimmed = [np.einsum("r,rsij->sij", system[0, :, 0, 1], middle)[None],
+                 middle, last]
+    assert np.allclose(dense(blocks[0][1]), dense(untrimmed))
 
 
 @pytest.mark.parametrize("representation", REPRESENTATIONS)
