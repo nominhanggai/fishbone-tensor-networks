@@ -76,7 +76,7 @@ def composite_measure_quad(Jb, domain, m_per=60, x0=1e-8, ratio=1.7,
 
     base_x, base_w = np.polynomial.legendre.leggauss(int(m_per))
     node_blocks, weight_blocks = [], []
-    for lo, hi in zip(cuts[:-1], cuts[1:]):
+    for lo, hi in zip(cuts[:-1], cuts[1:], strict=True):
         if hi <= lo:
             continue
         half = 0.5 * (hi - lo)

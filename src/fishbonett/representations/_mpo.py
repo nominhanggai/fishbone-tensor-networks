@@ -81,7 +81,7 @@ def product_sum_mpo(dimensions: Sequence[int], products, coefficients=None):
     if any(len(row) != len(dimensions) for row in rows):
         raise ValueError("every product must contain one operator per site")
     for row in rows:
-        for dimension, operator in zip(dimensions, row):
+        for dimension, operator in zip(dimensions, row, strict=True):
             if operator.shape != (dimension, dimension):
                 raise ValueError(
                     f"local operator shape {operator.shape} does not match "

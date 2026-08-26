@@ -153,7 +153,9 @@ class InterleavedExcitonTEBD:
             coefficients = representation.interval_coefficients(time, self.dt)
             if len(modes) != len(coefficients):
                 raise ValueError("bath branch sites and coefficients differ")
-            for offset, (mode, coefficient) in enumerate(zip(modes, coefficients)):
+            for offset, (mode, coefficient) in enumerate(
+                zip(modes, coefficients, strict=True)
+            ):
                 bond = electronic + offset
                 if mode != bond + 1:
                     raise ValueError("interleaved bath branch is not contiguous")

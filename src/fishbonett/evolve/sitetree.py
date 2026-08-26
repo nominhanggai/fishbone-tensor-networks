@@ -283,7 +283,7 @@ def write_branch(state, tensors, layout):
     replayed from the layout; the rest come from the tensor as it now is.
     """
     for tensor, (node, order, sizes, has_prev, has_next) in zip(
-            tensors, layout):
+            tensors, layout, strict=True):
         rows, physical, cols = tensor.shape
         shape = list(sizes)
         if has_prev:

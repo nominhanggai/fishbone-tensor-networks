@@ -159,7 +159,7 @@ class InteractionRepresentation:
         """
         out = []
         for dimension, amplitude in zip(
-                self.pd_boson, self.interval_coefficients(t, delta)):
+                self.pd_boson, self.interval_coefficients(t, delta), strict=True):
             destroy = annihilate(dimension)
             bath_operator = (
                 amplitude * destroy

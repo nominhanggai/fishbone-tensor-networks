@@ -89,7 +89,7 @@ def _discover_log_bounds(J, *, step=0.05, relative_tail=1e-12,
     frequency = np.exp(log_frequency)
     values = np.array([
         samples.get(int(index), _density_value(J, value))
-        for index, value in zip(indices, frequency)
+        for index, value in zip(indices, frequency, strict=True)
     ])
     return frequency, log_frequency, values
 

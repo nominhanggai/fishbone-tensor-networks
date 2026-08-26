@@ -33,7 +33,9 @@ def _copy_mps(tensors):
 def _overlap(bra, ket, *, operator=None, site=None):
     """Contract ``<bra|ket>`` or one local matrix element."""
     environment = np.ones((1, 1), complex)
-    for index, (bra_tensor, ket_tensor) in enumerate(zip(bra, ket)):
+    for index, (bra_tensor, ket_tensor) in enumerate(
+        zip(bra, ket, strict=True)
+    ):
         if index == site:
             environment = _einsum_cached(
                 "ab,arq,bsp,qp->rs",

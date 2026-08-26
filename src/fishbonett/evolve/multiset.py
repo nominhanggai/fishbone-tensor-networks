@@ -155,7 +155,7 @@ def _pack(values):
 def _unpack(vector, shapes, sizes):
     out = []
     start = 0
-    for shape, size in zip(shapes, sizes):
+    for shape, size in zip(shapes, sizes, strict=True):
         out.append(np.asarray(vector[start : start + size]).reshape(shape))
         start += size
     return out

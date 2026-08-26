@@ -171,7 +171,7 @@ def predict_density_mat(t, T, r_init):
         raise ValueError("T and r_init must contain only finite values")
     r = copy.deepcopy(initial)
     diff = t - len(r_init)
-    for i in range(diff):
+    for _ in range(diff):
         r_relevant = r[:-len(transfer) - 1:-1]
         vectors = r_relevant.reshape(len(transfer), -1, 1)
         rho = _einsum_cached('Nij,Njk->ik', transfer, vectors).reshape(

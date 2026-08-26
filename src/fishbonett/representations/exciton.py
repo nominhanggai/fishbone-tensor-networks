@@ -62,7 +62,9 @@ def _system_first_mpo(hamiltonian, branches, time):
     mpo = [first]
     for branch, (_level, representation) in enumerate(branches):
         coefficients = representation.coefficients(time)
-        for dimension, coefficient in zip(representation.pd_boson, coefficients):
+        for dimension, coefficient in zip(
+            representation.pd_boson, coefficients, strict=True
+        ):
             tensor = np.zeros((count + 1, count + 1, dimension, dimension), complex)
             identity = np.eye(dimension, dtype=complex)
             for state in range(count + 1):
@@ -110,7 +112,9 @@ def _interleaved_mpo(hamiltonian, branches, time):
         if representation is None:
             continue
         for dimension, coefficient in zip(
-            representation.pd_boson, representation.coefficients(time)
+            representation.pd_boson,
+            representation.coefficients(time),
+            strict=True,
         ):
             mode = propagator(dimension)
             mode[bath_open + level, done] = _mode_operator(dimension, coefficient)
@@ -130,7 +134,7 @@ def _tree_topology(levels, branches):
         nodes = list(range(next_node, next_node + representation.len_boson))
         mode_nodes[level] = tuple(nodes)
         path = [level, *nodes]
-        edges.extend(zip(path[:-1], path[1:]))
+        edges.extend(zip(path[:-1], path[1:], strict=True))
         dimensions.extend(representation.pd_boson)
         next_node += representation.len_boson
     return tuple(dimensions), tuple(edges), mode_nodes
@@ -283,6 +287,7 @@ class ExcitonInteractionRepresentation:
                 for dimension, coefficient in zip(
                     representation.pd_boson,
                     representation.interval_coefficients(time, dt),
+                    strict=True,
                 ):
                     tensor = _identity_mpo_tensor(levels, dimension)
                     tensor[owner, owner] = displacement(
@@ -313,7 +318,7 @@ class ExcitonInteractionRepresentation:
             mpo.append(electronic)
             coefficients = representation.interval_coefficients(time, dt)
             for mode, (dimension, coefficient) in enumerate(zip(
-                representation.pd_boson, coefficients
+                representation.pd_boson, coefficients, strict=True
             )):
                 tensor = _identity_mpo_tensor(2, dimension)
                 tensor[1, 1] = displacement(
@@ -370,6 +375,7 @@ class ExcitonInteractionRepresentation:
             for dimension, coefficient in zip(
                 representation.pd_boson,
                 representation.interval_coefficients(time, dt),
+                strict=True,
             ):
                 bath = _mode_operator(dimension, coefficient)
                 generator = np.kron(projector, bath)
@@ -419,6 +425,7 @@ class ExcitonInteractionRepresentation:
                         nodes,
                         representation.pd_boson,
                         representation.coefficients(time),
+                        strict=True,
                     ):
                         local[node] = _mode_operator(dimension, value)
                 if local:

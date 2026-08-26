@@ -79,7 +79,9 @@ def get_approx_func(J, n, domain, epsilon):
     """
     delta = lambda x: 1 / np.pi * epsilon / (epsilon ** 2 + x ** 2)
     w, V_squared = get_vn_squared(J, n, domain)
-    j_approx = lambda x: np.sum([vi * delta(x - wi) for wi, vi in zip(w, V_squared)])
+    j_approx = lambda x: np.sum([
+        vi * delta(x - wi) for wi, vi in zip(w, V_squared, strict=True)
+    ])
     return np.vectorize(j_approx)
 
 

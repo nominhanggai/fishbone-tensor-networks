@@ -106,7 +106,9 @@ class MultichannelInteractionRepresentation:
         signed = np.concatenate((-freq, freq))
         self._setup(pd,
                     [mat * np.sqrt(np.abs(temp_factor(temp, w)))
-                     for mat, w in zip(np.concatenate((coup_mat, coup_mat)), signed)],
+                     for mat, w in zip(
+                         np.concatenate((coup_mat, coup_mat)), signed, strict=True
+                     )],
                     signed, h_sys, H_add, representation)
         return self
 
