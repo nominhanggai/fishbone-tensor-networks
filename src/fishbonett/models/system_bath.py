@@ -11,9 +11,16 @@ This class supports two models:
 See :mod:`fishbonett.models.registry` for supported representation,
 state-geometry, and integrator combinations.
 """
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
+
+from numpy.typing import ArrayLike
+
+from fishbonett.bath.coupled import CoupledBath, bind_bath
+from fishbonett.bath.spec import Bath
 from fishbonett.linalg import Truncation
 from fishbonett.system import System
-from fishbonett.bath.coupled import bind_bath
 from fishbonett.models.propagate import (
     RunCtx, _resolve_continuation, _resolve_sampling_options,
     resolve_time_grid,
@@ -22,6 +29,7 @@ from fishbonett.models import registry
 from fishbonett.models.registry import (
     BOND_CAP_REQUIRED_METHODS, methods_of, unknown_method_error,
 )
+from fishbonett.models.result import Result, SimulationCheckpoint
 from fishbonett.targets import BathMode
 
 __all__ = ["SystemBath"]
@@ -108,7 +116,12 @@ class SystemBath:
     bath : Bath
     """
 
-    def __init__(self, h, coupling, bath):
+    def __init__(
+        self,
+        h: ArrayLike,
+        coupling: ArrayLike | Sequence[ArrayLike],
+        bath: Bath | CoupledBath,
+    ) -> None:
         """Validate the system and bind its operator or channels to one bath."""
         # `System` validates h and the coupling(s) once -- square, matching
         # dimension, Hermitian -- and keeps a multichannel coupling as a *list*
@@ -123,11 +136,31 @@ class SystemBath:
         self.bath = self.coupled_bath.bath
 
     # -- public API ----------------------------------------------------------
-    def run(self, *, dt, t_max=None, n_steps=None, method=None,
-            model=None, representation=None, state_geometry=None, integrator=None,
-            trunc=None, bond_dim=None, trunc_eps=None, observables=None,
-            initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
-            progress=None, observe_every=1, svd_backend="auto", **engine_kw):
+    def run(
+        self,
+        *,
+        dt: float,
+        t_max: float | None = None,
+        n_steps: int | None = None,
+        method: str | None = None,
+        model: str | None = None,
+        representation: str | None = None,
+        state_geometry: str | None = None,
+        integrator: str | None = None,
+        trunc: Truncation | float | None = None,
+        bond_dim: int | None = None,
+        trunc_eps: float | None = None,
+        observables: Mapping[str, object] | None = None,
+        initial: str | ArrayLike | None = None,
+        krylov: int = 25,
+        seed: int | None = 0,
+        resume: SimulationCheckpoint | None = None,
+        bath_horizon: float | None = None,
+        progress: Callable[[dict[str, object]], None] | None = None,
+        observe_every: int = 1,
+        svd_backend: str = "auto",
+        **engine_kw: object,
+    ) -> Result:
         """Propagate and return a :class:`Result`.
 
         .. rubric:: Method selection

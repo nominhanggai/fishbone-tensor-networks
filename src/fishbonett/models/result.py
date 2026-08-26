@@ -30,14 +30,23 @@ One container for both shapes of result, because the *model* decides the shape:
 ``comb`` and ``site-tree`` are multi-site. ``n_records`` equals ``n_steps`` unless ``observe_every`` is
 greater than one. See :mod:`fishbonett.models.registry`.
 """
+from __future__ import annotations
+
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 import hashlib
 import json
 import os
 from pathlib import Path
 import tempfile
+from typing import TYPE_CHECKING
 
 import numpy as np
+from numpy.typing import ArrayLike
+
+if TYPE_CHECKING:
+    from fishbonett.representations.schrodinger import LocalTerms
+    from fishbonett.states.tree import TreeTensorNetwork
 
 __all__ = ["Result", "SimulationCheckpoint", "plan_signature"]
 
@@ -63,7 +72,12 @@ def _hamiltonian_signature(terms):
     return digest.hexdigest()
 
 
-def plan_signature(dims, edges, arrays=(), scalars=()):
+def plan_signature(
+    dims: Sequence[int],
+    edges: Sequence[tuple[int, int]],
+    arrays: Sequence[ArrayLike] = (),
+    scalars: Sequence[object] = (),
+) -> str:
     """Digest for a plan that builds its own topology rather than :class:`LocalTerms`.
 
     The interaction-picture comb assembles ``dims``/``edges`` itself from the
@@ -93,9 +107,9 @@ class SimulationCheckpoint:
     change the continued Hamiltonian.
     """
 
-    tensors: tuple
-    dims: tuple
-    edges: tuple
+    tensors: tuple[np.ndarray, ...]
+    dims: tuple[int, ...]
+    edges: tuple[tuple[int, int], ...]
     oc: int
     method: str
     elapsed: float
@@ -103,7 +117,15 @@ class SimulationCheckpoint:
     signature: str
 
     @classmethod
-    def from_state(cls, state, terms, *, method, elapsed, bath_horizon):
+    def from_state(
+        cls,
+        state: TreeTensorNetwork,
+        terms: LocalTerms,
+        *,
+        method: str,
+        elapsed: float,
+        bath_horizon: float,
+    ) -> SimulationCheckpoint:
         """Capture a tree state using a represented ``LocalTerms`` signature."""
         return cls(
             tensors=tuple(np.array(value, complex, copy=True) for value in state.T),
@@ -115,8 +137,17 @@ class SimulationCheckpoint:
         )
 
     @classmethod
-    def from_tree(cls, state, dims, edges, *, signature, method, elapsed,
-                  bath_horizon):
+    def from_tree(
+        cls,
+        state: TreeTensorNetwork,
+        dims: Sequence[int],
+        edges: Sequence[tuple[int, int]],
+        *,
+        signature: str,
+        method: str,
+        elapsed: float,
+        bath_horizon: float,
+    ) -> SimulationCheckpoint:
         """Checkpoint a tree state whose topology was assembled by the plan."""
         return cls(
             tensors=tuple(np.array(value, complex, copy=True) for value in state.T),
@@ -125,12 +156,17 @@ class SimulationCheckpoint:
             oc=int(state.oc), method=str(method), elapsed=float(elapsed),
             bath_horizon=float(bath_horizon), signature=str(signature))
 
-    def restore(self, terms):
+    def restore(self, terms: LocalTerms) -> TreeTensorNetwork:
         """Return a fresh tree state after validating ``terms``."""
         return self.restore_tree(terms.dims, terms.edges,
                                  _hamiltonian_signature(terms))
 
-    def restore_tree(self, dims, edges, signature):
+    def restore_tree(
+        self,
+        dims: Sequence[int],
+        edges: Sequence[tuple[int, int]],
+        signature: str,
+    ) -> TreeTensorNetwork:
         """Return a fresh tree state after validating an explicit topology."""
         if self.signature != str(signature):
             raise ValueError(
@@ -174,7 +210,7 @@ class SimulationCheckpoint:
         state.oc = int(self.oc)
         return state
 
-    def save(self, path):
+    def save(self, path: str | os.PathLike[str]) -> Path:
         """Write this checkpoint as an NPZ archive without Python pickles."""
         path = Path(path)
         if path.suffix.lower() != ".npz":
@@ -204,7 +240,7 @@ class SimulationCheckpoint:
         return path
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: str | os.PathLike[str]) -> SimulationCheckpoint:
         """Load a checkpoint written by :meth:`save`."""
         with np.load(Path(path), allow_pickle=False) as archive:
             metadata = json.loads(str(archive["metadata"].item()))

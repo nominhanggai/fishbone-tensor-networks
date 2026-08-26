@@ -1,4 +1,6 @@
 """Binding between a bath specification and its system coupling operators."""
+from __future__ import annotations
+
 from dataclasses import dataclass, replace
 from collections.abc import Sequence
 
@@ -26,7 +28,7 @@ def _operators(value: ArrayLike | Sequence[ArrayLike]) -> tuple[np.ndarray, ...]
     return tuple(out)
 
 
-def _same_operators(left, right):
+def _same_operators(left, right) -> bool:
     if len(left) != len(right):
         return False
     return all(a.shape == b.shape and np.array_equal(a, b)
@@ -45,7 +47,7 @@ class CoupledBath:
     bath: Bath
     operators: tuple[np.ndarray, ...]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate and freeze the coupling operators in normalized tuple form."""
         ops = _operators(self.operators)
         if not ops:
@@ -72,33 +74,33 @@ class CoupledBath:
         object.__setattr__(self, "operators", ops)
 
     @property
-    def is_multichannel(self):
+    def is_multichannel(self) -> bool:
         """Whether several system operators share this bath's modes."""
         return len(self.operators) > 1
 
     @property
-    def operator(self):
+    def operator(self) -> np.ndarray:
         """Return the sole coupling operator, rejecting multichannel bindings."""
         if self.is_multichannel:
             raise ValueError("this bath has several coupling operators")
         return self.operators[0]
 
     @property
-    def n_modes(self):
+    def n_modes(self) -> int | None:
         """Configured or resolved number of represented bath modes."""
         return self.bath.n_modes
 
     @property
-    def phys_dim(self):
+    def phys_dim(self) -> int:
         """Local Fock-space dimension of every represented bath mode."""
         return self.bath.phys_dim
 
     @property
-    def domain(self):
+    def domain(self) -> tuple[float, float] | None:
         """Configured or resolved bath-frequency interval."""
         return self.bath.domain
 
-    def resolved(self, t_max=None):
+    def resolved(self, t_max: float | None = None) -> CoupledBath:
         """Return a binding whose automatic bath settings cover ``t_max``."""
         bath = self.bath.resolved(t_max)
         if bath is self.bath:
