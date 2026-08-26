@@ -120,6 +120,9 @@ fixed by the tensor-network geometry:
 | `binary-tree` | `tree` | `interaction-chain-tree-tebd` |
 | `tree` | `tree` | `schrodinger-chain-tree-tebd` |
 
+The system-first and interleaved MPS layouts also support `tebd`,
+`trotter-mpo`, `tdvp1`, and `dtdvp` by replacing `tdvp2` in the example name.
+
 The `binary-tree` and `tree` rows use `tree` in ordinary method names. The binary-tree method
 `interaction-chain-tree-tebd` and the comb method would otherwise collide, so
 the interaction-chain comb family uses the `fishbone` infix:

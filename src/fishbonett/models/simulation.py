@@ -533,32 +533,53 @@ def _compile_exciton_mpo_plan(model, spec, context):
         context.bath_horizon or context.t_max,
         layout=layout,
     )
+    restored = (
+        None
+        if context.resume is None
+        else _restore_path(
+            context.resume,
+            representation.dimensions,
+            _exciton_path_signature(representation),
+        )
+    )
     if layout == "system-first":
-        initial = context.initial
         observe = lambda tensors: _mpo.measure_rdm(tensors[0])
-        prepare = None
+        if restored is None:
+            initial = context.initial
+            prepare = None
+        else:
+            initial = None
+            prepare = None
     else:
-        initial = np.array([1.0, 0.0], complex)
         electronic_sites = representation.electronic_sites
-
-        def prepare(_tensors):
-            return _interleaved_initial_mps(
-                context.initial, representation.dimensions, electronic_sites
-            )
-
         observe = lambda tensors: _interleaved_exciton_rdm(
             tensors, electronic_sites
         )
+        if restored is None:
+            initial = np.array([1.0, 0.0], complex)
+
+            def prepare(_tensors):
+                return _interleaved_initial_mps(
+                    context.initial, representation.dimensions, electronic_sites
+                )
+        else:
+            initial = None
+            prepare = None
 
     def execute():
-        times, rdms, max_bond = _mpo.run_mpo_hamiltonian(
+        hooks = {}
+        if spec.driver == "tdvp1":
+            hooks["initial_bond"] = context.bond_dim
+        elif spec.driver == "dtdvp":
+            hooks["prec"] = context.kw.get("prec", context.trunc_eps)
+        times, rdms, max_bond, final_state = _mpo.run_mpo_hamiltonian(
             representation,
             initial=initial,
             prepare=prepare,
             observe=observe,
             dt=context.dt,
             nsteps=context.n_steps,
-            sweep="tdvp2",
+            sweep=spec.driver,
             bond_dim=context.bond_dim,
             trunc_eps=context.trunc_eps,
             krylov=context.krylov,
@@ -567,10 +588,22 @@ def _compile_exciton_mpo_plan(model, spec, context):
             bond_expand=context.kw.get("bond_expand"),
             seed=context.seed,
             progress=context.progress,
+            state=restored,
+            time_offset=context.elapsed,
+            return_state=True,
+            **hooks,
         )
         expectations = _expect_from_rdm(rdms, context.obs_ops)
         expectations["population"] = np.real_if_close(
             np.diagonal(rdms, axis1=1, axis2=2)
+        )
+        checkpoint = _path_checkpoint(
+            final_state,
+            representation.dimensions,
+            signature=_exciton_path_signature(representation),
+            method=spec.name,
+            elapsed=context.elapsed + context.n_steps * context.dt,
+            bath_horizon=context.bath_horizon,
         )
         return Result(
             t=times,
@@ -578,21 +611,319 @@ def _compile_exciton_mpo_plan(model, spec, context):
             max_bond=max_bond,
             rdm=rdms,
             method=spec.name,
-            meta={
-                "layout": layout,
-                "electronic_sites": representation.electronic_sites,
-                "bath_branches": tuple(
-                    {
-                        "electronic_level": level,
-                        "n_modes": branch.len_boson,
-                        "phys_dim": branch.pd_boson[0],
-                    }
-                    for level, branch in representation.branches
-                ),
-            },
+            meta=_exciton_layout_metadata(representation, layout),
+            checkpoint=checkpoint,
         )
 
     return SimulationPlan(spec, context, execute=execute)
+
+
+def _exciton_layout_metadata(representation, layout):
+    return {
+        "layout": layout,
+        "electronic_sites": representation.electronic_sites,
+        "bath_branches": tuple(
+            {
+                "electronic_level": level,
+                "n_modes": branch.len_boson,
+                "phys_dim": branch.pd_boson[0],
+            }
+            for level, branch in representation.branches
+        ),
+    }
+
+
+def _exciton_path_signature(representation):
+    from fishbonett.models.result import plan_signature
+
+    arrays = [representation.hamiltonian]
+    scalars = [representation.layout]
+    for level, branch in representation.branches:
+        scalars.append(level)
+        arrays.extend(
+            [branch.frequencies, branch.star_couplings, branch.star_to_chain]
+        )
+    edges = tuple(
+        (site, site + 1) for site in range(len(representation.dimensions) - 1)
+    )
+    return plan_signature(
+        representation.dimensions, edges, arrays=arrays, scalars=scalars
+    )
+
+
+def _path_checkpoint(
+    tensors, dimensions, *, signature, method, elapsed, bath_horizon,
+):
+    """Store TDVP-order path tensors in the common tree checkpoint format."""
+    from fishbonett.models.result import SimulationCheckpoint
+
+    values = [np.asarray(tensor, complex) for tensor in tensors]
+    if len(values) < 2:
+        raise ValueError("a checkpointed path needs at least two sites")
+    stored = [values[0][0]]
+    stored.extend(values[1:-1])
+    stored.append(values[-1][:, 0])
+    edges = tuple((site, site + 1) for site in range(len(values) - 1))
+    return SimulationCheckpoint(
+        tensors=tuple(np.array(tensor, copy=True) for tensor in stored),
+        dims=tuple(map(int, dimensions)),
+        edges=edges,
+        oc=0,
+        method=method,
+        elapsed=float(elapsed),
+        bath_horizon=float(bath_horizon),
+        signature=str(signature),
+    )
+
+
+def _restore_path(checkpoint, dimensions, signature):
+    edges = tuple((site, site + 1) for site in range(len(dimensions) - 1))
+    tree = checkpoint.restore_tree(dimensions, edges, signature)
+    tensors = [np.asarray(tensor, complex).copy() for tensor in tree.T]
+    tensors[0] = tensors[0][None, :, :]
+    tensors[-1] = tensors[-1][:, None, :]
+    return tensors
+
+
+def _exciton_step_plan(
+    spec, context, representation, layout, *, step, measure_rdm, peak_bond,
+    checkpoint_tensors,
+):
+    """Wrap a conventional-MPS step engine with exciton result fields."""
+    def execute():
+        result = propagate(
+            spec,
+            context,
+            step=step,
+            rdm=measure_rdm,
+            peak_bond=peak_bond,
+            expect_from_rdm=_expect_from_rdm,
+        )
+        result.expect["population"] = np.real_if_close(
+            np.diagonal(result.rdm, axis1=1, axis2=2)
+        )
+        result.meta.update(_exciton_layout_metadata(representation, layout))
+        result.checkpoint = _path_checkpoint(
+            checkpoint_tensors(),
+            representation.dimensions,
+            signature=_exciton_path_signature(representation),
+            method=spec.name,
+            elapsed=context.elapsed + context.n_steps * context.dt,
+            bath_horizon=context.bath_horizon,
+        )
+        return result
+
+    return SimulationPlan(spec, context, execute=execute)
+
+
+def _vidal_tdvp_tensors(state):
+    """View a Vidal-form path MPS as right-canonical TDVP-order tensors."""
+    tensors = []
+    for site in range(state.n):
+        if site == 0:
+            tensor = state.get_theta1(site)
+        else:
+            tensor = _einsum_cached(
+                "KI,aIb->aKb", state.R[site], state.B[site]
+            )
+        tensors.append(np.moveaxis(tensor, 1, -1))
+    return tensors
+
+
+def _exciton_system_first_tebd_step(
+    state, representation, time, dt, n_modes, bond_dim, trunc_eps,
+):
+    _tebd.symmetric_swap_step(
+        state,
+        representation,
+        time,
+        dt,
+        n_modes,
+        bond_dim,
+        trunc_eps,
+    )
+
+
+def _compile_exciton_tebd_plan(model, spec, context):
+    """Compile gate-based propagation on a conventional exciton MPS."""
+    from fishbonett.evolve.exciton_tebd import (
+        InterleavedExcitonTEBD,
+        vidal_from_mps,
+    )
+    from fishbonett.representations.exciton import (
+        ExcitonInteractionRepresentation,
+        _interleaved_initial_mps,
+    )
+    from fishbonett.states.mps import SystemBathMPS
+
+    layout = {
+        "system-first-mps": "system-first",
+        "interleaved-mps": "interleaved",
+    }[spec.state_geometry]
+    representation = ExcitonInteractionRepresentation(
+        model.h,
+        model.baths,
+        context.bath_horizon or context.t_max,
+        layout=layout,
+    )
+    restored = (
+        None
+        if context.resume is None
+        else _restore_path(
+            context.resume,
+            representation.dimensions,
+            _exciton_path_signature(representation),
+        )
+    )
+    if layout == "system-first":
+        if restored is None:
+            state = SystemBathMPS(representation.dimensions)
+            state.B[0][:] = 0.0
+            for level, amplitude in enumerate(context.initial):
+                state.B[0][0, level, 0] = amplitude
+        else:
+            state = vidal_from_mps(representation.dimensions, restored)
+        n_modes = len(representation.dimensions) - 1
+        step = lambda index: _exciton_system_first_tebd_step(
+            state,
+            representation,
+            context.elapsed + index * context.dt,
+            context.dt,
+            n_modes,
+            context.bond_dim,
+            context.trunc_eps,
+        )
+        measure = lambda: state.rdm(0)
+    else:
+        tensors = (
+            restored
+            if restored is not None
+            else _interleaved_initial_mps(
+                context.initial,
+                representation.dimensions,
+                representation.electronic_sites,
+            )
+        )
+        state = vidal_from_mps(representation.dimensions, tensors)
+        engine = InterleavedExcitonTEBD(
+            representation,
+            state,
+            context.dt,
+            context.bond_dim,
+            context.trunc_eps,
+            time_offset=context.elapsed,
+        )
+        step = engine.step
+        measure = lambda: _interleaved_exciton_rdm(
+            _vidal_tdvp_tensors(state), representation.electronic_sites
+        )
+
+    return _exciton_step_plan(
+        spec,
+        context,
+        representation,
+        layout,
+        step=step,
+        measure_rdm=measure,
+        peak_bond=lambda: mps_peak_bond(state),
+        checkpoint_tensors=lambda: _vidal_tdvp_tensors(state),
+    )
+
+
+def _compile_exciton_trotter_plan(model, spec, context):
+    """Compile conditional-displacement MPO propagation on a conventional MPS."""
+    from fishbonett.evolve.mpo_apply import (
+        apply_mpo,
+        bond_dims,
+        compress,
+        product_state,
+    )
+    from fishbonett.representations.exciton import (
+        ExcitonInteractionRepresentation,
+        _interleaved_initial_mps,
+    )
+
+    layout = {
+        "system-first-mps": "system-first",
+        "interleaved-mps": "interleaved",
+    }[spec.state_geometry]
+    representation = ExcitonInteractionRepresentation(
+        model.h,
+        model.baths,
+        context.bath_horizon or context.t_max,
+        layout=layout,
+    )
+    restored = (
+        None
+        if context.resume is None
+        else _restore_path(
+            context.resume,
+            representation.dimensions,
+            _exciton_path_signature(representation),
+        )
+    )
+    if restored is not None:
+        tensors = [np.moveaxis(tensor, -1, 1) for tensor in restored]
+    elif layout == "system-first":
+        tensors = product_state(representation.dimensions, context.initial)
+    else:
+        tensors = [
+            np.moveaxis(tensor, -1, 1)
+            for tensor in _interleaved_initial_mps(
+                context.initial,
+                representation.dimensions,
+                representation.electronic_sites,
+            )
+        ]
+
+    if layout == "system-first":
+        observe = lambda: _mpo.measure_rdm(
+            np.moveaxis(tensors[0], 1, -1)
+        )
+    else:
+        def observe():
+            return _interleaved_exciton_rdm(
+                [np.moveaxis(tensor, 1, -1) for tensor in tensors],
+                representation.electronic_sites,
+            )
+
+    electronic_half = representation.electronic_mpo(context.dt / 2.0)
+
+    def step(index):
+        nonlocal tensors
+        tensors = compress(
+            apply_mpo(tensors, electronic_half),
+            context.bond_dim,
+            context.trunc_eps,
+        )
+        tensors = compress(
+            apply_mpo(
+                tensors,
+                representation.trotter_mpo(
+                    context.elapsed + index * context.dt, context.dt
+                ),
+            ),
+            context.bond_dim,
+            context.trunc_eps,
+        )
+        tensors = compress(
+            apply_mpo(tensors, electronic_half),
+            context.bond_dim,
+            context.trunc_eps,
+        )
+
+    return _exciton_step_plan(
+        spec,
+        context,
+        representation,
+        layout,
+        step=step,
+        measure_rdm=observe,
+        peak_bond=lambda: max(bond_dims(tensors)),
+        checkpoint_tensors=lambda: [
+            np.moveaxis(tensor, 1, -1) for tensor in tensors
+        ],
+    )
 
 
 def _compile_exciton_multiset_tree_plan(model, spec, context):
@@ -1695,6 +2026,8 @@ def _compile_interaction_fishbone_plan(model, spec, context):
 PLAN_COMPILERS = {
     "mpo-tdvp": _compile_mpo_plan,
     "exciton-mpo-tdvp": _compile_exciton_mpo_plan,
+    "exciton-mps-tebd": _compile_exciton_tebd_plan,
+    "exciton-mps-trotter": _compile_exciton_trotter_plan,
     "multiset-tdvp": _compile_multiset_plan,
     "multiset-tree-tdvp": _compile_exciton_multiset_tree_plan,
     "modetree": _compile_modetree_plan,

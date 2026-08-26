@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import numpy as np
+import scipy.linalg as la
 
 from fishbonett._products import ScaledTreeIdentity
-from fishbonett.operators import annihilate
+from fishbonett.operators import annihilate, displacement
+from fishbonett.representations._mpo import identity_product, product_sum_mpo
 from fishbonett.representations.interaction import InteractionRepresentation
 from fishbonett.system import check_operator
 
@@ -15,6 +17,37 @@ __all__ = ["ExcitonInteractionRepresentation"]
 def _mode_operator(dimension, coefficient):
     destroy = annihilate(dimension)
     return coefficient * destroy + np.conj(coefficient) * destroy.conj().T
+
+
+def _one_excitation_gate_mpo(hamiltonian, duration):
+    """Exact electronic gate on the one-excitation sector, as an MPO."""
+    hamiltonian = np.asarray(hamiltonian, complex)
+    levels = hamiltonian.shape[0]
+    unitary = la.expm(-1j * float(duration) * hamiltonian)
+    dimensions = [2] * levels
+    number = np.diag([0.0, 1.0]).astype(complex)
+    plus = np.array([[0.0, 0.0], [1.0, 0.0]], complex)
+    minus = plus.conj().T
+    products, coefficients = [], []
+    for target in range(levels):
+        for source in range(levels):
+            row = identity_product(dimensions)
+            if target == source:
+                row[target] = number
+            else:
+                row[target] = plus
+                row[source] = minus
+            products.append(row)
+            coefficients.append(unitary[target, source])
+    return product_sum_mpo(dimensions, products, coefficients)
+
+
+def _identity_mpo_tensor(rank, dimension):
+    tensor = np.zeros((rank, rank, dimension, dimension), complex)
+    identity = np.eye(dimension, dtype=complex)
+    for branch in range(rank):
+        tensor[branch, branch] = identity
+    return tensor
 
 
 def _system_first_mpo(hamiltonian, branches, time):
@@ -213,6 +246,144 @@ class ExcitonInteractionRepresentation:
         if self.layout == "system-first":
             return _system_first_mpo(self.hamiltonian, self.branches, time)
         return _interleaved_mpo(self.hamiltonian, self.branches, time)
+
+    @property
+    def branch_sites(self):
+        """MPS positions of each bath-bearing electronic site and its modes."""
+        sites = {}
+        if self.layout == "system-first":
+            position = 1
+            for level, representation in self.branches:
+                modes = tuple(range(position, position + representation.len_boson))
+                sites[level] = (0, modes)
+                position += representation.len_boson
+            return sites
+        by_level = dict(self.branches)
+        position = 0
+        for level in range(self.hamiltonian.shape[0]):
+            electronic = position
+            position += 1
+            representation = by_level.get(level)
+            if representation is None:
+                continue
+            modes = tuple(range(position, position + representation.len_boson))
+            sites[level] = (electronic, modes)
+            position += representation.len_boson
+        return sites
+
+    def trotter_mpo(self, time, dt):
+        """Conditional-displacement MPO for the integrated bath coupling."""
+        if self.layout == "system-first":
+            levels = self.hamiltonian.shape[0]
+            first = np.zeros((1, levels, levels, levels), complex)
+            for level in range(levels):
+                first[0, level, level, level] = 1.0
+            mpo = [first]
+            for owner, representation in self.branches:
+                for dimension, coefficient in zip(
+                    representation.pd_boson,
+                    representation.interval_coefficients(time, dt),
+                ):
+                    tensor = _identity_mpo_tensor(levels, dimension)
+                    tensor[owner, owner] = displacement(
+                        -1j * np.conj(coefficient), dimension
+                    )
+                    mpo.append(tensor)
+            last = mpo[-1]
+            collapsed = np.zeros(
+                (levels, 1, last.shape[2], last.shape[3]), complex
+            )
+            for branch in range(levels):
+                collapsed[branch, 0] = last[branch, branch]
+            mpo[-1] = collapsed
+            return mpo
+
+        branch_by_level = dict(self.branches)
+        mpo = []
+        vacuum = np.diag([1.0, 0.0]).astype(complex)
+        occupied = np.diag([0.0, 1.0]).astype(complex)
+        for level in range(self.hamiltonian.shape[0]):
+            representation = branch_by_level.get(level)
+            if representation is None:
+                mpo.append(np.eye(2, dtype=complex).reshape(1, 1, 2, 2))
+                continue
+            electronic = np.zeros((1, 2, 2, 2), complex)
+            electronic[0, 0] = vacuum
+            electronic[0, 1] = occupied
+            mpo.append(electronic)
+            coefficients = representation.interval_coefficients(time, dt)
+            for mode, (dimension, coefficient) in enumerate(zip(
+                representation.pd_boson, coefficients
+            )):
+                tensor = _identity_mpo_tensor(2, dimension)
+                tensor[1, 1] = displacement(
+                    -1j * np.conj(coefficient), dimension
+                )
+                if mode == len(coefficients) - 1:
+                    collapsed = np.zeros((2, 1, dimension, dimension), complex)
+                    collapsed[0, 0] = tensor[0, 0]
+                    collapsed[1, 0] = tensor[1, 1]
+                    tensor = collapsed
+                mpo.append(tensor)
+        return mpo
+
+    def electronic_mpo(self, duration):
+        """MPO for exact electronic evolution over ``duration``."""
+        if self.layout == "system-first":
+            unitary = la.expm(-1j * float(duration) * self.hamiltonian)
+            mpo = [unitary.reshape(1, 1, *unitary.shape)]
+            mpo.extend(
+                np.eye(dimension, dtype=complex).reshape(
+                    1, 1, dimension, dimension
+                )
+                for dimension in self.dimensions[1:]
+            )
+            return mpo
+
+        electronic = _one_excitation_gate_mpo(self.hamiltonian, duration)
+        branch_by_level = dict(self.branches)
+        mpo = []
+        for level, tensor in enumerate(electronic):
+            mpo.append(tensor)
+            representation = branch_by_level.get(level)
+            if representation is None:
+                continue
+            rank = tensor.shape[1]
+            mpo.extend(
+                _identity_mpo_tensor(rank, dimension)
+                for dimension in representation.pd_boson
+            )
+        return mpo
+
+    def tebd_gates(self, time, dt):
+        """Integrated system--mode gates for the system-first swap network."""
+        if self.layout != "system-first":
+            raise ValueError(
+                "interleaved TEBD uses one local swap network per bath branch"
+            )
+        first_order, reversed_order = [], []
+        first_mode = True
+        levels = self.hamiltonian.shape[0]
+        for owner, representation in self.branches:
+            projector = np.zeros((levels, levels), complex)
+            projector[owner, owner] = 1.0
+            for dimension, coefficient in zip(
+                representation.pd_boson,
+                representation.interval_coefficients(time, dt),
+            ):
+                bath = _mode_operator(dimension, coefficient)
+                generator = np.kron(projector, bath)
+                if first_mode:
+                    generator += float(dt) * np.kron(
+                        self.hamiltonian, np.eye(dimension)
+                    )
+                    first_mode = False
+                gate = la.expm(-1j * generator).reshape(
+                    levels, dimension, levels, dimension
+                )
+                first_order.append(gate)
+                reversed_order.append(np.transpose(gate, (1, 0, 3, 2)))
+        return first_order, reversed_order
 
     def multiset_tree_operators(self, time=None):
         """Bath-only TTNO block matrix for coupled multi-set tree TDVP.

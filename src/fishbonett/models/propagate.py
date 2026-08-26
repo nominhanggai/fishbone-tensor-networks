@@ -289,14 +289,15 @@ def propagate(
                 extra[name].append(value)
         if ctx.progress is not None:
             ctx.progress({"step": k, "n_steps": ctx.n_steps,
-                          "t": (k + 1) * ctx.dt, "bond": max_bond[-1],
+                          "t": ctx.elapsed + (k + 1) * ctx.dt,
+                          "bond": max_bond[-1],
                           "rdm": rdms[-1], "state": None})
     expectations = expect_from_rdm(rdms, ctx.obs_ops)
     expectations.update({
         name: np.real_if_close(np.asarray(values))
         for name, values in extra.items()
     })
-    return Result(t=np.arange(1, ctx.n_steps + 1) * ctx.dt,
+    return Result(t=ctx.elapsed + np.arange(1, ctx.n_steps + 1) * ctx.dt,
                   expect=expectations,
                   max_bond=np.array(max_bond),
                   rdm=np.asarray(rdms),

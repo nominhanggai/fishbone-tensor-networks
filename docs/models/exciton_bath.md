@@ -34,17 +34,27 @@ baths = [
 model = ExcitonBath(h, baths)
 ```
 
-## State layouts
+## State layouts and propagators
 
-All four methods below use the same `interaction-chain` Hamiltonian. They differ
-only in how the wavefunction is factorized.
+Every method below uses the same `interaction-chain` Hamiltonian. The two
+conventional MPS layouts offer five propagators; the multi-set layouts currently
+use two-site TDVP.
 
-| `state_geometry` | site layout | method |
+| `state_geometry` | site layout | available integrators |
 |---|---|---|
-| `system-first-mps` | one (N)-level site, then the modes of bath 1, bath 2, … | `interaction-chain-system-first-tdvp2` |
-| `interleaved-mps` | electronic site 1, its modes, electronic site 2, its modes, … | `interaction-chain-interleaved-tdvp2` |
-| `multi-set-mps` | one bath MPS for every electronic basis state | `interaction-chain-multi-set-tdvp2` |
-| `multi-set-tree` | one branched bath TTN for every electronic basis state | `interaction-chain-multi-set-tree-tdvp2` |
+| `system-first-mps` | one (N)-level site, then the modes of bath 1, bath 2, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `dtdvp` |
+| `interleaved-mps` | electronic site 1, its modes, electronic site 2, its modes, … | `tebd`, `trotter-mpo`, `tdvp1`, `tdvp2`, `dtdvp` |
+| `multi-set-mps` | one bath MPS for every electronic basis state | `tdvp2` |
+| `multi-set-tree` | one branched bath TTN for every electronic basis state | `tdvp2` |
+
+For the conventional layouts, replace the final component of the method name.
+For example, the system-first family is
+`interaction-chain-system-first-tebd`,
+`interaction-chain-system-first-trotter-mpo`,
+`interaction-chain-system-first-tdvp1`,
+`interaction-chain-system-first-tdvp2`, and
+`interaction-chain-system-first-dtdvp`. The interleaved family follows the same
+pattern.
 
 For example:
 
@@ -78,6 +88,37 @@ bath chain branches from the connector associated with its electronic level.
 The electronic index remains outside the TTNs and is evolved by the coupled
 tree-TDVP equations.
 
+The propagators realize the interaction Hamiltonian differently:
+
+- TEBD applies two-site system--mode gates. Reversible swaps bring each coupled
+  pair together and restore the original MPS ordering after the gate sequence.
+- Trotter-MPO applies an electronic half-step, the interval-integrated
+  conditional-displacement MPO, and a second electronic half-step.
+- TDVP1 evolves on a fixed-bond manifold, TDVP2 grows bonds through two-site
+  sweeps, and dTDVP expands the one-site tangent space adaptively. TDVP1 and
+  dTDVP therefore require an explicit `bond_dim` ceiling.
+
+All ten conventional-MPS methods return a checkpoint. Resolve the bath for the
+complete intended horizon, then continue a shorter segment without restarting
+the time-dependent interaction coefficients:
+
+```python
+first = model.run(
+    dt=0.02,
+    n_steps=25,
+    bath_horizon=1.0,
+    method="interaction-chain-interleaved-tdvp2",
+    trunc_eps=1e-4,
+)
+second = model.run(
+    dt=0.02,
+    n_steps=25,
+    resume=first.checkpoint,
+    method=first.method,
+    trunc_eps=1e-4,
+)
+```
+
 ## Choosing a layout
 
 `system-first-mps` has one compact electronic site and an MPO bond controlled by
@@ -108,6 +149,6 @@ For each chosen layout, compare:
 2. `trunc_eps` and a tighter threshold;
 3. the Fock dimension of every bath;
 4. the bath mode count and frequency domain;
-5. at least two state layouts over a common time interval.
+5. at least two propagators and two state layouts over a common time interval.
 
 See {doc}`/tutorials/convergence` for bath correlation and light-cone checks.

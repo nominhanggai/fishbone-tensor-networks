@@ -112,11 +112,13 @@ class ExcitonBath:
     ):
         """Propagate an excitonic model with an explicitly selected layout.
 
-        The currently implemented interaction-chain layouts are
-        ``system-first-mps``, ``interleaved-mps``, ``multi-set-mps``, and
-        ``multi-set-tree``. Every result includes ``expect["population"]`` with shape
+        The conventional ``system-first-mps`` and ``interleaved-mps`` layouts
+        support TEBD, Trotter-MPO, TDVP1, TDVP2, and dTDVP. The
+        ``multi-set-mps`` and ``multi-set-tree`` layouts support TDVP2. Every
+        result includes ``expect["population"]`` with shape
         ``(recorded_times, n_levels)`` in addition to requested system
-        observables.
+        observables. Conventional-MPS results include a checkpoint that can be
+        resumed within the original ``bath_horizon``.
         """
         axes = {
             "model": model,
@@ -132,13 +134,31 @@ class ExcitonBath:
             method=None if method is None else method.lower().replace("_", "-"),
             **axes,
         )
-        allowed = {"tol", "eshift", "bond_expand"}
+        allowed = set()
+        if spec.engine in {
+            "exciton-mpo-tdvp", "multiset-tdvp", "multiset-tree-tdvp"
+        }:
+            allowed.update({"tol", "eshift"})
+            if spec.integrator == "tdvp2":
+                allowed.add("bond_expand")
+            elif spec.integrator == "dtdvp":
+                allowed.update({"prec", "bond_expand"})
         unknown = set(engine_kw) - allowed
         if unknown:
             names = ", ".join(sorted(unknown))
             raise TypeError(f"unexpected run option(s) for {spec.name}: {names}")
         dt, n_steps = resolve_time_grid(dt, t_max=t_max, n_steps=n_steps)
         truncation = Truncation.resolve(trunc, eps=trunc_eps, max_bond=bond_dim)
+        if truncation.max_bond is None and spec.requires_bond_cap:
+            reason = (
+                "uses a fixed one-site TDVP manifold"
+                if spec.integrator == "tdvp1"
+                else "grows bonds adaptively but requires a finite memory ceiling"
+            )
+            raise ValueError(
+                f"method {spec.name!r} {reason}, so bond_dim must be given "
+                "explicitly"
+            )
         observe_every, bath_horizon = _resolve_sampling_options(observe_every, bath_horizon)
         bath_horizon = _resolve_continuation(
             resume=resume,
@@ -147,7 +167,9 @@ class ExcitonBath:
             dt=dt,
             n_steps=n_steps,
             bath_horizon=bath_horizon,
-            supports_resume=False,
+            supports_resume=spec.state_geometry in {
+                "system-first-mps", "interleaved-mps"
+            },
         )
         if observables is None:
             observables = {}

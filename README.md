@@ -107,6 +107,8 @@ include their geometry when needed to distinguish them, for example:
 - `polaron-chain-multi-set-tdvp2`
 - `interaction-chain-system-first-tdvp2`
 - `interaction-chain-interleaved-tdvp2`
+- `interaction-chain-system-first-trotter-mpo`
+- `interaction-chain-interleaved-tebd`
 - `interaction-chain-multi-set-tree-tdvp2`
 - `polaron-chain-tree-tebd`
 
