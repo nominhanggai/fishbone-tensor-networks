@@ -1,6 +1,7 @@
 # Schrödinger-star representation — MPO + TDVP
 
-`schrodinger-star-tdvp1` (fixed bond) and `schrodinger-star-tdvp2` (adaptive) run TDVP on a
+`schrodinger-star-tdvp1` (fixed bond), `schrodinger-star-tdvp2` (two-site bond
+growth), and `schrodinger-star-a1tdvp` (adaptive one-site bond growth) run TDVP on a
 **static** star-representation MPO — no chain mapping, every mode coupled directly to the
 system, and nothing rotated out.  Because $H$ is time-independent the MPO is built
 **once**, which makes these the most accurate methods in the package at a given
@@ -76,6 +77,9 @@ Two variants:
 - **`schrodinger-star-tdvp2`** — 2-site TDVP, **growing** the bond from the product state by
   SVD truncation (`trunc_eps`, optionally capped by `bond_dim`); `result.max_bond`
   reports the peak bond.
+- **`schrodinger-star-a1tdvp`** — adaptive 1-site TDVP, growing the tangent
+  manifold until its relative convergence measure reaches `trunc_eps`;
+  `bond_dim` is a finite memory ceiling.
 
 ## Example
 
