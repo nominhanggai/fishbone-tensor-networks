@@ -218,6 +218,7 @@ def run_method(profile, label, output):
         "dt_fs": profile.dt * TIME_UNIT_FS,
         "n_steps": profile.n_steps,
         "svd_threshold": profile.trunc_eps,
+        "svd_backend": "auto",
         "max_bond_cap": max_bond_cap,
         "truncation_control": (
             "fixed TDVP1 bond dimension"
