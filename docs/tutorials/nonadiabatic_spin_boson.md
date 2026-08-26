@@ -174,11 +174,15 @@ left.plot(
     label="Fig. 8 IC10 (vector-path samples)",
 )
 left.set(xlabel=r"$t\Delta/\pi$", ylabel=r"$P_\uparrow(t)$")
-left.legend()
 
 right.plot(scaled_time, result.max_bond)
 right.set(xlabel=r"$t\Delta/\pi$", ylabel="retained bond dimension")
-figure.tight_layout()
+handles, labels = left.get_legend_handles_labels()
+figure.legend(
+    handles, labels, frameon=False, loc="upper center", ncol=2,
+    bbox_to_anchor=(0.5, 1.0),
+)
+figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.88))
 plt.show()
 ```
 

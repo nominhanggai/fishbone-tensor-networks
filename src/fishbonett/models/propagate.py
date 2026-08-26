@@ -1,6 +1,6 @@
 """The propagation call: what every ``run`` has in common.
 
-A ``run`` is one *(model, representation, integrator)* combination
+A ``run`` is one *(model, representation, state geometry, integrator)* combination
 (:class:`fishbonett.models.registry.MethodSpec`) applied to one set of run
 parameters.  :class:`RunCtx` is that second half -- the arguments that are the
 same whichever combination was picked -- so a driver takes ``(spec, ctx)`` and

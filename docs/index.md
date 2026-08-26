@@ -43,7 +43,7 @@ The main sections are meant to be read in this order, though each stands alone:
 7. **{doc}`licensing`** — the MIT license, algorithm citations, and numerical
    provenance.
 
-{doc}`api` is the generated reference for every public module.
+{doc}`api` documents the supported high-level and low-level interfaces.
 
 ```{toctree}
 :maxdepth: 2
@@ -69,16 +69,16 @@ api
   and returns the same `Result`, so switching engines — or cross-validating one
   against another — is a one-word change.
 - **Many representations, one model.** The same physical model can use a
-  Schrödinger, interaction, or polaron representation, with star or chain included
-  in the representation name. The representation determines how much
+  Schrödinger star or chain, interaction-picture chain, or polaron star or chain
+  representation. The representation determines how much
   entanglement the state has to carry. Which representations a model admits — and
   why the others are absent — is recorded in
   {py:mod}`fishbonett.models.registry`.
 - **Sensible automation.** The bath `domain` and mode count can be derived from the
   spectral density and the propagation time; truncation is driven by an accuracy
   threshold, with the bond dimension left unbounded unless you cap it.
-- **Self-contained.** TEDOPA discretization and chain mapping are implemented in
-  the package — no external Fortran dependencies — with `opt_einsum`
+- **Bath mappings included.** TEDOPA discretization and chain mapping are
+  implemented in the package with `opt_einsum`
   contractions and an optional CuPy GPU backend.
 - Also included: golden-rule and Marcus rate theory, transfer tensors, and
   Boys-localization diabatization.

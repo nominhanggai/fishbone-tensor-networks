@@ -273,8 +273,16 @@ axes[1].set(
 )
 for axis in axes:
     axis.grid(alpha=0.25)
-    axis.legend(frameon=False)
-fig.tight_layout()
+handles, labels = [], []
+for axis in axes:
+    panel_handles, panel_labels = axis.get_legend_handles_labels()
+    handles.extend(panel_handles)
+    labels.extend(panel_labels)
+fig.legend(
+    handles, labels, frameon=False, loc="upper center", ncol=4,
+    bbox_to_anchor=(0.5, 1.0),
+)
+fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.88))
 fig.savefig("two_bath_heat_flow.svg")
 ```
 

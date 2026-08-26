@@ -291,9 +291,7 @@ peaked = Bath(J=my_peaked_density, domain=(0, 40), n_modes=40, phys_dim=20,
 The name `"tedopa"` identifies the measure-adapted quadrature; `"legendre"`
 identifies the uniform-measure Gauss--Legendre alternative. Both are
 orthogonal-polynomial methods. What distinguishes TEDOPA here is that it uses
-$J$ as the weight function. `ORTHPOL` is the external Fortran package from which
-an earlier implementation obtained recurrence coefficients; `fishbonett` does
-not depend on it.
+$J$ as the weight function.
 ```
 
 See {py:mod}`fishbonett.bath.tedopa`; the `discretization` choice is threaded all

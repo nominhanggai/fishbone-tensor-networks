@@ -10,8 +10,9 @@ combined system-bath wavefunction with matrix-product-state (MPS) or tree tensor
 network methods.
 
 The high-level API covers a single system with one or several coupling channels
-and multi-site models with baths attached to selected sites. Hamiltonians may use
-Schrödinger, interaction, or polaron representations in star or chain modes.
+and multi-site models with baths attached to selected sites. The supported
+Hamiltonian representations are Schrödinger star and chain, interaction-picture
+chain, and polaron star and chain.
 Propagation uses TEBD, Trotter MPOs, or TDVP where supported.
 
 ## Install
