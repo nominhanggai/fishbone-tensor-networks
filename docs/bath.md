@@ -258,8 +258,8 @@ discretization. The interaction construction then starts from that star:
 
 Consequently, chain diagonalization is not the definition of
 `interaction-chain`. It is one way to prepare the finite star from which the
-interaction representation is built. The whole mapping is implemented in
-NumPy/SciPy without an external ORTHPOL dependency.
+interaction representation is built. The recurrence and transformations are
+computed with NumPy and SciPy.
 
 ## `legendre` vs `tedopa`
 

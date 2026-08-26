@@ -1,4 +1,4 @@
-"""Unit tests for the measure-adapted ORTHPOL bath discretization."""
+"""Unit tests for the measure-adapted TEDOPA bath discretization."""
 import numpy as np
 from scipy.integrate import trapezoid
 
@@ -42,8 +42,8 @@ def test_tedopa_sum_rule_and_shape():
 
 
 def test_tedopa_beats_legendre_on_correlation():
-    """The star reproduces C(t) = int J_beta e^{-iwt} dw; ORTHPOL should be far
-    more accurate than the uniform-measure Legendre star."""
+    """The measure-adapted star reproduces the correlation much more accurately
+    than the uniform-measure Legendre star."""
     Jb = _superohmic_Jb()
     wg = np.linspace(DOMAIN[0], DOMAIN[1], 20001)
     Jg = np.array([Jb(w) for w in wg])
@@ -55,10 +55,10 @@ def test_tedopa_beats_legendre_on_correlation():
     Co = np.array([np.sum(vo * np.exp(-1j * fo * t)) for t in ts])
     Cl = np.array([np.sum(vl * np.exp(-1j * fl * t)) for t in ts])
 
-    e_orth = np.max(np.abs(Co - Cex))
+    e_tedopa = np.max(np.abs(Co - Cex))
     e_leg = np.max(np.abs(Cl - Cex))
-    assert e_orth < 1e-6
-    assert e_orth < e_leg / 100.0     # at least two orders of magnitude better
+    assert e_tedopa < 1e-6
+    assert e_tedopa < e_leg / 100.0     # at least two orders of magnitude better
 
 
 def test_tedopa_discretizer_is_dropin_for_chain_mapping():

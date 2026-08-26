@@ -7,7 +7,7 @@ node matrix, started from the square roots of those weights, produces the Jacobi
 matrix of the measure.  Its eigenvalues and first eigenvector components are the
 nodes and weights of the desired Gaussian rule (Golub--Welsch).
 
-No external ORTHPOL implementation is required.
+The recurrence is computed directly from the discretized positive measure.
 """
 import numpy as np
 from scipy.linalg import eigh_tridiagonal
