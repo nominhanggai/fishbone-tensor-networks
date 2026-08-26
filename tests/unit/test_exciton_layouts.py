@@ -327,4 +327,10 @@ def test_fmo_propagator_summary_records_the_resolved_baths(tmp_path):
         example.PROFILES["smoke"], "system-first-a1tdvp", tmp_path
     )
     assert adaptive["svd_backend"] is None
-    assert adaptive["factorization_backend"] == "full-qr"
+    assert adaptive["factorization_backend"] == "deterministic-qr-completion"
+
+    fixed = example.run_method(
+        example.PROFILES["smoke"], "system-first-tdvp1", tmp_path
+    )
+    assert fixed["svd_backend"] is None
+    assert fixed["factorization_backend"] == "reduced-qr"
