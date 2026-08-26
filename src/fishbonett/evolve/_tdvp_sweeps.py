@@ -294,7 +294,9 @@ def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
     tensors are formed once in the largest local QR-complement space and
     leading blocks give the values for smaller candidates.  The selected
     dimension is the first one whose relative increment is no larger than
-    ``precision``.  QR-complement columns are constructed deterministically by
+    ``precision``; each increment is accumulated from the slices a candidate
+    admits rather than by differencing two nearly equal convergence values.
+    QR-complement columns are constructed deterministically by
     :func:`_partial_full_qr`, so this test does not inherit a LAPACK-specific
     direction ordering.
     """
@@ -385,20 +387,42 @@ def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
             )
             return float(sum(np.vdot(value, value).real for value in values))
 
+        def added(
+            size,
+            action_left=action_left,
+            action_bond=action_bond,
+            action_right=action_right,
+        ):
+            """Return ``convergence(size + 1) - convergence(size)`` exactly.
+
+            Summing only the newly admitted slices keeps the increment a sum of
+            squares.  Subtracting two nearly equal convergence values instead
+            cancels away most of the significant digits, which left increments
+            near ``precision`` carrying enough rounding noise to select
+            different bond dimensions on different BLAS implementations.
+            """
+            values = (
+                action_left[:, size],
+                action_bond[size, :size + 1],
+                action_bond[:size, size],
+                action_right[size],
+            )
+            return float(sum(np.vdot(value, value).real for value in values))
+
         selected = local_limit
         selected_increment = 0.0
         value = convergence(current)
         for candidate in range(current, local_limit):
-            following = convergence(candidate + 1)
+            gain = added(candidate)
             if value == 0.0:
-                increment = 0.0 if following == 0.0 else np.inf
+                increment = 0.0 if gain == 0.0 else np.inf
             else:
-                increment = max(0.0, following / value - 1.0)
+                increment = gain / value
             selected_increment = increment
             if increment <= precision:
                 selected = candidate
                 break
-            value = following
+            value += gain
         targets.append(selected)
         details.append({
             "bond": site,
