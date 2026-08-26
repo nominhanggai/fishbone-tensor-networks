@@ -23,7 +23,7 @@ from fishbonett.models.propagate import (
     RunCtx, modetree_peak_bond, mps_peak_bond, propagate, tree_peak_bond,
 )
 from fishbonett.models.result import Result
-from fishbonett.randomized import random_seed
+from fishbonett.randomized import random_seed, svd_statistics
 from fishbonett.targets import BathMode
 
 __all__ = ["SimulationPlan", "PLAN_COMPILERS", "compile_plan"]
@@ -79,7 +79,8 @@ class SimulationPlan:
 
     def run(self):
         """Execute the prepared plan and return a uniform :class:`Result`."""
-        with random_seed(self.context.seed):
+        with random_seed(
+                self.context.seed, backend=self.context.svd_backend):
             if self.execute is not None:
                 result = self.execute()
             else:
@@ -89,6 +90,7 @@ class SimulationPlan:
                     expect_from_rdm=_expect_from_rdm,
                     measure_expect=self.measure_expect,
                 )
+            decomposition_statistics = svd_statistics()
         metadata = {
             "method": self.spec.name,
             "representation": getattr(self.spec, "representation", ""),
@@ -102,6 +104,8 @@ class SimulationPlan:
             "max_bond_cap": self.context.bond_dim,
             "krylov": self.context.krylov,
             "seed": self.context.seed,
+            "svd_backend": self.context.svd_backend,
+            "svd": decomposition_statistics,
         }
         metadata.update(result.meta)
         result.meta = metadata

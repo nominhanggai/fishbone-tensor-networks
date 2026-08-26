@@ -67,4 +67,5 @@ docs/img/
 /output/
 
 # Repository-local scratch output (never package or commit)
+/.codex-jobs/
 /tmp/

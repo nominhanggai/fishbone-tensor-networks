@@ -123,6 +123,8 @@ the interaction-chain comb family uses the `fishbone` infix:
 `interaction-chain-fishbone-trotter-mpo`, and
 `interaction-chain-fishbone-tdvp2`.
 
-All high-level model classes execute through `SimulationPlan`. `run(seed=...)`
-also scopes randomized linear algebra to that plan without changing NumPy's
-global random generator.
+All high-level model classes execute through `SimulationPlan`. The plan scopes
+the `svd_backend` policy and `run(seed=...)` to one propagation without changing
+NumPy's global random generator. Adaptive randomized truncation keys each sketch
+to its matrix, making the random choice independent of checkpoint segmentation;
+the returned result records decomposition and fallback counts in `meta["svd"]`.

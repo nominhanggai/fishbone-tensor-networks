@@ -15,8 +15,7 @@ MPO ``W[i]``: ``(bond_l, bond_r, phys_out, phys_in)``.
 import numpy as np
 
 from fishbonett.contract import contract as einsum
-from fishbonett.linalg import DEFAULT_EPS, cap_rank
-from fishbonett._svd import robust_svd as _robust_svd
+from fishbonett.linalg import DEFAULT_EPS, full_svd, threshold_svd
 
 __all__ = ["apply_mpo", "compress", "bond_dims", "total_bond_entropy",
            "product_state"]
@@ -64,9 +63,9 @@ def compress(A, chi_max=None, eps=DEFAULT_EPS):
         A[i + 1] = einsum('xy,ybc->xbc', r, A[i + 1])
     for i in range(n - 1, 0, -1):                            # truncate right-to-left
         dl, d, dr = A[i].shape
-        u, s, vh = _robust_svd(A[i].reshape(dl, d * dr), full_matrices=False)
-        keep = cap_rank(np.sum(s > eps * s[0]) if s[0] > 0 else 1, chi_max)
-        u, s, vh = u[:, :keep], s[:keep], vh[:keep]
+        u, s, vh = threshold_svd(
+            A[i].reshape(dl, d * dr), eps, max_rank=chi_max)
+        keep = s.size
         A[i] = vh.reshape(keep, d, dr)
         A[i - 1] = einsum('abc,cx,x->abx', A[i - 1], u, s)
     A[0] = A[0] / np.linalg.norm(A[0])
@@ -90,7 +89,7 @@ def total_bond_entropy(A):
     total, cur = 0.0, A[0]
     for i in range(len(A) - 1):
         dl, d, dr = cur.shape
-        _, s, vh = _robust_svd(cur.reshape(dl * d, dr), full_matrices=False)
+        _, s, vh = full_svd(cur.reshape(dl * d, dr), full_matrices=False)
         p = s ** 2
         p = p[p > 1e-14]
         if p.size > 1:

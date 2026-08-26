@@ -11,7 +11,7 @@ observables are lifted as ``O_physical (x) I_ancilla``.
 from __future__ import annotations
 
 import numpy as np
-from fishbonett._svd import robust_svd as _robust_svd
+from fishbonett.linalg import full_svd
 
 __all__ = ["GibbsPurification"]
 
@@ -86,7 +86,7 @@ def _factor_mps(vector, dimensions):
     left = 1
     for dimension in dimensions[:-1]:
         matrix = work.reshape(left * dimension, -1)
-        u, singular, vh = _robust_svd(matrix, full_matrices=False)
+        u, singular, vh = full_svd(matrix, full_matrices=False)
         # Exact preparation: remove only numerical zeroes produced by SVD.
         cutoff = np.finfo(float).eps * max(matrix.shape) * singular[0]
         rank = max(1, int(np.count_nonzero(singular > cutoff)))

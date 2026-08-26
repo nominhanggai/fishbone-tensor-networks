@@ -6,7 +6,8 @@ The package provides three related state types:
   canonical-form operations and observables for loop-free tensor networks.
 * :class:`~fishbonett.states.mps.SystemBathMPS` -- the path case, in Vidal
   (``Gamma-Lambda``) form with singular values on bonds, local-basis-optimization
-  projectors, an adaptive SVD search and a GPU path.  This is the hot 1D code.
+  projectors, certified adaptive SVD truncation and a GPU path. This is the hot
+  1D code.
 * :class:`~fishbonett.states.tree.TreeTensorNetwork` stores an arbitrary loop-free
   tree in mixed-canonical form for the comb and site-tree models.
 

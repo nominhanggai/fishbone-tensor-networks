@@ -75,6 +75,10 @@ the maximum bond dimension unrestricted; set a finite value only when a hard
 memory limit is needed. Fixed-bond and dynamically expanding TDVP methods require
 a finite cap. `Result` uses the same layout for every high-level method, so
 representations and integrators can be compared without changing analysis code.
+`svd_backend="auto"` uses exact SVD on small blocks and certified adaptive
+randomized truncation on large low-rank blocks; `"exact"` is available for
+reference runs. Decomposition and fallback counts are stored in
+`result.meta["svd"]`.
 
 ## Models and methods
 

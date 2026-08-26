@@ -1,19 +1,19 @@
 """Tensor-network linear algebra: SVD, gate exponentials, and truncation policy.
 
-Randomized truncated SVD (``svd``), two-site gate exponential (``expm_gate``),
-identity/Kronecker constructors tolerating ``None`` legs, and
-:class:`Truncation` (``eps`` + ``max_bond``).
+Certified adaptive SVD (``threshold_svd``), full-spectrum SVD (``full_svd``),
+two-site gate exponentials, identity/Kronecker constructors tolerating ``None``
+legs, and :class:`Truncation` (``eps`` + ``max_bond``).
 """
 from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
 import scipy.linalg
-from scipy.linalg import svd as csvd
 from scipy.sparse import coo_array, csc_matrix, kron as skron
 from scipy.sparse.linalg import expm as sparse_expm
 
-from fishbonett.randomized import randomized_svd
+from fishbonett._svd import robust_svd
+from fishbonett.randomized import adaptive_svd
 
 #: Default relative singular-value threshold.  ``1e-4`` is the accuracy most
 #: calculations actually need; tightening it far below the target accuracy is the
@@ -58,18 +58,48 @@ def kron(a, b):
     return skron(coo_array(first), *rest, format='csc')
 
 
-def svd(A, b=None, full_matrices=False):
-    """Truncated SVD keeping (up to) ``b`` singular values.
+def threshold_svd(A, eps, max_rank=None, *, extra_rank=0, backend=None,
+                  initial_rank=16, return_info=False):
+    """Return the Schmidt directions admitted by a relative threshold.
 
-    Uses :func:`fishbonett.randomized.randomized_svd` when ``b >= 0`` for
-    speed; falls back to the full ``scipy.linalg.svd`` when ``b`` is ``None`` or
-    negative -- i.e. when no bond-dimension cap is imposed and truncation is left
-    to the singular-value threshold alone.  Returns scipy's ``(U, s, Vh)`` tuple.
+    Large low-rank matrices use adaptively enlarged randomized ranges.  The
+    omitted Frobenius norm certifies their stopping point; unresolved or nearly
+    full-rank cases fall back to LAPACK.  ``backend`` may be ``"auto"``,
+    ``"exact"`` or ``"randomized"``.  The accuracy semantics are identical in
+    every case: retain singular values above ``eps * s[0]``, optionally keep
+    ``extra_rank`` additional directions, and finally apply ``max_rank``.
     """
+    return adaptive_svd(
+        A, eps=eps, max_rank=max_rank, extra_rank=extra_rank,
+        backend=backend, initial_rank=initial_rank, return_info=return_info,
+    )
+
+
+def full_svd(A, full_matrices=False):
+    """Return the complete exact spectrum for operations that require it.
+
+    Entropy evaluation and exact state/operator factorization cannot infer their
+    output from a partial spectrum, so they deliberately select the exact branch
+    of the common package policy.
+    """
+    return robust_svd(A, full_matrices=full_matrices)
+
+
+def svd(A, b=None, full_matrices=False):
+    """Compatibility facade for a full or fixed-rank decomposition.
+
+    New truncation code should call :func:`threshold_svd` so the requested error
+    is explicit.  ``b=None`` returns the complete exact spectrum; a positive
+    ``b`` requests at most that many leading directions through the adaptive
+    backend.
+    """
+    if full_matrices:
+        if b is not None:
+            raise ValueError("a truncated SVD cannot request full_matrices=True")
+        return full_svd(A, full_matrices=True)
     if b is None or b < 0:
-        return csvd(A, full_matrices=False)
-    b = min(b, min(A.shape[0], A.shape[1]))
-    return randomized_svd(A, b, n_iter=2, oversample=b)
+        return full_svd(A, full_matrices=False)
+    return threshold_svd(A, 0.0, max_rank=int(b))
 
 
 def cap_rank(count, chi_max=None):
@@ -174,8 +204,7 @@ class Truncation:
 
     @property
     def svd_rank(self):
-        """The ``b`` argument for :func:`svd`: ``max_bond``, or ``None`` when
-        unlimited (which selects the exact, non-randomized SVD)."""
+        """The fixed-rank compatibility value corresponding to ``max_bond``."""
         return self.max_bond
 
 

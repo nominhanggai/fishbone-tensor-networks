@@ -33,8 +33,7 @@ import numpy as np
 
 from fishbonett.evolve._tdvp_kernels import init_right_envs
 from fishbonett.evolve._tdvp_sweeps import DEFAULT_BOND_EXPAND, tdvp2sweep
-from fishbonett.linalg import cap_rank
-from fishbonett._svd import robust_svd as _robust_svd
+from fishbonett.linalg import threshold_svd
 
 __all__ = [
     "apply_site", "apply_edge", "symmetric_tree_step", "edge_gate",
@@ -44,9 +43,7 @@ __all__ = [
 
 
 def _svd_trunc(mat, chi, eps):
-    U, S, Vh = _robust_svd(mat, full_matrices=False)
-    k = cap_rank(np.sum(S > eps * (S[0] if S.size else 1.0)), chi)
-    return U[:, :k], S[:k], Vh[:k, :]
+    return threshold_svd(mat, eps, max_rank=chi)
 
 
 def edge_gate(edge_gates, i, j):

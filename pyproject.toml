@@ -58,6 +58,7 @@ packages = ["src/fishbonett"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [
+    "/.codex-jobs",
     "/.github",
     "/.private",
     "/.tmp-*",

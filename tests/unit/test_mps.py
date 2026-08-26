@@ -40,7 +40,6 @@ def _random_gate(d1, d2, rng, dt=0.05):
 
 @pytest.mark.parametrize("mode,kw", [
     ("plain", {}),
-    ("adaptive", {"adaptive": True}),
     ("lbo", {"eps_lbo": 1e-10}),
 ])
 def test_engine_preserves_normalization(mode, kw):

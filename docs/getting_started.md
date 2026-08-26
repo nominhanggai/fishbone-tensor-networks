@@ -84,20 +84,30 @@ near (threshold rank + `bond_expand`), not at `bond_dim`. `bond_expand=0`
 selects strict thresholding and is mainly useful for diagnosing whether
 tangent-space expansion affects a calculation.
 
-### Reproducibility: `seed`
+### SVD backend and reproducibility
 
-Truncation uses a randomized SVD on large blocks, so it draws random numbers.
-`run(seed=...)` defaults to `0`, which makes randomized choices reproducible on
-the same numerical backend:
-an internal optimization should never make an observable depend on when it was
-run. The generator is run-local and never touches NumPy's global random state,
-so seeding a run does not perturb anything else in your process.
+`svd_backend="auto"` is the default. Small blocks use the exact LAPACK SVD.
+Larger blocks use an adaptively enlarged randomized range only when its omitted
+Frobenius norm certifies that no unresolved singular direction can exceed the
+requested `trunc_eps`. A slowly decaying spectrum falls back to LAPACK instead of
+accepting an uncertified truncation. Use `svd_backend="exact"` for a reference
+calculation or `svd_backend="randomized"` to request randomized range finding on
+smaller eligible blocks; the same residual check and exact fallback still apply.
+
+Randomized truncation draws random numbers. `run(seed=...)` defaults to `0`,
+which makes the sketches reproducible on the same numerical backend. Their seeds
+are keyed to the matrix being decomposed, so splitting an otherwise identical run
+across checkpoints does not change its sketches. The generator is run-local and
+never touches NumPy's global random state.
 
 Pass `seed=None` to draw from NumPy's global generator instead. This permits
 run-to-run variation from randomized truncation and is generally unsuitable for
 convergence comparisons.
 
-Blocks smaller than 128 use the exact SVD and are deterministic.
+In `auto` mode, blocks whose smaller dimension is at most 128 use exact SVD. The
+`result.meta["svd"]` counters report exact calls, randomized calls, exact
+fallbacks, maximum trial and retained ranks, and the largest certified residual
+ratio encountered during propagation.
 
 ## The fishbone tensor-network geometry
 

@@ -2,7 +2,9 @@
 import numpy as np
 import pytest
 
-from fishbonett.randomized import randomized_svd, random_seed
+from fishbonett.randomized import (
+    adaptive_svd, randomized_svd, random_seed, svd_statistics,
+)
 
 
 @pytest.mark.parametrize("shape", [(40, 18), (18, 40)])
@@ -95,3 +97,107 @@ def test_a_run_is_reproducible_by_default():
     # an explicit seed reproduces too, and a different one is still valid physics
     assert np.array_equal(run(seed=5)[0], run(seed=5)[0])
     assert np.allclose(run(seed=5)[0], first, atol=1e-5)
+
+
+def _known_spectrum_matrix(seed=11):
+    rng = np.random.default_rng(seed)
+    left, _ = np.linalg.qr(rng.standard_normal((180, 80)))
+    right, _ = np.linalg.qr(rng.standard_normal((160, 80)))
+    spectrum = np.r_[np.geomspace(1.0, 1e-3, 30), np.full(50, 1e-8)]
+    return (left * spectrum) @ right.T, spectrum
+
+
+def test_adaptive_svd_certifies_threshold_without_a_rank_cap():
+    matrix, spectrum = _known_spectrum_matrix()
+    with random_seed(4):
+        u, values, vh, info = adaptive_svd(
+            matrix, eps=1e-4, return_info=True)
+        statistics = svd_statistics()
+
+    assert info.backend == "randomized"
+    assert not info.exact_fallback
+    assert info.residual_norm <= 0.25 * info.cutoff
+    assert len(values) == np.sum(spectrum > 1e-4 * spectrum[0])
+    assert np.allclose(values, spectrum[:len(values)], rtol=1e-9, atol=1e-12)
+    relative_error = np.linalg.norm(matrix - (u * values) @ vh) / np.linalg.norm(matrix)
+    assert relative_error < 1e-7
+    assert statistics["randomized_calls"] == 1
+    assert statistics["exact_calls"] == 0
+    assert statistics["maximum_retained_rank"] == len(values)
+
+
+def test_adaptive_svd_handles_a_wide_complex_matrix():
+    matrix, spectrum = _known_spectrum_matrix(seed=13)
+    matrix = matrix.T.astype(complex)
+    matrix *= np.exp(1j * np.linspace(0.0, 1.0, matrix.shape[0]))[:, None]
+    matrix *= np.exp(-1j * np.linspace(0.0, 0.7, matrix.shape[1]))[None, :]
+
+    u, values, vh, info = adaptive_svd(
+        matrix, eps=1e-4, backend="randomized", return_info=True)
+
+    assert info.backend == "randomized"
+    assert len(values) == np.sum(spectrum > 1e-4 * spectrum[0])
+    assert np.allclose(values, spectrum[:len(values)], rtol=1e-9, atol=1e-12)
+    relative_error = np.linalg.norm(matrix - (u * values) @ vh) / np.linalg.norm(matrix)
+    assert relative_error < 1e-7
+
+
+def test_adaptive_svd_falls_back_when_the_threshold_requires_full_rank():
+    matrix = np.diag(np.linspace(1.0, 0.5, 2 * 128))
+    with random_seed(2):
+        _, values, _, info = adaptive_svd(
+            matrix, eps=1e-8, initial_rank=8, return_info=True)
+        statistics = svd_statistics()
+
+    assert info.backend == "exact"
+    assert info.exact_fallback
+    assert len(values) == matrix.shape[0]
+    assert statistics["exact_calls"] == 1
+    assert statistics["exact_fallbacks"] == 1
+
+
+def test_adaptive_svd_uses_exact_fallback_for_an_ambiguous_cutoff():
+    spectrum = np.r_[1.0, np.geomspace(1e-1, 1e-3, 12), 1e-4,
+                     np.full(146, 1e-8)]
+    matrix = np.diag(spectrum)
+    _, values, _, info = adaptive_svd(
+        matrix, eps=1e-4, backend="randomized", return_info=True)
+
+    assert info.backend == "exact"
+    assert info.exact_fallback
+    assert len(values) == 13
+    assert values[-1] > 1e-4
+
+
+def test_adaptive_svd_matrix_key_is_checkpoint_segment_stable():
+    matrix, _ = _known_spectrum_matrix(seed=15)
+    with random_seed(7):
+        first = adaptive_svd(matrix, eps=1e-4)
+        # Other decompositions must not advance the sketch used for this matrix.
+        adaptive_svd(1.01 * matrix, eps=1e-4)
+        second = adaptive_svd(matrix, eps=1e-4)
+    with random_seed(7):
+        resumed = adaptive_svd(matrix, eps=1e-4)
+
+    assert all(np.array_equal(a, b) for a, b in zip(first, second))
+    assert all(np.array_equal(a, b) for a, b in zip(first, resumed))
+
+
+def test_run_can_select_exact_svd_and_reports_decomposition_statistics():
+    from fishbonett import Bath, SystemBath
+    from fishbonett.operators import sigma_x, sigma_z
+
+    bath = Bath(
+        J=lambda w: 0.1 * w * np.exp(-w), domain=(0.0, 4.0),
+        n_modes=3, phys_dim=3,
+    )
+    result = SystemBath(
+        h=0.2 * sigma_x, coupling=sigma_z, bath=bath,
+    ).run(
+        dt=0.02, n_steps=2, method="schrodinger-chain-tdvp2",
+        trunc_eps=1e-5, svd_backend="exact",
+    )
+
+    assert result.meta["svd_backend"] == "exact"
+    assert result.meta["svd"]["exact_calls"] > 0
+    assert result.meta["svd"]["randomized_calls"] == 0

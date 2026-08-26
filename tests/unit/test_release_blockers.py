@@ -39,6 +39,14 @@ def test_opt_einsum_is_a_core_dependency():
     assert "\nspeed =" not in optional
 
 
+def test_local_job_artifacts_are_ignored_and_excluded_from_sdists():
+    root = Path(__file__).resolve().parents[2]
+    ignore = (root / ".gitignore").read_text(encoding="utf-8")
+    metadata = (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert "/.codex-jobs/" in ignore
+    assert '"/.codex-jobs"' in metadata
+
+
 def test_complex_multichannel_local_hamiltonian_is_hermitian():
     representation = MultichannelInteractionRepresentation.from_signed_star(
         [2, 3], [sigma_z + sigma_y], [1.0], h_sys=np.zeros((2, 2)),
@@ -90,7 +98,7 @@ def test_mps_tebd_uses_a_relative_singular_value_threshold():
     theta[0, 0, 0, 0] = 0.1
     theta[0, 1, 1, 0] = 5e-5
 
-    state._split_plain(theta, 0, 10, 1e-4)
+    state._split_cpu(theta, 0, 10, 1e-4, None)
     assert len(state.S[1]) == 2
 
 
