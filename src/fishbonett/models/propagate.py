@@ -7,16 +7,25 @@ same whichever combination was picked -- so a driver takes ``(spec, ctx)`` and
 nothing else, and dispatch can be a table lookup rather than a chain of ``if``
 statements over method names.
 """
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
 
 import numpy as np
 
-from fishbonett.models.result import Result
+from fishbonett.models.result import Result, SimulationCheckpoint
 
-__all__ = ["RunCtx", "resolve_time_grid", "propagate",
-           "mps_peak_bond", "tree_peak_bond", "modetree_peak_bond"]
+__all__ = [
+    "RunCtx",
+    "resolve_time_grid",
+    "propagate",
+    "mps_peak_bond",
+    "tree_peak_bond",
+    "modetree_peak_bond",
+]
 
 
 def resolve_time_grid(dt, *, t_max=None, n_steps=None):
@@ -26,27 +35,31 @@ def resolve_time_grid(dt, *, t_max=None, n_steps=None):
     must lie on the integration grid; silently rounding it would make the result
     end at a different physical time than the caller requested.
     """
-    if (isinstance(dt, (bool, np.bool_))
-            or not isinstance(dt, (int, float, np.number))
-            or not np.isfinite(dt) or dt <= 0):
+    if (
+        isinstance(dt, (bool, np.bool_))
+        or not isinstance(dt, (int, float, np.number))
+        or not np.isfinite(dt)
+        or dt <= 0
+    ):
         raise ValueError(f"dt must be a finite positive number, got {dt!r}")
     dt = float(dt)
     if (t_max is None) == (n_steps is None):
         raise ValueError("provide exactly one of t_max or n_steps")
     if n_steps is not None:
-        if (isinstance(n_steps, (bool, np.bool_))
-                or not isinstance(n_steps, (int, np.integer))
-                or n_steps < 1):
-            raise ValueError(
-                f"n_steps must be a positive integer, got {n_steps!r}"
-            )
+        if (
+            isinstance(n_steps, (bool, np.bool_))
+            or not isinstance(n_steps, (int, np.integer))
+            or n_steps < 1
+        ):
+            raise ValueError(f"n_steps must be a positive integer, got {n_steps!r}")
         return dt, int(n_steps)
-    if (isinstance(t_max, (bool, np.bool_))
-            or not isinstance(t_max, (int, float, np.number))
-            or not np.isfinite(t_max) or t_max <= 0):
-        raise ValueError(
-            f"t_max must be a finite positive number, got {t_max!r}"
-        )
+    if (
+        isinstance(t_max, (bool, np.bool_))
+        or not isinstance(t_max, (int, float, np.number))
+        or not np.isfinite(t_max)
+        or t_max <= 0
+    ):
+        raise ValueError(f"t_max must be a finite positive number, got {t_max!r}")
     ratio = float(t_max) / dt
     steps = int(round(ratio))
     if steps < 1 or not np.isclose(ratio, steps, rtol=1e-12, atol=1e-12):
@@ -59,21 +72,32 @@ def resolve_time_grid(dt, *, t_max=None, n_steps=None):
 
 def _resolve_sampling_options(observe_every, bath_horizon):
     """Validate recording cadence and an optional bath-resolution horizon."""
-    if (isinstance(observe_every, (bool, np.bool_))
-            or not isinstance(observe_every, (int, np.integer))
-            or observe_every < 1):
+    if (
+        isinstance(observe_every, (bool, np.bool_))
+        or not isinstance(observe_every, (int, np.integer))
+        or observe_every < 1
+    ):
         raise ValueError("observe_every must be a positive integer")
     if bath_horizon is not None:
-        if (isinstance(bath_horizon, (bool, np.bool_))
-                or not isinstance(bath_horizon, (int, float, np.number))
-                or not np.isfinite(bath_horizon) or bath_horizon <= 0):
+        if (
+            isinstance(bath_horizon, (bool, np.bool_))
+            or not isinstance(bath_horizon, (int, float, np.number))
+            or not np.isfinite(bath_horizon)
+            or bath_horizon <= 0
+        ):
             raise ValueError("bath_horizon must be finite and positive")
         bath_horizon = float(bath_horizon)
     return int(observe_every), bath_horizon
 
 
 def _resolve_continuation(
-    *, resume, initial, method, dt, n_steps, bath_horizon,
+    *,
+    resume,
+    initial,
+    method,
+    dt,
+    n_steps,
+    bath_horizon,
     supports_resume,
 ):
     """Validate checkpoint use and return the resolved bath horizon."""
@@ -87,9 +111,7 @@ def _resolve_continuation(
         if initial is not None:
             raise ValueError("initial and resume cannot be supplied together")
         if resume.method != method:
-            raise ValueError(
-                f"checkpoint method is {resume.method!r}, requested {method!r}"
-            )
+            raise ValueError(f"checkpoint method is {resume.method!r}, requested {method!r}")
         if bath_horizon is None:
             bath_horizon = resume.bath_horizon
         elif not np.isclose(bath_horizon, resume.bath_horizon):
@@ -156,20 +178,20 @@ class RunCtx:
 
     dt: float
     n_steps: int
-    bond_dim: Optional[int] = None
+    bond_dim: int | None = None
     trunc_eps: float = 1e-4
-    obs_ops: Mapping[str, Any] = field(default_factory=dict)
-    initial: Any = "up"
+    obs_ops: Mapping[str, object] = field(default_factory=dict)
+    initial: object = "up"
     krylov: int = 25
-    seed: Optional[int] = 0
+    seed: int | None = 0
     svd_backend: str = "auto"
-    kw: Mapping[str, Any] = field(default_factory=dict)
-    resume: Any = None
-    bath_horizon: Optional[float] = None
+    kw: Mapping[str, object] = field(default_factory=dict)
+    resume: SimulationCheckpoint | None = None
+    bath_horizon: float | None = None
     observe_every: int = 1
     #: Optional ``callable(info)`` invoked after every integration step with the
     #: payload documented above. This is independent of ``observe_every``.
-    progress: Any = None
+    progress: Callable[[dict[str, object]], None] | None = None
 
     def __post_init__(self):
         """Validate run controls and freeze mapping-valued inputs."""
@@ -177,35 +199,42 @@ class RunCtx:
         object.__setattr__(self, "dt", dt)
         object.__setattr__(self, "n_steps", n_steps)
         if self.bond_dim is not None and (
-                isinstance(self.bond_dim, (bool, np.bool_))
-                or not isinstance(self.bond_dim, (int, np.integer))
-                or self.bond_dim < 1):
+            isinstance(self.bond_dim, (bool, np.bool_))
+            or not isinstance(self.bond_dim, (int, np.integer))
+            or self.bond_dim < 1
+        ):
             raise ValueError("bond_dim must be a positive integer or None")
-        if (isinstance(self.trunc_eps, (bool, np.bool_))
-                or not np.isfinite(self.trunc_eps) or self.trunc_eps < 0):
+        if (
+            isinstance(self.trunc_eps, (bool, np.bool_))
+            or not np.isfinite(self.trunc_eps)
+            or self.trunc_eps < 0
+        ):
             raise ValueError("trunc_eps must be finite and non-negative")
-        if (isinstance(self.krylov, (bool, np.bool_))
-                or not isinstance(self.krylov, (int, np.integer))
-                or self.krylov < 1):
+        if (
+            isinstance(self.krylov, (bool, np.bool_))
+            or not isinstance(self.krylov, (int, np.integer))
+            or self.krylov < 1
+        ):
             raise ValueError("krylov must be a positive integer")
         if self.seed is not None and (
-                isinstance(self.seed, (bool, np.bool_))
-                or not isinstance(self.seed, (int, np.integer))):
+            isinstance(self.seed, (bool, np.bool_)) or not isinstance(self.seed, (int, np.integer))
+        ):
             raise ValueError("seed must be an integer or None")
         if self.svd_backend not in {"auto", "exact", "randomized"}:
-            raise ValueError(
-                "svd_backend must be 'auto', 'exact', or 'randomized'")
-        if (isinstance(self.observe_every, (bool, np.bool_))
-                or not isinstance(self.observe_every, (int, np.integer))
-                or self.observe_every < 1):
+            raise ValueError("svd_backend must be 'auto', 'exact', or 'randomized'")
+        if (
+            isinstance(self.observe_every, (bool, np.bool_))
+            or not isinstance(self.observe_every, (int, np.integer))
+            or self.observe_every < 1
+        ):
             raise ValueError("observe_every must be a positive integer")
         if self.bath_horizon is not None and (
-                not np.isfinite(self.bath_horizon) or self.bath_horizon <= 0):
+            not np.isfinite(self.bath_horizon) or self.bath_horizon <= 0
+        ):
             raise ValueError("bath_horizon must be finite and positive")
         if self.progress is not None and not callable(self.progress):
             raise TypeError("progress must be callable or None")
-        object.__setattr__(self, "bond_dim", None if self.bond_dim is None
-                           else int(self.bond_dim))
+        object.__setattr__(self, "bond_dim", None if self.bond_dim is None else int(self.bond_dim))
         object.__setattr__(self, "trunc_eps", float(self.trunc_eps))
         object.__setattr__(self, "krylov", int(self.krylov))
         object.__setattr__(self, "observe_every", int(self.observe_every))
@@ -230,8 +259,7 @@ def mps_peak_bond(state):
 
 def tree_peak_bond(state):
     """Peak bond of a tree state -- the widest bond leg over every node."""
-    return max((t.shape[leg] for t in state.T for leg in range(t.ndim - 1)),
-               default=1)
+    return max((t.shape[leg] for t in state.T for leg in range(t.ndim - 1)), default=1)
 
 
 def modetree_peak_bond(nodes):
@@ -254,7 +282,13 @@ def modetree_peak_bond(nodes):
 
 
 def propagate(
-    spec, ctx, *, step, rdm, peak_bond, expect_from_rdm,
+    spec,
+    ctx,
+    *,
+    step,
+    rdm,
+    peak_bond,
+    expect_from_rdm,
     measure_expect=None,
 ):
     """Run ``ctx.n_steps`` steps and assemble the :class:`Result`.
@@ -274,8 +308,7 @@ def propagate(
     Every method reports ``max_bond``; it is constant for fixed-bond methods.
     """
     rdms, max_bond = [], []
-    extra = {name: [] for name in ctx.obs_ops
-             if isinstance(ctx.obs_ops[name], tuple)}
+    extra = {name: [] for name in ctx.obs_ops if isinstance(ctx.obs_ops[name], tuple)}
     for k in range(ctx.n_steps):
         step(k)
         rdms.append(rdm())
@@ -283,23 +316,28 @@ def propagate(
         if measure_expect is not None:
             measured = measure_expect()
             if set(measured) != set(extra):
-                raise ValueError(
-                    "measure_expect must return every targeted observable"
-                )
+                raise ValueError("measure_expect must return every targeted observable")
             for name, value in measured.items():
                 extra[name].append(value)
         if ctx.progress is not None:
-            ctx.progress({"step": k, "n_steps": ctx.n_steps,
-                          "t": ctx.elapsed + (k + 1) * ctx.dt,
-                          "bond": max_bond[-1],
-                          "rdm": rdms[-1], "state": None})
+            ctx.progress(
+                {
+                    "step": k,
+                    "n_steps": ctx.n_steps,
+                    "t": ctx.elapsed + (k + 1) * ctx.dt,
+                    "bond": max_bond[-1],
+                    "rdm": rdms[-1],
+                    "state": None,
+                }
+            )
     expectations = expect_from_rdm(rdms, ctx.obs_ops)
-    expectations.update({
-        name: np.real_if_close(np.asarray(values))
-        for name, values in extra.items()
-    })
-    return Result(t=ctx.elapsed + np.arange(1, ctx.n_steps + 1) * ctx.dt,
-                  expect=expectations,
-                  max_bond=np.array(max_bond),
-                  rdm=np.asarray(rdms),
-                  method=spec.name)
+    expectations.update(
+        {name: np.real_if_close(np.asarray(values)) for name, values in extra.items()}
+    )
+    return Result(
+        t=ctx.elapsed + np.arange(1, ctx.n_steps + 1) * ctx.dt,
+        expect=expectations,
+        max_bond=np.array(max_bond),
+        rdm=np.asarray(rdms),
+        method=spec.name,
+    )
