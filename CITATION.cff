@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "fishbonett: Tensor-network dynamics of vibronic open quantum systems"
+title: "fishbonett: Tensor-network dynamics of open quantum systems in multiple harmonic-bath representations"
 abstract: >-
   A Python package for tensor-network simulations of open quantum systems coupled
   to harmonic baths. It supports matrix-product-state and tree tensor network
