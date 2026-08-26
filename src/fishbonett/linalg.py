@@ -79,27 +79,10 @@ def full_svd(A, full_matrices=False):
     """Return the complete exact spectrum for operations that require it.
 
     Entropy evaluation and exact state/operator factorization cannot infer their
-    output from a partial spectrum, so they deliberately select the exact branch
-    of the common package policy.
+    output from a partial spectrum, so they select the exact branch of the common
+    package policy.
     """
     return robust_svd(A, full_matrices=full_matrices)
-
-
-def svd(A, b=None, full_matrices=False):
-    """Compatibility facade for a full or fixed-rank decomposition.
-
-    New truncation code should call :func:`threshold_svd` so the requested error
-    is explicit.  ``b=None`` returns the complete exact spectrum; a positive
-    ``b`` requests at most that many leading directions through the adaptive
-    backend.
-    """
-    if full_matrices:
-        if b is not None:
-            raise ValueError("a truncated SVD cannot request full_matrices=True")
-        return full_svd(A, full_matrices=True)
-    if b is None or b < 0:
-        return full_svd(A, full_matrices=False)
-    return threshold_svd(A, 0.0, max_rank=int(b))
 
 
 def cap_rank(count, chi_max=None):
@@ -119,7 +102,7 @@ class Truncation:
     """How much of a state to discard at each bond -- accuracy *and* memory in one
     object.
 
-    The two controls are deliberately not interchangeable:
+    The two controls are not interchangeable:
 
     ``eps``
         the **accuracy** knob (default :data:`DEFAULT_EPS` = ``1e-4``).  After
@@ -202,12 +185,6 @@ class Truncation:
     def cap(self, count):
         """Clamp an already-chosen kept-value ``count`` to ``max_bond`` (>= 1)."""
         return cap_rank(count, self.max_bond)
-
-    @property
-    def svd_rank(self):
-        """The fixed-rank compatibility value corresponding to ``max_bond``."""
-        return self.max_bond
-
 
 def expm_gate(H, dt):
     """Dense two-site propagator ``expm(-i * dt * H)``.
