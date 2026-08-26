@@ -23,6 +23,9 @@ networks use one of the tree modules.
    * - ``multi-set-mps``
      - :mod:`~fishbonett.evolve.multiset`
      - coupled two-site TDVP
+   * - ``multi-set-tree``
+     - :mod:`~fishbonett.evolve.multiset_tree`
+     - coupled tree TDVP2
    * - ``binary-tree``
      - :mod:`~fishbonett.evolve.modetree`
      - TTNO gates with Schmidt truncation
@@ -82,6 +85,7 @@ from fishbonett.evolve.tdvp import run_mpo_hamiltonian
 from fishbonett.evolve.modetree import run_tree_tebd
 from fishbonett.evolve.mpo_apply import apply_mpo, compress
 from fishbonett.evolve.multiset import run_multiset_mpo_hamiltonian
+from fishbonett.evolve.multiset_tree import run_multiset_tree_hamiltonian
 
 __all__ = [
     # TEBD (1D chain)
@@ -92,6 +96,7 @@ __all__ = [
     # TDVP driver (1D chain): one loop, any representation, any sweep
     "run_mpo_hamiltonian",
     "run_multiset_mpo_hamiltonian",
+    "run_multiset_tree_hamiltonian",
     # tree drivers
     "run_tree_tebd",
 ]

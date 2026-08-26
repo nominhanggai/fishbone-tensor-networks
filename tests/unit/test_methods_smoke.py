@@ -49,8 +49,9 @@ def test_every_module_all_is_accurate():
 
 def test_public_api_surface():
     import fishbonett as fb
-    for name in ("SystemBathMPS", "MultiSetMPS", "TreeTensorNetwork",
-                 "SystemBath", "Fishbone", "TreeFishbone", "Bath",
+    for name in ("SystemBathMPS", "MultiSetMPS", "MultiSetTreeTensorNetwork",
+                 "TreeTensorNetwork", "SystemBath", "ExcitonBath", "Fishbone",
+                 "TreeFishbone", "Bath",
                  "Result", "Truncation",
                  "get_bath_nn_parameters", "get_coupling", "lanczos",
                  "sigma_x", "sigma_z", "drude", "lorentzian"):

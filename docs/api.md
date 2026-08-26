@@ -29,6 +29,7 @@ The supported Hamiltonian representations are `schrodinger-chain`,
    fishbonett.models.registry
    fishbonett.models.system_bath
    fishbonett.models.fishbone
+   fishbonett.models.exciton
    fishbonett.models.simulation
    fishbonett.models.propagate
    fishbonett.models.result
@@ -51,6 +52,7 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.representations.interaction
    fishbonett.representations.polaron
    fishbonett.representations.multichannel
+   fishbonett.representations.exciton
 ```
 
 ## Tensor-network states
@@ -63,6 +65,7 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.states.network
    fishbonett.states.mps
    fishbonett.states.multiset
+   fishbonett.states.multiset_tree
    fishbonett.states.tree
    fishbonett.states.thermal
 ```
@@ -79,6 +82,7 @@ Hamiltonian. They do not advance tensor-network states.
    fishbonett.evolve.mpo_apply
    fishbonett.evolve.tdvp
    fishbonett.evolve.multiset
+   fishbonett.evolve.multiset_tree
    fishbonett.evolve.modetree
 ```
 

@@ -38,7 +38,12 @@ def krylov_statistics(*, reset=False):
 
 
 def init_mps(n_sites, d, sys_state=None):
-    """Return ``|system> (x) |vacuum>`` as a bond-one MPS."""
+    """Return ``|system> (x) |vacuum>`` as a bond-one MPS.
+
+    ``d`` may be one common environment dimension or the dimensions of every
+    site after the system.  The latter supports interleaved electronic and
+    vibrational sites without changing the TDVP tensor convention.
+    """
     if int(n_sites) < 1:
         raise ValueError("n_sites must be positive")
     system = (np.array([1.0, 0.0], complex) if sys_state is None
@@ -48,9 +53,17 @@ def init_mps(n_sites, d, sys_state=None):
     # the product state through ``prepare`` before canonicalization.
     if norm > 0:
         system = system / norm
+    if np.isscalar(d):
+        dimensions = (int(d),) * (int(n_sites) - 1)
+    else:
+        dimensions = tuple(int(value) for value in d)
+        if len(dimensions) != int(n_sites) - 1:
+            raise ValueError("d must contain one dimension per non-system site")
+    if any(dimension < 1 for dimension in dimensions):
+        raise ValueError("site dimensions must be positive")
     tensors = [system.reshape(1, 1, -1)]
-    for _ in range(int(n_sites) - 1):
-        tensor = np.zeros((1, 1, int(d)), complex)
+    for dimension in dimensions:
+        tensor = np.zeros((1, 1, dimension), complex)
         tensor[0, 0, 0] = 1.0
         tensors.append(tensor)
     return tensors

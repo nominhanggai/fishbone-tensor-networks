@@ -10,9 +10,10 @@ Use `method="..."` as a shorthand, or pass the axes directly. Every call returns
 the same {py:class}`~fishbonett.models.result.Result` contract.
 
 Method names are representation-explicit. A conventional 1D MPS method is named
-`<representation>-<integrator>`; tree tensor-network methods insert `tree`, and
-multi-set MPS methods insert `multi-set`. Thus
-`schrodinger-chain-multi-set-tdvp2` identifies all three numerical choices.
+`<representation>-<integrator>`. Layouts that would otherwise collide insert a
+stable infix such as `system-first`, `interleaved`, `multi-set`, or `tree`.
+Thus `interaction-chain-multi-set-tree-tdvp2` identifies the representation,
+state layout, and integrator.
 
 ## The five representations
 
@@ -80,6 +81,10 @@ integrator determines how that product advances the tensor state.
 |---|---|---|---|
 | `multichannel` | `schrodinger-star` | star tensor network (`tree`) | `schrodinger-star-tree-tebd` |
 | `multichannel` | `interaction-chain` | 1D MPS (`mps`) | `interaction-chain-tebd` |
+| `exciton-bath` | `interaction-chain` | grouped system-first MPS | `interaction-chain-system-first-tdvp2` |
+| `exciton-bath` | `interaction-chain` | interleaved electronic/bath MPS | `interaction-chain-interleaved-tdvp2` |
+| `exciton-bath` | `interaction-chain` | multi-set MPS | `interaction-chain-multi-set-tdvp2` |
+| `exciton-bath` | `interaction-chain` | multi-set bath tree | `interaction-chain-multi-set-tree-tdvp2` |
 | `comb` | `schrodinger-chain` | comb tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
 | `comb` | `interaction-chain` | comb tensor network (`tree`) | `interaction-chain-fishbone-tebd`, `interaction-chain-fishbone-trotter-mpo`, `interaction-chain-fishbone-tdvp2` |
 | `comb` | `polaron-chain` | comb tensor network (`tree`) | `polaron-chain-tree-tebd` |

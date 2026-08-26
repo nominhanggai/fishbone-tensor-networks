@@ -201,6 +201,49 @@ def _measure_mps_bath(
     return values
 
 
+def _mps_product_matrix_element(tensors, operators):
+    """Contract a product of local operators against TDVP-order MPS tensors."""
+    environment = np.ones((1, 1), complex)
+    for site, tensor in enumerate(tensors):
+        operator = operators.get(site)
+        if operator is None:
+            operator = np.eye(tensor.shape[2], dtype=complex)
+        environment = np.einsum(
+            "ab,arp,bsq,qp->rs",
+            environment,
+            tensor,
+            tensor.conj(),
+            operator,
+            optimize=True,
+        )
+    return environment.reshape(-1)[0]
+
+
+def _interleaved_exciton_rdm(tensors, electronic_sites):
+    """One-excitation electronic RDM from local two-level MPS sites."""
+    sites = tuple(electronic_sites)
+    count = len(sites)
+    number = np.diag([0.0, 1.0]).astype(complex)
+    plus = np.array([[0.0, 0.0], [1.0, 0.0]], complex)
+    minus = plus.conj().T
+    norm = _mps_product_matrix_element(tensors, {})
+    if abs(norm) == 0 or not np.isfinite(norm):
+        raise ValueError("cannot measure a zero or non-finite interleaved MPS")
+    rho = np.zeros((count, count), complex)
+    for left, site in enumerate(sites):
+        rho[left, left] = _mps_product_matrix_element(
+            tensors, {site: number}
+        ) / norm
+        for right in range(left + 1, count):
+            value = _mps_product_matrix_element(
+                tensors,
+                {site: minus, sites[right]: plus},
+            ) / norm
+            rho[left, right] = value
+            rho[right, left] = np.conj(value)
+    return rho / np.trace(rho)
+
+
 def _check_single_channel(model):
     if model.system.is_multichannel:
         raise ValueError(
@@ -325,6 +368,11 @@ def _compile_mpo_plan(model, spec, context):
 
 def _compile_multiset_plan(model, spec, context):
     """Compile coupled two-site TDVP on independent bath MPS components."""
+    from fishbonett.models.exciton import ExcitonBath
+
+    if isinstance(model, ExcitonBath):
+        return _compile_exciton_multiset_plan(model, spec, context)
+
     from fishbonett.states.multiset import MultiSetMPS
 
     _check_single_channel(model)
@@ -406,6 +454,207 @@ def _compile_multiset_plan(model, spec, context):
             meta={
                 "n_sets": final_state.n_sets,
                 "final_set_bonds": set_bonds[-1].tolist(),
+            },
+        )
+
+    return SimulationPlan(spec, context, execute=execute)
+
+
+def _compile_exciton_multiset_plan(model, spec, context):
+    """Flatten independent exciton baths into each multi-set component MPS."""
+    from fishbonett.representations.exciton import ExcitonInteractionRepresentation
+    from fishbonett.states.multiset import MultiSetMPS
+
+    representation = ExcitonInteractionRepresentation(
+        model.h,
+        model.baths,
+        context.bath_horizon or context.t_max,
+        layout="system-first",
+    )
+    state = MultiSetMPS.product(context.initial, representation.dimensions[1:])
+
+    def execute():
+        times, rdms, max_bond, set_bonds, final_state = (
+            _multiset.run_multiset_mpo_hamiltonian(
+                representation,
+                state=state,
+                dt=context.dt,
+                nsteps=context.n_steps,
+                bond_dim=context.bond_dim,
+                trunc_eps=context.trunc_eps,
+                krylov=context.krylov,
+                tol=context.kw.get("tol", 1e-7),
+                eshift=context.kw.get("eshift", False),
+                bond_expand=context.kw.get("bond_expand"),
+                progress=context.progress,
+            )
+        )
+        expectations = _expect_from_rdm(rdms, context.obs_ops)
+        expectations["population"] = np.real_if_close(
+            np.diagonal(rdms, axis1=1, axis2=2)
+        )
+        return Result(
+            t=times,
+            expect=expectations,
+            max_bond=max_bond,
+            rdm=rdms,
+            method=spec.name,
+            meta={
+                "n_sets": final_state.n_sets,
+                "final_set_bonds": set_bonds[-1].tolist(),
+                "layout": "system-first baths inside each set MPS",
+                "bath_branches": tuple(
+                    {
+                        "electronic_level": level,
+                        "n_modes": branch.len_boson,
+                        "phys_dim": branch.pd_boson[0],
+                    }
+                    for level, branch in representation.branches
+                ),
+            },
+        )
+
+    return SimulationPlan(spec, context, execute=execute)
+
+
+def _compile_exciton_mpo_plan(model, spec, context):
+    """Compile either requested conventional-MPS ordering for an exciton."""
+    from fishbonett.representations.exciton import (
+        ExcitonInteractionRepresentation,
+        _interleaved_initial_mps,
+    )
+
+    layout = {
+        "system-first-mps": "system-first",
+        "interleaved-mps": "interleaved",
+    }[spec.state_geometry]
+    representation = ExcitonInteractionRepresentation(
+        model.h,
+        model.baths,
+        context.bath_horizon or context.t_max,
+        layout=layout,
+    )
+    if layout == "system-first":
+        initial = context.initial
+        observe = lambda tensors: _mpo.measure_rdm(tensors[0])
+        prepare = None
+    else:
+        initial = np.array([1.0, 0.0], complex)
+        electronic_sites = representation.electronic_sites
+
+        def prepare(_tensors):
+            return _interleaved_initial_mps(
+                context.initial, representation.dimensions, electronic_sites
+            )
+
+        observe = lambda tensors: _interleaved_exciton_rdm(
+            tensors, electronic_sites
+        )
+
+    def execute():
+        times, rdms, max_bond = _mpo.run_mpo_hamiltonian(
+            representation,
+            initial=initial,
+            prepare=prepare,
+            observe=observe,
+            dt=context.dt,
+            nsteps=context.n_steps,
+            sweep="tdvp2",
+            bond_dim=context.bond_dim,
+            trunc_eps=context.trunc_eps,
+            krylov=context.krylov,
+            tol=context.kw.get("tol", 1e-7),
+            eshift=context.kw.get("eshift", False),
+            bond_expand=context.kw.get("bond_expand"),
+            seed=context.seed,
+            progress=context.progress,
+        )
+        expectations = _expect_from_rdm(rdms, context.obs_ops)
+        expectations["population"] = np.real_if_close(
+            np.diagonal(rdms, axis1=1, axis2=2)
+        )
+        return Result(
+            t=times,
+            expect=expectations,
+            max_bond=max_bond,
+            rdm=rdms,
+            method=spec.name,
+            meta={
+                "layout": layout,
+                "electronic_sites": representation.electronic_sites,
+                "bath_branches": tuple(
+                    {
+                        "electronic_level": level,
+                        "n_modes": branch.len_boson,
+                        "phys_dim": branch.pd_boson[0],
+                    }
+                    for level, branch in representation.branches
+                ),
+            },
+        )
+
+    return SimulationPlan(spec, context, execute=execute)
+
+
+def _compile_exciton_multiset_tree_plan(model, spec, context):
+    """Compile one independently truncated bath TTN per excitonic state."""
+    from fishbonett.evolve.multiset_tree import run_multiset_tree_hamiltonian
+    from fishbonett.representations.exciton import ExcitonInteractionRepresentation
+    from fishbonett.states.multiset_tree import MultiSetTreeTensorNetwork
+
+    representation = ExcitonInteractionRepresentation(
+        model.h,
+        model.baths,
+        context.bath_horizon or context.t_max,
+        layout="system-first",
+    )
+    state = MultiSetTreeTensorNetwork.product(
+        context.initial,
+        representation.tree_dimensions,
+        representation.tree_edges,
+    )
+
+    def execute():
+        times, rdms, max_bond, set_bonds, final_state = (
+            run_multiset_tree_hamiltonian(
+                representation,
+                state=state,
+                dt=context.dt,
+                nsteps=context.n_steps,
+                bond_dim=context.bond_dim,
+                trunc_eps=context.trunc_eps,
+                krylov=context.krylov,
+                tol=context.kw.get("tol", 1e-7),
+                eshift=context.kw.get("eshift", False),
+                bond_expand=context.kw.get("bond_expand"),
+                progress=context.progress,
+            )
+        )
+        expectations = _expect_from_rdm(rdms, context.obs_ops)
+        expectations["population"] = np.real_if_close(
+            np.diagonal(rdms, axis1=1, axis2=2)
+        )
+        return Result(
+            t=times,
+            expect=expectations,
+            max_bond=max_bond,
+            rdm=rdms,
+            method=spec.name,
+            meta={
+                "n_sets": final_state.n_sets,
+                "final_set_bonds": set_bonds[-1].tolist(),
+                "layout": "bath TTN inside each excitonic set",
+                "tree_dimensions": representation.tree_dimensions,
+                "tree_edges": representation.tree_edges,
+                "bath_branches": tuple(
+                    {
+                        "electronic_level": level,
+                        "nodes": representation.tree_mode_nodes[level],
+                        "n_modes": branch.len_boson,
+                        "phys_dim": branch.pd_boson[0],
+                    }
+                    for level, branch in representation.branches
+                ),
             },
         )
 
@@ -1446,7 +1695,9 @@ def _compile_interaction_fishbone_plan(model, spec, context):
 #: table is the implementation boundary for its coarser engine categories.
 PLAN_COMPILERS = {
     "mpo-tdvp": _compile_mpo_plan,
+    "exciton-mpo-tdvp": _compile_exciton_mpo_plan,
     "multiset-tdvp": _compile_multiset_plan,
+    "multiset-tree-tdvp": _compile_exciton_multiset_tree_plan,
     "modetree": _compile_modetree_plan,
     "swap-tebd": _compile_swap_plan,
     "displacement-mpo": _compile_displacement_plan,

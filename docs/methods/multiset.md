@@ -1,4 +1,4 @@
-# Multi-set MPS [coupled two-site TDVP]
+# Multi-set tensor networks [coupled two-site TDVP]
 
 The multi-set ansatz is useful when a finite-dimensional system labels
 environmental wavepackets with substantially different structures. In a chosen
@@ -8,7 +8,7 @@ $$
 |\Psi(t)\rangle=\sum_{a=1}^{d_S}|a\rangle|\psi_a(t)\rangle,
 $$
 
-each $|\psi_a\rangle$ is represented by its own bath MPS. Its squared norm is
+each $|\psi_a\rangle$ is represented by its own bath MPS or bath TTN. Its squared norm is
 the population of system state $a$. Off-diagonal system coherences are the
 cross overlaps $\langle\psi_b|\psi_a\rangle$.
 
@@ -33,13 +33,21 @@ i\frac{d}{dt}|\psi_a\rangle
 =\sum_b H_{ab}^{B}|\psi_b\rangle.
 $$
 
-Every $H_{ab}^{B}$ is an MPO obtained by slicing the system tensor from the
-ordinary full system--bath MPO. During a two-site sweep, all component centre
-tensors are evolved together under this block effective Hamiltonian. Each
-component is then split and truncated independently. Consequently:
+For a multi-set MPS, every $H_{ab}^{B}$ is an MPO obtained by slicing the system
+tensor from the ordinary full system--bath MPO. During a two-site sweep, all
+component centre tensors are evolved together under this block effective
+Hamiltonian. Each component is then split and truncated independently.
+
+The tree implementation uses the same block equation with a TTNO for every
+$H_{ab}^{B}$. A depth-first projector-splitting walk crosses every tree edge in
+both directions. At a branching node, the backward one-site evolution carries
+the node-projector multiplicity required by its degree. Tests compare path and
+branched trees with direct finite-Hamiltonian evolution.
+
+Consequently:
 
 - the system basis label is never truncated;
-- `trunc_eps` controls each environmental MPS;
+- `trunc_eps` controls each environmental MPS or TTN;
 - `result.max_bond` is the largest retained bond in any component;
 - computational work grows at least with the number of system states, and the
   block couplings may make it quadratic in that number.
@@ -84,6 +92,37 @@ The equivalent method name is
 Schrödinger chain or star, interaction chain, and polaron chain or star on the
 same resolved finite bath.
 
+## Excitons with independent baths
+
+{py:class}`~fishbonett.models.exciton.ExcitonBath` applies the multi-set ansatz
+to a single excitation on (N) electronic levels. Every level has an independent
+bath coupled to its population. For an instance named `exciton_model`, the two
+multi-set state geometries are selected as follows:
+
+```python
+mps_result = exciton_model.run(
+    dt=0.02,
+    t_max=1.0,
+    method="interaction-chain-multi-set-tdvp2",
+    initial=0,
+    trunc_eps=1e-4,
+)
+
+tree_result = exciton_model.run(
+    dt=0.02,
+    t_max=1.0,
+    method="interaction-chain-multi-set-tree-tdvp2",
+    initial=0,
+    trunc_eps=1e-4,
+)
+```
+
+The MPS groups all bath modes in electronic-level order. The tree retains one
+bath branch per level inside every set. Both use the same interaction-chain
+coefficients and return the full (N\times N) electronic RDM. See
+{doc}`/models/exciton_bath` for the conventional system-first and interleaved
+MPS layouts on the same physical model.
+
 ## Holstein comparison
 
 `examples/multiset_holstein.py` constructs
@@ -114,10 +153,9 @@ observables with a conventional MPS calculation.
 The number of sets is the full system-basis dimension. It is therefore natural
 for an $N$-level impurity or a single-excitation electronic model, but becomes
 exponential if a many-site tensor-product system is expanded without a symmetry
-restriction. The present high-level implementation is limited to the
-single-system `SystemBath` model. A multi-set tree tensor network would require
-coupled tangent-space sweeps for that tree manifold; relabeling the existing
-tree TEBD engine would not implement the method.
+restriction. `SystemBath` supplies multi-set MPS propagation for its five
+single-channel representations. `ExcitonBath` supplies interaction-chain
+multi-set MPS and multi-set tree propagation for independent local baths.
 
 ## Convergence checks
 

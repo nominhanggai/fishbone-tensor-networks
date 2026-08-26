@@ -20,6 +20,7 @@ route to the discretization.
 """
 
 from fishbonett.representations.interaction import InteractionRepresentation
+from fishbonett.representations.exciton import ExcitonInteractionRepresentation
 from fishbonett.representations.multichannel import (
     MultichannelInteractionRepresentation,
 )
@@ -31,6 +32,7 @@ from fishbonett.representations.schrodinger import (
 
 __all__ = [
     "InteractionRepresentation",
+    "ExcitonInteractionRepresentation",
     "MultichannelInteractionRepresentation",
     "PolaronRepresentation",
     "SchrodingerRepresentation",

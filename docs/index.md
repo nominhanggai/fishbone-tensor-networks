@@ -25,7 +25,7 @@ The main sections are meant to be read in this order, though each stands alone:
 
 1. **{doc}`getting_started`** — install, then a complete first simulation in a
    dozen lines. Start here.
-2. **{doc}`models/index`** — the four models: what you can express, from a single
+2. **{doc}`models/index`** — the five models: what you can express, from a single
    spin-boson system to arbitrary loop-free trees of sites and baths, plus how to
    define observables.  The model you pick decides which representations and propagators
    are available.
@@ -64,7 +64,7 @@ api
 ## Highlights
 
 - **A declarative interface.** Describe a bath and a system as `Bath` /
-  `SystemBath` / `Fishbone` / `TreeFishbone` objects and propagate with a single
+  `SystemBath` / `ExcitonBath` / `Fishbone` / `TreeFishbone` objects and propagate with a single
   `run(dt=..., t_max=..., method=...)` call. Every method takes the same arguments
   and returns the same `Result`, so switching engines — or cross-validating one
   against another — is a one-word change.

@@ -2,11 +2,14 @@
 
 A run is specified by four axes::
 
-    model     what is coupled to what      system-bath | multichannel | comb | site-tree
+    model     what is coupled to what      system-bath | multichannel | exciton-bath
+                                             | comb | site-tree
     representation  how H is written         schrodinger-chain | schrodinger-star
                                              | interaction-chain
                                              | polaron-chain | polaron-star
-    state_geometry  tensor-network state        mps | multi-set-mps | binary-tree | tree
+    state_geometry  tensor-network state        mps | system-first-mps
+                                             | interleaved-mps | multi-set-mps
+                                             | multi-set-tree | binary-tree | tree
     integrator  how a step is taken        tebd | tdvp1 | tdvp2 | dtdvp | trotter-mpo
 
 Availability of each Hamiltonian representation for a model is recorded by
@@ -100,8 +103,17 @@ REPRESENTATIONS = {
 #: (``interaction-chain-tree-tebd``).
 STATE_GEOMETRIES = {
     "mps": "a one-dimensional matrix product state, with the system at site 0",
+    "system-first-mps": (
+        "one multilevel electronic site followed by grouped bath modes"
+    ),
+    "interleaved-mps": (
+        "local electronic sites interleaved with their grouped bath modes"
+    ),
     "multi-set-mps": (
         "one independent environment MPS per exact system-basis state"
+    ),
+    "multi-set-tree": (
+        "one independent environment tree tensor network per system-basis state"
     ),
     "binary-tree": "a balanced binary tree tensor network with the system at the root",
     "tree": "a general tree tensor network determined by the multi-site model",
@@ -181,15 +193,16 @@ class MethodSpec:
 def _canonical_method_name(representation, integrator, state_geometry="mps"):
     """Derive a method name from its representation and algorithm.
 
-    Conventional MPS methods use ``<representation>-<integrator>``. A tree
-    tensor network inserts ``tree`` and a multi-set MPS inserts ``multi-set`` so
-    methods that share a representation and integrator remain unambiguous.
-    Keeping this rule here prevents a registry label from drifting away from the
-    tuple it denotes.
+    Conventional MPS methods use ``<representation>-<integrator>``. Other
+    layouts insert the tag recorded below so methods that share a representation
+    and integrator remain unambiguous.
     """
     tags = {
         "mps": "",
+        "system-first-mps": "system-first-",
+        "interleaved-mps": "interleaved-",
         "multi-set-mps": "multi-set-",
+        "multi-set-tree": "multi-set-tree-",
         "binary-tree": "tree-",
         "tree": "tree-",
     }
@@ -251,8 +264,14 @@ _METHOD_ROWS = [
     _m("interaction-chain", _SB, "mpo-tdvp",
        "tdvp1", requires_bond_cap=True),
     _m("interaction-chain", _SB, "mpo-tdvp", "tdvp2"),
-    _m("interaction-chain", _SB, "multiset-tdvp", "tdvp2",
+    _m("interaction-chain", (*_SB, "exciton-bath"), "multiset-tdvp", "tdvp2",
        state_geometry="multi-set-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp2",
+       state_geometry="system-first-mps"),
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp2",
+       state_geometry="interleaved-mps"),
+    _m("interaction-chain", ("exciton-bath",), "multiset-tree-tdvp", "tdvp2",
+       state_geometry="multi-set-tree"),
     # -- ...and the chain representation on a balanced binary tree ---------------------
     _m("interaction-chain", _SB, "modetree",
        "run_tree_tebd", integrator="tebd", state_geometry="binary-tree"),
@@ -323,6 +342,11 @@ _NO_MULTICHANNEL_POLARON = (
     "not implemented for several coupling operators: the current Lang-Firsov "
     "representation requires one Hermitian generator.")
 
+_EXCITON_INTERACTION_ONLY = (
+    "not implemented for this exciton layout; independent local baths are "
+    "currently assembled in the interaction-chain representation."
+)
+
 MODELS = {
     "system-bath": Model(
         key="system-bath", label="system-bath",
@@ -342,6 +366,19 @@ MODELS = {
               "polaron-chain": _NO_MULTICHANNEL_POLARON,
               "polaron-star": _NO_MULTICHANNEL_POLARON},
         selected_by="coupling"),
+    "exciton-bath": Model(
+        key="exciton-bath", label="single-excitation system with local baths",
+        blurb="One N-level electronic Hamiltonian with an independent bath on "
+              "each site population. It supports a multilevel system-first MPS, "
+              "local electronic sites interleaved with their baths, and a "
+              "multi-set MPS, and multi-set bath tree.",
+        cls="ExcitonBath",
+        gaps={
+            "schrodinger-chain": _EXCITON_INTERACTION_ONLY,
+            "schrodinger-star": _EXCITON_INTERACTION_ONLY,
+            "polaron-chain": _EXCITON_INTERACTION_ONLY,
+            "polaron-star": _EXCITON_INTERACTION_ONLY,
+        }),
     "comb": Model(
         key="comb", label="fishbone / comb",
         blurb="Several system sites on a 1D backbone, each carrying one or two "

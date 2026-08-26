@@ -79,7 +79,10 @@ def split_system_mpo(mpo, system_dimension=None):
             if not np.any(boundary):
                 row.append(None)
             else:
-                row.append([boundary] + [value.copy() for value in mpo[2:]])
+                # Every block has its own contracted left boundary, while the
+                # remaining MPO tensors are immutable during a sweep. Sharing
+                # that tail avoids N**2 copies for an N-level multi-set model.
+                row.append([boundary, *mpo[2:]])
         blocks.append(row)
     return blocks
 

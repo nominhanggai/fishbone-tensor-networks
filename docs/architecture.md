@@ -113,11 +113,14 @@ fixed by the tensor-network geometry:
 | `state_geometry` | infix | example |
 |---|---|---|
 | `mps` | *(none)* | `polaron-chain-tdvp2` |
+| `system-first-mps` | `system-first` | `interaction-chain-system-first-tdvp2` |
+| `interleaved-mps` | `interleaved` | `interaction-chain-interleaved-tdvp2` |
 | `multi-set-mps` | `multi-set` | `polaron-chain-multi-set-tdvp2` |
+| `multi-set-tree` | `multi-set-tree` | `interaction-chain-multi-set-tree-tdvp2` |
 | `binary-tree` | `tree` | `interaction-chain-tree-tebd` |
 | `tree` | `tree` | `schrodinger-chain-tree-tebd` |
 
-Both tree geometries use `tree` in ordinary method names. The binary-tree method
+The `binary-tree` and `tree` rows use `tree` in ordinary method names. The binary-tree method
 `interaction-chain-tree-tebd` and the comb method would otherwise collide, so
 the interaction-chain comb family uses the `fishbone` infix:
 `interaction-chain-fishbone-tebd`,
