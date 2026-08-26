@@ -44,10 +44,14 @@ def _ignored_tick_labels(figure):
         y_bottom, y_top = sorted(axis.get_ylim())
         x_scale = max(abs(x_left), abs(x_right), 1.0)
         y_scale = max(abs(y_bottom), abs(y_top), 1.0)
-        for tick, label in zip(axis.xaxis.get_major_ticks(), axis.get_xticklabels()):
+        for tick, label in zip(
+            axis.xaxis.get_major_ticks(), axis.get_xticklabels(), strict=True
+        ):
             if not x_left - 1e-10 * x_scale <= tick.get_loc() <= x_right + 1e-10 * x_scale:
                 ignored.add(label)
-        for tick, label in zip(axis.yaxis.get_major_ticks(), axis.get_yticklabels()):
+        for tick, label in zip(
+            axis.yaxis.get_major_ticks(), axis.get_yticklabels(), strict=True
+        ):
             if not y_bottom - 1e-10 * y_scale <= tick.get_loc() <= y_top + 1e-10 * y_scale:
                 ignored.add(label)
     return ignored
@@ -178,7 +182,9 @@ def _figure_legend(figure, axes, *, columns=4, top=0.84):
     entries = []
     labels = set()
     for axis in axes:
-        for handle, label in zip(*axis.get_legend_handles_labels()):
+        for handle, label in zip(
+            *axis.get_legend_handles_labels(), strict=True
+        ):
             if label not in labels:
                 entries.append((handle, label))
                 labels.add(label)
@@ -279,9 +285,10 @@ def bath_structured(path=None):
         return result
 
     exact = np.array([
-        quad(lambda omega: density(omega) / np.pi * np.cos(omega * time),
+        quad(lambda omega, time=time: density(omega) / np.pi * np.cos(omega * time),
              0, 60, limit=600)[0]
-        - 1j * quad(lambda omega: density(omega) / np.pi * np.sin(omega * time),
+        - 1j * quad(
+            lambda omega, time=time: density(omega) / np.pi * np.sin(omega * time),
                     0, 60, limit=600)[0]
         for time in _TS
     ])
@@ -317,7 +324,9 @@ def vibronic_dimer(path=None):
     figure, axes = plt.subplots(
         1, 2, figsize=(11.2, 4.4), sharex=True, sharey=True,
     )
-    for axis, (vibration, result) in zip(axes, suite["results"].items()):
+    for axis, (vibration, result) in zip(
+        axes, suite["results"].items(), strict=True
+    ):
         population = np.asarray(result.expect["population"])
         column = f"omega{int(vibration)}_acceptor"
         axis.plot(

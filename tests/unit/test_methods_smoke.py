@@ -112,7 +112,9 @@ def test_mps_and_tree_are_one_tensor_network():
     B_before = [b.copy() for b in st.B]
     st._prepare_for(3)
     assert st.oc == 3
-    assert all(np.array_equal(a, b) for a, b in zip(B_before, st.B))
+    assert all(
+        np.array_equal(a, b) for a, b in zip(B_before, st.B, strict=True)
+    )
 
 
 def test_mps_joint_rdm_matches_the_dense_state():
@@ -276,7 +278,9 @@ def test_schrodinger_representation_serves_every_topology():
 
     assert isinstance(a, LocalTerms) and isinstance(b, LocalTerms)
     assert a.dims == b.dims and a.edges == b.edges
-    assert all(np.allclose(x, y) for x, y in zip(a.site, b.site))
+    assert all(
+        np.allclose(x, y) for x, y in zip(a.site, b.site, strict=True)
+    )
     assert set(a.bond) == set(b.bond)
     assert all(np.allclose(a.bond[k], b.bond[k]) for k in a.bond)
 

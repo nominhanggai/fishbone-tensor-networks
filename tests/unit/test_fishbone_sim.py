@@ -52,11 +52,11 @@ def _build_exact(sites, specs, backbone, d):
     dims, e_idx, slots = [], [], []
     for i in range(nc):
         slot = {}
-        for (nm, op, side) in specs[i]:
+        for (nm, _op, side) in specs[i]:
             if side == "L":
                 slot["L"] = (len(dims), nm); dims += [d] * nm
         e_idx.append(len(dims)); dims.append(de[i])
-        for (nm, op, side) in specs[i]:
+        for (nm, _op, side) in specs[i]:
             if side == "R":
                 slot["R"] = (len(dims), nm); dims += [d] * nm
         slots.append(slot)
@@ -362,9 +362,11 @@ def test_every_pair_of_comb_integrators_agrees_to_second_order():
     for index, first in enumerate(COMB_METHODS):
         for second in COMB_METHODS[index + 1:]:
             errors = [float(np.max(np.abs(a - b)))
-                      for a, b in zip(series[first], series[second])]
+                      for a, b in zip(
+                          series[first], series[second], strict=True
+                      )]
             assert errors[0] < 1e-4, (first, second, errors)
-            for coarse, fine in zip(errors, errors[1:]):
+            for coarse, fine in zip(errors, errors[1:], strict=False):
                 assert 3.4 < coarse / fine < 4.6, (
                     f"{first} vs {second} is not second order: {errors}")
 

@@ -147,7 +147,9 @@ def test_checkpoint_continuation_matches_one_shot_and_roundtrips(tmp_path):
     assert second.checkpoint.elapsed == pytest.approx(0.12)
     assert loaded.signature == first.checkpoint.signature
     assert all(np.array_equal(a, b)
-               for a, b in zip(loaded.tensors, first.checkpoint.tensors))
+               for a, b in zip(
+                   loaded.tensors, first.checkpoint.tensors, strict=True
+               ))
 
 
 def test_checkpoint_rejects_incompatible_or_overlong_continuation():

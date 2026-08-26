@@ -31,7 +31,7 @@ def main():
     rate_marcus = np.array([marcus_rate(c_da, e - coup, kbT, reorg_e) for e in energies])
 
     print(f"{'E (a.u.)':>10} {'FGR rate':>14} {'Marcus rate':>14}")
-    for e, rf, rm in zip(energies, rate_fgr, rate_marcus):
+    for e, rf, rm in zip(energies, rate_fgr, rate_marcus, strict=True):
         print(f"{e:>10.4f} {rf:>14.4e} {rm:>14.4e}")
     return energies, rate_fgr, rate_marcus
 

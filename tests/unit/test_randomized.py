@@ -64,7 +64,9 @@ def test_run_local_seed_is_reproducible_and_isolated():
     with random_seed(8):
         third = randomized_svd(matrix, 4, n_iter=0, oversample=1)
 
-    assert all(np.array_equal(a, b) for a, b in zip(first, second))
+    assert all(
+        np.array_equal(a, b) for a, b in zip(first, second, strict=True)
+    )
     assert not np.array_equal(first[0], third[0])
 
 
@@ -87,7 +89,7 @@ def test_small_matrices_use_the_exact_svd():
     # identical results from generators that would otherwise disagree
     a = randomized_svd(matrix, 4, rng=np.random.default_rng(1))
     b = randomized_svd(matrix, 4, rng=np.random.default_rng(999))
-    assert all(np.array_equal(x, y) for x, y in zip(a, b))
+    assert all(np.array_equal(x, y) for x, y in zip(a, b, strict=True))
     exact = np.linalg.svd(matrix, full_matrices=False)[1][:4]
     assert np.allclose(a[1], exact)
 
@@ -202,8 +204,12 @@ def test_adaptive_svd_matrix_key_is_checkpoint_segment_stable():
     with random_seed(7):
         resumed = adaptive_svd(matrix, eps=1e-4)
 
-    assert all(np.array_equal(a, b) for a, b in zip(first, second))
-    assert all(np.array_equal(a, b) for a, b in zip(first, resumed))
+    assert all(
+        np.array_equal(a, b) for a, b in zip(first, second, strict=True)
+    )
+    assert all(
+        np.array_equal(a, b) for a, b in zip(first, resumed, strict=True)
+    )
 
 
 def test_run_can_select_exact_svd_and_reports_decomposition_statistics():
