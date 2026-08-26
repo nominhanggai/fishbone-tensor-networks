@@ -34,8 +34,8 @@ __all__ = [
 #: 640 x 640      64  816 ms    305 ms       2.68x
 #: ===========  ====  ========  ===========  =======
 #:
-#: The 48 x 48 row is the regime the test suite runs in, where sketching cost
-#: 30% *more* time and gave up reproducibility for it.
+#: The 48 x 48 row represents the small-block regime, where sketching costs
+#: about 30% more time and adds randomized work without a speed benefit.
 EXACT_BELOW = 128
 
 
