@@ -51,13 +51,11 @@ def run_mpo_hamiltonian(representation, *, dt, nsteps, sweep, initial=None,
     dimensions = tuple(representation.dimensions)
     if len(dimensions) < 2:
         raise ValueError("TDVP system-bath propagation needs at least two sites")
-    if len(set(dimensions[1:])) != 1:
-        raise ValueError("TDVP currently requires one common bath-site dimension")
     if initial is None:
         initial = np.zeros(dimensions[0], complex)
         initial[0] = 1.0
     measure = observe if observe is not None else lambda state: measure_sz(state[0])
-    state = init_mps(len(dimensions), dimensions[1], initial)
+    state = init_mps(len(dimensions), dimensions[1:], initial)
     if prepare is not None:
         state = prepare(state)
 

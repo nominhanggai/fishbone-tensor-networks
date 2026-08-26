@@ -6,13 +6,14 @@ which baths couple to them. The Hamiltonian ``representation`` and tensor-networ
 
     model -> representation -> state_geometry -> integrator
 
-Four models, three classes:
+Five models, four classes:
 
 ================  =====================  ==========================================
 model             class                  what it is
 ================  =====================  ==========================================
 ``system-bath``   :class:`SystemBath`    1 system + 1 bath + 1 coupling operator
 ``multichannel``  :class:`SystemBath`    1 system + 1 bath, several shared couplings
+``exciton-bath``   :class:`ExcitonBath`   N electronic levels, independent local baths
 ``comb``          :class:`Fishbone`      N sites on a 1D backbone, baths per site
 ``site-tree``     :class:`TreeFishbone`  N sites in any loop-free tree, baths/site
 ================  =====================  ==========================================
@@ -28,6 +29,7 @@ print(d())"`` prints the whole thing.
 """
 from fishbonett.models.result import Result, SimulationCheckpoint
 from fishbonett.models.system_bath import SystemBath
+from fishbonett.models.exciton import ExcitonBath
 from fishbonett.models.fishbone import Fishbone, TreeFishbone
 from fishbonett.targets import BathMode
 from fishbonett.models.simulation import SimulationPlan, compile_plan
@@ -40,7 +42,8 @@ from fishbonett.models.registry import (
 
 __all__ = [
     # model classes
-    "SystemBath", "Fishbone", "TreeFishbone", "BathMode", "Result", "SimulationCheckpoint",
+    "SystemBath", "ExcitonBath", "Fishbone", "TreeFishbone", "BathMode",
+    "Result", "SimulationCheckpoint",
     "SimulationPlan", "compile_plan",
     # the taxonomy
     "MODELS", "REPRESENTATIONS", "Model", "RepresentationSpec", "MethodSpec",

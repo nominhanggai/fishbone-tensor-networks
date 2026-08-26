@@ -9,7 +9,8 @@ One container for both shapes of result, because the *model* decides the shape:
      - single-system models
      - multi-site models
    * - ``expect[name]``
-     - ``(n_records,)``
+     - ``(n_records,)``; ``ExcitonBath`` also records all site populations as
+       ``(n_records, n_levels)``
      - ``(n_records, n_sites)`` for a per-site specification; otherwise
        ``(n_records,)``
    * - ``rdm``
@@ -25,8 +26,8 @@ One container for both shapes of result, because the *model* decides the shape:
      - resumable state when the method supports it
      - resumable state when the method supports it
 
-``system-bath`` and ``multichannel`` are single-system; ``comb`` and ``site-tree``
-are multi-site. ``n_records`` equals ``n_steps`` unless ``observe_every`` is
+``system-bath``, ``multichannel``, and ``exciton-bath`` are single-system;
+``comb`` and ``site-tree`` are multi-site. ``n_records`` equals ``n_steps`` unless ``observe_every`` is
 greater than one. See :mod:`fishbonett.models.registry`.
 """
 from dataclasses import dataclass, field

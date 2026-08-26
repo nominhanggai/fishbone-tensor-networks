@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from fishbonett import Bath, MultiSetMPS, SystemBath
+from fishbonett.evolve.multiset import split_system_mpo
 from fishbonett.operators import annihilate, sigma_x, sigma_z
 from fishbonett.representations.interaction import InteractionRepresentation
 
@@ -89,6 +90,18 @@ def test_multiset_product_rdm_and_conventional_embedding_agree():
     split = MultiSetMPS.from_full_mps(full)
     assert np.allclose(split.system_rdm(), expected)
     assert split.peak_bond() == 2  # the exact embedding retains its set blocks
+
+
+def test_split_system_mpo_shares_the_immutable_operator_tail():
+    mpo = [
+        np.ones((1, 2, 2, 2), complex),
+        np.ones((2, 2, 3, 3), complex),
+        np.ones((2, 1, 3, 3), complex),
+    ]
+    blocks = split_system_mpo(mpo)
+    assert blocks[0][0][0] is not mpo[1]
+    assert blocks[0][0][1] is mpo[2]
+    assert blocks[1][1][1] is mpo[2]
 
 
 @pytest.mark.parametrize("representation", REPRESENTATIONS)

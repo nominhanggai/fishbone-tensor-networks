@@ -86,11 +86,14 @@ reference runs. Decomposition and fallback counts are stored in
 |---|---|---|
 | One system, one bath | `SystemBath` | Spin-boson and molecular-vibration models |
 | One system, shared bath modes with several coupling operators | `SystemBath` | Correlated multichannel noise |
+| One excitation on several levels, with independent local baths | `ExcitonBath` | Molecular aggregates and pigment-protein complexes |
 | A one-dimensional backbone with baths on its sites | `Fishbone` | Electron and excitation-energy transfer |
 | Any loop-free network of system sites and baths | `TreeFishbone` | Branched molecular or transport models |
 
 For `Fishbone` and `TreeFishbone`, attach each bath explicitly with
 `bath.bind(system_operator)` so the coupled site and operator are unambiguous.
+For `ExcitonBath`, entry `baths[i]` is defined to couple to the population
+projector of electronic level `i`.
 
 A method name identifies a representation, state geometry, and integrator.
 Conventional-MPS names omit the implicit `mps`; multi-set and tree-state names
@@ -102,6 +105,9 @@ include their geometry when needed to distinguish them, for example:
 - `interaction-chain-tree-tebd`
 - `polaron-chain-tdvp2`
 - `polaron-chain-multi-set-tdvp2`
+- `interaction-chain-system-first-tdvp2`
+- `interaction-chain-interleaved-tdvp2`
+- `interaction-chain-multi-set-tree-tdvp2`
 - `polaron-chain-tree-tebd`
 
 The method registry rejects unsupported combinations and explains why they are

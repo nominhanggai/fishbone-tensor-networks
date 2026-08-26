@@ -55,8 +55,10 @@ coefficients its Hamiltonian requires. A
 system operator;
 :mod:`fishbonett.linalg` and :mod:`fishbonett.operators` hold the shared numerics.
 
-Four models, three classes: :class:`~fishbonett.models.system_bath.SystemBath` for one
+Five models, four classes: :class:`~fishbonett.models.system_bath.SystemBath` for one
 system and one bath (``system-bath``, ``multichannel``),
+:class:`~fishbonett.models.exciton.ExcitonBath` for a single excitation with
+independent local baths (``exciton-bath``),
 :class:`~fishbonett.models.fishbone.Fishbone` for a 1D chain of sites (``comb``), and
 :class:`~fishbonett.models.fishbone.TreeFishbone` for any loop-free tree of sites
 (``site-tree``). Hamiltonian ``representation`` and ``state_geometry`` are
@@ -70,6 +72,8 @@ orthogonality centres, and reduced density matrices. The MPS orders its legs as
 for canonical-form and gate-splitting details.
 :class:`~fishbonett.states.multiset.MultiSetMPS` instead holds one independent
 environmental MPS per exact system-basis state.
+:class:`~fishbonett.states.multiset_tree.MultiSetTreeTensorNetwork` applies the
+same outer expansion to independently truncated bath trees.
 
 Site ordering: the system is **site 0** and the bath modes follow, nearest
 first.
@@ -78,12 +82,15 @@ Public API
 ----------
 * **High-level interface:** :class:`~fishbonett.bath.spec.Bath`,
   :class:`~fishbonett.models.system_bath.SystemBath`,
+  :class:`~fishbonett.models.exciton.ExcitonBath`,
   :class:`~fishbonett.models.result.Result`, and
   :class:`~fishbonett.linalg.Truncation`. For several system sites use
   :class:`~fishbonett.models.fishbone.Fishbone` or
   :class:`~fishbonett.models.fishbone.TreeFishbone`.
 * **State ansaetze:** :class:`~fishbonett.states.mps.SystemBathMPS` for a 1D MPS,
-  :class:`~fishbonett.states.multiset.MultiSetMPS` for a multi-set MPS, and
+  :class:`~fishbonett.states.multiset.MultiSetMPS` for a multi-set MPS,
+  :class:`~fishbonett.states.multiset_tree.MultiSetTreeTensorNetwork` for
+  multi-set bath trees, and
   :class:`~fishbonett.states.tree.TreeTensorNetwork` for a general tree.
 * **Representations and numerical products:** the Schrödinger, interaction,
   polaron, and multichannel builders in :mod:`fishbonett.representations`.
@@ -101,9 +108,11 @@ from importlib.metadata import PackageNotFoundError, version as _version
 
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.states.multiset import MultiSetMPS
+from fishbonett.states.multiset_tree import MultiSetTreeTensorNetwork
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian
 from fishbonett.evolve.modetree import run_tree_tebd
 from fishbonett.evolve.multiset import run_multiset_mpo_hamiltonian
+from fishbonett.evolve.multiset_tree import run_multiset_tree_hamiltonian
 from fishbonett.bath import (
     Bath, CoupledBath, thermalize,
     integrated_free_phase, reorganization_energy, star_coupling_squared,
@@ -116,7 +125,8 @@ from fishbonett.linalg import Truncation
 from fishbonett.targets import BathMode
 from fishbonett.system import System
 from fishbonett.models import (
-    Result, SimulationCheckpoint, Fishbone, SystemBath, TreeFishbone,
+    Result, SimulationCheckpoint, ExcitonBath, Fishbone, SystemBath,
+    TreeFishbone,
 )
 from fishbonett.states.tree import TreeTensorNetwork
 from fishbonett.states.thermal import GibbsPurification
@@ -139,12 +149,14 @@ __all__ = [
     # low-level state and evolution entry points
     "SystemBathMPS",
     "MultiSetMPS",
+    "MultiSetTreeTensorNetwork",
     "run_mpo_hamiltonian",
     "run_multiset_mpo_hamiltonian",
+    "run_multiset_tree_hamiltonian",
     "run_tree_tebd",
     # high-level interface
     "Bath", "CoupledBath",
-    "System", "SystemBath",
+    "System", "SystemBath", "ExcitonBath",
     "Result", "SimulationCheckpoint", "Truncation", "thermalize", "Fishbone",
     "BathMode",
     "TreeFishbone", "TreeTensorNetwork", "GibbsPurification",

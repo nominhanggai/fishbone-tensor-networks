@@ -17,6 +17,7 @@ python examples/interaction_picture_spin_boson.py
 | [`bridge_electron_transfer.py`](bridge_electron_transfer.py) | Donor--bridge--acceptor electron transfer with diagonal and non-Condon bath fluctuations. |
 | [`two_bath_heat_flow.py`](two_bath_heat_flow.py) | Heat flow through a two-level junction, measured from explicit system--bath correlations. |
 | [`multiset_holstein.py`](multiset_holstein.py) | Franck--Condon Holstein dynamics compared between multi-set and conventional MPS TDVP. |
+| [`fmo_state_layouts.py`](fmo_state_layouts.py) | Seven-site FMO dynamics with system-first, interleaved, multi-set MPS, and multi-set tree layouts. |
 
 The vibronic-dimer, nonadiabatic-spin-boson, electron-transfer, and heat-flow
 tutorials accept `--profile smoke|docs|reference`. Their default `smoke`
@@ -27,3 +28,5 @@ or refines the timestep, Fock dimension, SVD threshold, or parameter grid as
 specified on the corresponding tutorial page.
 The Holstein method comparison instead provides `smoke`, `quick`, and
 `paper-scale` profiles; its default is `quick`.
+The FMO layout comparison provides `smoke` and `quick`; add
+`--layouts multi-set-tree` only when the coupled tree calculation is wanted.

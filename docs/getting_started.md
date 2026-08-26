@@ -153,9 +153,9 @@ A run is four independent choices:
 
 | axis | values | what it is |
 |---|---|---|
-| `model` | `system-bath`, `multichannel`, `comb`, `site-tree` | what is coupled to what |
+| `model` | `system-bath`, `multichannel`, `exciton-bath`, `comb`, `site-tree` | what is coupled to what |
 | `representation` | five exact names, below | how `H` is written down |
-| `state_geometry` | `mps`, `multi-set-mps`, `binary-tree`, `tree` | conventional or multi-set MPS, binary tree tensor network, or general tree tensor network |
+| `state_geometry` | `mps`, `system-first-mps`, `interleaved-mps`, `multi-set-mps`, `multi-set-tree`, `binary-tree`, `tree` | tensor-network factorization and site ordering |
 | `integrator` | `tebd`, `tdvp1`, `tdvp2`, `dtdvp`, `trotter-mpo` | how a step is taken |
 
 The general `tree` state supports several model-specific tensor-network

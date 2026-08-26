@@ -1,6 +1,6 @@
 """Tensor-network state containers and canonical-form operations.
 
-The package provides four related state types:
+The package provides five related state types:
 
 * :class:`~fishbonett.states.network.TensorNetwork` provides topology,
   canonical-form operations and observables for loop-free tensor networks.
@@ -13,6 +13,8 @@ The package provides four related state types:
 * :class:`~fishbonett.states.multiset.MultiSetMPS` stores one independent bath
   MPS per system-basis state.  The outer system index is exact and the component
   MPSs are truncated independently.
+* :class:`~fishbonett.states.multiset_tree.MultiSetTreeTensorNetwork` stores one
+  independent bath TTN per system-basis state on a shared tree topology.
 
 Propagation algorithms live in :mod:`fishbonett.evolve`; physical model assembly
 lives in :mod:`fishbonett.models`.
@@ -60,9 +62,11 @@ would make its bond singular values inconsistent. MPS updates therefore use
 """
 from fishbonett.states.mps import SystemBathMPS
 from fishbonett.states.multiset import MultiSetMPS
+from fishbonett.states.multiset_tree import MultiSetTreeTensorNetwork
 from fishbonett.states.thermal import GibbsPurification
 from fishbonett.states.tree import TreeTensorNetwork
 
 __all__ = [
-    "SystemBathMPS", "MultiSetMPS", "TreeTensorNetwork", "GibbsPurification",
+    "SystemBathMPS", "MultiSetMPS", "MultiSetTreeTensorNetwork",
+    "TreeTensorNetwork", "GibbsPurification",
 ]

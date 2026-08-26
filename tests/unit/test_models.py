@@ -4,7 +4,7 @@ import re
 import numpy as np
 import pytest
 
-from fishbonett import Bath, CoupledBath, SystemBath, Fishbone
+from fishbonett import Bath, CoupledBath, ExcitonBath, SystemBath, Fishbone
 from fishbonett.models import TreeFishbone
 from fishbonett.models import registry as R
 from fishbonett.models.registry import BOND_CAP_REQUIRED_METHODS as _BOND_CAP_REQUIRED_METHODS
@@ -53,7 +53,8 @@ def test_registry_and_plan_compilers_are_the_two_dispatch_boundaries():
 
 def test_state_geometry_vocabulary_is_explicit():
     assert set(R.STATE_GEOMETRIES) == {
-        "mps", "multi-set-mps", "binary-tree", "tree",
+        "mps", "system-first-mps", "interleaved-mps", "multi-set-mps",
+        "multi-set-tree", "binary-tree", "tree",
     }
     assert "path" not in R.STATE_GEOMETRIES
     assert "comb-tree" not in R.STATE_GEOMETRIES
@@ -65,7 +66,7 @@ def test_high_level_run_signatures_are_uniform():
 
     signatures = {
         cls.__name__: tuple(inspect.signature(cls.run).parameters)
-        for cls in (SystemBath, Fishbone, TreeFishbone)
+        for cls in (SystemBath, ExcitonBath, Fishbone, TreeFishbone)
     }
     assert len(set(signatures.values())) == 1, signatures
 
@@ -160,6 +161,8 @@ def _run_for(model_key):
         mc = Bath(J=[_J, _J], domain=(0.0, 40.0),
                   n_modes=3, phys_dim=4)
         return SystemBath(h=h, coupling=[sigma_z, sigma_x], bath=mc), None
+    if model_key == "exciton-bath":
+        return ExcitonBath(h=h, baths=[_bath(), _bath()]), None
     if model_key == "comb":
         return Fishbone(
             sites=[h, h], baths=[_bath().bind(sigma_z), None],
@@ -520,7 +523,9 @@ def test_describe_taxonomy_mentions_every_model_and_method():
 #: ``state_geometry`` -> the infix a method name carries.  Two geometries are
 #: trees, so "insert tree" is not a rule that can name both.
 GEOMETRY_INFIX = {
-    "mps": "", "multi-set-mps": "multi-set",
+    "mps": "", "system-first-mps": "system-first",
+    "interleaved-mps": "interleaved", "multi-set-mps": "multi-set",
+    "multi-set-tree": "multi-set-tree",
     "binary-tree": "tree", "tree": "tree",
 }
 
