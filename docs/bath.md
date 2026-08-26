@@ -30,6 +30,10 @@ bath = Bath(J=lambda w: 0.2 * w * np.exp(-w / 5),   # spectral density J(w)
 - **`temperature` / `beta`** — finite-temperature thermalization (below).
 - **`discretization`** — `"legendre"` (default) or `"tedopa"`.
 
+Omit both `temperature` and `beta` for a zero-temperature bath.
+`temperature=0` is rejected because it does not define a finite-temperature
+thermofield density.
+
 The bath does not need to own a system operator. `SystemBath(coupling=...)` owns
 that part of the physical model. For a multi-site model, bind the operator that
 connects a particular bath to its system site:
