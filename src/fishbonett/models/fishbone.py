@@ -405,12 +405,13 @@ class TreeFishbone:
             progress=None, observe_every=1, svd_backend="auto", **engine_kw):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
-        ``method`` exists for symmetry with
-        :meth:`fishbonett.models.system_bath.SystemBath.run`; the multi-site models have a
-        single propagator, :data:`SCHRODINGER_CHAIN_TREE_TEBD`, so it is the only
-        accepted value.  Asking for a single-system
-        method here raises with a message saying which model owns it.  The
-        representation gaps are recorded in :mod:`fishbonett.models.registry`.
+        ``TreeFishbone`` currently supports
+        :data:`SCHRODINGER_CHAIN_TREE_TEBD`, which is also its default.  The
+        linear :class:`Fishbone` specialization additionally supports registered
+        interaction-chain TEBD, Trotter-MPO, and TDVP2 paths, plus polaron-chain
+        tree TEBD. Asking for a method owned by another model raises an error that
+        names the compatible model. The complete compatibility table lives in
+        :mod:`fishbonett.models.registry`.
 
         The step is second order in ``dt``
         (:func:`fishbonett.evolve.sitetree.symmetric_tree_step`), so halving ``dt``
@@ -601,9 +602,15 @@ class Fishbone:
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
             progress=None, observe_every=1, svd_backend="auto", **engine_kw):
-        """Propagate the 1D fishbone through the shared simulation planner. See
-        :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the arguments, the
-        observable spec and the per-site :class:`Result` layout.
+        """Propagate the 1D fishbone through the shared simulation planner.
+
+        The default is ``schrodinger-chain-tree-tebd``. Registered alternatives
+        are ``polaron-chain-tree-tebd``, ``interaction-chain-fishbone-tebd``,
+        ``interaction-chain-fishbone-trotter-mpo``, and
+        ``interaction-chain-fishbone-tdvp2``. See
+        :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the common
+        arguments, observable specification, checkpoint controls, and per-site
+        :class:`Result` layout.
 
         ``method`` is validated against the ``comb`` model before delegating, so
         an unsupported one names ``comb`` rather than ``site-tree``."""
