@@ -10,7 +10,7 @@ model -> representation -> tensor-network geometry -> integrator
 - A **representation** defines the mathematical Hamiltonian and materializes its
   supported numerical products: a TDVP MPO, Trotter MPO, or TEBD gates.
 - A **tensor-network geometry** is the state ansatz: 1D MPS, binary tree tensor
-  network, or a general tree tensor network.
+  network, or a tree tensor network.
 - An **integrator** advances the represented operator and state.
 
 These are the four public selection axes.

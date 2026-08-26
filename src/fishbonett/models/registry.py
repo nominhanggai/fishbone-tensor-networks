@@ -116,7 +116,7 @@ STATE_GEOMETRIES = {
         "one independent environment tree tensor network per system-basis state"
     ),
     "binary-tree": "a balanced binary tree tensor network with the system at the root",
-    "tree": "a general tree tensor network determined by the multi-site model",
+    "tree": "a tree tensor network determined by the multi-site model",
 }
 
 

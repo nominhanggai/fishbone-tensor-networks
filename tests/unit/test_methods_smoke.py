@@ -259,7 +259,7 @@ def test_interaction_graph_is_a_star_while_the_state_is_an_mps():
 
 
 def test_schrodinger_representation_serves_every_topology():
-    """The Schrodinger representation serves comb and general-tree models."""
+    """The Schrodinger representation serves comb and tree models."""
     import numpy as np
     from fishbonett import Bath, Fishbone
     from fishbonett.models import TreeFishbone

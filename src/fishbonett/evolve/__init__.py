@@ -31,7 +31,7 @@ networks use one of the tree modules.
      - TTNO gates with Schmidt truncation
    * - ``tree``
      - :mod:`~fishbonett.evolve.sitetree`
-     - TEBD on a general tree
+     - TEBD on a tree tensor network
 
 Note the two tree modules serve different geometries, not two integrators for one
 graph: ``modetree`` is a balanced binary tree of *bath modes* around one system
