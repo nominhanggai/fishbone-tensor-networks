@@ -56,13 +56,17 @@ For example, the system-first family is
 `interaction-chain-system-first-dtdvp`. The interleaved family follows the same
 pattern.
 
+Here `tebd` and `trotter-mpo` both propagate a conventional MPS. They do not
+use the multi-set ansatz; multi-set propagation is selected only by the
+separately named `multi-set-mps` or `multi-set-tree` state geometry.
+
 For example:
 
 ```python
 result = model.run(
     dt=0.02,
     t_max=1.0,
-    method="interaction-chain-multi-set-tdvp2",
+    method="interaction-chain-system-first-trotter-mpo",
     initial=0,                 # excitation initially on electronic level 0
     trunc_eps=1e-4,
     bond_dim=None,
