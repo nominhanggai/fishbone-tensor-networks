@@ -1,18 +1,20 @@
 """Projector-splitting sweeps for matrix-product states.
 
 The one-site and two-site integrators share one environment convention and one
-palindromic traversal.  Dynamic TDVP uses the two-site tangent space as its bond
-growth mechanism, then applies the requested adaptive truncation threshold.
+palindromic traversal.  Adaptive one-site TDVP enlarges the local tangent
+spaces with the unused columns of full QR factorizations before taking an
+ordinary one-site sweep.  It never exponentiates a two-site centre.
 """
 import numpy as np
+from scipy.linalg.lapack import get_lapack_funcs
 
 from fishbonett.contract import _einsum_cached
-#: Schmidt directions kept beyond what ``trunc_eps`` admits, so a two-site
-#: bond can grow.  Two is enough to bootstrap a product state and costs a bond
-#: of ``rank + 2``; raise it if a run appears stuck at a small bond.
+#: Maximum new bond directions considered in one sweep.  For TDVP2 these are
+#: Schmidt directions beyond the threshold rank.  For adaptive one-site TDVP
+#: they are full-QR complement directions tested by the tangent-space measure.
 DEFAULT_BOND_EXPAND = 2
 from fishbonett.evolve._tdvp_kernels import (
-    SZ, _setbond, applyH1, evolveAC, evolveC, expmv_lanczos,
+    SZ, _setbond, applyH0, applyH1, evolveAC, evolveC, expmv_lanczos,
     init_right_envs, left_qr, right_lq, updateleftenv, updaterightenv,
 )
 from fishbonett.linalg import threshold_svd
@@ -190,17 +192,249 @@ def _pad_bonds(tensors, D, noise=1e-10, seed=0):
     return out
 
 
-def tdvp1sweep_dynamic(dt2, tensors, mpo, Afull, FRs, *, prec=1e-3,
-                       Dlim=50, Dplusmax=None, expand=DEFAULT_BOND_EXPAND,
-                       **krylov):
-    """Adaptive TDVP using a two-site tangent space and SVD rank selection.
+def _partial_full_qr(matrix, target):
+    """Return the first ``target`` columns of full Q and the reduced R.
 
-    ``prec`` is this integrator's truncation threshold and ``expand`` is the
-    bond-expansion allowance; see :func:`_split2`. A positive allowance lets a
-    product-state input grow new bond sectors.
+    LAPACK stores the Householder reflectors compactly. ``ungqr``/``orgqr``
+    applies them only to the requested columns, avoiding the square full-Q
+    allocation while returning exactly the corresponding full-QR basis.
     """
-    threshold = float(prec)
-    state, env = tdvp2sweep(
-        dt2, tensors, mpo, Dlim, threshold, None, expand=expand, **krylov)
-    diagnostic = {"bond_dimensions": bonddims(state), "threshold": threshold}
+    matrix = np.asarray(matrix)
+    rows, columns = matrix.shape
+    if columns > rows or target < columns or target > rows:
+        raise ValueError("requested QR dimensions are incompatible")
+    generator = "ungqr" if np.iscomplexobj(matrix) else "orgqr"
+    geqrf, generate_q = get_lapack_funcs(("geqrf", generator), (matrix,))
+    packed, tau, _work, info = geqrf(
+        np.array(matrix, order="F", copy=True), overwrite_a=True
+    )
+    if info != 0:
+        raise np.linalg.LinAlgError(f"LAPACK geqrf failed with info={info}")
+    reflectors = np.zeros((rows, target), dtype=matrix.dtype, order="F")
+    reflectors[:, :columns] = packed
+    basis, _work, info = generate_q(reflectors, tau, overwrite_a=True)
+    if info != 0:
+        raise np.linalg.LinAlgError(
+            f"LAPACK QR basis generation failed with info={info}"
+        )
+    triangular = np.triu(packed[:columns, :columns])
+    return basis, triangular
+
+
+def _complete_columns(columns, target):
+    """Append requested full-QR complement columns without rotating a basis."""
+    current = columns.shape[1]
+    if target < current or target > columns.shape[0]:
+        raise ValueError("completion dimension is outside the available space")
+    if target == current:
+        return columns.copy()
+    complete, _triangular = _partial_full_qr(columns, target)
+    return np.column_stack((columns, complete[:, current:target]))
+
+
+def _left_completion(isometry, target):
+    """Extend a left-isometric tensor with full-QR complement columns."""
+    dl, current, physical = isometry.shape
+    matrix = np.transpose(isometry, (0, 2, 1)).reshape(
+        dl * physical, current
+    )
+    if target > matrix.shape[0]:
+        raise ValueError("left completion exceeds the local Hilbert space")
+    basis = _complete_columns(matrix, target)
+    return np.transpose(basis.reshape(dl, physical, target), (0, 2, 1))
+
+
+def _right_completion(tensor, target):
+    """Extend a right-isometric tensor with full-QR complement rows."""
+    current, dr, physical = tensor.shape
+    matrix_t = tensor.reshape(current, dr * physical).T
+    if target > matrix_t.shape[0]:
+        raise ValueError("right completion exceeds the local Hilbert space")
+    basis = _complete_columns(matrix_t, target)
+    return basis.T.reshape(target, dr, physical)
+
+
+def _embed_matrix(matrix, size):
+    """Embed a bond centre in the leading block of a square matrix."""
+    out = np.zeros((size, size), dtype=matrix.dtype)
+    rows = min(size, matrix.shape[0])
+    columns = min(size, matrix.shape[1])
+    out[:rows, :columns] = matrix[:rows, :columns]
+    return out
+
+
+def _adaptive_bond_targets(tensors, mpo, precision, ceiling, expand):
+    """Select full-QR tangent-space dimensions for the next one-site sweep.
+
+    For bond ``i`` the convergence function contains the squared norms of
+    ``H(i) A_C(i)``, ``K(i) C(i)``, and ``H(i+1) A_C(i+1)``.  The three
+    tensors are formed once in the largest local QR-complement space and
+    leading blocks give the values for smaller candidates.  The selected
+    dimension is the first one whose relative increment is no larger than
+    ``precision``.
+    """
+    count = len(tensors)
+    right_envs = init_right_envs(tensors, mpo)
+    boundary = np.ones((1, 1, 1), complex)
+    left_envs = [None] * (count + 1)
+    left_envs[0] = boundary
+    centers = []
+    bond_centers = []
+    left_isometries = []
+    center = tensors[0]
+    for site in range(count - 1):
+        centers.append(center)
+        left, bond = left_qr(center)
+        left_isometries.append(left)
+        bond_centers.append(bond)
+        left_envs[site + 1] = updateleftenv(
+            left, mpo[site], left_envs[site]
+        )
+        center = _einsum_cached(
+            "ax,xbs->abs", bond, tensors[site + 1]
+        )
+    centers.append(center)
+
+    targets = []
+    details = []
+    for site in range(count - 1):
+        current = tensors[site].shape[1]
+        if current != tensors[site + 1].shape[0]:
+            raise ValueError("adjacent MPS bond dimensions differ")
+        if current > ceiling:
+            raise ValueError(
+                f"current bond dimension {current} exceeds the A1TDVP "
+                f"ceiling {ceiling}"
+            )
+        local_limit = min(
+            int(ceiling),
+            current + int(expand),
+            centers[site].shape[0] * centers[site].shape[2],
+            tensors[site + 1].shape[1] * tensors[site + 1].shape[2],
+        )
+        if local_limit <= current:
+            targets.append(current)
+            details.append({
+                "bond": site,
+                "before": current,
+                "after": current,
+                "relative_increment": 0.0,
+            })
+            continue
+
+        left = _left_completion(left_isometries[site], local_limit)
+        right = _right_completion(tensors[site + 1], local_limit)
+        left_expanded = updateleftenv(
+            left, mpo[site], left_envs[site]
+        )
+        right_expanded = updaterightenv(
+            right, mpo[site + 1], right_envs[site + 3]
+        )
+
+        center_left = _setbond(
+            centers[site], centers[site].shape[0], local_limit
+        )
+        center_right = _setbond(
+            centers[site + 1], local_limit, centers[site + 1].shape[1]
+        )
+        bond = _embed_matrix(bond_centers[site], local_limit)
+        action_left = applyH1(
+            center_left, mpo[site], left_envs[site], right_expanded
+        )
+        action_bond = applyH0(bond, left_expanded, right_expanded)
+        action_right = applyH1(
+            center_right, mpo[site + 1], left_expanded,
+            right_envs[site + 3],
+        )
+
+        def convergence(
+            size,
+            action_left=action_left,
+            action_bond=action_bond,
+            action_right=action_right,
+        ):
+            values = (
+                action_left[:, :size],
+                action_bond[:size, :size],
+                action_right[:size],
+            )
+            return float(sum(np.vdot(value, value).real for value in values))
+
+        selected = local_limit
+        selected_increment = 0.0
+        value = convergence(current)
+        for candidate in range(current, local_limit):
+            following = convergence(candidate + 1)
+            if value == 0.0:
+                increment = 0.0 if following == 0.0 else np.inf
+            else:
+                increment = max(0.0, following / value - 1.0)
+            selected_increment = increment
+            if increment <= precision:
+                selected = candidate
+                break
+            value = following
+        targets.append(selected)
+        details.append({
+            "bond": site,
+            "before": current,
+            "after": selected,
+            "relative_increment": float(selected_increment),
+        })
+    return targets, details
+
+
+def _expand_right_canonical(tensors, targets):
+    """Embed an MPS exactly in the selected right-canonical bond spaces."""
+    state = [np.asarray(tensor, complex).copy() for tensor in tensors]
+    if len(targets) != len(state) - 1:
+        raise ValueError("one target dimension is required per MPS bond")
+    for site in range(len(state) - 1, 0, -1):
+        tensor = state[site]
+        old_left, right, physical = tensor.shape
+        target = int(targets[site - 1])
+        if target < old_left or target > right * physical:
+            raise ValueError("requested bond expansion is locally impossible")
+        matrix_t = tensor.reshape(old_left, right * physical).T
+        basis, triangular = _partial_full_qr(matrix_t, target)
+        state[site] = basis.T.reshape(target, right, physical)
+        centre = np.zeros((old_left, target), complex)
+        centre[:, :old_left] = triangular.T
+        state[site - 1] = _einsum_cached(
+            "axp,xb->abp", state[site - 1], centre
+        )
+    norm = np.linalg.norm(state[0])
+    if norm == 0.0 or not np.isfinite(norm):
+        raise ValueError("cannot expand a zero or non-finite MPS")
+    state[0] /= norm
+    return state
+
+
+def a1tdvp_sweep(
+    dt2,
+    tensors,
+    mpo,
+    *,
+    trunc_eps=1e-3,
+    bond_dim=50,
+    expand=DEFAULT_BOND_EXPAND,
+    **krylov,
+):
+    """Advance adaptive one-site TDVP after a full-QR subspace expansion.
+
+    ``trunc_eps`` is the maximum relative increment in the tangent-space
+    convergence function; ``bond_dim`` is a strict memory ceiling and
+    ``expand`` limits the number of QR-complement directions tested per sweep.
+    The time step itself is an ordinary one-site projector-splitting sweep.
+    """
+    targets, bonds = _adaptive_bond_targets(
+        tensors, mpo, float(trunc_eps), int(bond_dim), int(expand)
+    )
+    state = _expand_right_canonical(tensors, targets)
+    state, env = tdvp1sweep(dt2, state, mpo, None, **krylov)
+    diagnostic = {
+        "bond_dimensions": bonddims(state),
+        "precision": float(trunc_eps),
+        "bonds": bonds,
+    }
     return state, None, env, diagnostic

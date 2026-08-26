@@ -253,16 +253,13 @@ def _check_single_channel(model):
             "fishbonett.models.registry.")
 
 
-def _tdvp_hooks(context, driver):
+def _tdvp_hooks(context):
     """Driver options shared by every representation supplying a TDVP MPO."""
-    hooks = dict(
+    return dict(
         observe=lambda tensors: _mpo.measure_rdm(tensors[0]),
         tol=context.kw.get("tol", 1e-7),
         eshift=context.kw.get("eshift", False),
     )
-    if driver == "dtdvp":
-        hooks["prec"] = context.kw.get("prec", context.trunc_eps)
-    return hooks
 
 
 def _schrodinger_representation(model, coupled, name):
@@ -297,11 +294,11 @@ def _compile_tdvp_representation(model, spec, context, coupled):
     if spec.representation in {"schrodinger-chain", "schrodinger-star"}:
         representation = _schrodinger_representation(
             model, coupled, spec.representation)
-        return representation, _tdvp_hooks(context, spec.driver)
+        return representation, _tdvp_hooks(context)
     if spec.representation == "interaction-chain":
         representation, _phys_dims = _interaction_representation(
             model, coupled, spec.representation)
-        return representation, _tdvp_hooks(context, spec.driver)
+        return representation, _tdvp_hooks(context)
     if spec.representation in {"polaron-chain", "polaron-star"}:
         transformed, _bath, _n_modes, _phys_dims = _polaron_representation(
             model, context, spec.representation)
@@ -314,8 +311,6 @@ def _compile_tdvp_representation(model, spec, context, coupled):
             prepare=prepare,
             observe=transformed.recover_rdm,
         )
-        if spec.driver == "dtdvp":
-            hooks["prec"] = context.kw.get("prec", context.trunc_eps)
         if spec.driver == "tdvp1":
             # One-site TDVP evolves on the requested fixed-bond manifold.
             hooks["initial_bond"] = context.bond_dim
@@ -571,8 +566,6 @@ def _compile_exciton_mpo_plan(model, spec, context):
         hooks = {}
         if spec.driver == "tdvp1":
             hooks["initial_bond"] = context.bond_dim
-        elif spec.driver == "dtdvp":
-            hooks["prec"] = context.kw.get("prec", context.trunc_eps)
         times, rdms, max_bond, final_state = _mpo.run_mpo_hamiltonian(
             representation,
             initial=initial,

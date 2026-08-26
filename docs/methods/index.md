@@ -63,12 +63,12 @@ same transformed Hamiltonian and both are implemented.
 
 | representation | state geometry | methods | details |
 |---|---|---|---|
-| `schrodinger-chain` | 1D MPS | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-dtdvp` | {doc}`schrodinger/chain` |
+| `schrodinger-chain` | 1D MPS | `schrodinger-chain-tdvp1`, `schrodinger-chain-tdvp2`, `schrodinger-chain-a1tdvp` | {doc}`schrodinger/chain` |
 | `schrodinger-star` | 1D MPS | `schrodinger-star-tdvp1`, `schrodinger-star-tdvp2` | {doc}`schrodinger/star_mpo` |
 | `interaction-chain` | 1D MPS | `interaction-chain-tebd`, `interaction-chain-trotter-mpo`, `interaction-chain-tdvp1`, `interaction-chain-tdvp2` | {doc}`interaction/tebd`, {doc}`interaction/trotter_mpo`, {doc}`interaction/tdvp` |
 | `interaction-chain` | binary tree tensor network | `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
-| `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`polaron` |
-| `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`polaron` |
+| `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-a1tdvp` | {doc}`polaron` |
+| `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-a1tdvp` | {doc}`polaron` |
 | all five representations | multi-set MPS | `<representation>-multi-set-tdvp2` | {doc}`multiset` |
 
 The two `interaction-chain` rows use the same Hamiltonian on different tensor
@@ -91,7 +91,7 @@ integrator determines how that product advances the tensor state.
 | `site-tree` | `schrodinger-chain` | arbitrary tree tensor network (`tree`) | `schrodinger-chain-tree-tebd` |
 
 For the two conventional exciton MPS rows, `<integrator>` is one of `tebd`,
-`trotter-mpo`, `tdvp1`, `tdvp2`, or `dtdvp`.
+`trotter-mpo`, `tdvp1`, `tdvp2`, or `a1tdvp`.
 
 For multichannel interaction propagation, `interaction-chain-tebd` applies one
 common orthogonal star-to-chain transform to the matrix-valued mode couplings.

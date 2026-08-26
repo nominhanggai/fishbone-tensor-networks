@@ -10,7 +10,7 @@ A run is specified by four axes::
     state_geometry  tensor-network state        mps | system-first-mps
                                              | interleaved-mps | multi-set-mps
                                              | multi-set-tree | binary-tree | tree
-    integrator  how a step is taken        tebd | tdvp1 | tdvp2 | dtdvp | trotter-mpo
+    integrator  how a step is taken        tebd | tdvp1 | tdvp2 | a1tdvp | trotter-mpo
 
 Availability of each Hamiltonian representation for a model is recorded by
 :attr:`Model.gaps`.
@@ -181,7 +181,7 @@ class MethodSpec:
     #: 1-site TDVP cannot grow a bond and adaptive tangent expansion needs a ceiling, so
     #: ``bond_dim=None`` ("unlimited") is not meaningful for these.
     requires_bond_cap: bool = False
-    #: The integrator **axis** -- ``"tebd"``, ``"tdvp1"``, ``"tdvp2"``, ``"dtdvp"``,
+    #: The integrator **axis** -- ``"tebd"``, ``"tdvp1"``, ``"tdvp2"``, ``"a1tdvp"``,
     #: ``"trotter-mpo"``. Unique within a
     #: ``(model, representation, state_geometry)``, which is
     #: what lets ``run`` be called by the axes instead of by a name that mashes
@@ -245,7 +245,7 @@ _METHOD_ROWS = [
        "tdvp1", requires_bond_cap=True),
     _m("schrodinger-chain", _SB, "mpo-tdvp", "tdvp2"),
     _m("schrodinger-chain", _SB, "mpo-tdvp",
-       "dtdvp", requires_bond_cap=True),
+       "a1tdvp", requires_bond_cap=True),
     _m("schrodinger-star", _SB, "mpo-tdvp",
        "tdvp1", requires_bond_cap=True),
     _m("schrodinger-star", _SB, "mpo-tdvp", "tdvp2"),
@@ -274,7 +274,7 @@ _METHOD_ROWS = [
        requires_bond_cap=True, state_geometry="system-first-mps"),
     _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp2",
        state_geometry="system-first-mps"),
-    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "dtdvp",
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "a1tdvp",
        requires_bond_cap=True, state_geometry="system-first-mps"),
     _m("interaction-chain", ("exciton-bath",), "exciton-mps-tebd",
        integrator="tebd", state_geometry="interleaved-mps"),
@@ -284,7 +284,7 @@ _METHOD_ROWS = [
        requires_bond_cap=True, state_geometry="interleaved-mps"),
     _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "tdvp2",
        state_geometry="interleaved-mps"),
-    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "dtdvp",
+    _m("interaction-chain", ("exciton-bath",), "exciton-mpo-tdvp", "a1tdvp",
        requires_bond_cap=True, state_geometry="interleaved-mps"),
     _m("interaction-chain", ("exciton-bath",), "multiset-tree-tdvp", "tdvp2",
        state_geometry="multi-set-tree"),
@@ -297,12 +297,12 @@ _METHOD_ROWS = [
        "tdvp1", requires_bond_cap=True),
     _m("polaron-chain", _SB, "mpo-tdvp", "tdvp2"),
     _m("polaron-chain", _SB, "mpo-tdvp",
-       "dtdvp", requires_bond_cap=True),
+       "a1tdvp", requires_bond_cap=True),
     _m("polaron-star", _SB, "mpo-tdvp",
        "tdvp1", requires_bond_cap=True),
     _m("polaron-star", _SB, "mpo-tdvp", "tdvp2"),
     _m("polaron-star", _SB, "mpo-tdvp",
-       "dtdvp", requires_bond_cap=True),
+       "a1tdvp", requires_bond_cap=True),
     _m("polaron-chain", _SB, "multiset-tdvp", "tdvp2",
        state_geometry="multi-set-mps"),
     _m("polaron-star", _SB, "multiset-tdvp", "tdvp2",

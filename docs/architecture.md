@@ -121,7 +121,7 @@ fixed by the tensor-network geometry:
 | `tree` | `tree` | `schrodinger-chain-tree-tebd` |
 
 The system-first and interleaved MPS layouts also support `tebd`,
-`trotter-mpo`, `tdvp1`, and `dtdvp` by replacing `tdvp2` in the example name.
+`trotter-mpo`, `tdvp1`, and `a1tdvp` by replacing `tdvp2` in the example name.
 
 The `binary-tree` and `tree` rows use `tree` in ordinary method names. The binary-tree method
 `interaction-chain-tree-tebd` and the comb method would otherwise collide, so

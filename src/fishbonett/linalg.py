@@ -109,13 +109,17 @@ class Truncation:
         each SVD, singular values below ``eps`` *relative to the largest on that
         bond* are discarded.  On its own this already determines the bond
         dimension -- the state grows exactly as much as the physics demands.
+        Adaptive one-site TDVP has no truncating SVD; its high-level API uses
+        the same field for the relative tangent-space convergence precision.
     ``max_bond``
         an optional **hard cap**, ``None`` meaning *unlimited*.  Use it when you
         need a guaranteed memory bound and will accept a larger error to get it.
 
-    The intended workflow is to set ``eps`` to the accuracy you need, leave
-    ``max_bond`` unset, and watch ``result.max_bond``; introduce a cap only if
-    the bond grows beyond what you can afford.
+    The intended workflow for SVD-based methods is to set ``eps`` to the
+    accuracy you need, leave ``max_bond`` unset, and watch
+    ``result.max_bond``; introduce a cap only if the bond grows beyond what you
+    can afford. Adaptive one-site TDVP requires a finite cap because its QR
+    convergence test selects directions inside a user-bounded search space.
 
     >>> import numpy as np
     >>> t = Truncation(eps=1e-4)

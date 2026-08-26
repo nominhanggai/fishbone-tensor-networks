@@ -1,7 +1,7 @@
 """Benchmark: MPO / TDVP engine vs exact diagonalization.
 
 Propagates <sigma_z(t)> of a small spin-boson chain with the fixed-bond 1-site
-TDVP and the bond-adaptive DTDVP engines, and compares against exact
+TDVP and the bond-adaptive A1TDVP engines, and compares against exact
 diagonalization of the full chain Hamiltonian (feasible for a few modes).
 
 Run with:  python benchmarks/mpo_tdvp.py
@@ -72,15 +72,15 @@ def main():
                               bond_dim=40, krylov=25)
     _, sz2, md2 = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="tdvp2",
                                 bond_dim=40, trunc_eps=1e-12, krylov=25)
-    _, szd, maxd = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="dtdvp",
-                                 prec=1e-8, bond_dim=40, krylov=25)
+    _, szd, maxd = run_mpo_hamiltonian(representation, dt=0.10, nsteps=30, sweep="a1tdvp",
+                                 trunc_eps=1e-8, bond_dim=40, krylov=25)
     sz_ex = exact_sz(n_chain, d, V, t)
-    print(f"{'t':>6} {'exact':>10} {'TDVP1':>10} {'TDVP2':>10} {'DTDVP':>10}")
+    print(f"{'t':>6} {'exact':>10} {'TDVP1':>10} {'TDVP2':>10} {'A1TDVP':>10}")
     for i in range(0, len(t), 5):
         print(f"{t[i]:>6.2f} {sz_ex[i]:>+10.5f} {sz1[i]:>+10.5f} {sz2[i]:>+10.5f} {szd[i]:>+10.5f}")
     print(f"max|TDVP1 - exact| = {np.max(np.abs(sz1 - sz_ex)):.2e}   (fixed bond)")
     print(f"max|TDVP2 - exact| = {np.max(np.abs(sz2 - sz_ex)):.2e}   (two-site, maxD={md2[-1]})")
-    print(f"max|DTDVP - exact| = {np.max(np.abs(szd - sz_ex)):.2e}   (adaptive, maxD={maxd[-1]})")
+    print(f"max|A1TDVP - exact| = {np.max(np.abs(szd - sz_ex)):.2e}   (adaptive, maxD={maxd[-1]})")
 
 
 if __name__ == "__main__":

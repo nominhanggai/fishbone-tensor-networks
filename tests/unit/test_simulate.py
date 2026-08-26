@@ -398,11 +398,11 @@ def test_trotter_mpo_matches_tebd_general_coupling():
 
 POLARON_METHODS = [
     "polaron-chain-tebd", "polaron-chain-tdvp1", "polaron-chain-tdvp2",
-    "polaron-chain-dtdvp",
+    "polaron-chain-a1tdvp",
     # The star polaron displaces every mode instead of localizing on c0.  Same
     # physics, so it must reproduce the interaction picture just as the chain
     # one does -- and until this was added the whole representation had no test.
-    "polaron-star-tdvp1", "polaron-star-tdvp2", "polaron-star-dtdvp",
+    "polaron-star-tdvp1", "polaron-star-tdvp2", "polaron-star-a1tdvp",
 ]
 
 
@@ -425,7 +425,7 @@ def test_polaron_matches_ip_populations_and_coherence(method):
     assert np.max(np.abs(rp.expect["sx"] - ri.expect["sx"])) < 1e-3   # un-dressed
 
 
-@pytest.mark.parametrize("method", ["polaron-chain-tebd", "polaron-chain-dtdvp"])
+@pytest.mark.parametrize("method", ["polaron-chain-tebd", "polaron-chain-a1tdvp"])
 def test_polaron_general_coupling_matches_ip(method):
     """The polaron representation handles a general (3-level, three-eigenvalue) coupling O."""
     O = np.diag([1.0, 0.0, -1.0]).astype(complex)
@@ -535,13 +535,13 @@ def test_bond_expansion_allowance_is_bounded():
     assert int(np.max(stuck.max_bond)) == 1
 
 
-def test_dynamic_tdvp_honours_the_bond_expansion_allowance():
-    """Dynamic TDVP passes ``bond_expand`` to its two-site sweep."""
-    grown = _model().run(dt=0.05, n_steps=8, method="schrodinger-chain-dtdvp",
+def test_a1tdvp_honours_the_bond_expansion_allowance():
+    """A1TDVP limits how many full-QR directions it tests per sweep."""
+    grown = _model().run(dt=0.05, n_steps=8, method="schrodinger-chain-a1tdvp",
                          bond_dim=40, trunc_eps=1e-3,
                          observables={"sz": sigma_z})
-    off = _model().run(dt=0.05, n_steps=8, method="schrodinger-chain-dtdvp",
+    off = _model().run(dt=0.05, n_steps=8, method="schrodinger-chain-a1tdvp",
                        bond_dim=40, trunc_eps=1e-3, bond_expand=0,
                        observables={"sz": sigma_z})
     assert int(np.max(grown.max_bond)) > int(np.max(off.max_bond)), (
-        "bond_expand does not reach the dtdvp sweep")
+        "bond_expand does not reach the a1tdvp sweep")

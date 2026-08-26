@@ -19,7 +19,7 @@ networks use one of the tree modules.
      - TEBD with Trotter gates
    * - ``mps`` with an MPO
      - :mod:`~fishbonett.evolve.tdvp`
-     - one-site, two-site, and dynamic TDVP
+     - one-site, two-site, and adaptive one-site TDVP (A1TDVP)
    * - ``multi-set-mps``
      - :mod:`~fishbonett.evolve.multiset`
      - coupled two-site TDVP

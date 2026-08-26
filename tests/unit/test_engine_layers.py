@@ -35,7 +35,7 @@ def test_tdvp_facade_exports_snake_case_entry_points():
     assert tdvp.expmv_lanczos is kernels.expmv_lanczos
     assert tdvp.tdvp1sweep is sweeps.tdvp1sweep
     assert tdvp.tdvp2sweep is sweeps.tdvp2sweep
-    assert tdvp.tdvp1sweep_dynamic is sweeps.tdvp1sweep_dynamic
+    assert tdvp.a1tdvp_sweep is sweeps.a1tdvp_sweep
     assert tdvp.run_mpo_hamiltonian is driver.run_mpo_hamiltonian
 
 
