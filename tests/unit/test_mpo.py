@@ -209,7 +209,15 @@ def test_adaptive_qr_expansion_preserves_the_state_and_right_gauge():
     ]
     state = right_canonicalize(state)
     before = _dense_mps(state)
-    expanded = _expand_right_canonical(state, [2, 3, 2])
+    # The expansion reads its new directions off the Hamiltonian, so it needs
+    # an operator; any well-formed MPO exercises the gauge bookkeeping.
+    mpo_bonds = (1, 2, 2, 2, 1)
+    mpo = [
+        rng.normal(size=(mpo_bonds[i], mpo_bonds[i + 1], d, d))
+        + 1j * rng.normal(size=(mpo_bonds[i], mpo_bonds[i + 1], d, d))
+        for i, d in enumerate(dimensions)
+    ]
+    expanded = _expand_right_canonical(state, [2, 3, 2], mpo)
 
     np.testing.assert_allclose(_dense_mps(expanded), before, atol=2e-13)
     assert [tensor.shape[1] for tensor in expanded[:-1]] == [2, 3, 2]
