@@ -34,6 +34,15 @@ def _load_fmo_example():
     return module
 
 
+def _load_fmo_methods_example():
+    path = Path(__file__).resolve().parents[2] / "examples" / "fmo_mps_methods.py"
+    spec = importlib.util.spec_from_file_location("test_fmo_mps_methods", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _density(frequency):
     return 0.08 * frequency**2 * np.exp(-frequency) if frequency >= 0 else 0.0
 
@@ -254,3 +263,13 @@ def test_fmo_example_smoke_compares_all_mps_layouts():
     assert arrays["t"].tolist() == [0.02]
     assert summary["interleaved"]["maximum_population_difference"] < 1e-7
     assert summary["multi-set"]["maximum_population_difference"] < 1e-7
+
+
+def test_fmo_propagator_summary_records_the_resolved_baths(tmp_path):
+    example = _load_fmo_methods_example()
+    summary = example.run_method(
+        example.PROFILES["smoke"], "system-first-trotter-mpo", tmp_path
+    )
+    assert summary["state_family"] == "conventional-mps"
+    assert summary["state_geometry"] == "system-first-mps"
+    assert summary["bath_modes_per_level"] == [1] * 7

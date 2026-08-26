@@ -16,11 +16,16 @@ import argparse
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import sys
 from time import perf_counter
 
 import numpy as np
 
 from fishbonett import Bath, ExcitonBath, SimulationCheckpoint
+
+EXAMPLE_DIRECTORY = Path(__file__).resolve().parent
+if str(EXAMPLE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(EXAMPLE_DIRECTORY))
 
 from fmo_state_layouts import (
     BETA,
@@ -220,6 +225,10 @@ def run_method(profile, label, output):
             else "relative SVD threshold with a maximum-bond safety ceiling"
         ),
         "physical_dimension": profile.phys_dim,
+        "bath_modes_per_level": [
+            int(branch["n_modes"])
+            for branch in result.meta["bath_branches"]
+        ],
         "peak_bond": int(max(bonds)),
         "normalization_error": float(
             np.max(np.abs(np.sum(population, axis=1) - 1.0))
