@@ -7,6 +7,29 @@ from fishbonett.randomized import (
 )
 
 
+def test_robust_svd_retries_with_gesvd_after_nonconvergence(monkeypatch):
+    """A failed divide-and-conquer SVD falls back without losing the result."""
+    import fishbonett._svd as module
+
+    matrix = np.diag([3.0, 2.0, 1.0])
+    original = module.scipy.linalg.svd
+    drivers = []
+
+    def fail_gesdd_once(value, **options):
+        driver = options["lapack_driver"]
+        drivers.append(driver)
+        if driver == "gesdd":
+            raise np.linalg.LinAlgError("forced nonconvergence")
+        return original(value, **options)
+
+    monkeypatch.setattr(module.scipy.linalg, "svd", fail_gesdd_once)
+    with pytest.warns(UserWarning, match="retrying with gesvd"):
+        u, singular, vh = module.robust_svd(matrix, full_matrices=False)
+
+    assert drivers == ["gesdd", "gesvd"]
+    assert np.allclose((u * singular) @ vh, matrix)
+
+
 @pytest.mark.parametrize("shape", [(40, 18), (18, 40)])
 @pytest.mark.parametrize("complex_input", [False, True])
 def test_randomized_svd_recovers_a_known_low_rank_matrix(shape, complex_input):
