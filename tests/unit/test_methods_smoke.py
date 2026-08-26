@@ -27,8 +27,6 @@ def test_every_module_all_is_accurate():
     names = [m.name for m in pkgutil.walk_packages(fishbonett.__path__, "fishbonett.")
              if not any(p.startswith("_") for p in m.name.split(".")[1:])]
     for name in sorted(set(names + ["fishbonett"])):
-        if name == "fishbonett.rsvd_cupy":          # needs CuPy
-            continue
         mod = importlib.import_module(name)
         declared = getattr(mod, "__all__", None)
         if declared is None:

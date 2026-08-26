@@ -42,7 +42,7 @@ MIN_LBO_DIMENSION = 10
 
 try:  # optional GPU backend
     import cupy as cp
-    from fishbonett.rsvd_cupy import adaptive_svd as _cu_threshold_svd
+    from fishbonett._rsvd_cupy import adaptive_svd as _cu_threshold_svd
 
     _CUPY = True
     _mempool = cp.get_default_memory_pool()

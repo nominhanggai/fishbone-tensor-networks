@@ -1,4 +1,4 @@
-"""CuPy implementation of fishbonett's randomized range-finder SVD.
+"""Private CuPy implementation of fishbonett's randomized range-finder SVD.
 
 Importing this optional module requires CuPy and a CUDA-capable runtime.  The
 algorithm mirrors :func:`fishbonett.randomized.randomized_svd` while keeping all
