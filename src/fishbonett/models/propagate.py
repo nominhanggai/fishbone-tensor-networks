@@ -132,6 +132,11 @@ class RunCtx:
         **reproducible**: randomized truncation is an internal optimization and
         must not make an observable depend on when it was run.  Pass ``None``
         to draw from NumPy's global generator instead.
+    svd_backend
+        ``"auto"`` selects certified adaptive randomized truncation only when
+        the matrix is large enough to benefit, ``"exact"`` always uses LAPACK,
+        and ``"randomized"`` requests the adaptive path with exact safety
+        fallbacks.
     kw
         Engine-specific extras passed through from ``run(**engine_kw)``.
     resume
@@ -157,6 +162,7 @@ class RunCtx:
     initial: Any = "up"
     krylov: int = 25
     seed: Optional[int] = 0
+    svd_backend: str = "auto"
     kw: Mapping[str, Any] = field(default_factory=dict)
     resume: Any = None
     bath_horizon: Optional[float] = None
@@ -185,6 +191,9 @@ class RunCtx:
                 isinstance(self.seed, (bool, np.bool_))
                 or not isinstance(self.seed, (int, np.integer))):
             raise ValueError("seed must be an integer or None")
+        if self.svd_backend not in {"auto", "exact", "randomized"}:
+            raise ValueError(
+                "svd_backend must be 'auto', 'exact', or 'randomized'")
         if (isinstance(self.observe_every, (bool, np.bool_))
                 or not isinstance(self.observe_every, (int, np.integer))
                 or self.observe_every < 1):

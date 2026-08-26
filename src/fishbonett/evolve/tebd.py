@@ -31,8 +31,7 @@ __all__ = ["update_bond", "sweep", "swap_in", "swap_out",
 
 
 # -- primitive ---------------------------------------------------------------
-def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
-                gpu=False):
+def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, gpu=False):
     """Apply the two-site gate ``state.U[i]`` at bond ``i`` and re-split ``state``.
 
     The primitive every sweep is built from: contract the two site tensors with
@@ -58,10 +57,7 @@ def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
         they are *now*, which is why the builders hand out both ``U1`` and its
         leg-transposed twin ``U2``.
     eps_lbo : float, optional
-        Local-basis-optimization threshold; enables LBO and the adaptive search.
-    adaptive : bool
-        Adaptive bond-dimension search without LBO.  Ignored when ``eps_lbo`` is
-        given.  Default is a single truncated SVD at ``chi_max``.
+        Local-basis-optimization threshold.
     gpu : bool
         Use the CuPy backend if it is installed.
     """
@@ -74,8 +70,8 @@ def update_bond(state, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
         utheta = einsum('ijkl,PklQ->PijQ', u_bond, theta)
     else:
         raise ValueError(f"swap must be 0 or 1, got {swap!r}")
-    state.split_truncate_theta(utheta, i, chi_max, eps, eps_lbo=eps_lbo,
-                               adaptive=adaptive, gpu=use_gpu)
+    state.split_truncate_theta(
+        utheta, i, chi_max, eps, eps_lbo=eps_lbo, gpu=use_gpu)
 
 
 # -- sweeps ------------------------------------------------------------------

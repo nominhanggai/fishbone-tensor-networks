@@ -217,7 +217,7 @@ def _run_multisite_model(
     physical_model, *, dt, t_max, n_steps, method, model,
     representation, state_geometry, integrator, trunc, bond_dim,
     trunc_eps, observables, initial, krylov, seed, resume, bath_horizon,
-    progress, observe_every, engine_kw,
+    progress, observe_every, svd_backend, engine_kw,
 ):
     """Shared public-run prelude for ``Fishbone`` and ``TreeFishbone``."""
     axis_kw = {
@@ -251,7 +251,7 @@ def _run_multisite_model(
     context = RunCtx(
         dt=dt, n_steps=n_steps, bond_dim=trunc.max_bond,
         trunc_eps=trunc.eps, obs_ops=observables, initial=initial,
-        krylov=krylov, seed=seed, resume=resume,
+        krylov=krylov, seed=seed, svd_backend=svd_backend, resume=resume,
         bath_horizon=bath_horizon, observe_every=observe_every,
         progress=progress, kw=engine_kw,
     )
@@ -397,7 +397,7 @@ class TreeFishbone:
             state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
-            progress=None, observe_every=1, **engine_kw):
+            progress=None, observe_every=1, svd_backend="auto", **engine_kw):
         """Propagate and return a :class:`~fishbonett.models.result.Result`.
 
         ``method`` exists for symmetry with
@@ -439,7 +439,12 @@ class TreeFishbone:
         final one) without changing the TEBD step. ``bath_horizon`` fixes the time
         used for automatic bath resolution; make it cover all continuation
         segments. A returned ``result.checkpoint`` resumes through ``resume=`` and
-        is rejected if the resolved Hamiltonian changes."""
+        is rejected if the resolved Hamiltonian changes.
+
+        ``svd_backend`` is ``"auto"`` (exact small-block SVD plus certified
+        adaptive randomized truncation), ``"exact"`` or ``"randomized"``. The
+        randomized request retains exact fallbacks when its residual cannot be
+        certified."""
         return _run_multisite_model(
             self, dt=dt, t_max=t_max, n_steps=n_steps, method=method,
             model=model, representation=representation,
@@ -447,7 +452,8 @@ class TreeFishbone:
             bond_dim=bond_dim, trunc_eps=trunc_eps,
             observables=observables, initial=initial, krylov=krylov, seed=seed,
             resume=resume, bath_horizon=bath_horizon, progress=progress,
-            observe_every=observe_every, engine_kw=engine_kw,
+            observe_every=observe_every, svd_backend=svd_backend,
+            engine_kw=engine_kw,
         )
 
 # -- 1D fishbone: a specialization of TreeFishbone to a linear backbone -------
@@ -588,7 +594,7 @@ class Fishbone:
             state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
-            progress=None, observe_every=1, **engine_kw):
+            progress=None, observe_every=1, svd_backend="auto", **engine_kw):
         """Propagate the 1D fishbone through the shared simulation planner. See
         :meth:`fishbonett.models.fishbone.TreeFishbone.run` for the arguments, the
         observable spec and the per-site :class:`Result` layout.
@@ -602,5 +608,6 @@ class Fishbone:
             bond_dim=bond_dim, trunc_eps=trunc_eps,
             observables=observables, initial=initial, krylov=krylov, seed=seed,
             resume=resume, bath_horizon=bath_horizon, progress=progress,
-            observe_every=observe_every, engine_kw=engine_kw,
+            observe_every=observe_every, svd_backend=svd_backend,
+            engine_kw=engine_kw,
         )

@@ -125,7 +125,7 @@ class SystemBath:
             model=None, representation=None, state_geometry=None, integrator=None,
             trunc=None, bond_dim=None, trunc_eps=None, observables=None,
             initial=None, krylov=25, seed=0, resume=None, bath_horizon=None,
-            progress=None, observe_every=1, **engine_kw):
+            progress=None, observe_every=1, svd_backend="auto", **engine_kw):
         """Propagate and return a :class:`Result`.
 
         .. rubric:: Method selection
@@ -207,6 +207,11 @@ class SystemBath:
         require ``bond_dim``. Dynamic TDVP can grow its manifold, but also
         requires ``bond_dim`` as a finite memory ceiling.
 
+        ``svd_backend="auto"`` uses certified adaptive randomized truncation on
+        sufficiently large matrices and exact LAPACK otherwise. ``"exact"`` and
+        ``"randomized"`` select either policy explicitly; randomized requests
+        retain exact safety fallbacks when the residual cannot be certified.
+
         ``observables`` maps a name to either a ``(d, d)`` operator on the
         system or ``(operator, BathMode(0, 0, mode))`` on a represented bath
         mode. ``result.expect[name]`` has one value per recorded time. The
@@ -285,7 +290,8 @@ class SystemBath:
         )
         ctx = RunCtx(dt=dt, n_steps=n_steps, bond_dim=bond_dim,
                      trunc_eps=trunc_eps, obs_ops=obs_ops, initial=initial,
-                     krylov=krylov, seed=seed, kw=engine_kw, resume=resume,
+                     krylov=krylov, seed=seed, svd_backend=svd_backend,
+                     kw=engine_kw, resume=resume,
                      bath_horizon=bath_horizon, observe_every=observe_every,
                      progress=progress)
         # Local import keeps the physical model independent of every concrete

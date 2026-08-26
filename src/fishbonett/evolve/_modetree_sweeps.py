@@ -7,10 +7,9 @@ truncates every edge by its Schmidt spectrum.
 import numpy as np
 import scipy.linalg
 
-from fishbonett.linalg import cap_rank
 from fishbonett.operators import annihilate
 from fishbonett.evolve._modetree_core import SZ
-from fishbonett._svd import robust_svd as _robust_svd
+from fishbonett.linalg import threshold_svd
 
 
 def _einsum(subscripts, *operands):
@@ -294,10 +293,7 @@ def canon_to_root(nodes, root):
 def _svd_split(tensor, leg, D, eps):
     axes = [axis for axis in range(tensor.ndim) if axis != leg] + [leg]
     matrix = np.transpose(tensor, axes).reshape(-1, tensor.shape[leg])
-    u, singular, vh = _robust_svd(matrix, full_matrices=False)
-    scale = singular[0] if singular.size and singular[0] > 0 else 1.0
-    keep = cap_rank(np.sum(singular > float(eps) * scale), D)
-    return u[:, :keep], singular[:keep], vh[:keep]
+    return threshold_svd(matrix, eps, max_rank=D)
 
 
 def truncate_from_root(nodes, root, D, eps):

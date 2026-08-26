@@ -3,7 +3,7 @@
 from typing import Sequence
 
 import numpy as np
-from fishbonett._svd import robust_svd as _robust_svd
+from fishbonett.linalg import threshold_svd
 
 
 def identity_product(dimensions):
@@ -51,10 +51,8 @@ def dense_operator_mpo(operator, dimensions, tolerance=1e-13):
     left_rank = 1
     for dimension in dimensions[:-1]:
         matrix = carry.reshape(left_rank * dimension * dimension, -1)
-        u, singular, vh = _robust_svd(matrix, full_matrices=False)
-        scale = singular[0] if singular.size else 1.0
-        rank = max(1, int(np.sum(singular > tolerance * scale)))
-        u, singular, vh = u[:, :rank], singular[:rank], vh[:rank]
+        u, singular, vh = threshold_svd(matrix, tolerance)
+        rank = singular.size
         mpo.append(np.transpose(
             u.reshape(left_rank, dimension, dimension, rank), (0, 3, 1, 2)
         ))
@@ -104,10 +102,8 @@ def product_sum_mpo(dimensions: Sequence[int], products, coefficients=None):
         [values[index] * rows[index][0] for index in range(rank)], axis=-1
     )
     matrix = first.reshape(dimensions[0] ** 2, rank)
-    u, singular, vh = _robust_svd(matrix, full_matrices=False)
-    scale = singular[0] if singular.size else 1.0
-    kept = max(1, int(np.sum(singular > 1e-13 * scale)))
-    u, singular, vh = u[:, :kept], singular[:kept], vh[:kept]
+    u, singular, vh = threshold_svd(matrix, 1e-13)
+    kept = singular.size
     mpo = [u.reshape(1, dimensions[0], dimensions[0], kept).transpose(
         0, 3, 1, 2
     )]
@@ -120,10 +116,8 @@ def product_sum_mpo(dimensions: Sequence[int], products, coefficients=None):
         matrix = np.transpose(tensor, (0, 2, 3, 1)).reshape(
             left * dimension * dimension, rank
         )
-        u, singular, vh = _robust_svd(matrix, full_matrices=False)
-        scale = singular[0] if singular.size else 1.0
-        kept = max(1, int(np.sum(singular > 1e-13 * scale)))
-        u, singular, vh = u[:, :kept], singular[:kept], vh[:kept]
+        u, singular, vh = threshold_svd(matrix, 1e-13)
+        kept = singular.size
         mpo.append(np.transpose(
             u.reshape(left, dimension, dimension, kept), (0, 3, 1, 2)
         ))
@@ -155,10 +149,8 @@ def compress_mpo(mpo, tolerance=1e-13):
         left, right, d_out, d_in = out[site].shape
         matrix = np.transpose(out[site], (0, 2, 3, 1)).reshape(
             left, d_out * d_in * right)
-        u, singular, vh = _robust_svd(matrix, full_matrices=False)
-        scale = singular[0] if singular.size else 1.0
-        rank = max(1, int(np.sum(singular > tolerance * scale)))
-        u, singular, vh = u[:, :rank], singular[:rank], vh[:rank]
+        u, singular, vh = threshold_svd(matrix, tolerance)
+        rank = singular.size
         out[site] = np.transpose(
             vh.reshape(rank, d_out, d_in, right), (0, 3, 1, 2))
         transfer = u * singular[None, :]

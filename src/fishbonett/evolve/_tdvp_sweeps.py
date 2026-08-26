@@ -6,8 +6,6 @@ growth mechanism, then applies the requested adaptive truncation threshold.
 """
 import numpy as np
 
-from fishbonett.linalg import cap_rank
-
 #: Schmidt directions kept beyond what ``trunc_eps`` admits, so a two-site
 #: bond can grow.  Two is enough to bootstrap a product state and costs a bond
 #: of ``rank + 2``; raise it if a run appears stuck at a small bond.
@@ -16,7 +14,7 @@ from fishbonett.evolve._tdvp_kernels import (
     SZ, _setbond, applyH1, evolveAC, evolveC, expmv_lanczos,
     init_right_envs, left_qr, right_lq, updateleftenv, updaterightenv,
 )
-from fishbonett._svd import robust_svd as _robust_svd
+from fishbonett.linalg import threshold_svd
 
 
 def measure_rdm(center):
@@ -99,11 +97,9 @@ def _split2(theta, chi_max, eps, ortho, expand=DEFAULT_BOND_EXPAND):
     dl, dr, d_left, d_right = theta.shape
     matrix = np.transpose(theta, (0, 2, 3, 1)).reshape(
         dl * d_left, d_right * dr)
-    u, singular, vh = _robust_svd(matrix, full_matrices=False)
-    scale = singular[0] if singular.size and singular[0] > 0 else 1.0
-    above = int(np.sum(singular > float(eps) * scale))
-    keep = cap_rank(min(above + max(0, int(expand)), singular.size), chi_max)
-    u, singular, vh = u[:, :keep], singular[:keep], vh[:keep]
+    u, singular, vh = threshold_svd(
+        matrix, eps, max_rank=chi_max, extra_rank=max(0, int(expand)))
+    keep = singular.size
     if ortho == "left":
         first = np.transpose(u.reshape(dl, d_left, keep), (0, 2, 1))
         second = np.transpose(

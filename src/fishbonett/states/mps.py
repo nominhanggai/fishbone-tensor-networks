@@ -5,7 +5,7 @@ the propagation algorithms in :mod:`fishbonett.evolve`).
 form, the per-bond gate store ``U``, and the local-basis-optimization projectors
 ``R``.  It provides the wavefunction accessors (:meth:`get_theta1`,
 :meth:`get_theta2`) and the canonical-form primitive :meth:`split_truncate_theta`
-(single / adaptive SVD split, optional LBO, optional CuPy GPU). The
+(threshold-controlled SVD, optional LBO, optional CuPy GPU). The
 swap-network TEBD sweep that applies the gates lives in
 :func:`fishbonett.evolve.tebd.update_bond`; :meth:`update_bond` is a thin wrapper
 around it. Truncation behavior is selected per :meth:`update_bond` call:
@@ -15,16 +15,15 @@ around it. Truncation behavior is selected per :meth:`update_bond` call:
   system site along the chain, giving it a turn adjacent to every mode: the swap
   network the interaction picture needs, since there every mode couples to the
   system and the interaction is not nearest-neighbour;
-* **single truncated SVD** at ``chi_max`` (the default), or an **adaptive**
-  bond-dimension search (``adaptive=True``) that grows the trial rank until the
-  truncation error is resolved;
+* a certified adaptive SVD that grows its trial rank until the truncation error
+  is resolved, with exact fallback for unresolved spectra;
 * optional **local basis optimization (LBO)** -- pass ``eps_lbo`` to project each
-  boson site onto its optimal reduced basis before the SVD (this implies the
-  adaptive search);
+  boson site onto its optimal reduced basis before the SVD;
 * optional **GPU** execution through CuPy (``gpu=True``), used only if CuPy is
   importable.
 
-With ``eps_lbo=None`` and ``adaptive=False``, the update uses one truncated SVD.
+The high-level run's ``svd_backend`` selects automatic, exact, or randomized
+resolution for every eligible split.
 """
 import warnings
 
@@ -32,8 +31,8 @@ import numpy as np
 import scipy.linalg
 from fishbonett.contract import contract as einsum
 
-from fishbonett.linalg import svd, cap_rank
-from fishbonett.randomized import _next_seed
+from fishbonett.linalg import threshold_svd
+from fishbonett.randomized import _next_seed, current_svd_backend
 from fishbonett.states.network import TensorNetwork
 
 # LBO is an auxiliary compression before the bond SVD. Retaining a modest floor
@@ -43,17 +42,11 @@ MIN_LBO_DIMENSION = 10
 
 try:  # optional GPU backend
     import cupy as cp
-    from fishbonett.rsvd_cupy import rsvd as _curdsvd
+    from fishbonett.rsvd_cupy import adaptive_svd as _cu_threshold_svd
 
     _CUPY = True
     _mempool = cp.get_default_memory_pool()
 
-    def _cusvd(a, b, full_matrices=False):
-        dim = min(a.shape[0], a.shape[1])
-        b = min(b, dim)
-        # Derive each device sketch from the high-level run-local RNG. This
-        # honors ``run(seed=...)`` while advancing between successive bonds.
-        return _curdsvd(a, b, n_iter=2, l=2 * b, seed=_next_seed())
 except ImportError:  # pragma: no cover - exercised only with a GPU present
     _CUPY = False
 
@@ -195,34 +188,30 @@ class SystemBathMPS(TensorNetwork):
         return einsum('aIb,LJ,bJc->aILc', self.get_theta1(i), self.R[j], self.B[j])
 
     # -- TEBD step (algorithm lives in fishbonett.evolve.tebd) -----------------
-    def update_bond(self, i, chi_max, eps, swap=0, eps_lbo=None, adaptive=False,
-                    gpu=False):
+    def update_bond(self, i, chi_max, eps, swap=0, eps_lbo=None, gpu=False):
         """Apply the two-site gate ``self.U[i]`` at bond ``i`` and re-split.
 
         Thin convenience wrapper: the swap-network TEBD sweep logic lives in
         :func:`fishbonett.evolve.tebd.update_bond` (this state object only holds
         the tensors and their canonical form).  ``swap=1`` transposes the two
         physical legs during the gate; ``eps_lbo`` enables local basis
-        optimization (and the adaptive bond search); ``adaptive`` enables the
-        adaptive search without LBO.
+        optimization before the common threshold-controlled split.
         """
         from fishbonett.evolve.tebd import update_bond as _update_bond
         _update_bond(self, i, chi_max, eps, swap=swap, eps_lbo=eps_lbo,
-                     adaptive=adaptive, gpu=gpu)
+                     gpu=gpu)
 
     # -- canonical-form primitives (state operations) --------------------------
     def split_truncate_theta(self, theta, i, chi_max, eps, eps_lbo=None,
-                             adaptive=False, gpu=False):
+                             gpu=False):
         """Split a two-site ``theta`` back into two sites, truncating bond ``i``.
 
         Restores the canonical form in place: SVD the two-site tensor, keep
         singular values above ``eps`` (relative) and at most ``chi_max`` of them
         (``None`` = unlimited), and write back ``B[i]``, ``B[i+1]`` and ``S[i+1]``.
 
-        Three strategies, selected by the arguments: a plain truncated SVD
-        (default), a *local-basis-optimization* pass when ``eps_lbo`` is given
-        (which also compresses the local boson basis ``R``), or the adaptive
-        bond-dimension search when ``adaptive`` is set.
+        ``eps_lbo`` additionally compresses the local boson basis ``R`` before
+        the common threshold-controlled bond decomposition.
 
         ``gpu=True`` without CuPy installed falls back to the CPU path -- the
         results are the same, only slower -- but says so once, because otherwise
@@ -236,24 +225,11 @@ class SystemBathMPS(TensorNetwork):
                 RuntimeWarning, stacklevel=2)
         if gpu and _CUPY:
             self._split_gpu(theta, i, chi_max, eps, eps_lbo)
-        elif eps_lbo is None and not adaptive:
-            self._split_plain(theta, i, chi_max, eps)
         else:
-            self._split_adaptive(theta, i, chi_max, eps, eps_lbo)
+            self._split_cpu(theta, i, chi_max, eps, eps_lbo)
 
-    # -- single truncated SVD at chi_max, no LBO -------------------------------
-    def _split_plain(self, theta, i, chi_max, eps):
-        chi_ll, phys_l, phys_r, chi_rr = theta.shape
-        theta = np.reshape(theta, [chi_ll * phys_l, phys_r * chi_rr])
-        A, S, B = svd(theta, chi_max, full_matrices=False)
-        scale = S[0] if S.size and S[0] > 0 else 1.0
-        chivC = cap_rank(np.sum(S > eps * scale), chi_max)
-        self._store_split(A, S, B, i, chi_ll, phys_l, phys_r, chi_rr, chivC)
-        self.R[i] = np.eye(phys_l)
-        self.R[i + 1] = np.eye(phys_r)
-
-    # -- adaptive bond dimension, optional LBO ---------------------------------
-    def _split_adaptive(self, theta, i, chi_max, eps, eps_lbo):
+    # -- CPU threshold decomposition, with optional LBO ------------------------
+    def _split_cpu(self, theta, i, chi_max, eps, eps_lbo):
         if eps_lbo is not None:
             # Local basis optimization: project each site onto its optimal basis.
             w_A, v_A = scipy.linalg.eigh(einsum('aIJb,aKJb->IK', theta, theta.conj()))
@@ -268,15 +244,10 @@ class SystemBathMPS(TensorNetwork):
         chi_ll, phys_l, phys_r, chi_rr = theta.shape
         theta = np.reshape(theta, [chi_ll * phys_l, phys_r * chi_rr])
 
-        chi_try = int(self.pre_factor * len(self.S[i + 1])) + 10
-        A, S, B = svd(theta, chi_try, full_matrices=False)
-        scale = S[0] if S.size and S[0] > 0 else 1.0
-        chivC = min(cap_rank(np.sum(S > eps * scale), chi_max), chi_try)
-        while chivC == chi_try and chi_try < min(*theta.shape):
-            chi_try = int(round(self.pre_factor * chi_try))
-            A, S, B = svd(theta, chi_try, full_matrices=False)
-            scale = S[0] if S.size and S[0] > 0 else 1.0
-            chivC = min(cap_rank(np.sum(S > eps * scale), chi_max), chi_try)
+        initial_rank = int(self.pre_factor * len(self.S[i + 1])) + 10
+        A, S, B = threshold_svd(
+            theta, eps, max_rank=chi_max, initial_rank=initial_rank)
+        chivC = S.size
 
         self._store_split(A, S, B, i, chi_ll, phys_l, phys_r, chi_rr, chivC)
         if eps_lbo is None:
@@ -314,19 +285,12 @@ class SystemBathMPS(TensorNetwork):
         theta = cp.reshape(theta, [chi_ll * phys_l, phys_r * chi_rr])
         _mempool.free_all_blocks()
 
-        chi_try = int(self.pre_factor * len(self.S[i + 1])) + 10
-        A, S, B = _cusvd(theta, chi_try, full_matrices=False)
-        scale = S[0] if S.size and S[0] > 0 else 1.0
-        chivC = min(
-            cap_rank(cp.sum(S > eps * scale).item(), chi_max), chi_try
-        )
-        while chivC == chi_try and chi_try < min(*theta.shape):
-            chi_try = int(round(self.pre_factor * chi_try))
-            A, S, B = _cusvd(theta, chi_try, full_matrices=False)
-            scale = S[0] if S.size and S[0] > 0 else 1.0
-            chivC = min(
-                cap_rank(cp.sum(S > eps * scale).item(), chi_max), chi_try
-            )
+        A, S, B = _cu_threshold_svd(
+            theta, eps=eps, max_rank=chi_max,
+            backend=current_svd_backend(),
+            initial_rank=int(self.pre_factor * len(self.S[i + 1])) + 10,
+            seed=_next_seed())
+        chivC = S.size
         del theta
         _mempool.free_all_blocks()
 
