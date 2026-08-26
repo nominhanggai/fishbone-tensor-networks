@@ -1,4 +1,4 @@
-"""Compare conventional-MPS propagators for seven-site FMO dynamics.
+"""Compare propagators on conventional MPSs for seven-site FMO dynamics.
 
 The system-first and interleaved layouts each run with swap-network TEBD,
 conditional-displacement Trotter-MPO, TDVP1, TDVP2, or dTDVP.  The ``smoke``
@@ -171,6 +171,12 @@ def run_method(profile, label, output):
     population = np.asarray(populations)
     summary = {
         "method": method,
+        "state_family": "conventional-mps",
+        "state_geometry": (
+            "system-first-mps"
+            if label.startswith("system-first-")
+            else "interleaved-mps"
+        ),
         "layout": (
             "system-first" if label.startswith("system-first-") else "interleaved"
         ),
