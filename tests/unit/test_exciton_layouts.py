@@ -274,4 +274,5 @@ def test_fmo_propagator_summary_records_the_resolved_baths(tmp_path):
     )
     assert summary["state_family"] == "conventional-mps"
     assert summary["state_geometry"] == "system-first-mps"
+    assert summary["svd_backend"] == "auto"
     assert summary["bath_modes_per_level"] == [1] * 7
