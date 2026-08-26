@@ -87,8 +87,8 @@ expanding the domain checks the frequency cutoff. These are distinct tests.
 
 ## Complete runnable calculation
 
-Run this code from the repository root so it can also load the vector-path
-samples extracted from the paper's Figure 8.
+Run this code from the repository root so it can also load samples digitized
+from the vector graphics in the paper's Figure 8.
 
 ```python
 from pathlib import Path
@@ -171,7 +171,7 @@ left.plot(
     paper_population,
     "o",
     markerfacecolor="none",
-    label="Fig. 8 IC10 (vector-path samples)",
+    label="digitized paper Fig. 8 IC10",
 )
 left.set(xlabel=r"$t\Delta/\pi$", ylabel=r"$P_\uparrow(t)$")
 
@@ -186,7 +186,7 @@ figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.88))
 plt.show()
 ```
 
-The CSV contains samples of the converged IC10 vector path in the arXiv figure;
+The CSV contains samples digitized from the converged IC10 curve in the arXiv figure;
 it is not raw numerical data supplied by the authors. Comparing the complete
 curve is more informative than matching a single endpoint.
 

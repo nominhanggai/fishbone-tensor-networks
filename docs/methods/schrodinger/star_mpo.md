@@ -4,8 +4,8 @@
 growth), and `schrodinger-star-a1tdvp` (adaptive one-site bond growth) run TDVP on a
 **static** star-representation MPO — no chain mapping, every mode coupled directly to the
 system, and nothing rotated out.  Because $H$ is time-independent the MPO is built
-**once**, which makes these the most accurate methods in the package at a given
-`dt`: there is no per-step rebuild error at all.
+**once**. This avoids the midpoint approximation needed when a time-dependent
+interaction-chain MPO is rebuilt during every step.
 
 ## Theory
 
@@ -69,7 +69,7 @@ Hamiltonian-MPO construction with the chain representation beyond the TDVP sweep
 Agreement after independently converging both calculations is therefore a useful
 cross-validation.
 
-Two variants:
+Three variants:
 
 - **`schrodinger-star-tdvp1`** — 1-site TDVP at a **fixed** bond dimension `bond_dim`
   (required — a 1-site sweep cannot grow a bond; see

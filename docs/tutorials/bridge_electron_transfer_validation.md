@@ -78,7 +78,7 @@ for case in ("diagonal_reference", "noncondon"):
     print("  final populations:", population[-1])
     print("  final transfer-tensor norm:", transfer_norm[-1])
 
-# Load the vector-path samples used for the pointwise paper comparison.
+# Load the samples digitized from Fig. 2 for the pointwise paper comparison.
 paper = np.genfromtxt(
     Path("examples/reference_data")
     / "acharyya_2021_fig2_populations.csv",

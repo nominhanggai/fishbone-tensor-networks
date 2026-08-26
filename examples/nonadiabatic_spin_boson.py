@@ -25,7 +25,7 @@ METHODS = {
 REFERENCE_DATA = Path(__file__).resolve().parent / "reference_data"
 PAPER_FIG8_DATA = REFERENCE_DATA / "nuomin_2022_fig8_ic10.csv"
 SIMULATION_LABEL = "fishbonett"
-PAPER_LABEL = "Fig. 8 IC10 (vector-path samples)"
+PAPER_LABEL = "digitized paper Fig. 8 IC10"
 
 
 @dataclass(frozen=True)
@@ -101,7 +101,7 @@ def run_profile(profile="smoke", *, announce=False):
 
 
 def load_paper_figure8(path=PAPER_FIG8_DATA):
-    """Return vector-path samples of the published converged IC10 curve."""
+    """Return samples digitized from the published converged IC10 curve."""
     table = np.genfromtxt(path, delimiter=",", names=True)
     return {
         "t_delta_over_pi": np.asarray(table["t_delta_over_pi"], float),
