@@ -30,6 +30,7 @@ One container for both shapes of result, because the *model* decides the shape:
 ``comb`` and ``site-tree`` are multi-site. ``n_records`` equals ``n_steps`` unless ``observe_every`` is
 greater than one. See :mod:`fishbonett.models.registry`.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -131,7 +132,9 @@ class SimulationCheckpoint:
             tensors=tuple(np.array(value, complex, copy=True) for value in state.T),
             dims=tuple(map(int, terms.dims)),
             edges=tuple(tuple(map(int, edge)) for edge in terms.edges),
-            oc=int(state.oc), method=str(method), elapsed=float(elapsed),
+            oc=int(state.oc),
+            method=str(method),
+            elapsed=float(elapsed),
             bath_horizon=float(bath_horizon),
             signature=_hamiltonian_signature(terms),
         )
@@ -153,13 +156,16 @@ class SimulationCheckpoint:
             tensors=tuple(np.array(value, complex, copy=True) for value in state.T),
             dims=tuple(map(int, dims)),
             edges=tuple(tuple(map(int, edge)) for edge in edges),
-            oc=int(state.oc), method=str(method), elapsed=float(elapsed),
-            bath_horizon=float(bath_horizon), signature=str(signature))
+            oc=int(state.oc),
+            method=str(method),
+            elapsed=float(elapsed),
+            bath_horizon=float(bath_horizon),
+            signature=str(signature),
+        )
 
     def restore(self, terms: LocalTerms) -> TreeTensorNetwork:
         """Return a fresh tree state after validating ``terms``."""
-        return self.restore_tree(terms.dims, terms.edges,
-                                 _hamiltonian_signature(terms))
+        return self.restore_tree(terms.dims, terms.edges, _hamiltonian_signature(terms))
 
     def restore_tree(
         self,
@@ -172,8 +178,10 @@ class SimulationCheckpoint:
             raise ValueError(
                 "checkpoint Hamiltonian does not match this resolved model; "
                 "bath temperatures, couplings, discretization and topology must "
-                "remain unchanged")
+                "remain unchanged"
+            )
         from fishbonett.states.tree import TreeTensorNetwork
+
         state = TreeTensorNetwork(dims, edges, root=0)
         if tuple(map(int, dims)) != self.dims:
             raise ValueError("checkpoint physical dimensions do not match the model")
@@ -189,8 +197,7 @@ class SimulationCheckpoint:
             expected_rank = len(state.neighbours(node)) + 1
             if tensor.ndim != expected_rank:
                 raise ValueError(
-                    f"checkpoint tensor {node} has rank {tensor.ndim}, "
-                    f"expected {expected_rank}"
+                    f"checkpoint tensor {node} has rank {tensor.ndim}, expected {expected_rank}"
                 )
             if tensor.shape[-1] != state.dims[node]:
                 raise ValueError(
@@ -203,9 +210,7 @@ class SimulationCheckpoint:
             left_leg = state.neighbours(left).index(right)
             right_leg = state.neighbours(right).index(left)
             if tensors[left].shape[left_leg] != tensors[right].shape[right_leg]:
-                raise ValueError(
-                    f"checkpoint bond {(left, right)} has incompatible dimensions"
-                )
+                raise ValueError(f"checkpoint bond {(left, right)} has incompatible dimensions")
         state.T = tensors
         state.oc = int(self.oc)
         return state
@@ -216,23 +221,28 @@ class SimulationCheckpoint:
         if path.suffix.lower() != ".npz":
             path = path.with_suffix(path.suffix + ".npz")
         metadata = {
-            "version": 1, "dims": self.dims, "edges": self.edges,
-            "oc": self.oc, "method": self.method, "elapsed": self.elapsed,
-            "bath_horizon": self.bath_horizon, "signature": self.signature,
+            "version": 1,
+            "dims": self.dims,
+            "edges": self.edges,
+            "oc": self.oc,
+            "method": self.method,
+            "elapsed": self.elapsed,
+            "bath_horizon": self.bath_horizon,
+            "signature": self.signature,
             "n_tensors": len(self.tensors),
         }
         arrays = {f"tensor_{i}": value for i, value in enumerate(self.tensors)}
         path.parent.mkdir(parents=True, exist_ok=True)
         handle = tempfile.NamedTemporaryFile(
-            dir=path.parent, prefix=f".{path.name}.", suffix=".npz",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".npz",
             delete=False,
         )
         temporary = Path(handle.name)
         handle.close()
         try:
-            np.savez_compressed(
-                temporary, metadata=np.array(json.dumps(metadata)), **arrays
-            )
+            np.savez_compressed(temporary, metadata=np.array(json.dumps(metadata)), **arrays)
             os.replace(temporary, path)
         finally:
             if temporary.exists():
@@ -246,12 +256,16 @@ class SimulationCheckpoint:
             metadata = json.loads(str(archive["metadata"].item()))
             if metadata.get("version") != 1:
                 raise ValueError("unsupported checkpoint format version")
-            tensors = tuple(np.array(archive[f"tensor_{i}"], copy=True)
-                            for i in range(int(metadata["n_tensors"])))
+            tensors = tuple(
+                np.array(archive[f"tensor_{i}"], copy=True)
+                for i in range(int(metadata["n_tensors"]))
+            )
         return cls(
-            tensors=tensors, dims=tuple(metadata["dims"]),
+            tensors=tensors,
+            dims=tuple(metadata["dims"]),
             edges=tuple(tuple(edge) for edge in metadata["edges"]),
-            oc=int(metadata["oc"]), method=metadata["method"],
+            oc=int(metadata["oc"]),
+            method=metadata["method"],
             elapsed=float(metadata["elapsed"]),
             bath_horizon=float(metadata["bath_horizon"]),
             signature=metadata["signature"],
@@ -267,6 +281,7 @@ class Result:
     smaller when ``observe_every > 1``. See the module table for the remaining
     single-system and multi-site dimensions.
     """
+
     t: np.ndarray
     expect: dict[str, np.ndarray]
     max_bond: np.ndarray | None = None
