@@ -68,6 +68,8 @@ selected through ``run``.
 orthogonality centres, and reduced density matrices. The MPS orders its legs as
 ``(vL, p, vR)`` and the tree as ``(bonds..., p)``. See :mod:`fishbonett.states`
 for canonical-form and gate-splitting details.
+:class:`~fishbonett.states.multiset.MultiSetMPS` instead holds one independent
+environmental MPS per exact system-basis state.
 
 Site ordering: the system is **site 0** and the bath modes follow, nearest
 first.
@@ -80,8 +82,9 @@ Public API
   :class:`~fishbonett.linalg.Truncation`. For several system sites use
   :class:`~fishbonett.models.fishbone.Fishbone` or
   :class:`~fishbonett.models.fishbone.TreeFishbone`.
-* **State ansaetze:** :class:`~fishbonett.states.mps.SystemBathMPS` for a 1D MPS
-  and :class:`~fishbonett.states.tree.TreeTensorNetwork` for a general tree.
+* **State ansaetze:** :class:`~fishbonett.states.mps.SystemBathMPS` for a 1D MPS,
+  :class:`~fishbonett.states.multiset.MultiSetMPS` for a multi-set MPS, and
+  :class:`~fishbonett.states.tree.TreeTensorNetwork` for a general tree.
 * **Representations and numerical products:** the Schrödinger, interaction,
   polaron, and multichannel builders in :mod:`fishbonett.representations`.
   See :doc:`the methods guide </methods/index>` for compatible propagators.
@@ -97,8 +100,10 @@ Public API
 from importlib.metadata import PackageNotFoundError, version as _version
 
 from fishbonett.states.mps import SystemBathMPS
+from fishbonett.states.multiset import MultiSetMPS
 from fishbonett.evolve.tdvp import run_mpo_hamiltonian
 from fishbonett.evolve.modetree import run_tree_tebd
+from fishbonett.evolve.multiset import run_multiset_mpo_hamiltonian
 from fishbonett.bath import (
     Bath, CoupledBath, thermalize,
     integrated_free_phase, reorganization_energy, star_coupling_squared,
@@ -133,7 +138,9 @@ __all__ = [
     "__version__",
     # low-level state and evolution entry points
     "SystemBathMPS",
+    "MultiSetMPS",
     "run_mpo_hamiltonian",
+    "run_multiset_mpo_hamiltonian",
     "run_tree_tebd",
     # high-level interface
     "Bath", "CoupledBath",

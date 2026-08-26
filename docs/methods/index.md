@@ -9,10 +9,10 @@ model -> representation -> state_geometry -> integrator
 Use `method="..."` as a shorthand, or pass the axes directly. Every call returns
 the same {py:class}`~fishbonett.models.result.Result` contract.
 
-Method names are representation-explicit. A 1D MPS method is named
-`<representation>-<integrator>`; a tree tensor-network method inserts `tree`, as in
-`interaction-chain-tree-tebd`. Thus `polaron-chain-tdvp2` states both the
-polaron-chain representation and the TDVP2 integrator.
+Method names are representation-explicit. A conventional 1D MPS method is named
+`<representation>-<integrator>`; tree tensor-network methods insert `tree`, and
+multi-set MPS methods insert `multi-set`. Thus
+`schrodinger-chain-multi-set-tdvp2` identifies all three numerical choices.
 
 ## The five representations
 
@@ -68,6 +68,7 @@ same transformed Hamiltonian and both are implemented.
 | `interaction-chain` | binary tree tensor network | `interaction-chain-tree-tebd` | {doc}`interaction/tree` |
 | `polaron-chain` | 1D MPS | `polaron-chain-tebd`, `polaron-chain-tdvp1`, `polaron-chain-tdvp2`, `polaron-chain-dtdvp` | {doc}`polaron` |
 | `polaron-star` | 1D MPS | `polaron-star-tdvp1`, `polaron-star-tdvp2`, `polaron-star-dtdvp` | {doc}`polaron` |
+| all five representations | multi-set MPS | `<representation>-multi-set-tdvp2` | {doc}`multiset` |
 
 The two `interaction-chain` rows use the same Hamiltonian on different tensor
 graphs. The representation supplies the requested numerical product, while the
@@ -92,6 +93,9 @@ common orthogonal star-to-chain transform to the matrix-valued mode couplings.
 - Start with a bond-growing method: `interaction-chain-tree-tebd`,
   `interaction-chain-tebd`, or a two-site TDVP
   method.
+- Consider {doc}`multiset` when a small system basis labels qualitatively
+  different environmental wavepackets. Its reported bond is the largest bond
+  in any component MPS; work also scales with the number of system states.
 - One-site TDVP methods require an explicit `bond_dim`; they cannot grow a bond
   from a product state.
 - Time-dependent interaction representations rebuild their numerical operator at
@@ -130,6 +134,7 @@ table.
 schrodinger/chain
 schrodinger/star_mpo
 polaron
+multiset
 interaction/tebd
 interaction/trotter_mpo
 interaction/tdvp

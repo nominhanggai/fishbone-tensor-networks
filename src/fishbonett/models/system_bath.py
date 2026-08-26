@@ -2,8 +2,9 @@
 
 This class supports two models:
 
-* ``system-bath`` -- one system, one bath, one coupling operator.  All implemented representations
-  and both single-system geometries;
+* ``system-bath`` -- one system, one bath, one coupling operator. All five
+  representations on conventional or multi-set MPSs, plus the binary-tree
+  interaction-chain method;
 * ``multichannel`` -- several couplings on shared modes, selected automatically
   by giving ``SystemBath(coupling=...)`` a *list* of operators.
 
@@ -140,7 +141,8 @@ class SystemBath:
         how ``H`` is written: ``"schrodinger-chain"``,
         ``"schrodinger-star"``, ``"interaction-chain"``,
         ``"polaron-chain"``, or ``"polaron-star"``. ``state_geometry`` is the
-        tensor-network geometry (``"mps"``/``"binary-tree"``/``"tree"``), and
+        tensor-network geometry (``"mps"``, ``"multi-set-mps"``,
+        ``"binary-tree"``, or ``"tree"``), and
         ``integrator`` how a step is taken (``"tebd"``, ``"tdvp1"``, ``"tdvp2"``,
         ``"dtdvp"``, ``"trotter-mpo"``).  Omit an axis and it is inferred when only
         one combination fits; if several do, the error lists them.
@@ -185,6 +187,9 @@ class SystemBath:
           ``int J/w^2`` finite (gapped or super-ohmic).  The corresponding star
           polaron representation uses ``polaron-star-tdvp1/2/dtdvp``.  Finite
           temperature works via T-TEDOPA thermalization.
+          Every one of these five representations also supports coupled
+          two-site TDVP on ``state_geometry="multi-set-mps"``.  That ansatz
+          stores one independently truncated bath MPS per system-basis state.
         * **multichannel** -- one bath through several couplings on shared modes.
           Selected by giving ``SystemBath(coupling=...)`` a *list* of coupling
           operators.
@@ -259,7 +264,7 @@ class SystemBath:
         if not set(spec.models) & mine:
             raise unknown_method_error(spec.name)
         allowed_engine_options = set()
-        if spec.engine == "mpo-tdvp":
+        if spec.engine in {"mpo-tdvp", "multiset-tdvp"}:
             allowed_engine_options.update({"tol", "eshift"})
             if spec.integrator == "tdvp2":
                 allowed_engine_options.add("bond_expand")
