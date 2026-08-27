@@ -593,12 +593,16 @@ def _global_enrichment(tensors, mpo, chi_max, eps, expand):
     # ``expand`` per bond rather than the operator's whole bond dimension.
     krylov = _compress(krylov, chi_max=max(1, int(expand)), eps=max(eps, 1e-14))
     krylov[0] = krylov[0] * GLOBAL_ENRICHMENT
-    # Truncate on rank alone.  Truncating on weight would discard the
-    # enrichment itself, which is exactly what its smallness is for.
+    # The combination carries weights near one from the state and near
+    # GLOBAL_ENRICHMENT from the enrichment.  Truncating at the caller's
+    # threshold would throw the enrichment away, which is what its smallness is
+    # for; truncating at nothing would keep rounding debris, whose content
+    # differs between BLAS implementations and which the sweep then amplifies.
+    # Cut between the two.
     combined = _compress(
         _mps_add(order, krylov),
         chi_max=min(chi_max, current + max(1, int(expand))),
-        eps=0.0,
+        eps=GLOBAL_ENRICHMENT * 1.0e-2,
     )
     return [np.ascontiguousarray(np.transpose(t, (0, 2, 1))) for t in combined]
 
