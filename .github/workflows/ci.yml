@@ -131,11 +131,32 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      # These are production calculations, not smoke plots: the vibronic dimer
+      # reproduces a published figure and takes over two hours. Reuse it unless
+      # something it depends on changed. The key lists exactly what
+      # docs/figures.py already treats as a figure's inputs, so a hit means the
+      # generator would have skipped the work anyway.
+      - name: Restore the generated figure
+        id: figure-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            docs/img
+            docs/_generated
+          key: >-
+            docs-figure-${{ matrix.figure }}-${{ hashFiles(
+              'docs/figures.py',
+              format('examples/{0}.py', matrix.figure),
+              'examples/reference_data/**',
+              'src/fishbonett/**/*.py'
+            ) }}
       - name: Install package with docs extras
+        if: steps.figure-cache.outputs.cache-hit != 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[docs]
       - name: Generate tutorial figure
+        if: steps.figure-cache.outputs.cache-hit != 'true'
         run: |
           set +e
           python docs/figures.py --figure "${{ matrix.figure }}" > figure.log 2>&1
