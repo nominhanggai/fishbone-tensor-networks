@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Tutorial figures are production calculations. Ordinary pushes reuse the
+  # last ones built; this is when they are rebuilt and the site is published.
+  schedule:
+    - cron: "0 3 * * 0"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -132,31 +136,43 @@ jobs:
         with:
           python-version: "3.12"
       # These are production calculations, not smoke plots: the vibronic dimer
-      # reproduces a published figure and takes over two hours. Reuse it unless
-      # something it depends on changed. The key lists exactly what
-      # docs/figures.py already treats as a figure's inputs, so a hit means the
-      # generator would have skipped the work anyway.
+      # reproduces a published figure and took 151.6 minutes of one run against
+      # a 180 minute timeout. The exact key lists what docs/figures.py already
+      # treats as a figure's inputs, so an exact hit means the generator would
+      # have skipped the work anyway. The prefix leaves the most recent figure
+      # available to build the documentation against when the inputs did move.
       - name: Restore the generated figure
         id: figure-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             docs/img
             docs/_generated
-          key: >-
-            docs-figure-${{ matrix.figure }}-${{ hashFiles(
-              'docs/figures.py',
-              format('examples/{0}.py', matrix.figure),
-              'examples/reference_data/**',
-              'src/fishbonett/**/*.py'
-            ) }}
+          key: docs-figure-${{ matrix.figure }}-${{ hashFiles('docs/figures.py', format('examples/{0}.py', matrix.figure), 'examples/reference_data/**', 'src/fishbonett/**/*.py') }}
+          restore-keys: docs-figure-${{ matrix.figure }}-
+      - name: Decide whether to rebuild
+        id: plan
+        env:
+          FULL_BUILD: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+          EXACT_HIT: ${{ steps.figure-cache.outputs.cache-hit }}
+          MATCHED_KEY: ${{ steps.figure-cache.outputs.cache-matched-key }}
+          FIGURE: ${{ matrix.figure }}
+        run: |
+          if [ "$EXACT_HIT" = "true" ]; then
+            echo "rebuild=false" >> "$GITHUB_OUTPUT"
+          elif [ "$FULL_BUILD" = "true" ] || [ -z "$MATCHED_KEY" ]; then
+            echo "rebuild=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rebuild=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Tutorial figure $FIGURE reused::Its inputs changed, but this run does not rebuild figures. The documentation is built against the last one produced. A scheduled or dispatched run refreshes it and publishes the site."
+          fi
       - name: Install package with docs extras
-        if: steps.figure-cache.outputs.cache-hit != 'true'
+        if: steps.plan.outputs.rebuild == 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[docs]
       - name: Generate tutorial figure
-        if: steps.figure-cache.outputs.cache-hit != 'true'
+        if: steps.plan.outputs.rebuild == 'true'
         run: |
           set +e
           python docs/figures.py --figure "${{ matrix.figure }}" > figure.log 2>&1
@@ -167,6 +183,16 @@ jobs:
             echo "::error title=Tutorial figure ${{ matrix.figure }} failed::$message"
           fi
           exit "$status"
+      # Only store what this run actually produced. Saving a reused figure
+      # under the new key would mark stale work as current for these inputs.
+      - name: Save the generated figure
+        if: steps.plan.outputs.rebuild == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            docs/img
+            docs/_generated
+          key: docs-figure-${{ matrix.figure }}-${{ hashFiles('docs/figures.py', format('examples/{0}.py', matrix.figure), 'examples/reference_data/**', 'src/fishbonett/**/*.py') }}
       - name: Upload generated figure and summary
         uses: actions/upload-artifact@v6
         with:
@@ -204,14 +230,16 @@ jobs:
           name: docs-html
           path: docs/_build/html
       - name: Upload GitHub Pages artifact
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs/_build/html
 
   deploy-pages:
     name: deploy docs to GitHub Pages
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Publish only from a run that rebuilt the tutorial figures, so the site
+    # never shows one carried over from an earlier state of the package.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     needs: docs
     runs-on: ubuntu-latest
     permissions:
