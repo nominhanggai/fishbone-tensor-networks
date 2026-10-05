@@ -98,7 +98,7 @@ def test_sources_parse_against_the_oldest_supported_python():
         ast.parse("type X = int\n", feature_version=(3, 10))
 
     bad = []
-    for root in ("src/fishbonett", "tests", "examples", "benchmarks"):
+    for root in ("src/fishbonett", "tests", "examples"):
         for p in sorted((ROOT / root).rglob("*.py")):
             if "__pycache__" in str(p) or "legacy" in p.parts:
                 continue

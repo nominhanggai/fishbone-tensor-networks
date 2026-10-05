@@ -69,5 +69,3 @@ must not apply a second thermofield factor.
 - Small exact-diagonalization tests compare equivalent representations and integrators.
 - The multichannel characterization test compares a fixed propagation with
   committed golden observables.
-- `benchmarks/baseline_suite.py` records stable work metrics (Krylov calls and
-  iterations, peak bond) and a reference observable; wall time is diagnostic.

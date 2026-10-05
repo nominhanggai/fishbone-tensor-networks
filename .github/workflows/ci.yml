@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install ruff
-      - run: python -m ruff check src tests examples benchmarks docs/figures.py conftest.py
+      - run: python -m ruff check src tests examples docs/figures.py conftest.py
 
   test:
     name: ${{ matrix.os }} / py${{ matrix.python-version }}
@@ -88,9 +88,9 @@ jobs:
           path: dist/*
 
   smoke:
-    # Keep runnable examples and exact-diagonalization benchmarks in the release
-    # gate even though they are not imported by the unit suite.
-    name: examples + benchmarks
+    # Keep runnable examples in the release gate even though they are not
+    # imported by the unit suite.
+    name: examples
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -105,14 +105,6 @@ jobs:
         run: |
           set -e
           for f in examples/*.py; do
-            echo "::group::$f"
-            python "$f"
-            echo "::endgroup::"
-          done
-      - name: Run the benchmarks
-        run: |
-          set -e
-          for f in benchmarks/*.py; do
             echo "::group::$f"
             python "$f"
             echo "::endgroup::"

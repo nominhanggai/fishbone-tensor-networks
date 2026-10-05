@@ -156,7 +156,7 @@ python -m sphinx -b html -W --keep-going docs docs/_build/html
 
 ```bash
 python -m pip install -e ".[dev,docs]"
-python -m ruff check src tests examples benchmarks docs/figures.py conftest.py
+python -m ruff check src tests examples docs/figures.py conftest.py
 pytest
 python -m sphinx -b html -W --keep-going docs docs/_build/html
 ```
